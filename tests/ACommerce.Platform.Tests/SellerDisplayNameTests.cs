@@ -160,4 +160,41 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
         var other = new ACommerce.Kit.Notifications.Notification { Id = Guid.NewGuid(), UserId = Guid.NewGuid(), Type = "deal_accepted", RelatedUrl = "/zz-name/deals/x", Title = "t", Body = "مَتجَرُ الوَرد" };
         Assert.False(ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.EraseFrom(other, seller, new[] { "مَتجَرُ الوَرد" }, new[] { $"/deals/{deal}" }, Array.Empty<string>(), new HashSet<Guid>()));
     }
+
+    // ─── بابا بَدءِ المُحادَثَةِ يَكتُبانِ الاسمَ الشَخصِيّ (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-3) — تَوصيفٌ قَبلَ التَبديل ─────────────────────
+    //
+    // `fc2227b` و‏ADR-045 §٦ يَقولانِ إنّ `ActorName.Of` يَقرَؤُه كُلُّ كاتِبِ اسم — والمُحادَثاتُ مِنها ([أ] د40·١) — وبابا بَدءِ المُحادَثَةِ لا يُنادِيانِه:
+    // `/{slug}/users/{userId}/chat` يَكتُبُ `PartnerName = partner.FullName` و«تَواصُل مَع {partner.FullName}»، و`/{slug}/vendor/{vendorId}/chat` يَكتُبُ
+    // `me?.FullName` و`vendor?.FullName`. فَبائِعٌ تَخَطّى خُطوَةَ الاسمِ يَظهَرُ بِاسمِ نَشاطِه في صَفحَةِ الصَفقَةِ و«عُضو جَديد» في المُحادَثَةِ الَّتي تُفتَحُ مِنها.
+
+    /// <summary>كُلُّ مُهَيِّئِ <c>Conversation</c> في مِلَفِّ النِقاط، وما يَحمِلُ مِنه <c>.FullName</c> في اسمِ طَرَفٍ أَو مَوضوع — والعَدَدُ يُطبَع.</summary>
+    internal static (int Initializers, IReadOnlyList<string> FullNameWrites) ConversationNameWrites(string code)
+    {
+        var writes = new List<string>();
+        var initializers = 0;
+        foreach (Match m in Regex.Matches(code, @"\bnew\s+(?:ACommerce\.Kit\.Chat\.)?Conversation\s*(?:\(\s*\))?\s*\{"))
+        {
+            initializers++;
+            var depth = 0; var end = m.Index + m.Length - 1;
+            for (var i = end; i < code.Length; i++)
+            {
+                if (code[i] == '{') depth++;
+                else if (code[i] == '}' && --depth == 0) { end = i; break; }
+            }
+            foreach (Match a in Regex.Matches(code[m.Index..end], @"(?<p>\w*(?:Name|Subject))\s*=\s*(?<e>[^\n]*)"))
+                if (a.Groups["e"].Value.Contains(".FullName", StringComparison.Ordinal)) writes.Add($"{a.Groups["p"].Value} = {a.Groups["e"].Value.Trim().TrimEnd(',')}");
+        }
+        return (initializers, writes);
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): أَربَعُ كِتاباتٍ لِـ<c>.FullName</c> في مُحادَثَتَي البابَين.</summary>
+    [Fact]
+    public void Today_the_two_chat_start_doors_store_the_person_name_not_the_business_name()
+    {
+        var code = WriteEndpointGuardTests.StripComments(Code("MarketplaceTemplateExtensions.cs"));
+        var (initializers, writes) = ConversationNameWrites(code);
+        output.WriteLine($"مُهَيِّئاتُ Conversation: {initializers} · كِتاباتُ FullName: {writes.Count} ({string.Join(" | ", writes)})");
+        Assert.True(initializers >= 3, $"أَداةٌ عَمياء: {initializers} مُهَيِّئ.");
+        Assert.Equal(4, writes.Count);
+    }
 }
