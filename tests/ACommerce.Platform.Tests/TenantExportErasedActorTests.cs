@@ -61,10 +61,11 @@ public class LiveTenantExportErasedActorProofTests(ITestOutputHelper output)
         return table.Rows.Select(r => r.ToJsonString(TenantExportRedaction.Json)).ToList();
     }
 
-    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣)</b>: الحَقيبَةُ تُخرِجُ اسمَ المَمحُوِّ كَما كُتِبَ في سَطرِ فاعِلِه وفي حاشِيَةِ السَطرِ الَّذي هَدَفُه حِسابُه —
-    /// وصَفحَةُ السِجِلِّ نَفسُها تُخفيهِما (<c>AuditLogQueries.RecentAsync</c>). والقائِمُ بِاسمِه.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_the_store_export_carries_an_erased_members_name_in_the_audit_table_on_Postgres</c> (‏<c>26c5269</c>:
+    /// «تَحمِلُ اسمَ المَمحُوّ 2 · «حِسابٌ مَحذوف» 0 · بِاسمِ القائِم 1»). <b>المُوجَب</b>: سَطرُ فاعِلِه وحاشِيَةُ السَطرِ الَّذي هَدَفُه حِسابُه «حِسابٌ مَحذوف» في الحَقيبَة؛
+    /// <b>والسالِب</b>: سَطرُ القائِمِ بِاسمِه، وفاعِلُ السَطرِ الثالِثِ (صاحِبُ المَتجَر) بِاسمِه؛ <b>والمَخزَنُ لا يُمَسّ</b>: الأَسطُرُ المَحفوظَةُ بِاسمِه كَما كُتِبَت (تاريخٌ لا يُعادُ كَتبُه).</summary>
     [Fact]
-    public async Task Today_the_store_export_carries_an_erased_members_name_in_the_audit_table_on_Postgres()
+    public async Task The_store_export_hides_an_erased_members_name_in_the_audit_table_and_keeps_the_stored_rows_on_Postgres()
     {
         if (!Enabled) return;
         var slug = "zz-experase-" + Guid.NewGuid().ToString("N")[..8];
@@ -76,9 +77,14 @@ public class LiveTenantExportErasedActorProofTests(ITestOutputHelper output)
             var carrying = rows.Count(r => r.Contains(seeded.ErasedNameBefore, StringComparison.Ordinal));
             var erasedMarks = rows.Count(r => r.Contains(AccountDeletion.ErasedName, StringComparison.Ordinal));
             var liveNamed = rows.Count(r => r.Contains(seeded.Live.FullName, StringComparison.Ordinal));
-            output.WriteLine($"صُفوفُ التَدقيق {rows.Count} · تَحمِلُ اسمَ المَمحُوّ {carrying} · «حِسابٌ مَحذوف» {erasedMarks} · بِاسمِ القائِم {liveNamed}");
+            var ownerNamed = rows.Count(r => r.Contains("صاحِبُ المَتجَر", StringComparison.Ordinal));
+            await using var q = host.Store.QuerySession(slug);
+            var stored = (await q.Query<AuditEntry>().ToListAsync()).Count(a => a.ActorName == seeded.ErasedNameBefore || a.Note == seeded.ErasedNameBefore);
+            output.WriteLine($"صُفوفُ التَدقيق {rows.Count} · تَحمِلُ اسمَ المَمحُوّ {carrying} · «حِسابٌ مَحذوف» {erasedMarks} · بِاسمِ القائِم {liveNamed} · بِاسمِ صاحِبِ المَتجَر {ownerNamed} · " +
+                             $"في المَخزَنِ بِاسمِه {stored}");
             Assert.Equal(3, rows.Count);
-            Assert.Equal((2, 0, 1), (carrying, erasedMarks, liveNamed));
+            Assert.Equal((0, 2, 1, 1), (carrying, erasedMarks, liveNamed, ownerNamed));
+            Assert.Equal(2, stored);
         }
         finally { await CleanAsync(host.Store, slug); }
     }
