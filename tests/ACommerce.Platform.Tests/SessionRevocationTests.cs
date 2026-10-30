@@ -215,6 +215,8 @@ public class SessionRevocationTests(ITestOutputHelper output)
             ["PostLoginRouteAsync"] = MethodBody(mte, "private static async Task<string> PostLoginRouteAsync("),
             // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٦) كانَ يَحفَظُ بِيَدِه — وكانَ في قائِمَةِ «ما بَقِيَ بِلا إعادَة» تَحتَ ADR-041 G-1.
             ["AcceptTermsHandler.HandleAsync"] = MethodBody(WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Commands/AcceptTermsCommand.cs")), "public async Task<bool> HandleAsync("),
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ١٠) كانَ يَحفَظُ بِيَدِه بَعدَ أَثَرِه — وفي قائِمَةِ «ما بَقِيَ بِلا إعادَة» تَحتَ ADR-041 G-1.
+            ["StudioTier.Bump"] = MethodBody(WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/Incubator/StudioTier.cs")), "private async Task Bump("),
         };
         foreach (var route in new[] { "/api/{slug}/push/subscribe", "/{slug}/me/save", "/{slug}/me/role/save", "/{slug}/me/role/onboarding/save", "/{slug}/me/area/save" })
         {
@@ -224,7 +226,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
         }
         var off = bodies.Where(b => !SavesThroughAccountWrites(b.Value)).Select(b => b.Key).ToList();
         output.WriteLine($"كُتّابُ الحِسابِ المُسَمَّون: {bodies.Count} · بِالكِتابَةِ الواحِدَة: {bodies.Count - off.Count}");
-        Assert.Equal(14, bodies.Count);
+        Assert.Equal(15, bodies.Count);
         Assert.True(off.Count == 0, "كاتِبٌ يَحفَظُ الحِسابَ بِيَدِه: " + string.Join(" · ", off));
     }
 
@@ -250,18 +252,21 @@ public class SessionRevocationTests(ITestOutputHelper output)
         return (world, user, otherLogin);
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: <c>StudioTier.Bump</c> تَحميلٌ وحِفظٌ بِلا إعادَة — فَتَعارُضٌ عَلى الحِفظِ الأَوَّلِ يَرمي مِن <c>RecordAnalysisAsync</c>
-    /// (بابُ التَحليلِ يَصيرُ ‏500 بَعدَ أَن حَجَزَ الفِكرَةَ «قيدَ التَحليل»)، ولا تُعَدُّ الزِيادَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_a_parallel_studio_writer_turns_the_analysis_count_into_a_throw</c>
+    /// (‏<c>96fcaf2</c>): «⇒ ConcurrencyException · التَحليلاتُ المَعدودَة 2». والآن <c>Bump</c> بِـ<c>AccountWrites.UpdateAsync</c>: يُعادُ الدَوَرانُ والزِيادَةُ مَرَّةً
+    /// عَلى قِراءَةٍ جَديدَة — زِيادَةٌ واحِدَةٌ بِلا رَمي، وما كَتَبَه الكاتِبُ المُوازي (<c>LastLoginAt</c>) يَبقى.</summary>
     [Fact]
-    public async Task Today_a_parallel_studio_writer_turns_the_analysis_count_into_a_throw()
+    public async Task A_parallel_studio_writer_is_absorbed_and_the_analysis_is_counted_exactly_once()
     {
-        var (world, user, _) = StudioWorldWithAParallelWriter();
+        var (world, user, otherLogin) = StudioWorldWithAParallelWriter();
         var tier = new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioTierService(world.Store);
         var ex = await Record.ExceptionAsync(() => tier.RecordAnalysisAsync(user.Id));
         var stored = world.Read<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser>(user.Id.ToString())!;
-        output.WriteLine($"اليَوم: تَعارُضٌ عَلى الحِفظِ الأَوَّل ⇒ {ex?.GetType().Name ?? "لا رَمي"} · التَحليلاتُ المَعدودَة {stored.AnalysesUsed} (كانَت 2) · الحِفظ {world.SaveCalls}");
-        Assert.IsType<JasperFx.ConcurrencyException>(ex);
-        Assert.Equal(2, stored.AnalysesUsed);
+        output.WriteLine($"تَعارُضٌ عَلى الحِفظِ الأَوَّل ⇒ {ex?.GetType().Name ?? "لا رَمي"} · التَحليلاتُ المَعدودَة {stored.AnalysesUsed} (كانَت 2) · دُخولُ الكاتِبِ الآخَرِ باقٍ {stored.LastLoginAt == otherLogin} · الحِفظ {world.SaveCalls}");
+        Assert.Null(ex);
+        Assert.Equal(3, stored.AnalysesUsed);
+        Assert.Equal(otherLogin, stored.LastLoginAt);
+        Assert.Equal(1, world.SaveCalls);
     }
 
     /// <summary>حَقنُ عَيب (القاعِدَة ١٠): شَكلُ اليَومِ بِحَرفِه يُحمِرُّ الفاحِص، وشَكلُ اليَومِ لِلاستوديو أَيضاً.</summary>

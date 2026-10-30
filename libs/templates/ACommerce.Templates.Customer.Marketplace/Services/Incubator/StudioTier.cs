@@ -506,14 +506,19 @@ public sealed class StudioTierService
     /// زادَ عَدّاداً مِن فَترَةٍ مُنقَضِيَة. والدَوَران والزِيادَة في
     /// <b>حِفظٍ واحِد</b>، فَلا تَقَع إحداهُما دونَ الأُخرى.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 البَند ١٠ — G-docs-2؛ تَوصيفُه <c>96fcaf2</c>) <b>بِالكِتابَةِ الواحِدَةِ الَّتي تُعادُ مَرَّة</b>
+    /// (<c>AccountWrites.UpdateAsync</c>، القاعِدَة ٨): <c>StudioUser</c> بِتَزامُنٍ تَفاؤُلِيٍّ مُنذُ <c>8e02e67</c>، وكانَ هذا الحِفظُ تَحميلاً وحِفظاً بِلا إعادَة —
+    /// فَكاتِبٌ مُوازٍ (دُخولُ جِهازٍ ثانٍ يَكتُبُ <c>LastLoginAt</c>، أَو اختِيارُ الباقَة، أَو تَبويبٌ ثانٍ، أَو «اخرج من كل الأجهزة») يُرَدُّ حِفظُه بِـ<c>ConcurrencyException</c>
+    /// فَيَصيرُ التَحليلُ والاستِئنافُ ‏500 والفِكرَةُ «قيدَ التَحليل» حَتّى <c>StaleAfter</c>، والبِناءُ مَتجَراً بِلا عَدّ. والآن يُعادُ التَغييرُ نَفسُه — الدَوَرانُ
+    /// والزِيادَة — مَرَّةً عَلى قِراءَةٍ جَديدَة، فَيَبقى ما كَتَبَه الآخَرُ وتُعَدُّ الزِيادَةُ مَرَّةً واحِدَة؛ وتَعارُضانِ مُتَتالِيانِ يَرمِيانِ كَما في كُلِّ كاتِب.</remarks>
     private async Task Bump(Guid uid, Action<StudioUser> mutate, CancellationToken ct)
     {
-        await using var s = _store.LightweightSession(StudioAuth.Tenant);
-        var u = await s.LoadAsync<StudioUser>(uid, ct);
-        if (u is null) return;
-        ApplyPeriodRollover(u, DateTime.UtcNow);
-        mutate(u);
-        s.Store(u);
-        await s.SaveChangesAsync(ct);
+        var now = DateTime.UtcNow;
+        await ACommerce.Kit.Auth.Server.AccountWrites.UpdateAsync<StudioUser>(_store, StudioAuth.Tenant, uid, u =>
+        {
+            ApplyPeriodRollover(u, now);
+            mutate(u);
+            return true;
+        }, ct);
     }
 }
