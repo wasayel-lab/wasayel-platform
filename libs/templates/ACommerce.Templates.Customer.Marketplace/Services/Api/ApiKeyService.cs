@@ -70,6 +70,28 @@ public class ApiKeyService
 
     // ─── الإصدار ──────────────────────────────────────────────────────
 
+    /// <summary>رَمزُ رَدِّ إصدارٍ لِفاعِلٍ رَحَل — يُتَرجِمُه القامُوس (<c>studio.keys.err_actor_gone</c>).</summary>
+    public const string ActorGoneCode = "apikey_actor_gone";
+
+    /// <summary>
+    /// <para><b>أَيُصدَرُ هذا الطَلَب؟</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ CO10؛ تَوصيفُه <c>e4f5a4f</c>) — المُصادِقُ النَقِيُّ
+    /// (<see cref="ApiKeyValidator.Validate"/>) أَوَّلاً، ثُمَّ حالُ الفاعِلِ في مُستَأجِرِ المِفتاحِ بِالدالَّةِ نَفسِها الَّتي يَرُدُّ بِها الاستِعمال
+    /// (<see cref="ActorGone"/>، د56): فاعِلٌ مَحذوفٌ أَو بِلا حِسابٍ يُرَدُّ بِـ<see cref="ActorGoneCode"/> قَبلَ أَن يولَدَ مِفتاحٌ «فَعّالٌ» لا يُحَرِّكُ شَيئاً.
+    /// كانَ «حِسابي» يُخفي المَحذوفَ مِن القائِمَة، والبابُ يَقبَلُ مُعَرِّفَه مِن طَلَبٍ مَصنوعٍ أَو قائِمَةٍ قَديمَة.</para>
+    /// <para>والحالُ هُنا لا في المُصادِق: المُصادِقُ نَقِيٌّ لا يَقرَأُ حالَةً مُخَزَّنَة (القاعِدَة ٧). و<see cref="IssueAsync"/> لا يَسأَلُها — يَبقى
+    /// الرَدُّ عِندَ الاستِعمالِ حارِساً لِمِفتاحٍ رَحَلَ فاعِلُه بَعدَ إصدارِه.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<ApiKeyViolation>> ValidateIssueAsync(
+        string tenantSlug, ApiKeyValidator.IssueRequest request, CancellationToken ct = default)
+    {
+        var violations = ApiKeyValidator.Validate(request);
+        if (violations.Count > 0) return violations;
+        await using var tenant = _store.QuerySession(tenantSlug);
+        return ActorGone(await tenant.LoadAsync<User>(request.ActorUserId, ct))
+            ? [new ApiKeyViolation(ActorGoneCode, "الفاعِلُ حَذَفَ حِسابَه أَو لا حِسابَ لَه في المَتجَر — مِفتاحٌ بِاسمِه يُرَدُّ عِندَ أَوَّلِ استِعمال.")]
+            : violations;
+    }
+
     /// <summary>
     /// <para>يُنشِئ مِفتاحاً ويَحفَظُ <b>تَجزِئَتَه</b>، ويُعيدُ
     /// المَعروضَ مَرَّةً واحِدَة. الوَثيقَةُ عامَّة، فَالجَلسَةُ بِلا

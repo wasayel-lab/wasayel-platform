@@ -21,21 +21,49 @@ public class ApiKeyIssueActorTests(ITestOutputHelper output)
         return doors[0].Body;
     }
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، CO10)</b>: بَينَ التَحَقُّقِ والإصدارِ لا سُؤالَ عَن الفاعِل، وصَفحَةُ المَفاتيحِ لا رَمزَ لَها يُسَمّيه.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، CO10 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_issue_door_asks_nothing_about_the_actor_between_validation_and_issue</c> (‏<c>e4f5a4f</c>): «البابُ يَسأَلُ عَن الفاعِلِ قَبلَ الإصدار: False ·
+    /// الصَفحَةُ تُسَمّي رَحيلَه: False». والآن البابُ يَسأَلُ <c>ValidateIssueAsync</c> بَعدَ حارِسِه وقَبلَ الإصدار، والصَفحَةُ تُتَرجِمُ الرَمزَ مِن القامُوس.</summary>
     [Fact]
-    public void Today_the_issue_door_asks_nothing_about_the_actor_between_validation_and_issue()
+    public void The_issue_door_asks_the_actor_state_after_its_guard_and_before_issue_and_the_page_names_it()
     {
         var body = CreateBody();
-        var from = body.IndexOf("ApiKeyValidator.Validate(request)", StringComparison.Ordinal);
-        var to = body.IndexOf("keys.IssueAsync(", StringComparison.Ordinal);
-        Assert.True(from > 0 && to > from, $"التَحَقُّق@{from} الإصدار@{to}");
-        var between = body[from..to];
+        var guard = body.IndexOf("StudioOwnsAsync(store, auth, slug)", StringComparison.Ordinal);
+        var asks = body.IndexOf("await keys.ValidateIssueAsync(slug, request)", StringComparison.Ordinal);
+        var issue = body.IndexOf("keys.IssueAsync(", StringComparison.Ordinal);
         var page = StudioConsentCharacterizationTests.Source("libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "StudioAppKeys.razor");
-        var asks = between.Contains("ActorGone", StringComparison.Ordinal);
-        var named = page.Contains("actor_gone", StringComparison.Ordinal);
-        output.WriteLine($"اليَوم: البابُ يَسأَلُ عَن الفاعِلِ قَبلَ الإصدار: {asks} · الصَفحَةُ تُسَمّي رَحيلَه: {named}");
-        Assert.False(asks);
-        Assert.False(named);
+        var named = page.Contains("ApiKeyService.ActorGoneCode => \"studio.keys.err_actor_gone\"", StringComparison.Ordinal);
+        output.WriteLine($"بَعدَ التَبديل: الحارِس@{guard} سُؤالُ الفاعِل@{asks} الإصدار@{issue} · الصَفحَةُ تُسَمّي رَحيلَه: {named}");
+        Assert.True(guard > 0 && asks > guard && issue > asks);
+        Assert.DoesNotContain("ApiKeyValidator.Validate(request)", body, StringComparison.Ordinal);
+        Assert.True(named);
+        Assert.False(string.IsNullOrWhiteSpace(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "studio.keys.err_actor_gone")));
+        Assert.Equal("apikey_actor_gone", ApiKeyService.ActorGoneCode);
+    }
+
+    private static ApiKeyValidator.IssueRequest For(Guid actor, string name = "رَبطُ الناقِل")
+        => new(name, actor, "", new[] { ApiScopeCatalog.DealsRead }, null);
+
+    /// <summary>الرَمزُ بِحالاتِه — مُوجَب: فاعِلٌ مَحذوفٌ، وفاعِلٌ بِلا حِساب؛ سالِب: فاعِلٌ قائِمٌ يُصدَرُ لَه، وطَلَبٌ يَرُدُّه المُصادِقُ يُرَدُّ بِرَمزِه هُوَ
+    /// قَبلَ أَن تُقرَأَ حالٌ (المَخزَنُ البَديلُ يَرمي عِندَ أَيِّ نِداءٍ غَيرِ مَقصود).</summary>
+    [Theory]
+    [InlineData("deleted", "apikey_actor_gone")]
+    [InlineData("missing", "apikey_actor_gone")]
+    [InlineData("live", null)]
+    [InlineData("invalid", "name_empty")]
+    public async Task Issue_validation_refuses_a_gone_actor_and_nothing_else(string @case, string? code)
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = "zz-co10", DeletedAt = @case == "deleted" ? DateTime.UtcNow : null };
+        var keys = new ApiKeyService(AccountStub.Store(user));
+        var request = @case switch
+        {
+            "missing" => For(Guid.NewGuid()),
+            "invalid" => For(user.Id, name: ""),
+            _ => For(user.Id),
+        };
+        var violations = await keys.ValidateIssueAsync("zz-co10", request);
+        Assert.Equal(code, violations.FirstOrDefault()?.Code);
+        Assert.All(violations, v => Assert.False(string.IsNullOrWhiteSpace(v.MessageAr)));
     }
 }
 
@@ -49,10 +77,11 @@ public class LiveApiKeyIssueActorProofTests(ITestOutputHelper output)
     private static ApiKeyValidator.IssueRequest For(Guid actor)
         => new("رَبطُ الناقِل", actor, "", new[] { ApiScopeCatalog.DealsRead }, null);
 
-    /// <summary><b>تَوصيفُ اليَوم (‏2026-10-29، CO10)</b>: الخِدمَةُ تُصدِرُ لِفاعِلٍ مَحذوفٍ ولِفاعِلٍ بِلا حِساب مِفتاحاً «فَعّالاً»، ويُرَدُّ كِلاهُما عِندَ
-    /// الاستِعمالِ <c>ActorGone</c> — مِفتاحٌ مَيِّتٌ يَبدو حَيّاً.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-29، CO10 — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_key_issued_to_a_deleted_or_missing_actor_is_born_active_and_refused_on_use_on_Postgres</c> (‏<c>e4f5a4f</c>): «مِفتاحُ فاعِلٍ مَحذوف active ثُمَّ
+    /// ActorGone · مِفتاحُ فاعِلٍ بِلا حِساب active ثُمَّ ActorGone». والآن سُؤالُ البابِ يَرُدُّهُما قَبلَ الإصدار، والفاعِلُ القائِمُ يُصدَرُ لَه ويُصادِق.</summary>
     [Fact]
-    public async Task Today_a_key_issued_to_a_deleted_or_missing_actor_is_born_active_and_refused_on_use_on_Postgres()
+    public async Task A_deleted_or_missing_actor_is_refused_before_issue_and_a_live_actor_is_issued_on_Postgres()
     {
         if (!Enabled) return;
         await using var store = LiveApiKeyActorDeletionProofTests.BuildStore();
@@ -61,21 +90,25 @@ public class LiveApiKeyIssueActorProofTests(ITestOutputHelper output)
         try
         {
             var gone = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "966500000571" };
+            var live = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "966500000572" };
             await using (var s = store.LightweightSession(slug))
             {
                 AccountDeletion.Erase(gone, DateTime.UtcNow);
-                s.Store(gone);
+                s.Store(gone, live);
                 await s.SaveChangesAsync();
             }
             var keys = new ApiKeyService(store);
-            var deleted = await keys.IssueAsync(slug, For(gone.Id), Guid.NewGuid());
-            var missing = await keys.IssueAsync(slug, For(Guid.NewGuid()), Guid.NewGuid());
-            issued.AddRange(new[] { deleted.Key.Id, missing.Key.Id });
-            var useDeleted = (await keys.AuthenticateAsync(deleted.Presented)).Rejection;
-            var useMissing = (await keys.AuthenticateAsync(missing.Presented)).Rejection;
-            output.WriteLine($"اليَوم: مِفتاحُ فاعِلٍ مَحذوف {deleted.Key.Status} ثُمَّ {useDeleted} · مِفتاحُ فاعِلٍ بِلا حِساب {missing.Key.Status} ثُمَّ {useMissing}");
-            Assert.Equal((ApiKeyDocument.StatusActive, ApiKeyRejection.ActorGone), (deleted.Key.Status, useDeleted));
-            Assert.Equal((ApiKeyDocument.StatusActive, ApiKeyRejection.ActorGone), (missing.Key.Status, useMissing));
+            var deleted = (await keys.ValidateIssueAsync(slug, For(gone.Id))).FirstOrDefault()?.Code;
+            var missing = (await keys.ValidateIssueAsync(slug, For(Guid.NewGuid()))).FirstOrDefault()?.Code;
+            var ok = await keys.ValidateIssueAsync(slug, For(live.Id));
+            var key = await keys.IssueAsync(slug, For(live.Id), Guid.NewGuid());
+            issued.Add(key.Key.Id);
+            var use = (await keys.AuthenticateAsync(key.Presented)).Rejection;
+            output.WriteLine($"بَعدَ التَبديل: فاعِلٌ مَحذوف ⇒ {deleted} · فاعِلٌ بِلا حِساب ⇒ {missing} · فاعِلٌ قائِم ⇒ مَوانِع {ok.Count} ثُمَّ {key.Key.Status} ثُمَّ {use}");
+            Assert.Equal(ApiKeyService.ActorGoneCode, deleted);
+            Assert.Equal(ApiKeyService.ActorGoneCode, missing);
+            Assert.Empty(ok);
+            Assert.Equal((ApiKeyDocument.StatusActive, ApiKeyRejection.None), (key.Key.Status, use));
         }
         finally
         {

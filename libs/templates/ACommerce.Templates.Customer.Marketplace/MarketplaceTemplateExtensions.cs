@@ -4283,7 +4283,8 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
 
             var request = Services.Api.ApiKeySurface.Read(req);
-            var violations = Services.Api.ApiKeyValidator.Validate(request);
+            // ‏(‏2026-10-29، CO10) المُصادِقُ ثُمَّ حالُ الفاعِل (`ActorGone`، د56) — فاعِلٌ رَحَلَ يُرَدُّ قَبلَ أَن يولَدَ مِفتاحٌ مَيِّت.
+            var violations = await keys.ValidateIssueAsync(slug, request);
             if (violations.Count > 0)
                 return Results.Redirect($"/studio/apps/{slug}/keys?err={violations[0].Code}");
 
