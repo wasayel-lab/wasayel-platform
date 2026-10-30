@@ -113,7 +113,10 @@ public sealed class AuthSession
     /// <summary><b>كوكيُّ اسمِ العَرضِ لا كوكيُّ جَلسَة</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1) — الاسمُ يَنتَهي بِـ<c>.name</c>. نَقِيَّة،
     /// ويَسأَلُها الحَلُّ هُنا (لا يُقرَأُ جَلسَةً عَلى مَسارٍ ولا في السُقوط) و<c>SessionVersionGate.SessionCookieNames</c> — فَلا يَختَلِفانِ أَبَداً
     /// في أَيِّ الأَسماءِ جَلسَة.</summary>
-    public static bool IsNameCookie(string cookieName) => cookieName.EndsWith(".name", StringComparison.Ordinal);
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَوصيفُه <c>4ef835a</c>) «لا يَختَلِفانِ أَبَداً» لَم تَصدُق: القارِئُ يَبحَثُ
+    /// بِـ<c>Request.Cookies</c> بِلا حالَةِ أَحرُف (<c>Cookies[name + ".name"]</c> يُجيبُ <c>.NAME</c>) والقَرارُ كانَ بِحالَتِها. صارَ بِمُقارَنَةِ القارِئِ
+    /// (<c>OrdinalIgnoreCase</c>)، والبَوّابَةُ لا تَتَّكِلُ عَلَيه وَحدَه: تَفحَصُ كُلَّ كوكيٍّ يَحمِلُ رَمزاً أَيّاً كانَ اسمُه (<c>SessionVersionGate.CheckedCookieNames</c>).</remarks>
+    public static bool IsNameCookie(string cookieName) => cookieName.EndsWith(".name", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>الـ token الصالِح لِهذا الطَّلَب، أَو <c>null</c>.</summary>
     public static string? ResolveToken(HttpRequest req, string tenantSlug)

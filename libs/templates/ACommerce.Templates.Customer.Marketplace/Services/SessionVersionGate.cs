@@ -47,27 +47,50 @@ public static class SessionVersionGate
     /// (<see cref="SessionCookieNames"/>) <b>وكُلُّ كوكيٍّ مِن العائِلَةِ يَحمِلُ رَمزاً يَقبَلُه <c>ParseToken</c> أَيّاً كانَ اسمُه</b> — فَكوكيُّ «الاسم»
     /// الَّذي زُرِعَ فيه رَمزٌ ساقِطٌ يُفحَصُ ويُنزَع، وكوكيُّ اسمِ العَرضِ الحَقيقيُّ (قيمَتُه اسمٌ لا رَمز) لا يُمَسّ. كانَ الفَحصُ بِالاسمِ وَحدَه، والحَلُّ
     /// يَقرَأُ ذلِكَ الاسمَ لِدَورٍ اسمُه <c>name</c>.</para>
+    /// <para><b>(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَوصيفُه <c>4ef835a</c>) والعائِلَةُ لَم تَكُن تَكفي</b>: <c>Request.Cookies</c>
+    /// يَبحَثُ بِالاسمِ بِلا حالَةِ أَحرُف، والعائِلَةُ تُقارِنُ بِحالَتِها — فَرَمزٌ ساقِطٌ تَحتَ <c>.ACOMMERCE.AUTH.{slug}</c> أَو <c>.ACOMMERCE.STUDIO</c> لا يُفحَصُ
+    /// ويَقرَؤُه كُلُّ قارِئ. فَصارَ الشِقُّ الثاني <b>كُلَّ كوكيٍّ يَحمِلُ رَمزاً، مِن العائِلَةِ أَو مِن غَيرِها وبِأَيِّ حالَة</b>: الرَمزُ لا الاسمُ هُوَ ما يَفتَحُ
+    /// الجَلسَة، والقيمَةُ الَّتي لَيسَت رَمزاً يَرُدُّها فَكُّ الترميزِ أَو عَدَدُ الحُقولِ أَو التَوقيعُ بِلا قِراءَةِ قاعِدَة. والعائِلَةُ وكوكيُّ الاسمِ بِمُقارَنَةِ القارِئِ نَفسِها (<c>OrdinalIgnoreCase</c>).</para>
     /// </summary>
     public static IReadOnlyList<string> CheckedCookieNames(IEnumerable<KeyValuePair<string, string>> cookies)
     {
         var all = cookies.ToList();
-        return SessionCookieNames(all.Select(c => c.Key))
-            .Concat(all.Where(c => InFamily(c.Key) && AuthSession.IsNameCookie(c.Key) && AuthHandlers.ParseToken(c.Value) is not null)
-                       .Select(c => c.Key))
+        var sessions = SessionCookieNames(all.Select(c => c.Key));
+        return sessions
+            .Concat(all.Where(c => !sessions.Contains(c.Key) && AuthHandlers.ParseToken(c.Value) is not null).Select(c => c.Key))
             .ToList();
     }
 
-    /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت.</summary>
+    /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت، و(‏2026-10-30) بِلا حالَةِ أَحرُف
+    /// كَما يَبحَثُ <c>Request.Cookies</c>.</summary>
     private static bool InFamily(string name)
-        => name == StudioAuth.CookieName || name.StartsWith(AuthCookiePrefix, StringComparison.Ordinal);
+        => name.Equals(StudioAuth.CookieName, StringComparison.OrdinalIgnoreCase)
+           || name.StartsWith(AuthCookiePrefix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>رَأسُ <c>Cookie</c> بِلا الأَسماءِ المُسقَطَة (وكوكيّاتِ أَسمائِها) — نَقِيَّة، فَتُقاسُ بِلا خادِم.</summary>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١) <b>بِلا حالَةِ أَحرُف</b>: المُحَلِّلُ يُبقي آخِرَ المُكَرَّرِ بِحالَتَين، فَنَزعُ الاسمِ بِحالَتِه وَحدَها
+    /// كانَ يُظهِرُ النُسخَةَ المَحجوبَةَ بِرَمزِها الساقِط.</remarks>
     public static string WithoutCookies(string header, IReadOnlyCollection<string> names)
     {
-        var drop = names.SelectMany(n => new[] { n, n + ".name" }).ToHashSet(StringComparer.Ordinal);
-        return string.Join("; ", header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Where(pair => !drop.Contains(pair.Split('=', 2)[0].Trim())));
+        var drop = DropSet(names);
+        return string.Join("; ", Pairs(header).Where(pair => !drop.Contains(NameOf(pair))));
     }
+
+    /// <summary>الأَسماءُ كَما كُتِبَت في الرَأسِ الَّتي يَنزِعُها <see cref="WithoutCookies"/> — لِيُمحى كُلٌّ مِنها مِن المُتَصَفِّحِ بِحالَتِه (والمُتَصَفِّحُ
+    /// يُفَرِّقُ بَينَ الحالات). نَقِيَّة.</summary>
+    public static IReadOnlyList<string> DroppedNames(string header, IReadOnlyCollection<string> names)
+    {
+        var drop = DropSet(names);
+        return Pairs(header).Select(NameOf).Where(drop.Contains).Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private static HashSet<string> DropSet(IReadOnlyCollection<string> names)
+        => names.SelectMany(n => new[] { n, n + ".name" }).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string[] Pairs(string header)
+        => header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static string NameOf(string pair) => pair.Split('=', 2)[0].Trim();
 
     private static string Key(string tenant, Guid userId) => $"session-version|{tenant}|{userId:N}";
 
@@ -132,27 +155,48 @@ public static class SessionVersionGate
     }
 
     /// <summary>جِسمُ البَوّابَة: يَنزِعُ مِن الطَلَبِ كُلَّ كوكيِّ جَلسَةٍ أَسقَطَه رَفعُ الإصدار، ويَمحوه مِن المُتَصَفِّح.</summary>
+    /// <remarks>
+    /// <para>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — I-SEC-1 الجَولَةُ الأُولى؛ تَوصيفُه <c>4ef835a</c>) <b>والنَتيجَةُ تُقاسُ بِمُحَلِّلِ القارِئِ نَفسِه</b>: بَعدَ
+    /// كُلِّ نَزعٍ يُعادُ الفَحصُ عَلى <c>Request.Cookies</c> المُعادِ تَحليلُه — فَإن بَقِيَ رَمزٌ ساقِطٌ يَراه القارِئ (نُسخَةٌ كانَت مَحجوبَة، أَو رَأسٌ لا يُطابِقُ
+    /// تَقسيمُه تَحليلَه) ولَم يُغَيِّر النَزعُ شَيئاً أَو بَلَغَ <see cref="Passes"/>، <b>يُمحى رَأسُ <c>Cookie</c> كُلُّه</b> فَيَصيرُ الطَلَبُ مَجهولاً. الشَرطُ
+    /// «لا رَمزَ ساقِطاً بَعدَ البَوّابَةِ عِندَ أَيِّ قارِئ» يُفحَصُ بِالبِناءِ لا بِحُجَّةٍ عَن تَطابُقِ مُحَلِّلَين.</para>
+    /// </remarks>
     public static async Task ApplyAsync(HttpContext ctx)
     {
-        var names = CheckedCookieNames(ctx.Request.Cookies);
-        if (names.Count == 0) return;
+        if (CheckedCookieNames(ctx.Request.Cookies).Count == 0) return;
         var store = ctx.RequestServices.GetRequiredService<IDocumentStore>();
         var cache = ctx.RequestServices.GetRequiredService<IMemoryCache>();
-        var revoked = new List<string>();
-        foreach (var name in names)
+        var deleted = new List<string>();
+        for (var pass = 1; ; pass++)
         {
-            var token = ctx.Request.Cookies[name];
+            var revoked = await RevokedNamesAsync(ctx.Request.Cookies, store, cache);
+            if (revoked.Count == 0) break;
+            var header = ctx.Request.Headers.Cookie.ToString();
+            var stripped = WithoutCookies(header, revoked);
+            deleted.AddRange(revoked.SelectMany(n => new[] { n, n + ".name" }).Concat(DroppedNames(header, revoked)));
+            if (pass >= Passes || stripped == header) { ctx.Request.Headers.Cookie = string.Empty; break; }
+            ctx.Request.Headers.Cookie = stripped;
+        }
+        if (deleted.Count == 0) return;
+        var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(ctx.Request) };
+        foreach (var name in deleted.Distinct(StringComparer.Ordinal))
+            ctx.Response.Cookies.Delete(name, opts);
+    }
+
+    /// <summary>عَدَدُ مَرّاتِ النَزعِ قَبلَ مَحوِ الرَأسِ كُلِّه — نَزعٌ ثُمَّ فَحصٌ يَكفيانِ لِكُلِّ رَأسٍ مَقيس، والثالِثَةُ لا تَصِلُ إلّا بِتَحليلٍ لا يُطابِقُه التَقسيم.</summary>
+    public const int Passes = 3;
+
+    /// <summary>ما أَسقَطَه رَفعُ الإصدارِ مِن <see cref="CheckedCookieNames"/> — بِالرَمزِ الَّذي يَقرَؤُه القارِئُ تَحتَ ذلِكَ الاسم.</summary>
+    private static async Task<List<string>> RevokedNamesAsync(IRequestCookieCollection cookies, IDocumentStore store, IMemoryCache cache)
+    {
+        var revoked = new List<string>();
+        foreach (var name in CheckedCookieNames(cookies))
+        {
+            var token = cookies[name];
             if (AuthHandlers.ParseToken(token) is not { } parsed || AuthHandlers.SessionVersionOf(token) is not int version) continue;
             if (IsRevoked(version, await AccountVersionAsync(store, cache, parsed.TenantSlug, parsed.UserId))) revoked.Add(name);
         }
-        if (revoked.Count == 0) return;
-        ctx.Request.Headers.Cookie = WithoutCookies(ctx.Request.Headers.Cookie.ToString(), revoked);
-        var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(ctx.Request) };
-        foreach (var name in revoked)
-        {
-            ctx.Response.Cookies.Delete(name, opts);
-            ctx.Response.Cookies.Delete(name + ".name", opts);
-        }
+        return revoked;
     }
 
     /// <summary>تُسَجَّلُ قَبلَ نِقاطِ القالِبِ وصَفَحاتِه (‏<c>Program.cs</c>) — فَكُلُّ قارِئٍ لِلجَلسَةِ بَعدَها يَرى الكوكيَّ المُسقَطَ غائِباً.</summary>

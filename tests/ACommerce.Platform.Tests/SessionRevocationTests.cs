@@ -358,12 +358,13 @@ public class SessionRevocationTests(ITestOutputHelper output)
     // `Request.Cookies` يَبحَثُ بِالاسمِ بِلا حالَةِ أَحرُف (مَقيس: `.ACOMMERCE.AUTH.x` يُجيبُ `[".acommerce.auth.x"]`، والمُكَرَّرُ الأَخيرُ يَربَح)،
     // والبَوّابَةُ تَختارُ ما تَفحَصُه وما تَنزِعُه بِمُقارَنَةٍ حَسّاسَة (`Ordinal`). فَرَمزٌ ساقِطٌ تَحتَ اسمٍ بِحالَةٍ أُخرى لا يُفحَص، ويَقرَؤُه كُلُّ قارِئ.
 
-    /// <summary><b>تَوصيفُ «اليَوم» (القاعِدَة ٣)</b>: رَمزٌ أَسقَطَه رَفعُ الإصدارِ تَحتَ اسمِ كوكيٍّ بِحُروفٍ كَبيرَةٍ أَو مُختَلِطَة — عَلى مَسارٍ بِلا دَورٍ
-    /// ومَسارِ دَور — لا تَفحَصُه البَوّابَةُ فَيَفتَحُ الجَلسَة.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_revoked_token_under_an_upper_or_mixed_case_cookie_name_opens_a_session</c> (‏<c>4ef835a</c>): «تَفحَصُ البَوّابَةُ 0 · الجَلسَة تُفتَح ·
+    /// Set-Cookie 0». والآن يُفحَصُ ويُنزَعُ ويُمحى بِحالَتِه.</summary>
     [Theory]
     [InlineData(".ACOMMERCE.AUTH.{0}", "/{0}/me")]
     [InlineData(".Acommerce.auth.{0}.driver", "/{0}/r/driver/me")]
-    public async Task Today_a_revoked_token_under_an_upper_or_mixed_case_cookie_name_opens_a_session(string cookieFormat, string pathFormat)
+    public async Task A_revoked_token_under_an_upper_or_mixed_case_cookie_name_is_checked_stripped_and_deleted(string cookieFormat, string pathFormat)
     {
         var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 1 };
         var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
@@ -372,36 +373,40 @@ public class SessionRevocationTests(ITestOutputHelper output)
         var checkedNames = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.CheckedCookieNames(ctx.Request.Cookies);
         await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
         var token = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
-        output.WriteLine($"اليَوم: «{cookie}» · تَفحَصُ البَوّابَةُ {checkedNames.Count} · الجَلسَة {(token is null ? "لا" : "تُفتَح")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
-        Assert.Empty(checkedNames);
-        Assert.Equal(revoked, token);
+        output.WriteLine($"بَعدَ التَبديل: «{cookie}» · تَفحَصُ البَوّابَةُ {checkedNames.Count} · الجَلسَة {(token is null ? "لا" : "تُفتَح")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Equal(new[] { cookie }, checkedNames);
+        Assert.Null(token);
+        Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($"{cookie}=;", StringComparison.Ordinal));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: نُسخَتانِ بِاسمٍ واحِدٍ بِحالَتَين — يَقرَأُ المُحَلِّلُ الأَخيرَةَ فَتَفحَصُها البَوّابَةُ وتَنزِعُها بِحالَتِها وَحدَها،
-    /// فَتَظهَرُ الأُولى المَحجوبَةُ ويَقرَؤُها القارِئُ بَعدَ البَوّابَة.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_a_shadowed_case_duplicate_of_a_revoked_cookie_appears_after_the_gate_strips_the_first</c>
+    /// (‏<c>4ef835a</c>): «الجَلسَة تُفتَح بِالإصدار 1». والآن تُنزَعُ النُسخَتانِ مَعاً مِن الطَلَب، ويُمحى الاسمُ مِن المُتَصَفِّح.</summary>
+    /// <remarks>مَقيس: <c>Response.Cookies.Delete</c> يُبدِلُ <c>Set-Cookie</c> سابِقاً لِلاسمِ نَفسِه بِلا حالَةِ أَحرُف، فَرَدٌّ واحِدٌ يَمحو إحدى الصورَتَين؛
+    /// والأُخرى تُنزَعُ مِن كُلِّ طَلَبٍ وتُمحى في الرَدِّ التالي — والمُتَصَفِّحُ الَّذي يَحمِلُهُما مُتَصَفِّحُ حامِلِ الرَمزِ نَفسِه.</remarks>
     [Fact]
-    public async Task Today_a_shadowed_case_duplicate_of_a_revoked_cookie_appears_after_the_gate_strips_the_first()
+    public async Task A_shadowed_case_duplicate_of_a_revoked_cookie_is_stripped_with_it()
     {
         var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 2 };
         var hidden = AuthHandlers.MakeToken(user.Id, NameSlug, 1);
         var seen = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
         var ctx = GateContext($"/{NameSlug}/me", user, ($".ACOMMERCE.AUTH.{NameSlug}", hidden), ($".acommerce.auth.{NameSlug}", seen));
-        Assert.Equal(seen, ctx.Request.Cookies[$".acommerce.auth.{NameSlug}"]);
         await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
         var token = ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug);
-        output.WriteLine($"اليَوم: رَأسُ Cookie بَعدَ البَوّابَة «{ctx.Request.Headers.Cookie.ToString().Split('=')[0]}=…» · الجَلسَة {(token is null ? "لا" : $"تُفتَح بِالإصدار {AuthHandlers.SessionVersionOf(token)}")}");
-        Assert.Equal(hidden, token);
+        output.WriteLine($"بَعدَ التَبديل: رَأسُ Cookie «{ctx.Request.Headers.Cookie}» · الجَلسَة {(token is null ? "لا" : "تُفتَح")} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Null(token);
+        Assert.Equal("", ctx.Request.Headers.Cookie.ToString());
+        Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($".acommerce.auth.{NameSlug}=;", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: كوكيُّ الاستوديو — هُوِيَّةُ مُشرِفِ المَنَصَّة — بِحُروفٍ كَبيرَة: لا تَفحَصُه البَوّابَة، ويَقرَؤُه <c>StudioAuth.Load</c>
-    /// جَلسَةً، وبِاسمِه الصَحيحِ يُنزَع (الضابِط).</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_a_revoked_studio_token_under_an_upper_case_cookie_name_opens_the_studio</c> (‏<c>4ef835a</c>):
+    /// «‹.ACOMMERCE.STUDIO› تُفتَح». والآن لا يَفتَحُ الاستوديو بِأَيِّ حالَة.</summary>
     [Fact]
-    public async Task Today_a_revoked_studio_token_under_an_upper_case_cookie_name_opens_the_studio()
+    public async Task A_revoked_studio_token_opens_the_studio_under_no_case_of_its_name()
     {
         var studio = new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioUser { Id = Guid.NewGuid(), SessionVersion = 1 };
         var revoked = AuthHandlers.MakeToken(studio.Id, ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.Tenant, 0);
         var opened = new Dictionary<string, bool>();
-        foreach (var name in new[] { ".acommerce.studio", ".ACOMMERCE.STUDIO" })
+        foreach (var name in new[] { ".acommerce.studio", ".ACOMMERCE.STUDIO", ".Acommerce.Studio" })
         {
             var ctx = GateContext("/studio", studio, (name, revoked));
             await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
@@ -409,9 +414,117 @@ public class SessionRevocationTests(ITestOutputHelper output)
             auth.Load();
             opened[name] = auth.IsAuthenticated;
         }
-        output.WriteLine($"اليَوم: {string.Join(" · ", opened.Select(o => $"«{o.Key}» {(o.Value ? "تُفتَح" : "لا")}"))}");
-        Assert.False(opened[".acommerce.studio"]);
-        Assert.True(opened[".ACOMMERCE.STUDIO"]);
+        output.WriteLine($"بَعدَ التَبديل: {string.Join(" · ", opened.Select(o => $"«{o.Key}» {(o.Value ? "تُفتَح" : "لا")}"))}");
+        Assert.Equal(3, opened.Count);
+        Assert.All(opened.Values, Assert.False);
+    }
+
+    /// <summary>المُوجَب «أَيّاً كانَ اسمُه»: رَمزٌ ساقِطٌ في كوكيٍّ خارِجَ العائِلَة، وفي كوكيِّ «اسمٍ» بِحالَةٍ مُختَلِطَة — يُنزَعانِ، والجَلسَةُ الحَيَّةُ بِجِوارِهِما
+    /// تَبقى بِرَمزِها.</summary>
+    [Fact]
+    public async Task A_revoked_token_under_any_other_name_is_stripped_and_the_live_session_beside_it_stays()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 2 };
+        var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 1);
+        var live = AuthHandlers.MakeToken(user.Id, NameSlug, 2);
+        var ctx = GateContext($"/{NameSlug}/me", user,
+            ("zz_other", revoked), ($".acommerce.auth.{NameSlug}.driver.NAME", revoked), ($".acommerce.auth.{NameSlug}", live));
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        output.WriteLine($"رَأسُ Cookie بَعدَ البَوّابَة: «{ctx.Request.Headers.Cookie.ToString().Split('=')[0]}=…» · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Equal($".acommerce.auth.{NameSlug}={live}", ctx.Request.Headers.Cookie.ToString());
+        Assert.Equal(live, ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug));
+    }
+
+    /// <summary>السالِبان: كوكيُّ اسمِ عَرضٍ بِحالَةٍ مُختَلِطَةٍ قيمَتُه اسمٌ لا رَمز، ورَمزٌ <b>حَيٌّ</b> تَحتَ اسمٍ بِحُروفٍ كَبيرَة — لا يَمَسُّهُما شَيء.</summary>
+    [Fact]
+    public async Task A_mixed_case_display_name_cookie_and_a_live_upper_case_token_are_left_alone()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
+        var live = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var ctx = GateContext($"/{NameSlug}/me", user,
+            ($".ACOMMERCE.AUTH.{NameSlug}", live), ($".Acommerce.Auth.{NameSlug}.NAME", "%D8%B9%D8%B6%D9%88"));
+        var before = ctx.Request.Headers.Cookie.ToString();
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        Assert.Equal(before, ctx.Request.Headers.Cookie.ToString());
+        Assert.Equal(0, ctx.Response.Headers.SetCookie.Count);
+        Assert.Equal(live, ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie($".Acommerce.Auth.{NameSlug}.NAME"));
+    }
+
+    /// <summary>الاحتِياطُ المُغلَق: رَأسا <c>Cookie</c> (يَجمَعُهُما <c>ToString</c> بِفاصِلَة) والرَمزُ الساقِطُ في الثاني — التَقسيمُ بِـ«;» لا يَجِدُه فَلا يُغَيِّرُ
+    /// النَزعُ شَيئاً، فَيُمحى الرَأسُ كُلُّه ولا تُفتَحُ جَلسَة.</summary>
+    [Fact]
+    public async Task A_cookie_header_the_strip_cannot_change_is_dropped_whole()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 1 };
+        var revoked = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var ctx = GateContext($"/{NameSlug}/me", user);
+        ctx.Request.Headers.Cookie = new Microsoft.Extensions.Primitives.StringValues(new[] { "ac_lang=ar", $".acommerce.auth.{NameSlug}={revoked}" });
+        Assert.Equal(revoked, ctx.Request.Cookies[$".acommerce.auth.{NameSlug}"]);
+        await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+        output.WriteLine($"رَأسانِ: بَعدَ البَوّابَة كوكيّات {ctx.Request.Cookies.Count} · Set-Cookie {ctx.Response.Headers.SetCookie.Count}");
+        Assert.Equal(0, ctx.Request.Cookies.Count);
+        Assert.Null(ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug));
+        Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($".acommerce.auth.{NameSlug}=;", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// <para><b>الشَرطُ بِمُحَلِّلِ القارِئِ نَفسِه (القاعِدَة ١٠)</b>: لِكُلِّ رَأسٍ مَحقونٍ يَحمِلُ رَمزاً ساقِطاً بِشَكلٍ ما — حالاتُ الأَحرُف، والمُكَرَّرُ بِتَرتيبَيه،
+    /// وكوكيُّ «الاسم»، والاستوديو، والفَراغاتُ والفَواصِلُ المَنقوطَةُ الزائِدَة — لا يَبقى بَعدَ البَوّابَةِ في <c>Request.Cookies</c> كوكيٌّ رَمزُه ساقِط.
+    /// والعَيِّنَةُ تَطبَعُ عَدَدَها وتَفشَلُ إن كانَت صِفراً، وكُلُّ رَأسٍ يَفتَحُ الجَلسَةَ قَبلَ البَوّابَةِ (فَلا تُقاسُ عَيِّنَةٌ لا تُحرِجُها).</para>
+    /// </summary>
+    [Fact]
+    public async Task After_the_gate_no_reader_sees_a_revoked_token_in_any_injected_header()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 3 };
+        var a = AuthHandlers.MakeToken(user.Id, NameSlug, 1);
+        var b = AuthHandlers.MakeToken(user.Id, NameSlug, 2);
+        var g = $".acommerce.auth.{NameSlug}";
+        var headers = new[]
+        {
+            $"{g}={a}", $"{g.ToUpperInvariant()}={a}", $".Acommerce.Auth.{NameSlug}={a}",
+            $"{g.ToUpperInvariant()}={a}; {g}={b}", $"{g}={a}; {g.ToUpperInvariant()}={b}",
+            $"{g}.driver={a}; {g}.DRIVER={b}", $"{g}.name={a}", $"{g}.NAME={a}; {g}.name={b}",
+            $"ac_lang=ar;;; \t{g}={a}", $"zz={a}; {g}={b}",
+        };
+        var measured = 0;
+        foreach (var header in headers)
+        {
+            var ctx = GateContext($"/{NameSlug}/me", user);
+            ctx.Request.Headers.Cookie = header;
+            Assert.Contains(ctx.Request.Cookies, c => AuthHandlers.SessionVersionOf(c.Value) is int v && v < user.SessionVersion);
+            await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.ApplyAsync(ctx);
+            var left = ctx.Request.Cookies.Where(c => AuthHandlers.SessionVersionOf(c.Value) is int v && v < user.SessionVersion).Select(c => c.Key).ToList();
+            Assert.True(left.Count == 0, $"«{header.Split('=')[0]}…» تَرَكَ رَمزاً ساقِطاً تَحتَ {string.Join(", ", left)}.");
+            Assert.Null(ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug));
+            measured++;
+        }
+        output.WriteLine($"رُؤوسٌ مَحقونَةٌ مَقيسَة: {measured} · كُلُّها بِلا رَمزٍ ساقِطٍ بَعدَ البَوّابَة");
+        Assert.True(measured > 0);
+    }
+
+    /// <summary>القَرارُ الواحِدُ بِحالاتِ الأَحرُف (القاعِدَة ١٠، عَيِّنَةٌ مَحقونَة): ما يَراه <c>Request.Cookies</c> تَحتَ الاسمِ القانونيِّ لِجَلسَةٍ أَو لِاسمِ عَرض،
+    /// تَعُدُّه البَوّابَةُ كَذلِك — والعَيِّنَةُ تَطبَعُ عَدَدَها.</summary>
+    [Fact]
+    public void The_gate_and_the_reader_agree_on_session_and_name_cookies_whatever_the_case()
+    {
+        var sample = new (string Name, string Canonical, bool Session)[]
+        {
+            (".ACOMMERCE.AUTH.ejar", ".acommerce.auth.ejar", true), (".Acommerce.auth.ejar.driver", ".acommerce.auth.ejar.driver", true),
+            (".ACOMMERCE.STUDIO", ".acommerce.studio", true), (".Acommerce.Studio", ".acommerce.studio", true),
+            (".acommerce.auth.ejar.NAME", ".acommerce.auth.ejar.name", false), (".ACOMMERCE.AUTH.EJAR.DRIVER.Name", ".acommerce.auth.ejar.driver.name", false),
+            (".ACOMMERCE.STUDIO.NAME", ".acommerce.studio.name", false),
+        };
+        foreach (var (name, canonical, session) in sample)
+        {
+            var ctx = new DefaultHttpContext();
+            ctx.Request.Headers.Cookie = $"{name}=v";
+            Assert.Equal("v", ctx.Request.Cookies[canonical]);
+            Assert.Equal(!session, ACommerce.Templates.Customer.Marketplace.AuthSession.IsNameCookie(name));
+            Assert.Equal(session, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.SessionCookieNames(new[] { name }).Count == 1);
+        }
+        output.WriteLine($"عَيِّنَةُ الحالات: {sample.Length} · جَلَساتٌ {sample.Count(x => x.Session)} · أَسماءُ عَرضٍ {sample.Count(x => !x.Session)}");
+        Assert.True(sample.Length > 0);
     }
 
     // ─── A4 (تَدقيقُ الموجَة ١١، ‏2026-10-29): حِسابٌ حُذِفَ قَبلَ إصدارِ الجَلسَةِ يَبقى رَمزُه ‏0 صالِحاً ───────────────────────────
