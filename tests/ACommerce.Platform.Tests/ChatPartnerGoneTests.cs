@@ -13,8 +13,8 @@ namespace ACommerce.Platform.Tests;
 // **تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣)**: الحَذفُ يُبقي وَثيقَةَ الحِسابِ بِـ`DeletedAt` واسمِ «حِسابٌ مَحذوف» (`AccountDeletion.Erase`)، فَسُؤالُ
 // `partner is null` في `POST /{slug}/users/{userId}/chat` لا يَراه — وتَعليقُ البابِ يَقولُ «يَعودُ إلَيه عِندَ الطَرَفِ المَحذوفِ بِرَمزِه». وبابُ البائِعِ
 // `POST /{slug}/vendor/{vendorId}/chat` لا يَسأَلُ شَيئاً، وبابُ الإعلانِ `POST /{slug}/listings/{id}/chat` يَكتُبُ طَرَفاً مُعَرِّفُه `Guid.NewGuid()` لا عُضوَ
-// لَه — فَمُحادَثَتُه لا تَصِلُ صاحِبَ الإعلانِ أَبَداً. وغُرفَةُ المُحادَثَةِ وصَفحَةُ البائِعِ تَرسُمانِ الكِتابَةَ والتَواصُلَ بِلا سُؤال. وبابُ الإرسالِ يَرمي قَبلَ أَيِّ حِفظٍ لِطَرَفَينِ قائِمَين (سُؤالُ الإشعارِ الأَخيرِ بِوَقتٍ عالَمِيٍّ — صَفُّه أَدناه)، فَقَبلَ
-// أَن يُسأَلَ عَن الطَرَفِ يُصلَحُ في كوميتٍ مُستَقِلّ. صُفوفُ «Today_» تُثَبِّتُ ذلك كَما هُو، وتُقلَبُ بِأَسمائِها في كوميتِ التَبديل.
+// لَه — فَمُحادَثَتُه لا تَصِلُ صاحِبَ الإعلانِ أَبَداً. وغُرفَةُ المُحادَثَةِ وصَفحَةُ البائِعِ تَرسُمانِ الكِتابَةَ والتَواصُلَ بِلا سُؤال. وبابُ الإرسالِ كانَ يَرمي قَبلَ أَيِّ حِفظٍ لِطَرَفَينِ قائِمَين (سُؤالُ الإشعارِ الأَخيرِ بِوَقتٍ عالَمِيٍّ، ‏9dc8354)،
+// فَأُصلِحَ في كوميتٍ مُستَقِلٍّ قَبلَ أَن يُسأَلَ عَن الطَرَف — فَصارَ يَحفَظُ رِسالَةً وإشعاراً لِلمَمحُوّ (صَفُّه «Today_» أَدناه). صُفوفُ «Today_» تُثَبِّتُ ذلك كَما هُو، وتُقلَبُ بِأَسمائِها في كوميتِ التَبديل.
 
 /// <summary>صَفحَتا المُحادَثَةِ والبائِعِ — شَكلُ الشَرطِ الَّذي يَرسُمُ الكِتابَةَ والتَواصُل.</summary>
 public class ChatPartnerGoneSourceTests(ITestOutputHelper output)
@@ -205,11 +205,11 @@ public class LiveChatPartnerGoneProofTests(ITestOutputHelper output)
         finally { await CleanAsync(host.Store, slug, listing); }
     }
 
-    /// <summary><b>تَوصيف — وعَطَبٌ قُرِئَ أَثناءَ القِياس</b>: بابُ الإرسالِ يَرمي قَبلَ أَن يَحفَظَ شَيئاً — ولِطَرَفَينِ قائِمَين. سُؤالُه «أَلِلمُستَلِمِ إشعارٌ في آخِرِ ‏30
-    /// ثانِيَة» يُقارِنُ <c>n.At &gt; since</c> بِـ<c>since = DateTime.UtcNow…</c>، وMarten يُتَرجِمُ الحَقلَ <c>timestamp without time zone</c> فَيَرُدُّ Npgsql الوَسيطَ
-    /// (<c>InvalidUtcDateTimeUsageException</c>) — فَلا رِسالَةَ تُحفَظُ مِن هذا البابِ ولا إشعار. وهِيَ عِلَّةُ <c>ModelCallRecord.Instant</c> نَفسُها (ADR-031).</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30)</b> — كانَ <c>Today_the_send_door_throws_on_its_recent_notice_query_and_stores_nothing_on_Postgres</c>
+    /// (‏<c>9dc8354</c>: <c>InvalidUtcDateTimeUsageException</c> عِندَ <c>n.At &gt; since</c>، صِفرُ رِسالَةٍ وصِفرُ إشعار). والحَدُّ الآنَ بِـ<c>ModelCallRecord.Instant</c>.
+    /// <b>المُوجَب</b>: رِسالَتانِ مُتَتالِيَتانِ تُحفَظانِ، وإشعارٌ واحِدٌ لِلمُستَلِم — الثانِيَةُ في نافِذَةِ الـ‏30 ثانِيَةً لا تَكتُبُ ثانِياً.</summary>
     [Fact]
-    public async Task Today_the_send_door_throws_on_its_recent_notice_query_and_stores_nothing_on_Postgres()
+    public async Task The_send_door_stores_two_messages_and_one_notice_for_the_partner_within_thirty_seconds_on_Postgres()
     {
         if (!Enabled) return;
         var slug = NewSlug();
@@ -218,11 +218,65 @@ public class LiveChatPartnerGoneProofTests(ITestOutputHelper output)
         var conv = await SeedConversationAsync(host.Store, slug, buyer, seller);
         try
         {
-            var thrown = await Assert.ThrowsAsync<Marten.Exceptions.InvalidUtcDateTimeUsageException>(() => host.PostFormAsync(SendDoor,
-                new Dictionary<string, string> { ["slug"] = slug, ["conversationId"] = conv.Id.ToString() }, slug, token, ("body", "هَل ما زالَ مُتاحاً؟")));
+            var route = new Dictionary<string, string> { ["slug"] = slug, ["conversationId"] = conv.Id.ToString() };
+            var first = await host.PostFormAsync(SendDoor, route, slug, token, ("body", "هَل ما زالَ مُتاحاً؟"));
+            var second = await host.PostFormAsync(SendDoor, route, slug, token, ("body", "وكَم التَوصيل؟"));
             var (_, messages, notices) = await ReadAsync(host.Store, slug);
-            output.WriteLine($"البابُ رَمى: {thrown.GetType().Name} · رَسائِل {messages.Count} · إشعارات {notices.Count}");
-            Assert.Equal((0, 0), (messages.Count, notices.Count));
+            output.WriteLine($"البابُ: {first.Status} ثُمَّ {second.Status} · رَسائِل {messages.Count} · إشعاراتٌ لِلبائِع {notices.Count(n => n.UserId == seller.Id)}");
+            Assert.Equal((302, $"/{slug}/chats/{conv.Id}"), first);
+            Assert.Equal(first, second);
+            Assert.Equal(2, messages.Count(m => m.SenderId == buyer.Id));
+            Assert.Equal(("chat_message", seller.Id), (Assert.Single(notices).Type, notices[0].UserId));
+        }
+        finally { await CleanAsync(host.Store, slug); }
+    }
+
+    /// <summary><b>السالِب</b>: إشعارُ مُحادَثَةٍ أَقدَمُ مِن ‏30 ثانِيَةً لا يَحجُبُ إشعارَ الرِسالَةِ الجَديدَة — فَالحَدُّ يُقارِنُ الوَقتَ فِعلاً لا «أَيَّ إشعار».</summary>
+    [Fact]
+    public async Task A_chat_notice_older_than_thirty_seconds_does_not_hold_back_the_next_one_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = NewSlug();
+        await using var host = LiveTemplateDoorHost.Build();
+        var (buyer, seller, token) = await SeedAsync(host.Store, slug, erased: false);
+        var conv = await SeedConversationAsync(host.Store, slug, buyer, seller);
+        try
+        {
+            await using (var s = host.Store.LightweightSession(slug))
+            {
+                s.Store(new Notification { Id = Guid.NewGuid(), UserId = seller.Id, Type = "chat_message", Title = "قَديم", Body = "—",
+                    RelatedUrl = $"/{slug}/chats/{conv.Id}", At = DateTime.UtcNow.AddSeconds(-90) });
+                await s.SaveChangesAsync();
+            }
+            var sent = await host.PostFormAsync(SendDoor, new Dictionary<string, string> { ["slug"] = slug, ["conversationId"] = conv.Id.ToString() },
+                slug, token, ("body", "ما زِلتُ مُهتَمّاً"));
+            var (_, messages, notices) = await ReadAsync(host.Store, slug);
+            output.WriteLine($"البابُ: {sent.Status} · رَسائِل {messages.Count} · إشعاراتٌ لِلبائِع {notices.Count(n => n.UserId == seller.Id)}");
+            Assert.Equal(302, sent.Status);
+            Assert.Single(messages);
+            Assert.Equal(2, notices.Count(n => n.UserId == seller.Id && n.Type == "chat_message"));
+        }
+        finally { await CleanAsync(host.Store, slug); }
+    }
+
+    /// <summary><b>تَوصيف</b> (بَلَغَه القِياسُ بَعدَ إصلاحِ الحَدّ): بابُ الإرسالِ يَحفَظُ الرِسالَةَ ويَكتُبُ إشعاراً بِاسمِ المُرسِلِ لِلحِسابِ المَمحُوّ — ولا يَسأَلُ عَنه.</summary>
+    [Fact]
+    public async Task Today_the_send_door_stores_a_message_and_a_notice_for_an_erased_partner_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = NewSlug();
+        await using var host = LiveTemplateDoorHost.Build();
+        var (buyer, seller, token) = await SeedAsync(host.Store, slug, erased: true);
+        var conv = await SeedConversationAsync(host.Store, slug, buyer, seller);
+        try
+        {
+            var (status, location) = await host.PostFormAsync(SendDoor, new Dictionary<string, string> { ["slug"] = slug, ["conversationId"] = conv.Id.ToString() },
+                slug, token, ("body", "هَل ما زالَ مُتاحاً؟"));
+            var (_, messages, notices) = await ReadAsync(host.Store, slug);
+            output.WriteLine($"البابُ: {status} → {location} · رَسائِل {messages.Count} · إشعاراتٌ لِلمَمحُوّ {notices.Count(n => n.UserId == seller.Id)}");
+            Assert.Equal((302, $"/{slug}/chats/{conv.Id}"), (status, location));
+            Assert.Equal(buyer.Id, Assert.Single(messages).SenderId);
+            Assert.Equal(("chat_message", seller.Id), (Assert.Single(notices).Type, notices[0].UserId));
         }
         finally { await CleanAsync(host.Store, slug); }
     }

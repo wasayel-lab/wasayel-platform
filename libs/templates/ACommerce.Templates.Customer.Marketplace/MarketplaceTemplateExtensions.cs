@@ -2215,7 +2215,9 @@ public static class MarketplaceTemplateExtensions
             // المُستَخدِم رَسائِل مُتَتالِيَة.
             var recipientId = userId == conv.OwnerId ? conv.PartnerId : conv.OwnerId;
             var senderName  = userId == conv.OwnerId ? conv.OwnerName  : conv.PartnerName;
-            var since = DateTime.UtcNow.AddSeconds(-30);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الحَدُّ بِلا `Kind=Utc` (`ModelCallRecord.Instant`): Marten يُقارِنُ `At` عَموداً بِلا مِنطَقَة، وكانَ Npgsql
+            // يَرُدُّ `DateTime.UtcNow…` فَيَرمي البابُ قَبلَ أَيِّ حِفظٍ لِكُلِّ رِسالَة.
+            var since = Services.Metering.ModelCallRecord.Instant(DateTime.UtcNow.AddSeconds(-30));
             var hasRecent = await s.Query<ACommerce.Kit.Notifications.Notification>()
                 .AnyAsync(n => n.UserId == recipientId &&
                                n.Type == "chat_message" &&
