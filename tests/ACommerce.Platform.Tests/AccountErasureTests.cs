@@ -726,6 +726,27 @@ public class AccountErasureTests
             AccountErasure.CashRefundsOwed(new[] { owed, noteAfter, notOwed, active, asSeller, card, cardRefunded, cashThenCard }, Me).Select(d => d.Id).OrderBy(i => i));
     }
 
+    // ─── صَفقَةٌ قَبِلَها الاستوديو (‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 + H-SEC-1) — تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) ──────────────────
+
+    /// <summary><b>تَوصيفُ اليَوم</b>: صَفقَةُ مَسارِ العَرضِ الَّتي قَبِلَها صاحِبُ المَتجَرِ مِن الاستوديو — «→ التالي» يُعَيِّنُ مُستَخدِمَ الاستوديو طَرَفاً مُقابِلاً ويُحَرِّكُها —
+    /// تُعَدُّ <see cref="AccountErasure.IncomingUnaccepted"/> عِندَ «حَجز» و«دَفع» كَما عِندَ «عَرض»: الدالَّةُ لا تَسأَلُ المَرحَلَةَ ولا الطَرَفَ المُقابِل، وتَعليقُها يَقولُ «لَم يَقبَلْها».
+    /// يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public void Today_an_offer_deal_the_studio_accepted_still_reads_as_incoming_unaccepted_at_booked_and_paid()
+    {
+        var studio = Guid.NewGuid();
+        Deal Accepted(DealStage stage) => new()
+        {
+            Id = Guid.NewGuid(), InitiatorId = Guid.NewGuid(), CounterpartyId = studio, CounterpartyName = "مالِك التَّطبيق", Status = DealStatus.Active, Stage = stage,
+            Refs = new() { [DealsService.ListingOwnerRef] = Me.ToString() },
+        };
+        var booked = Accepted(DealStage.Booked);
+        var paid = Accepted(DealStage.Paid);
+        output.WriteLine($"قَبِلَها الاستوديو — عِندَ Booked: {AccountErasure.IncomingUnaccepted(booked, Me)} · عِندَ Paid: {AccountErasure.IncomingUnaccepted(paid, Me)}");
+        Assert.True(AccountErasure.IncomingUnaccepted(booked, Me));
+        Assert.True(AccountErasure.IncomingUnaccepted(paid, Me));
+    }
+
     // ─── رِحلَةٌ جارِيَة (‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) — مُوجَبٌ وسالِبٌ لِلدالَّتَين، وصَفحَةُ الحَذفِ تَسأَلُ السُؤالَ نَفسَه ─────────────
 
     /// <summary><see cref="AccountErasure.LiveTrip"/>: مُطابَقَةٌ فَعّالَةٌ عَلى إعلانِها القائِمِ ⇒ نَعَم؛ مُنتَهِيَةٌ أَو مَقطوعَةٌ، أَو إعلانُها مَحذوفٌ أَو غائِبٌ أَو غَيرُه ⇒ لا.
@@ -1850,5 +1871,93 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
             Assert.Single(offers);
         }
         finally { await CleanTripAsync(host.Store, slug, trip, other); }
+    }
+
+    // ─── صَفقَةٌ قَبِلَها الاستوديو عِندَ الحَذف (‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 + H-SEC-1) ───────────────────────────────────────────
+
+    /// <summary>بائِعٌ لَه إعلانٌ وصَفقَةُ مَسارِ عَرضٍ عَلَيه مِن مُشتَرٍ — بِالمَرحَلَةِ والطَرَفِ المُقابِلِ المُعطَيَين (مُستَخدِمُ الاستوديو حينَ قَبِلَها صاحِبُ المَتجَر).</summary>
+    private static async Task<(User Seller, Guid Listing, Deal Deal)> SeedOfferDealAsync(Marten.IDocumentStore store, string slug, DealStage stage, Guid? counterparty)
+    {
+        var seller = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "بائِعٌ يُغلِقُ حِسابَه", Phone = "+966500000581", PhoneVerified = true };
+        var buyer = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "مُشتَري العَرض", Phone = "+966500000582", PhoneVerified = true };
+        var listing = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var deal = new Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, ListingId = listing, ListingTitle = "سِلعَةُ البائِع", InitiatorId = buyer.Id, InitiatorName = buyer.FullName,
+            CounterpartyId = counterparty, CounterpartyName = counterparty is null ? null : "مالِك التَّطبيق", AmountSar = 120m,
+            Status = DealStatus.Active, Stage = stage, Refs = new() { [DealsService.ListingOwnerRef] = seller.Id.ToString() },
+        };
+        if (counterparty is { } c)
+            deal.Timeline.Add(new(DealStage.Offered, stage, "advanced", c, DealEvent.StudioActor, null, now));
+        await using var s = store.LightweightSession(slug);
+        s.Store(seller, buyer);
+        s.Events.StartStream<ACommerce.Kit.Listings.Listing>(listing, new ACommerce.Kit.Listings.ListingCreated(listing, slug, "سِلعَةُ البائِع", null, 120m, "c",
+            null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = seller.Id.ToString() }, now));
+        s.Store(deal);
+        await s.SaveChangesAsync();
+        return (seller, listing, deal);
+    }
+
+    private static async Task CleanDealAsync(Marten.IDocumentStore store, string slug, params Guid[] streams)
+    {
+        await using (var s = store.LightweightSession(slug))
+        {
+            s.DeleteWhere<Deal>(d => d.Id != Guid.Empty);
+            s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
+            s.DeleteWhere<ACommerce.Kit.Listings.Listing>(l => l.Id != Guid.Empty);
+            foreach (var id in streams) s.Events.ArchiveStream(id);
+            await s.SaveChangesAsync();
+        }
+        await LiveZeroRoleAdminProofTests.CleanAsync(store, slug);
+    }
+
+    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) — XS-1</b>: صَفقَةُ مَسارِ العَرضِ الَّتي قَبِلَها صاحِبُ المَتجَرِ مِن الاستوديو (مُستَخدِمُ الاستوديو طَرَفُها المُقابِلُ، عِندَ «حَجز»)
+    /// يُلغيها حَذفُ البائِعِ لِحِسابِه بِسَبَبِ «أَغلَقَ البائِعُ حِسابَه قَبلَ أَن يَقبَلَ الطَلَب» — وهُوَ كاذِبٌ — ويُقالُ لِلمُشتَري. يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public async Task Today_a_deal_the_studio_accepted_is_cancelled_at_booked_by_the_sellers_deletion_with_the_before_acceptance_reason_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Booked, Guid.NewGuid());
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · الصَفقَةُ الَّتي قَبِلَها الاستوديو: {deal.Status} عِندَ {deal.Stage} · بِسَبَبِ «قَبلَ أَن يَقبَلَ الطَلَب»: {deal.CancelReason == reason}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal((DealStatus.Cancelled, DealStage.Booked, reason), (deal.Status, deal.Stage, deal.CancelReason));
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
+    }
+
+    /// <summary><b>قِياسُ المُقَدِّمَةِ قَبلَ الأُنبوب (القاعِدَة ١٠)</b>: <c>DealsService.CancelWholeInvoiceAsync(…, stillDue:)</c> — الأُنبوبُ الَّذي يُعيدُ الشَرطَ عِندَ الكِتابَة — لا يُلغي صَفقَةَ
+    /// مَسارِ عَرضٍ بِلا فاتورَةٍ ولا شُحنَة: قائِمَةُ أَهدافِه مِن الفاتورَة (<c>GatewayInvoiceShare.OwedOnInvoice</c>)، ومَعَ الشَرطِ «لا رُجوعَ إلى الصَفقَةِ وَحدَها» (C-PAY-2)،
+    /// فَيُجيبُ <c>deal_no_longer_due</c> والصَفقَةُ فَعّالَة. فَبابُ الحَذفِ لا يَستَطيعُه لِصَفَقاتِ العَرض — وتَعديلُه في <c>Services/Deals</c> (‏F3) طَلَبٌ لِلمُنَسِّق.</summary>
+    [Fact]
+    public async Task The_whole_invoice_cancel_with_a_still_due_condition_leaves_an_invoice_less_offer_deal_active_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Offered, null);
+        try
+        {
+            var deals = new DealsService(host.Store, new DealMoneyClaimFirstTests.RecordingPaymentProvider());
+            var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
+            var r = await deals.CancelWholeInvoiceAsync(slug, seeded.Id, AccountErasure.ClosingCanceller, reason, default, stillDue: d => d.Status == DealStatus.Active);
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            output.WriteLine($"صَفقَةُ عَرضٍ بِلا فاتورَة · CancelWholeInvoiceAsync(stillDue): {(r.Result.Ok ? "أُلغِيَت" : r.Result.Violation!.Code)} · أُلغِيَ {r.Cancelled.Count} · الصَفقَة: {deal.Status}");
+            Assert.False(r.Result.Ok);
+            Assert.Equal(DealsService.NoLongerDue, r.Result.Violation!.Code);
+            Assert.Empty(r.Cancelled);
+            Assert.Equal(DealStatus.Active, deal.Status);
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
     }
 }
