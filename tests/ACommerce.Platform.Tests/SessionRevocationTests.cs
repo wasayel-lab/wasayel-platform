@@ -260,6 +260,29 @@ public class SessionRevocationTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم» (الموجَة ١٢ F1 البَند ٦ — ثابِتُ StillOpen، ‏2026-10-30)</b>: ADR-041 §٣ و«أ» F1·٣ يَقولانِ إنّ كُلَّ كاتِبٍ بِاسمِ جَلسَةٍ
+    /// يُعلِنُ <c>StillOpen</c> — و<c>AcceptTermsHandler</c> يُحَمِّلُ الحِسابَ ويَحفَظُه بِيَدِه بِلا سُؤال. فَجَلسَةٌ عَبَرَت البَوّابَةَ ثُمَّ أُسقِطَت («اخرج من كل
+    /// الأجهزة» يَقَعُ بَينَ البَوّابَةِ والقِراءَة — يُدخِلُه خُطّافُ <c>DocWorld</c> عِندَ <c>LoadAsync</c>) تَكتُبُ قَبولَ الشُروط: سِجِلٌّ قانونيٌّ يَبقى بَعدَ الجَلسَة،
+    /// مِن جَلسَةٍ مُغلَقَة. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
+    /// </summary>
+    [Fact]
+    public async Task Today_the_terms_acceptance_is_written_for_a_session_revoked_before_the_write()
+    {
+        var user = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 0 };
+        var token = AuthHandlers.MakeToken(user.Id, NameSlug, 0);
+        var world = new DocWorld().Put(user);
+        world.BeforeMember = m => { if (m == "LoadAsync") user.SessionVersion = 1; };
+        var handler = new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsHandler(world.Store);
+        await handler.HandleAsync(new ACommerce.Templates.Customer.Marketplace.Commands.AcceptTermsCommand(user.Id, NameSlug, 3));
+        var stored = world.Read<User>(user.Id.ToString())!;
+        var open = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(stored, token);
+        output.WriteLine($"اليَوم: جَلسَةٌ أُسقِطَت بَينَ البَوّابَةِ والكِتابَة ⇒ كُتِبَ القَبولُ {world.Wrote<User>()} مَرَّة · إصدارُ الشُروط {stored.AcceptedTermsVersion} · الجَلسَةُ مَفتوحَة {open}");
+        Assert.Equal(1, world.Wrote<User>());
+        Assert.Equal(3, stored.AcceptedTermsVersion);
+        Assert.False(open);
+    }
+
+    /// <summary>
     /// <para>المُعلَنُ في النِداء: كُلُّ كاتِبٍ بِاسمِ جَلسَةٍ يُعطي <c>admit</c> قَرارَ <c>StillOpen</c>، والخِدماتُ الَّتي تَأخُذُ <c>admit</c> تُمَرِّرُه — عَيِّنَةٌ تَطبَعُ عَدَدَها.</para>
     /// <para><b>(‏2026-10-30، الموجَة ١٢ F1 البَند ٢ — مُراجَعَةُ F1 الأَخيرَة R1-2؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) يَجِدُ الكُتّابَ ولا يُسَمّيهِم</b>: كانَ
     /// يُسَمّي سَبعَةَ مَساراتٍ ودالَّتَين (<c>SessionWriterRoutes</c>)، فَبابُ جَلسَةٍ جَديدٌ يُنادي <c>AccountWrites.UpdateAsync&lt;User&gt;</c> بِلا <c>admit</c>، أَو
