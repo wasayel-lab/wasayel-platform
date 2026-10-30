@@ -277,6 +277,47 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         Assert.Empty(keyless.Moyasar.Requests);
     }
 
+    // ═══ ٤‑أ) ما يَرُدُّه الوارِدُ حينَ لَم يُثبَت الدَفع (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1) ═════════════════════════════
+
+    /// <summary>
+    /// <para><b>تَوصيفُ «اليَوم»</b> (القاعِدَة ٣): إشعارٌ مَقبولٌ بِسِرِّه، ثُمَّ تَعَذَّرَ إثباتُ الدَفعِ لِسَبَبٍ عابِر — البَوّابَةُ لا تُجيب (‏5xx أَو انقِطاع)،
+    /// أَو تَرُدُّ ‏429 «Too Many Requests» (وَثيقَةُ الأَخطاء)، أَو جَوابٌ لا يُقرَأ، أَو المِفتاحُ لا يُفَكُّ الآن، أَو الفاتورَةُ ما زالَت «initiated» لِأَنّ حالَها يَتَأَخَّرُ
+    /// عَن الحَدَث: <b>لا يُكتَبُ شَيء، ويُجيبُ الوارِدُ ‏200</b> — لِأَنّ النُقطَةَ تَحسُبُ الرَدَّ مِن رَمزِ البَوّابَةِ وَحدَه ولا تَقرَأُ رَمزَ التَأكيد. فَلا تُعيدُ
+    /// البَوّابَةُ الإشعارَ (تُعيدُ غَيرَ 2xx خَمسَ مَرّات، ‏ADR-032 §٩‑٨) ويَبقى الطَلَبُ المَدفوعُ عِندَ «يَنتَظِرُ الدَفع».</para>
+    /// </summary>
+    [Theory]
+    [InlineData("server_error", MoyasarFailures.Unreachable)]
+    [InlineData("dropped", MoyasarFailures.Unreachable)]
+    [InlineData("rate_limited", MoyasarFailures.Refused)]
+    [InlineData("unreadable", MoyasarFailures.Unreadable)]
+    [InlineData("keyless", MoyasarFailures.NotConfigured)]
+    [InlineData("status_lags", GatewayPaymentProof.InvoiceUnpaid)]
+    public async Task Today_a_notice_whose_payment_could_not_be_confirmed_answers_200_so_the_gateway_never_retries(string kind, string code)
+    {
+        var w = await PaidCart(binding: kind == "keyless" ? _ => null : null);
+        switch (kind)
+        {
+            case "server_error": w.Moyasar.Then(HttpStatusCode.ServiceUnavailable, ""); break;
+            case "dropped": w.Moyasar.ThenThrow(); break;
+            case "rate_limited": w.Moyasar.Then((HttpStatusCode)429, "{\"type\":\"rate_limit_error\",\"message\":\"Too Many Requests\"}"); break;
+            case "unreadable": w.Moyasar.Then(HttpStatusCode.OK, "{}"); break;
+            case "status_lags": w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")); break;
+        }
+        var saves = w.Docs.SaveCalls;
+        var admitted = GatewayNoticeGate.Admit(Secret, Payload());
+
+        var res = await w.Gateway.ConfirmNoticeAsync(Slug, admitted.Notice!);
+        var status = GatewayNoticeGate.StatusFor(admitted.Violation?.Code);
+        output.WriteLine($"{kind}: الرَمز={res.Code} · كُتِب={w.Docs.SaveCalls - saves} · الرَدّ={status}");
+
+        Assert.Equal(code, res.Code);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(200, status);
+        var endpoint = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Billing", "TenantGatewayEndpoints.cs")));
+        Assert.Contains("return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code));", endpoint, StringComparison.Ordinal);
+    }
+
     // ═══ ٥) الحَقلُ الَّذي نُصدِرُه لا يَملَؤُه صاحِبُ المَتجَر ═══════════════════════════════════════════════════
 
     /// <summary>دالَّةٌ واحِدَةٌ لِلصَفحَةِ وللقارِئ: <c>issued_secret</c> لا يُرسَمُ ولا يُقرَأُ مِن النَموذَج — فَقيمَةٌ يَدُسُّها طالِبٌ في الحَقلِ لا تُكتَب؛ والمِفتاحُ يُقرَأُ كَما كان.</summary>
