@@ -105,6 +105,17 @@ public static class SessionVersionGate
     public static int? GateVersion(User? account)
         => account is null ? null : account.DeletedAt is not null ? int.MaxValue : account.SessionVersion;
 
+    /// <summary>
+    /// <para><b>أَما زالَت جَلسَةُ هذا الرَمزِ مَفتوحَةً عَلى هذا الحِساب؟</b> — نَقِيَّة (‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1، I-SEC-2 مَعَ G-1؛
+    /// تَوصيفُه <c>6e17ba9</c>): الرَمزُ يُقبَلُ ولِهذا الحِساب، وإصدارُه لَيسَ أَصغَرَ مِن <see cref="GateVersion"/> الوَثيقَة — فَالرَفعُ والحَذفُ كِلاهُما يُغلِقانِها.</para>
+    /// <para>يُعطى <c>admit</c> لِكُلِّ كاتِبٍ بِاسمِ جَلسَةٍ في <see cref="AccountWrites.UpdateAsync{T}"/>، فَيُسأَلُ عَلى كُلِّ قِراءَةٍ جَديدَة — البَوّابَةُ أَوَّلَ
+    /// الطَلَبِ لا تَرى رَفعاً وَقَعَ بَعدَها. مُستَهلِكوه سَبعَة: <c>push/subscribe</c> و<c>/me/save</c> و<c>/me/role/save</c> و<c>/me/role/onboarding/save</c>
+    /// و<c>/me/area/save</c> ورَبطُ الوَسيلَةِ وحَذفُها (<c>AccountContacts</c>).</para>
+    /// </summary>
+    public static bool StillOpen(User account, string? token)
+        => AuthHandlers.ParseToken(token) is { } parsed && parsed.UserId == account.Id
+           && AuthHandlers.SessionVersionOf(token) is int version && !IsRevoked(version, GateVersion(account));
+
     /// <summary>إصدارُ الحِسابِ المُخَزَّن — مِن الذاكِرَةِ إن حُفِظَ خِلالَ <see cref="CacheFor"/>، وإلّا مِن وَثيقَتِه: <c>StudioUser</c> لِلاستوديو
     /// و<c>User</c> في جَلسَةِ مُستَأجِرِه بِـ<see cref="GateVersion"/>. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>
     public static async Task<int?> AccountVersionAsync(IDocumentStore store, IMemoryCache cache, string tenant, Guid userId)

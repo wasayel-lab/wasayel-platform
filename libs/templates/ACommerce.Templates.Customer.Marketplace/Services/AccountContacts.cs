@@ -90,9 +90,11 @@ public static class AccountContacts
     /// </summary>
     /// <remarks>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) <b>والرَبطُ يُخطِرُ</b> (<see cref="NoticeLinkedAsync"/>): الوَسيلَةَ الأُخرى المُتَحَقَّقَ مِنها بِقَناتِها،
     /// وإشعاراً في التَطبيق، وسَطرَ تَدقيق — كانَ يَربِطُ ويَحفَظُ بِلا أَثَر.</remarks>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) <paramref name="admit"/> شَرطُ البابِ عَلى القِراءَةِ الجَديدَة (<c>SessionVersionGate.StillOpen</c>):
+    /// جَلسَةٌ أُغلِقَت بَينَ البَوّابَةِ والقِراءَةِ تُرَدُّ بِـ<see cref="ContactLink.NoAccount"/> ولا يُربَطُ شَيء.</remarks>
     public static async Task<string?> VerifyAsync(
         IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now,
-        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct)
+        IOtpChannel? phoneChannel, IEmailOtpChannel? emailChannel, CancellationToken ct, Func<User, bool>? admit = null)
     {
         if (Pending(slug, attemptId, userId) is not { } p) return CodeInvalid;
         if (!AuthHandlers.TryConsumeVerifyQuota($"{slug}|{p.Subject}")
@@ -115,7 +117,7 @@ public static class AccountContacts
             if (refusal is not null) return false;
             ContactLink.Link(u, kind, p.Value, now);
             return true;
-        }, ct);
+        }, ct, admit);
         if (user is null) return ContactLink.Validate(null, kind, p.Value, holders)!.Code;
         if (refusal is not null) return refusal;
         await NoticeLinkedAsync(store, slug, user, kind, p.Value, now, phoneChannel, emailChannel, ct);
@@ -209,8 +211,10 @@ public static class AccountContacts
     /// <para>يُتِمُّ الحَذف: المُحاوَلَةُ لِهذا الحِساب، وحِصَّةُ التَحَقُّق، واستِهلاكُ الرَمز — ثُمَّ <see cref="ContactLink.ValidateUnlink"/> و<see cref="ContactLink.Unlink"/>
     /// عَلى قِراءَةٍ جَديدَة (<see cref="AccountWrites.UpdateAsync{T}"/>)، ثُمَّ إشعارٌ في التَطبيقِ وسَطرُ تَدقيق. <c>null</c> = حُذِفَت؛ وإلّا رَمزُ الرَفض.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-10-30) و<paramref name="admit"/> كَـ<see cref="VerifyAsync"/>.</remarks>
     public static async Task<string?> VerifyRemoveAsync(
-        IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now, CancellationToken ct)
+        IDocumentStore store, string slug, Guid userId, string? attemptId, string? code, DateTime now, CancellationToken ct,
+        Func<User, bool>? admit = null)
     {
         if (PendingRemoval(slug, attemptId, userId) is not { } kind) return CodeInvalid;
         var subject = ContactLink.Subject(userId, kind);
@@ -226,7 +230,7 @@ public static class AccountContacts
             removed = ContactLink.Contact(u, kind)!;
             ContactLink.Unlink(u, kind, now);
             return true;
-        }, ct);
+        }, ct, admit);
         if (user is null) return ContactLink.NoAccount;
         if (refusal is not null) return refusal;
         await RecordAsync(store, slug, userId, Text(RemovedTitleKey), Text(RemovedBodyKey, ContactLink.Mask(kind, removed)), RemovedAction, kind, now, ct);

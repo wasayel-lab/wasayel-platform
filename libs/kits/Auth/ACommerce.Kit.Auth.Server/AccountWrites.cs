@@ -23,14 +23,19 @@ public static class AccountWrites
 
     /// <summary>يُحَمِّلُ <typeparamref name="T"/> بِمُعَرِّفِه في جَلسَةِ <paramref name="tenant"/>، ويُطَبِّقُ <paramref name="apply"/>، ويَحفَظ — ويُعيدُ
     /// مَرَّةً عَلى <c>ConcurrencyException</c>. <c>null</c> = لا وَثيقَة؛ وإلّا الوَثيقَةُ كَما حُفِظَت (أَو كَما قُرِئَت إن لَم يَتَغَيَّر شَيء).</summary>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — I-SEC-2 مَعَ G-1؛ تَوصيفُه <c>6e17ba9</c>) <b><paramref name="admit"/>: شَرطُ الكاتِبِ عَلى
+    /// الوَثيقَةِ الجَديدَة</b> — يُسأَلُ بَعدَ كُلِّ قِراءَةٍ وقَبلَ <paramref name="apply"/>، فَإن رَدَّها عادَ <c>null</c> بِلا كِتابَة. كانَ الكاتِبُ بِاسمِ جَلسَةٍ
+    /// يَفحَصُها مَرَّةً أَوَّلَ الطَلَب، فَطَلَبٌ عَبَرَ قَبلَ «اخرج من كل الأجهزة» وقَرَأَ بَعدَه — أَو أُعيدَ بَعدَ تَعارُضٍ مَعَه — يَكتُبُ عَلى حِسابٍ أُسقِطَت
+    /// جَلسَتُه. يُعلَنُ في نِداءِ الكاتِبِ (لا سَطراً في <paramref name="apply"/>)، والعُدَّةُ لا تَعرِفُ إصدارَ الجَلسَة — يُعطيها القالِبُ قَرارَه.</remarks>
     public static async Task<T?> UpdateAsync<T>(IDocumentStore store, string tenant, Guid id, Func<T, bool> apply,
-        CancellationToken ct = default) where T : class
+        CancellationToken ct = default, Func<T, bool>? admit = null) where T : class
     {
         for (var attempt = 1; ; attempt++)
         {
             await using var s = store.LightweightSession(tenant);
             var doc = await s.LoadAsync<T>(id, ct);
-            if (doc is null || !apply(doc)) return doc;
+            if (doc is null || (admit is not null && !admit(doc))) return null;
+            if (!apply(doc)) return doc;
             s.Store(doc);
             try
             {

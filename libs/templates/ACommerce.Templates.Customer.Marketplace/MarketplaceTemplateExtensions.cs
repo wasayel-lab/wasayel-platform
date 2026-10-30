@@ -537,8 +537,9 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
             var attempt = req.Form["attempt"].ToString();
             // ‏(‏2026-10-29، A3) والقَناتانِ لِإشعارِ الوَسيلَةِ الأُخرى المُتَحَقَّقِ مِنها — والإشعارُ والتَدقيقُ في `AccountContacts.NoticeLinkedAsync`.
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والرَبطُ يَسأَلُ الجَلسَةَ عَلى القِراءَةِ الجَديدَة — كانَ تَأكيدٌ عَبَرَ البَوّابَةَ قَبلَ الرَفعِ يَربِطُ بَعدَه.
             var refusal = await Services.AccountContacts.VerifyAsync(store, slug, parsed.Value.UserId, attempt,
-                req.Form["code"].ToString(), DateTime.UtcNow, phoneChannel, emailChannel, req.HttpContext.RequestAborted);
+                req.Form["code"].ToString(), DateTime.UtcNow, phoneChannel, emailChannel, req.HttpContext.RequestAborted, admit: u => Services.SessionVersionGate.StillOpen(u, AuthSession.ResolveToken(req, slug)));
             return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterVerify(slug, parsed.Value.UserId, attempt, refusal)));
         }).RequireFormBody().DisableAntiforgery();
 
@@ -563,7 +564,7 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
             var attempt = req.Form["attempt"].ToString();
             var refusal = await Services.AccountContacts.VerifyRemoveAsync(store, slug, parsed.Value.UserId, attempt,
-                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted);
+                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted, admit: u => Services.SessionVersionGate.StillOpen(u, AuthSession.ResolveToken(req, slug)));
             return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterRemove(slug, parsed.Value.UserId, attempt, refusal)));
         }).RequireFormBody().DisableAntiforgery();
 
@@ -719,12 +720,13 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"me/role?err={Gates.SelfGrantPolicy.RefusalCode}"));
 
             // ‏(‏2026-10-29، G-1) تَغييرُ هذا البابِ وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب (`AccountWrites.UpdateAsync`).
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والجَلسَةُ عَلى القِراءَةِ الجَديدَةِ (`StillOpen`) — نَسَقُ أَبوابِ «حِسابي» كُلِّها.
             var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
             {
                 u.ActiveRole = role;
                 u.UpdatedAt = DateTime.UtcNow;
                 return true;
-            });
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             // إن كانَ لِلدَور حُقول بَيانات مَطلوبَة غَير مَملوءَة، حَوِّل
@@ -776,7 +778,7 @@ public static class MarketplaceTemplateExtensions
                 }
                 u.UpdatedAt = DateTime.UtcNow;
                 return true;
-            });
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
@@ -884,7 +886,7 @@ public static class MarketplaceTemplateExtensions
                     }
                 }
                 return true;
-            });
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             AuthSession.UpdateNameCookie(req.HttpContext.Response, slug, fullName);
@@ -1932,12 +1934,14 @@ public static class MarketplaceTemplateExtensions
 
             // ‏(‏2026-10-29، G-1) يُنادى في كُلِّ صَفحَة، وكانَ حِفظُه الكامِلُ يُعيدُ إصدارَ جَلسَةٍ رُفِعَ بَينَ قِراءَتِه وحِفظِه — والآن الاشتِراكُ
             // وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والجَلسَةُ تُسأَلُ عَلى القِراءَةِ الجَديدَةِ (`StillOpen`) — كانَ طَلَبٌ عَبَرَ البَوّابَةَ قَبلَ
+            // «اخرج من كل الأجهزة» وقَرَأَ بَعدَه يَكتُبُ عُنوانَ السارِقِ عَلى الحِسابِ المَرفوع؛ والجَلسَةُ المُغلَقَةُ ‏401 كَالرَمزِ الغائِب.
             var saved = await AccountWrites.UpdateAsync<User>(store, slug, userId, user =>
             {
                 Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);
                 return true;
-            });
-            if (saved is null) return Results.NotFound();
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
+            if (saved is null) return Results.Unauthorized();
             return Results.Ok();
         }).DisableAntiforgery();
 
@@ -2020,7 +2024,7 @@ public static class MarketplaceTemplateExtensions
                 u.RadiusKm  = radius;
                 u.UpdatedAt = DateTime.UtcNow;
                 return true;
-            });
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
             return Results.Redirect(Link(req, slug, $"me/area?saved=1"));
         }).DisableAntiforgery().RequireFormBody()

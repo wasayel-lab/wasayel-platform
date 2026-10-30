@@ -234,6 +234,70 @@ public class SessionRevocationTests(ITestOutputHelper output)
     public void The_writer_scan_refuses_a_hand_written_load_and_store(string body)
         => Assert.False(SavesThroughAccountWrites(body));
 
+    // ─── الكاتِبُ بِاسمِ جَلسَةٍ يَسأَلُها عَلى القِراءَةِ الجَديدَة (مُراجَعَةُ الموجَة ١١ لِلمَسار F1، ‏2026-10-30) ───────────────────────
+
+    /// <summary><c>SessionVersionGate.StillOpen</c> — نَقِيَّة: رَمزٌ حَيٌّ لِهذا الحِسابِ مَفتوح (مُوجَب)؛ ورَمزُ ما قَبلَ الرَفعِ، ورَمزُ المَحذوف، ورَمزُ حِسابٍ آخَر،
+    /// وما لَيسَ رَمزاً — مُغلَقَةٌ (سالِب).</summary>
+    [Theory]
+    [InlineData("live", true)]
+    [InlineData("above", true)]
+    [InlineData("revoked", false)]
+    [InlineData("deleted", false)]
+    [InlineData("other", false)]
+    [InlineData("garbage", false)]
+    public void A_session_is_still_open_only_for_its_own_live_account(string row, bool open)
+    {
+        var account = new User { Id = Guid.NewGuid(), TenantSlug = NameSlug, SessionVersion = 2, DeletedAt = row == "deleted" ? DateTime.UtcNow : null };
+        var token = row switch
+        {
+            "live" or "deleted" => AuthHandlers.MakeToken(account.Id, NameSlug, 2),
+            "above" => AuthHandlers.MakeToken(account.Id, NameSlug, 3),
+            "revoked" => AuthHandlers.MakeToken(account.Id, NameSlug, 1),
+            "other" => AuthHandlers.MakeToken(Guid.NewGuid(), NameSlug, 2),
+            _ => "not-a-token",
+        };
+        Assert.Equal(open, ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(account, token));
+    }
+
+    /// <summary>المُعلَنُ في النِداء: كُلُّ كاتِبٍ بِاسمِ جَلسَةٍ يُعطي <c>admit</c> قَرارَ <c>StillOpen</c>، والخِدمَتانِ تُمَرِّرانِه — عَيِّنَةٌ تَطبَعُ عَدَدَها.</summary>
+    [Fact]
+    public void Every_session_writer_asks_the_session_on_the_fresh_read()
+    {
+        var contacts = WriteEndpointGuardTests.StripComments(Read($"{TemplateRoot}/Services/AccountContacts.cs"));
+        var bodies = new Dictionary<string, string>
+        {
+            ["AccountContacts.VerifyAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyAsync("),
+            ["AccountContacts.VerifyRemoveAsync"] = MethodBody(contacts, "public static async Task<string?> VerifyRemoveAsync("),
+        };
+        foreach (var route in SessionWriterRoutes)
+        {
+            var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Where(e => e.Route == route).ToList();
+            Assert.True(doors.Count == 1, $"«{route}»: {doors.Count} باباً — الأَداةُ عَمياء.");
+            bodies[route] = doors[0].Body;
+        }
+        var off = bodies.Where(b => !AsksTheSession(b.Value)).Select(b => b.Key).ToList();
+        output.WriteLine($"كُتّابٌ بِاسمِ جَلسَة: {bodies.Count} · يَسأَلونَها عَلى القِراءَةِ الجَديدَة: {bodies.Count - off.Count}");
+        Assert.Equal(9, bodies.Count);
+        Assert.True(off.Count == 0, "كاتِبٌ بِاسمِ جَلسَةٍ لا يَسأَلُها: " + string.Join(" · ", off));
+    }
+
+    internal static readonly string[] SessionWriterRoutes =
+    {
+        "/api/{slug}/push/subscribe", "/{slug}/me/save", "/{slug}/me/role/save", "/{slug}/me/role/onboarding/save", "/{slug}/me/area/save",
+        "/{slug}/me/contact/verify", "/{slug}/me/contact/remove/verify",
+    };
+
+    internal static bool AsksTheSession(string body)
+        => body.Contains("admit: u => Services.SessionVersionGate.StillOpen(u, ", StringComparison.Ordinal)
+           || Regex.IsMatch(body, @"AccountWrites\.UpdateAsync<User>\([\s\S]*\},\s*ct,\s*admit\);");
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠): نِداءُ اليَومِ بِلا <c>admit</c> — في البابِ وفي الخِدمَة — يُحمِرُّ الفاحِص.</summary>
+    [Theory]
+    [InlineData("var saved = await AccountWrites.UpdateAsync<User>(store, slug, userId, user =>\n{\n    Keep(user.PushSubscriptions, sub);\n    return true;\n});")]
+    [InlineData("var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>\n{\n    ContactLink.Link(u, kind, p.Value, now);\n    return true;\n}, ct);")]
+    public void The_session_writer_scan_refuses_a_write_without_admission(string body)
+        => Assert.False(AsksTheSession(body));
+
     // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
     //
     // البَوّابَةُ تُسقِطُ مِن فَحصِها كُلَّ اسمٍ يَنتَهي بِـ«.name» (كوكيُّ اسمِ العَرض)، و`ResolveCookieBase` يَقرَأُ لِمَسارِ
@@ -966,10 +1030,20 @@ public class LiveSessionWriteProofTests(ITestOutputHelper output)
         return user;
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم» (القاعِدَة ٣)</b>: اشتِراكٌ بِرَمزِ ما قَبلَ الرَفعِ يَقرَأُ بَعدَه — تَطبيقُ <c>/api/{slug}/push/subscribe</c> بِحَرفِه — فَيُحفَظُ
-    /// بِلا تَعارُضٍ عَلى الحِسابِ المَرفوعِ إصدارُه، وعُنوانُ السارِقِ يَبقى.</summary>
+    /// <summary>شَكلُ <c>/api/{slug}/push/subscribe</c> بَعدَ التَبديل: الاشتِراكُ بِشَرطِ الجَلسَةِ عَلى القِراءَةِ الجَديدَة.</summary>
+    internal static Task<User?> SubscribeAsync(Marten.IDocumentStore store, string slug, Guid userId, string token, Func<User, bool>? before = null)
+        => AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+        {
+            before?.Invoke(u);
+            ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions, Thief());
+            return true;
+        }, admit: u => ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(u, token));
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_subscribe_for_a_session_revoked_before_its_read_lands_on_the_revoked_account_on_Postgres</c> (‏<c>6e17ba9</c>): «رَمزُ الطَلَب ساقِط ·
+    /// الحِفظ حُفِظ · الإصدار 1 · الاشتِراكات 1». والآن الشَرطُ يَرُدُّ القِراءَةَ الجَديدَة فَلا يُكتَبُ شَيء.</summary>
     [Fact]
-    public async Task Today_a_subscribe_for_a_session_revoked_before_its_read_lands_on_the_revoked_account_on_Postgres()
+    public async Task A_subscribe_for_a_session_revoked_before_its_read_writes_nothing_on_Postgres()
     {
         if (!Enabled) return;
         await using var app = LiveAccountConcurrencyProofTests.HostApp();
@@ -980,25 +1054,20 @@ public class LiveSessionWriteProofTests(ITestOutputHelper output)
             var user = await SeedAsync(store, slug);
             var token = AuthHandlers.MakeToken(user.Id, slug, user.SessionVersion);
             Assert.True(await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, user.Id));
-            var saved = await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
-            {
-                ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions, Thief());
-                return true;
-            });
+            var saved = await SubscribeAsync(store, slug, user.Id, token);
             await using var q = store.QuerySession(slug);
             var after = (await q.LoadAsync<User>(user.Id))!;
-            var revoked = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(AuthHandlers.SessionVersionOf(token)!.Value, after.SessionVersion);
-            output.WriteLine($"اليَوم: رَمزُ الطَلَب {(revoked ? "ساقِط" : "صالِح")} · الحِفظ {(saved is null ? "لا" : "حُفِظ")} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count}");
-            Assert.True(revoked);
-            Assert.NotNull(saved);
-            Assert.Equal((1, 1), (after.SessionVersion, after.PushSubscriptions.Count));
+            output.WriteLine($"بَعدَ التَبديل: الحِفظ {(saved is null ? "رُدّ" : "حُفِظ")} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count}");
+            Assert.Null(saved);
+            Assert.Equal((1, 0), (after.SessionVersion, after.PushSubscriptions.Count));
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: الحِسابُ حُذِفَ قَبلَ قِراءَةِ الاشتِراك — فَيُكتَبُ عُنوانٌ عَلى حِسابٍ مَمحُوّ.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_a_subscribe_for_an_account_erased_before_its_read_lands_on_the_erased_account_on_Postgres</c>
+    /// (‏<c>6e17ba9</c>): «DeletedAt قائِم · الحِفظ حُفِظ · الاشتِراكات 1». والآن المَحذوفُ إصدارُه <see cref="int.MaxValue"/> فَيُرَدّ.</summary>
     [Fact]
-    public async Task Today_a_subscribe_for_an_account_erased_before_its_read_lands_on_the_erased_account_on_Postgres()
+    public async Task A_subscribe_for_an_account_erased_before_its_read_writes_nothing_on_Postgres()
     {
         if (!Enabled) return;
         await using var app = LiveAccountConcurrencyProofTests.HostApp();
@@ -1007,25 +1076,23 @@ public class LiveSessionWriteProofTests(ITestOutputHelper output)
         try
         {
             var user = await SeedAsync(store, slug);
+            var token = AuthHandlers.MakeToken(user.Id, slug, user.SessionVersion);
             await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u => { AccountDeletion.Erase(u, DateTime.UtcNow); return true; });
-            var saved = await AccountWrites.UpdateAsync<User>(store, slug, user.Id, u =>
-            {
-                ACommerce.Templates.Customer.Marketplace.Services.PushSubscriptionDoor.Keep(u.PushSubscriptions, Thief());
-                return true;
-            });
+            var saved = await SubscribeAsync(store, slug, user.Id, token);
             await using var q = store.QuerySession(slug);
             var after = (await q.LoadAsync<User>(user.Id))!;
-            output.WriteLine($"اليَوم: DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الحِفظ {(saved is null ? "لا" : "حُفِظ")} · الاشتِراكات {after.PushSubscriptions.Count}");
+            output.WriteLine($"بَعدَ التَبديل: DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الحِفظ {(saved is null ? "رُدّ" : "حُفِظ")} · الاشتِراكات {after.PushSubscriptions.Count}");
             Assert.NotNull(after.DeletedAt);
-            Assert.Single(after.PushSubscriptions);
+            Assert.Null(saved);
+            Assert.Empty(after.PushSubscriptions);
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 
-    /// <summary><b>تَوصيفُ «اليَوم»</b>: رَبطُ وَسيلَةٍ بُدِئَ بِالجَلسَةِ ثُمَّ رَفَعَ صاحِبُها الإصدار، وتَأكيدُه — عَبَرَ البَوّابَةَ قَبلَ الرَفعِ وقَرَأَ بَعدَه — يَربِطُ
-    /// البَريدَ عَلى الحِسابِ المَرفوعِ إصدارُه.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه</b> — كانَ <c>Today_a_contact_link_for_a_session_revoked_before_its_verify_lands_on_Postgres</c> (‏<c>6e17ba9</c>):
+    /// «الرَبط رُبِط · البَريدُ المَزروعُ في الحِساب True». والآن يُرَدُّ بِـ<c>no_account</c> ولا يُربَط.</summary>
     [Fact]
-    public async Task Today_a_contact_link_for_a_session_revoked_before_its_verify_lands_on_Postgres()
+    public async Task A_contact_link_for_a_session_revoked_before_its_verify_links_nothing_on_Postgres()
     {
         if (!Enabled) return;
         await using var app = LiveAccountConcurrencyProofTests.HostApp();
@@ -1041,15 +1108,76 @@ public class LiveSessionWriteProofTests(ITestOutputHelper output)
             var offered = ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offered(AuthChannels.Phone, phoneRegistered: true, emailRegistered: true);
             var start = await ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.StartAsync(store, slug, victim.UserId, ContactLink.Email, "planted.r1@example.com", sms, mail, offered, default);
             Assert.True(await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, victim.UserId));
-            var linked = await ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.VerifyAsync(store, slug, victim.UserId, start.AttemptId, mail.Code, DateTime.UtcNow, sms, mail, default);
+            var linked = await ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.VerifyAsync(store, slug, victim.UserId, start.AttemptId, mail.Code, DateTime.UtcNow, sms, mail, default,
+                admit: u => ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.StillOpen(u, victim.Token));
             await using var q = store.QuerySession(slug);
             var after = (await q.LoadAsync<User>(victim.UserId))!;
-            var revoked = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(AuthHandlers.SessionVersionOf(victim.Token)!.Value, after.SessionVersion);
             var planted = after.Email == "planted.r1@example.com";
-            output.WriteLine($"اليَوم: رَمزُ الطَلَب {(revoked ? "ساقِط" : "صالِح")} · الرَبط {(linked is null ? "رُبِط" : linked)} · البَريدُ المَزروعُ في الحِساب {planted}");
-            Assert.True(revoked);
-            Assert.Null(linked);
-            Assert.True(planted);
+            output.WriteLine($"بَعدَ التَبديل: الرَبط {(linked is null ? "رُبِط" : linked)} · البَريدُ المَزروعُ في الحِساب {planted} · رِسالَةٌ إلى الجَوّال {sms.Notices.Count}");
+            Assert.Equal(ContactLink.NoAccount, linked);
+            Assert.False(planted);
+            Assert.Empty(sms.Notices);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary>طَريقُ التَعارُض (المُوجَب): رَفعٌ بَينَ قِراءَةِ الاشتِراكِ وحِفظِه — يُرَدُّ الحِفظُ الأَوَّل، والإعادَةُ عَلى الوَثيقَةِ الجَديدَةِ يَرُدُّها الشَرط:
+    /// الإصدارُ مَرفوعٌ والاشتِراكاتُ صِفر. (صَفُّ <c>LiveAccountConcurrencyProofTests</c> القائِمُ يَقيسُ الإعادَةَ نَفسَها لِكاتِبٍ بِلا جَلسَة.)</summary>
+    [Fact]
+    public async Task A_subscribe_racing_the_revoke_is_refused_on_its_retry_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = LiveAccountConcurrencyProofTests.HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "sw-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            var token = AuthHandlers.MakeToken(user.Id, slug, user.SessionVersion);
+            var calls = 0;
+            var saved = await SubscribeAsync(store, slug, user.Id, token, _ =>
+            {
+                if (++calls == 1)
+                    ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.RevokeTenantAsync(store, Cache(), slug, user.Id).GetAwaiter().GetResult();
+                return true;
+            });
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(user.Id))!;
+            output.WriteLine($"تَعارُضٌ مَعَ الرَفع: تَطبيقات {calls} · الحِفظ {(saved is null ? "رُدّ" : "حُفِظ")} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count}");
+            Assert.Equal(1, calls);
+            Assert.Null(saved);
+            Assert.Equal((1, 0), (after.SessionVersion, after.PushSubscriptions.Count));
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary>السالِب: كاتِبٌ آخَرُ لا يَمَسُّ الجَلسَةَ (تَغييرُ الاسمِ) بَينَ القِراءَةِ والحِفظ — الإعادَةُ يَقبَلُها الشَرطُ فَيُحفَظُ الاشتِراكُ والاسمُ مَعاً.</summary>
+    [Fact]
+    public async Task A_live_session_racing_an_unrelated_writer_still_subscribes_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var app = LiveAccountConcurrencyProofTests.HostApp();
+        var store = app.Services.GetRequiredService<Marten.IDocumentStore>();
+        var slug = "sw-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var user = await SeedAsync(store, slug);
+            var token = AuthHandlers.MakeToken(user.Id, slug, user.SessionVersion);
+            var calls = 0;
+            var saved = await SubscribeAsync(store, slug, user.Id, token, _ =>
+            {
+                if (++calls == 1)
+                    AccountWrites.UpdateAsync<User>(store, slug, user.Id, u => { u.FullName = "اسمٌ جَديد"; return true; }).GetAwaiter().GetResult();
+                return true;
+            });
+            await using var q = store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(user.Id))!;
+            var renamed = after.FullName == "اسمٌ جَديد";
+            output.WriteLine($"تَعارُضٌ مَعَ كاتِبٍ آخَر: تَطبيقات {calls} · الحِفظ {(saved is null ? "رُدّ" : "حُفِظ")} · الإصدار {after.SessionVersion} · الاشتِراكات {after.PushSubscriptions.Count} · الاسمُ الجَديدُ باقٍ {renamed}");
+            Assert.Equal(2, calls);
+            Assert.NotNull(saved);
+            Assert.Equal((0, 1), (after.SessionVersion, after.PushSubscriptions.Count));
+            Assert.True(renamed);
         }
         finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
