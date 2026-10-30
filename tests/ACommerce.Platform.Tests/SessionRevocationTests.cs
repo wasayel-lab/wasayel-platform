@@ -662,6 +662,12 @@ public class SessionRevocationTests(ITestOutputHelper output)
 
     /// <summary>الاحتِياطُ المُغلَق: رَأسا <c>Cookie</c> (يَجمَعُهُما <c>ToString</c> بِفاصِلَة) والرَمزُ الساقِطُ في الثاني — التَقسيمُ بِـ«;» لا يَجِدُه فَلا يُغَيِّرُ
     /// النَزعُ شَيئاً، فَيُمحى الرَأسُ كُلُّه ولا تُفتَحُ جَلسَة.</summary>
+    /// <remarks>
+    /// <para><b>(‏2026-10-30، الموجَة ١٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) هذا الصَفُّ تَغطِيَةُ كودٍ دِفاعيٍّ، لا قِياسٌ لِلمَحو</b>: أَخضَرُ عَلى البَوّابَةِ قَبلَ
+    /// <c>5d858d0</c> وعَلى نُسخَةٍ فَرعُ المَحوِ فيها «يَضَعُ المَنزوعَ ويَخرُج» — لِأَنّ مُحَلِّلَ القارِئِ نَفسَه يَرُدُّ الرَأسَ المَجموعَ بِفاصِلَة (قيمَةُ الكوكيِّ لا تَحمِلُ
+    /// <c>,</c> فَيُترَكُ الباقي إلى «;» لا تَأتي)، فَيَختَفي الرَمزُ أَمُحِيَ الرَأسُ أَم لا. والسَطرُ الأَخيرُ يَقيسُ تِلكَ الآلِيَّةَ بِعَينِها. ولِلمَحوِ <b>لا حالَةَ
+    /// مَقيسَةً تَبلُغُه</b>: بَحثٌ مَحدودٌ بِثَلاثَةٍ وثَلاثينَ رَأساً (القائِمَةُ في جِسمِ الكوميت) خَرَجَ مِنه كُلُّها بِلا رَمزٍ ساقِطٍ عَلى النُسخَتَين.</para>
+    /// </remarks>
     [Fact]
     public async Task A_cookie_header_the_strip_cannot_change_is_dropped_whole()
     {
@@ -675,6 +681,11 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.Equal(0, ctx.Request.Cookies.Count);
         Assert.Null(ACommerce.Templates.Customer.Marketplace.AuthSession.ResolveToken(ctx.Request, NameSlug));
         Assert.Contains(ctx.Response.Headers.SetCookie, c => c!.StartsWith($".acommerce.auth.{NameSlug}=;", StringComparison.Ordinal));
+
+        var joined = GateContext($"/{NameSlug}/me", user);
+        joined.Request.Headers.Cookie = $"ac_lang=ar,.acommerce.auth.{NameSlug}={revoked}";
+        output.WriteLine($"الرَأسُ مَجموعاً بِفاصِلَةٍ عِندَ القارِئِ بِلا بَوّابَة: كوكيّات {joined.Request.Cookies.Count} — فَالرَمزُ يَختَفي بِلا المَحو، والصَفُّ تَغطِيَةٌ دِفاعِيَّة");
+        Assert.Equal(0, joined.Request.Cookies.Count);
     }
 
     /// <summary>
