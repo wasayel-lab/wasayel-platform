@@ -187,14 +187,21 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
         return (initializers, writes);
     }
 
-    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): أَربَعُ كِتاباتٍ لِـ<c>.FullName</c> في مُحادَثَتَي البابَين.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-3)</b> — كانَ <c>Today_the_two_chat_start_doors_store_the_person_name_not_the_business_name</c> (‏<c>ad8f6e0</c>:
+    /// «مُهَيِّئاتُ Conversation: 4 · كِتاباتُ FullName: 4»). والآن صِفرُ كِتابَةٍ لِـ<c>.FullName</c> في اسمِ طَرَفٍ أَو مَوضوعِ مُحادَثَةٍ في مِلَفِّ النِقاط، والبابانِ يُنادِيانِ
+    /// <c>ActorName.Of</c>؛ والعَيِّنَةُ القَديمَةُ بِحَرفِها تُحمِرُّ الماسِح.</summary>
     [Fact]
-    public void Today_the_two_chat_start_doors_store_the_person_name_not_the_business_name()
+    public void The_two_chat_start_doors_store_the_business_name_rule_and_no_conversation_stores_FullName()
     {
         var code = WriteEndpointGuardTests.StripComments(Code("MarketplaceTemplateExtensions.cs"));
         var (initializers, writes) = ConversationNameWrites(code);
         output.WriteLine($"مُهَيِّئاتُ Conversation: {initializers} · كِتاباتُ FullName: {writes.Count} ({string.Join(" | ", writes)})");
         Assert.True(initializers >= 3, $"أَداةٌ عَمياء: {initializers} مُهَيِّئ.");
-        Assert.Equal(4, writes.Count);
+        Assert.Empty(writes);
+        Assert.Contains("PartnerName = Services.Queries.ActorName.Of(partner),", code, StringComparison.Ordinal);
+        Assert.Contains("Subject = l.Format(\"chats.direct.subject\", Services.Queries.ActorName.Of(partner)),", code, StringComparison.Ordinal);
+        Assert.Contains("PartnerName = Services.Queries.ActorName.Of(vendor) ?? \"البائِع\",", code, StringComparison.Ordinal);
+        var before = ConversationNameWrites("var c = new ACommerce.Kit.Chat.Conversation\n{\n    OwnerName = me?.FullName ?? \"أَنا\",\n    PartnerName = vendor?.FullName ?? \"البائِع\",\n};");
+        Assert.Equal((1, 2), (before.Initializers, before.FullNameWrites.Count));
     }
 }

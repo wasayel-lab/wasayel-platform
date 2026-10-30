@@ -2087,12 +2087,14 @@ public static class MarketplaceTemplateExtensions
             if (existing is not null)
                 return Results.Redirect(Link(req, slug, $"chats/{existing.Id}"));
 
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-3؛ د40 «ج») واسمُ الطَرَفِ بِالقاعِدَةِ الَّتي يُكتَبُ بِها كُلُّ اسمِ فاعِل — اسمُ النَشاطِ حَيثُ وُجِد (`ActorName.Of`)
+            // كَـ`meName` أَعلاه — وكانَ `partner.FullName` فَيَظهَرُ البائِعُ «عُضو جَديد» في المُحادَثَةِ الَّتي تُفتَحُ مِن صَفحَةِ الصَفقَة.
             var conv = new Conversation
             {
                 Id = Guid.NewGuid(),
                 OwnerId = meId, OwnerName = meName,
-                PartnerId = partner.Id, PartnerName = partner.FullName,
-                Subject = l.Format("chats.direct.subject", partner.FullName),
+                PartnerId = partner.Id, PartnerName = Services.Queries.ActorName.Of(partner),
+                Subject = l.Format("chats.direct.subject", Services.Queries.ActorName.Of(partner)),
                 ListingId = null,
                 LastAt = DateTime.UtcNow,
                 // مُحادَثَة عامَّة بِلا TTL — لَيسَت مُؤَقَّتَة كَالمَشوار.
@@ -3454,8 +3456,9 @@ public static class MarketplaceTemplateExtensions
             var convo = new ACommerce.Kit.Chat.Conversation
             {
                 Id = Guid.NewGuid(),
-                OwnerId = userId, OwnerName = me?.FullName ?? "أَنا",
-                PartnerId = vendorId, PartnerName = vendor?.FullName ?? "البائِع",
+                // ‏(‏2026-10-30، B-PRIV-3؛ د40 «ج») بِـ`ActorName.Of` لا `FullName` — اسمُ نَشاطِ البائِعِ حَيثُ وُجِد، كَصَفحَتِه وصَفحَةِ الصَفقَة.
+                OwnerId = userId, OwnerName = Services.Queries.ActorName.Of(me) ?? "أَنا",
+                PartnerId = vendorId, PartnerName = Services.Queries.ActorName.Of(vendor) ?? "البائِع",
                 CreatedAt = DateTime.UtcNow, LastAt = DateTime.UtcNow
             };
             s.Store(convo);
