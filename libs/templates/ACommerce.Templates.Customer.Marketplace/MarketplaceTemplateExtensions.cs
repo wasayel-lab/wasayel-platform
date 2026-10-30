@@ -705,7 +705,7 @@ public static class MarketplaceTemplateExtensions
                 {
                     Id = Guid.NewGuid(),
                     OwnerId = userId, OwnerName = userName,
-                    PartnerId = owner.Id, PartnerName = Services.Queries.ActorName.Of(owner),
+                    PartnerId = owner.Id, PartnerName = Services.Queries.ActorName.Of(owner) ?? "",
                     Subject = listing.Title, ListingId = id, LastAt = DateTime.UtcNow
                 };
                 s.Store(conv);
