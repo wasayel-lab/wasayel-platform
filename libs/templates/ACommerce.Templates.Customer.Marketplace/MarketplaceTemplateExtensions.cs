@@ -685,8 +685,17 @@ public static class MarketplaceTemplateExtensions
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
             if (listing is null) return Results.Redirect($"/{slug}");
 
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الطَرَفُ مالِكُ الإعلانِ بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة (`CheckoutCart.OwnerOf`) — كانَ
+            // `Guid.NewGuid()` «صاحِب الإعلان» بِلا وَثيقَة فَلا تَصِلُ المُحادَثَةُ أَحَداً. وإعلانٌ بِلا مالِكٍ أَو مالِكُه غائِبٌ (`AccountErasure.PartnerGone`) يُرَدُّ إلى صَفحَتِه
+            // بِـ`partner_missing` قَبلَ أَيِّ كِتابَة؛ ومالِكُه يَعودُ إلَيها بِلا مُحادَثَةٍ مَعَ نَفسِه.
+            var origin = Link(req, slug, $"listings/{id}");
+            var ownerId = Services.Deals.CheckoutCart.OwnerOf(listing);
+            if (ownerId == userId) return Results.Redirect(origin);
+            var owner = ownerId is { } oid ? await s.LoadAsync<User>(oid) : null;
+            if (Services.Identity.AccountErasure.PartnerGone(owner)) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
+
             var existing = await s.Query<Conversation>()
-                .Where(c => c.ListingId == id && (c.OwnerId == userId || c.PartnerId == userId))
+                .Where(c => c.ListingId == id && ((c.OwnerId == userId && c.PartnerId == owner.Id) || (c.OwnerId == owner.Id && c.PartnerId == userId)))
                 .FirstOrDefaultAsync();
             Guid convId;
             if (existing is not null) convId = existing.Id;
@@ -696,7 +705,7 @@ public static class MarketplaceTemplateExtensions
                 {
                     Id = Guid.NewGuid(),
                     OwnerId = userId, OwnerName = userName,
-                    PartnerId = Guid.NewGuid(), PartnerName = "صاحِب الإعلان",
+                    PartnerId = owner.Id, PartnerName = Services.Queries.ActorName.Of(owner),
                     Subject = listing.Title, ListingId = id, LastAt = DateTime.UtcNow
                 };
                 s.Store(conv);
@@ -2085,6 +2094,8 @@ public static class MarketplaceTemplateExtensions
         // صَفحَةِ السائِقينَ بِلا كَلِمَة. فَصارَ يَقرَأُ مَنشَأَه مِن `returnUrl`
         // (بِـ`LocalRedirect.Resolve` القائِمَة — القاعِدَة ٨ — وإلّا مَسقَطُ الرَأس)
         // ويَعودُ إلَيه عِندَ الطَرَفِ المَحذوفِ بِرَمزِه (`ChatStartReturn.Failure`).
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) **وكانَ ذلك كاذِباً لِلمَحذوفِ بِالحَذف**: السُؤالُ كانَ `partner is null`، والحَذفُ يُبقي الوَثيقَةَ
+        // بِـ`DeletedAt` (`AccountDeletion.Erase`) فَتُفتَحُ المُحادَثَةُ مَعَه. فَصارَ يَسأَلُ `AccountErasure.PartnerGone` — غائِبٌ أَو مَحذوف — قَبلَ أَيِّ قِراءَةٍ أُخرى.
         app.MapPost("/{slug}/users/{userId:guid}/chat",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l, Services.Queries.AccountQueries actorNames) =>
         {
@@ -2099,7 +2110,7 @@ public static class MarketplaceTemplateExtensions
 
             await using var s = store.LightweightSession(slug);
             var partner = await s.LoadAsync<User>(userId);
-            if (partner is null) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
+            if (Services.Identity.AccountErasure.PartnerGone(partner)) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
 
             // ابحَث عَن مُحادَثَة قائِمَة بَين الاثنَين (بِلا ListingId).
             var existing = (await s.Query<Conversation>()
@@ -2200,6 +2211,10 @@ public static class MarketplaceTemplateExtensions
             if (conv is null) return Results.Redirect(Link(req, slug, $"chats"));
             if (conv.OwnerId != userId && conv.PartnerId != userId) return Forbidden();
             if (conv.IsExpired) return Results.Redirect(Link(req, slug, $"chats/{conversationId}?err=expired"));
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه da21e91) الطَرَفُ الآخَرُ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) — يُرَدُّ قَبلَ الرِسالَةِ والإشعار،
+            // وكانَ يُحفَظانِ ويَصِلُ الإشعارُ حِساباً مَمحُوّاً. والغُرفَةُ لا تَرسُمُ الاستِمارَةَ لَه بِالسُؤالِ نَفسِه.
+            var recipientId = userId == conv.OwnerId ? conv.PartnerId : conv.OwnerId;
+            if (Services.Identity.AccountErasure.PartnerGone(await s.LoadAsync<User>(recipientId))) return Results.Redirect(Link(req, slug, $"chats/{conversationId}?err={Services.ChatStartReturn.PartnerMissing}"));
 
             var msg = new Message
             {
@@ -2213,7 +2228,6 @@ public static class MarketplaceTemplateExtensions
             // عَلى جَرَس الـ topnav. تَحَقُّق سَريع: لا تُكَرِّر إشعاراً عَلى
             // نَفس المُحادَثَة في آخِر ٣٠ ثانِيَة لِتَفادي السپام لَو أَرسَل
             // المُستَخدِم رَسائِل مُتَتالِيَة.
-            var recipientId = userId == conv.OwnerId ? conv.PartnerId : conv.OwnerId;
             var senderName  = userId == conv.OwnerId ? conv.OwnerName  : conv.PartnerName;
             // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الحَدُّ بِلا `Kind=Utc` (`ModelCallRecord.Instant`): Marten يُقارِنُ `At` عَموداً بِلا مِنطَقَة، وكانَ Npgsql
             // يَرُدُّ `DateTime.UtcNow…` فَيَرمي البابُ قَبلَ أَيِّ حِفظٍ لِكُلِّ رِسالَة.
@@ -3471,6 +3485,9 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var me = await s.LoadAsync<User>(userId);
             var vendor = await s.LoadAsync<User>(vendorId);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) بائِعٌ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) يُرَدُّ إلى صَفحَتِه قَبلَ أَيِّ كِتابَة — كانَ
+            // البابُ لا يَسأَلُ شَيئاً فَتُفتَحُ مُحادَثَةٌ مَعَ حِسابٍ مَمحُوّ. والصَفحَةُ لا تَرسُمُ الزِرَّ لَه بِالسُؤالِ نَفسِه.
+            if (Services.Identity.AccountErasure.PartnerGone(vendor)) return Results.Redirect(Services.ChatStartReturn.Failure(Link(req, slug, $"vendor/{vendorId}"), Services.ChatStartReturn.PartnerMissing));
             // اِبحَث مُحادَثَة قائِمَة بَين الطَّرَفَين (بِأَيّ اتِّجاه).
             var existing = await s.Query<ACommerce.Kit.Chat.Conversation>()
                 .Where(c => (c.OwnerId == userId && c.PartnerId == vendorId)

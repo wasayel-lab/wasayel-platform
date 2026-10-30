@@ -121,7 +121,10 @@ public class ChatStartReturnTests
         var body = WriteEndpointGuardTests.StripComments(text.Substring(start, end - start));
 
         Assert.Contains("var origin = Services.LocalRedirect.Resolve(req.Form[\"returnUrl\"].ToString(), Link(req, slug, $\"drivers\"));", body, StringComparison.Ordinal);
-        Assert.Contains("if (partner is null) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));", body, StringComparison.Ordinal);
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) السُؤالُ `AccountErasure.PartnerGone` لا `partner is null`: الحَذفُ يُبقي الوَثيقَةَ بِـ`DeletedAt` فَكانَ «الطَرَفُ المَحذوفُ»
+        // يَمُرُّ (تَوصيفُه 9dc8354، وصُفوفُه الحَيَّةُ في `LiveChatPartnerGoneProofTests`).
+        Assert.Contains("if (Services.Identity.AccountErasure.PartnerGone(partner)) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("partner is null", body, StringComparison.Ordinal);
         Assert.Contains("if (meId == userId) return Results.Redirect(origin);", body, StringComparison.Ordinal);
         // والدُخولُ يَحمِلُ المَنشَأَ مُرَمَّزاً قيمَةً واحِدَة — كانَ `login?returnUrl={origin}` خاماً
         // (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11؛ الصَفّانِ أَدناه).

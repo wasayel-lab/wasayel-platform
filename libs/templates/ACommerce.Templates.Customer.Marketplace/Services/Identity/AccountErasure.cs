@@ -219,8 +219,16 @@ public static class AccountErasure
     public const string OffererGoneCode = "offer_gone";
 
     /// <summary>صاحِبُ العَرضِ حَذَفَ حِسابَه (أَو لا حِسابَ لَه) — فَلا يُقبَلُ عَرضُه: عَرضٌ مُعَلَّقٌ مِن حَذفٍ سَبَقَ <see cref="EraseEvents(Offer, Guid, DateTime)"/> لا يُنشِئُ مُطابَقَةً
-    /// ولا مُحادَثَةً مَعَ حِسابٍ لا وُجودَ لَه.</summary>
-    public static bool OffererGone(User? offerer) => offerer is null || offerer.DeletedAt is not null;
+    /// ولا مُحادَثَةً مَعَ حِسابٍ لا وُجودَ لَه. القاعِدَةُ <see cref="PartnerGone"/> بِعَينِها — اسمٌ لِمَوضِعِها لا قاعِدَةٌ ثانِيَة.</summary>
+    public static bool OffererGone([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] User? offerer) => PartnerGone(offerer);
+
+    /// <summary>
+    /// <para><b>الطَرَفُ الآخَرُ غائِب</b> (‏2026-10-30، الموجَة ١٢ F2 · ٥، F2B-2؛ تَوصيفُه <c>9dc8354</c>) — دالَّةٌ نَقِيَّةٌ واحِدَة: لا وَثيقَةَ لَه، أَو أَغلَقَ حِسابَه
+    /// (<c>DeletedAt</c>). الحَذفُ يُبقي الوَثيقَةَ بِاسمِ «حِسابٌ مَحذوف» (<see cref="ACommerce.Kit.Auth.AccountDeletion.Erase"/>)، فَسُؤالُ <c>is null</c> وَحدَه لا يَراه.</para>
+    /// <para>يَسأَلُها كُلُّ بابٍ يَفتَحُ مُحادَثَةً أَو يُرسِلُ فيها (<c>users/{userId}/chat</c>، <c>vendor/{vendorId}/chat</c>، <c>listings/{id}/chat</c>،
+    /// <c>chats/{id}/send</c>) قَبلَ أَيِّ كِتابَة، وتَسأَلُها الصَفَحاتُ الَّتي تَرسُمُ أَبوابَها (غُرفَةُ المُحادَثَة، صَفحَةُ البائِع، صَفحَةُ الإعلان) — فَلا يُرسَمُ بابٌ يَرُدُّه.</para>
+    /// </summary>
+    public static bool PartnerGone([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] User? partner) => partner is null || partner.DeletedAt is not null;
 
     /// <summary>إعلانٌ يَسحَبُه حَذفُ حِسابِه (‏2026-10-30، B-PRIV-1): قائِمٌ لَم يُحذَف، ومالِكُه هُوَ بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة
     /// (<see cref="ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy"/>).</summary>

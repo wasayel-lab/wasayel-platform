@@ -227,6 +227,12 @@ else
            فَلا يَبلُغُه إلّا إعلانُ حِسابٍ حُذِفَ قَبلَ ذلك — والاستِمارَةُ لا تُرسَمُ لَه (`ownerGone`) — ويُقالُ ولا يُبتلَع. *@
         <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_owner_gone"]" />
     }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.ChatStartReturn.PartnerMissing)
+    {
+        @* `partner_missing` — رَدُّ بابِ المُحادَثَةِ عَلى الإعلانِ حينَ لا مالِكَ لَه أَو أَغلَقَ مالِكُه حِسابَه (‏2026-10-30، الموجَة ١٢ F2 · ٥): الزِرُّ لا يُرسَمُ
+           لَه (`chatOpens`)، فَلا يَبلُغُه إلّا نَقرٌ عَلى صَفحَةٍ رُسِمَت قَبلَ ذلك — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_partner_missing"]" />
+    }
     else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)
     {
         @* `cart_closed` — رَمزُ `cart/add` عَلى مَتجَرٍ لا يَستَعمِلُ نَمَطُه السَلَّة (`CartDoor`، تَيّارُ S15 البَند L): الصَفحَةُ لا تَرسُمُ
@@ -516,21 +522,27 @@ else
                             @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_cart"]) · @((MarkupString)Money.Format(listing.Price))
                         </button>
                     </form>
+                    @if (chatOpens)
+                    {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-block">
                             <AcIcon Name="message" Size="18" /> @L.Markup("listings.detail.ask_seller")@((MarkupString)"\n                        ")
                         </button>
                     </form>
+                    }
                 }
                 else
                 {
                     @* أَنماط بِلا سَلَّة (إيجار/سَكَن/مَشاوير): تَواصُل + عَرض. *@
+                    @if (chatOpens)
+                    {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0 0 10px;">
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                             <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "message")" Size="18" />
                             @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_contact"])
                         </button>
                     </form>
+                    }
                     @* تَفاوُض اختياريّ — يَفتَح نَموذَج العَرض كَ <details>. *@
                     <details>
                         <summary class="ac-btn ac-btn-ghost ac-btn-block" style="text-align:start;cursor:pointer;">
@@ -702,6 +714,9 @@ else
     bool canSwitchToOffer;
     /// <summary>مالِكُ الإعلانِ أَغلَقَ حِسابَه (‏2026-10-30، B-PRIV-1) — <c>CheckoutCart.OwnerGone</c> سُؤالُ بابِ العَرضِ بِعَينِه، فَلا تُرسَمُ استِمارَتُه.</summary>
     bool ownerGone;
+    /// <summary>‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) لِلإعلانِ مالِكٌ قائِمٌ يُراسَل — سُؤالُ بابِ <c>listings/{id}/chat</c> بِعَينِه (<c>CheckoutCart.OwnerOf</c> ثُمَّ
+    /// <c>AccountErasure.PartnerGone</c>)، فَلا يُرسَمُ زِرُّ مُحادَثَةٍ يَرُدُّه البابُ بِـ<c>partner_missing</c>.</summary>
+    bool chatOpens;
     double? pickupLat, pickupLng, dropoffLat, dropoffLng;
     /// <summary>نَمَط تَدَفُّق الصَّفقَة لِهذا المُستَأجِر — نَفس الدالَّة
     /// الَّتي يَستَخدِمُها endpoint بَدء الصَّفقَة، لا اشتِقاق مُوازٍ.</summary>
@@ -780,6 +795,9 @@ else
         // ولا يُقرَأُ حِسابُ المالِكِ إلّا حَيثُ تُرسَمُ استِمارَةُ العَرض.
         if (showOffers && ownerId is { } seller)
             ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, await Accounts.ProfileAsync(Slug, seller));
+        // وحِسابُه حَيثُ يُرسَمُ زِرُّ المُحادَثَة: قِسمُ التَواصُلِ لِصاحِبِ جَلسَةٍ غَيرِ المالِك.
+        if (Auth.IsAuthenticated && !isOwner && !isOfferBased && ownerId is { } partner)
+            chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, partner));
 
         // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
         pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");

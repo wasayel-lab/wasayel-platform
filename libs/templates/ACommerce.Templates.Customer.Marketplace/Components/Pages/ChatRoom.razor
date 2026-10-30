@@ -68,7 +68,13 @@ else
         </p>
     }
 
-    @if (conv.IsExpired)
+    @if (partnerGone)
+    {
+        @* ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) الطَرَفُ الآخَرُ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) — بابُ الإرسالِ يَرُدُّه، فَلا تُرسَمُ استِمارَةٌ يَرُدُّها. *@
+        <div style="text-align:center;padding:16px;background:var(--ac-bg-alt);
+                    border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">@L.Markup("chats.room.partner_gone")</div>
+    }
+    else if (conv.IsExpired)
     {
         <div style="text-align:center;padding:16px;background:var(--ac-bg-alt);
                     border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">@((MarkupString)"\n            ")@L.Markup("chats.room.expired")@((MarkupString)"\n        ")
@@ -98,6 +104,7 @@ else
     [Parameter] public Guid ConversationId { get; set; }
     Conversation? conv;
     List<Message> messages = new();
+    bool partnerGone;
 
     // غَير ساكِنَة: القيَم صارَت في المَعجَم، والساكِنَة لا تَبلُغ `L`.
     // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): تَأخُذُ اللَحظَةَ المُخَزَّنَةَ لا ساعَتَها المَحَلِّيَّة، وتُنَسِّقُ بِـ`FormatTime` — فَلَحظَةٌ لَم تُضبَط
@@ -132,5 +139,9 @@ else
             c => c.OwnerId == Auth.UserId || c.PartnerId == Auth.UserId);
         conv     = room.Conversation;
         messages = room.Messages.ToList();
+        // سُؤالُ بابِ الإرسالِ بِعَينِه عَلى الطَرَفِ الآخَر — يُقرَأُ حِسابُه حينَ تُرسَمُ الغُرفَةُ لِطَرَفٍ فيها.
+        if (conv is not null)
+            partnerGone = ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(
+                await Account.ProfileAsync(Slug, conv.OwnerId == Auth.UserId ? conv.PartnerId : conv.OwnerId));
     }
 }

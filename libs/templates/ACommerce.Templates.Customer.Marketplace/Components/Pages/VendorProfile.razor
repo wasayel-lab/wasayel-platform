@@ -48,7 +48,12 @@
             </ChildContent>
         </AcCard>
 
-        @if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
+        @if (ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(vendor))
+        {
+            @* ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) أَغلَقَ البائِعُ حِسابَه — بابُ المُحادَثَةِ يَرُدُّه بِالسُؤالِ نَفسِه، فَلا يُرسَمُ زِرٌّ يَرُدُّه. *@
+            <p style="margin:0 0 12px;color:var(--ac-text-muted);">@L.Markup("vendors.profile.contact_gone")</p>
+        }
+        else if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
         {
             <form method="post" action="@($"/{Slug}/vendor/{VendorId}/chat")" style="margin:0 0 12px;">
                 <AcButton Type="submit" Variant="primary" Block="true" Text="@L["vendors.profile.contact"]" />
