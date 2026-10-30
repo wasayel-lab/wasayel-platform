@@ -153,6 +153,68 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         Assert.Contains("OTO", LocaleCatalog.Find("en", "platform.privacy.share_carrier")!, StringComparison.Ordinal);
     }
 
+    // ─── مَن يَطلُبُ مِنه المُتَصَفِّحُ مَباشَرَةً (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-5) ─────────────────────────────────────────────
+    //
+    // الجَردُ أَعلاه يَعُدُّ عُمَلاءَ الخادِمِ الصادِرينَ وَحدَهُم، فَما يَطلُبُه مُتَصَفِّحُ الزائِرِ مِن مُضيفٍ خارِجِيٍّ — الخَطُّ ومَكتَبَةُ الاتِّصالِ الحَيّ — لا يَراه:
+    // العَمى نَفسُه الَّذي أَصلَحَه د20 لِـSMTP وR2. وd20 «تُسمّى كل الجهات بأسمائها»، و`share_fonts` السَطرُ الوَحيدُ بِلا جِهَةٍ مُسَمّاة.
+
+    /// <summary>جِهَةُ كُلِّ مُضيفٍ خارِجِيٍّ يَطلُبُ مِنه المُتَصَفِّحُ مِلَفّاً — مَعجَمٌ مُغلَق: مُضيفٌ جَديدٌ بِلا سَطرٍ هُنا يُحمِرُّ الصَفّ.</summary>
+    internal static readonly IReadOnlyDictionary<string, string> BrowserHostParties = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["fonts.googleapis.com"] = "Google Fonts",
+        ["fonts.gstatic.com"]    = "Google Fonts",
+        ["cdn.jsdelivr.net"]     = "jsDelivr",
+        ["cdn.paddle.com"]       = "Paddle",
+    };
+
+    private static readonly Regex BrowserFetch = new(
+        @"<(?:link|script|img|iframe|source)\b[^>]*?\b(?:href|src)\s*=\s*[""']https?://(?<h>[A-Za-z0-9.-]+)|url\(\s*['""]?https?://(?<h>[A-Za-z0-9.-]+)|@import\s+['""]https?://(?<h>[A-Za-z0-9.-]+)",
+        RegexOptions.Compiled);
+
+    /// <summary>كُلُّ مُضيفٍ خارِجِيٍّ في وُسومِ <c>link/script/img/iframe/source</c> وفي <c>url(…)</c>/<c>@import</c> — في كُلِّ <c>.razor</c>/<c>.html</c>/<c>.css</c>
+    /// تَحتَ <c>libs</c> و<c>apps</c> (‏<c>App.razor</c> وأَوراقُ الأَنماطِ مِنها) — بِمِلَفِّه.</summary>
+    internal static IReadOnlyList<(string Host, string File)> BrowserHosts()
+    {
+        var found = new List<(string, string)>();
+        foreach (var root in new[] { "libs", "apps" })
+            foreach (var f in Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, root), "*.*", SearchOption.AllDirectories))
+            {
+                var sep = Path.DirectorySeparatorChar;
+                if (f.Contains($"{sep}bin{sep}") || f.Contains($"{sep}obj{sep}") || !(f.EndsWith(".razor") || f.EndsWith(".html") || f.EndsWith(".css"))) continue;
+                foreach (Match m in BrowserFetch.Matches(File.ReadAllText(f)))
+                    found.Add((m.Groups["h"].Value, Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, f)));
+            }
+        return found;
+    }
+
+    /// <summary>الجِهاتُ الَّتي لا يُسَمّيها نَصُّ <c>share_*</c> بِالعَرَبِيَّةِ أَو بِالإنجليزِيَّة.</summary>
+    internal static IReadOnlyList<string> UnnamedBrowserParties(IEnumerable<string> hosts)
+    {
+        var page = PrivacyPage();
+        var keys = Regex.Matches(page, @"@doc\.Markup\(""(?<k>platform\.privacy\.share_\w+)""[,)]").Select(m => m.Groups["k"].Value).Distinct().ToList();
+        var ar = string.Join(" ", keys.Select(k => LocaleCatalog.Find(LocaleCatalog.Arabic, k) ?? ""));
+        var en = string.Join(" ", keys.Select(k => LocaleCatalog.Find("en", k) ?? ""));
+        return hosts.Select(h => BrowserHostParties.TryGetValue(h, out var p) ? p : $"«{h}» بِلا جِهَة")
+            .Distinct(StringComparer.Ordinal)
+            .Where(p => !ar.Contains(p, StringComparison.Ordinal) || !en.Contains(p, StringComparison.Ordinal))
+            .OrderBy(p => p, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): المُتَصَفِّحُ يَطلُبُ مِن أَربَعَةِ مُضيفينَ خارِجِيّين، وجِهَتانِ مِنها لا يُسَمّيهِما نَصّ.</summary>
+    [Fact]
+    public void Today_the_browser_fetches_from_google_fonts_and_jsdelivr_and_no_share_line_names_them()
+    {
+        var hosts = BrowserHosts();
+        var distinct = hosts.Select(h => h.Host).Distinct(StringComparer.Ordinal).OrderBy(h => h, StringComparer.Ordinal).ToList();
+        var unnamed = UnnamedBrowserParties(distinct);
+        output.WriteLine($"طَلَباتُ مُتَصَفِّحٍ إلى مُضيفٍ خارِجِيّ: {hosts.Count} في {hosts.Select(h => h.File).Distinct().Count()} مِلَفّ · مُضيفون: {distinct.Count} " +
+                         $"({string.Join(", ", distinct)}) · جِهاتٌ غَيرُ مُسَمّاة: {string.Join(", ", unnamed)}");
+        Assert.True(hosts.Count > 0, "أَداةٌ عَمياء: صِفرُ طَلَبٍ خارِجِيّ.");
+        Assert.Contains(hosts, h => h.File.EndsWith("App.razor", StringComparison.Ordinal));
+        Assert.Contains(hosts, h => h.File.EndsWith("app.css", StringComparison.Ordinal));
+        Assert.Equal(new[] { "Google Fonts", "jsDelivr" }, unnamed);
+    }
+
     /// <summary>حُقولُ تَسجيلِ البائِعِ المُسَجَّلِ في الضَريبَةِ كَما يَكتُبُها <c>OtoClient.RegisterVendorAsync</c> تَحتَ <c>if (vendor.IsVatRegistered)</c>.</summary>
     internal static readonly string[] VatRegistrationFields =
     [
