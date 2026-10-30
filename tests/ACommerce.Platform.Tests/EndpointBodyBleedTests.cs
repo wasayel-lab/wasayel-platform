@@ -432,7 +432,10 @@ public class EndpointBodyBleedTests
         // ‏2824 ← **2828** يَوم ‏2026-10-30 (الموجَة ١٢ F1 البَند ٨): أَربَعَةُ أَسطُرٍ في `/{slug}/auth/logout` — حَلُّ الرَمز، وشَرطُ «استِمارَةٌ وجَلسَةٌ لِهذا المَتجَر»،
         // ونِداءُ `SessionVersionGate.ForgetDeviceAsync` بِعَناوينِ `push_endpoint` وشَرطِ الجَلسَة (سَطران)؛ والمَحوُ والتَحَقُّقُ مِن العُنوانِ في الدالَّة.
         // طَبَعَ العَدّادُ «‏2824 → 2828» و«‏3172 → 3176»، و**‏4**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2828),
+        // ‏2828 ← **2829** يَوم ‏2026-10-30 (الموجَة ١٢ F2 · ٣ — F2B-1): سَطرُ عَدَدِ الرِحلاتِ الجارِيَةِ وَسيطاً لِـ`AccountDeletion.Validate` في `/{slug}/me/delete/confirm`
+        // (`AccountErasure.OpenTripsAsync` بِجَلسَةِ البابِ، نَسَقُ سَطرِ الصَفَقاتِ فَوقَه)؛ وبابُ العَرضِ بَدَّلَ «أَوَّلَ مُطابَقَةٍ فَعّالَة» (ثَلاثَةُ أَسطُرٍ) بِحامِلٍ وحَلقَةٍ تَسأَلُ
+        // `AccountErasure.LiveTrip` (ثَلاثَة) بِلا زِيادَة. طَبَعَ العَدّادُ «‏2828 → 2829» و«‏3176 → 3177»، و**‏1**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2829),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1188,7 +1191,9 @@ public class EndpointBodyBleedTests
     /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3172 ← 3176 يَوم ‏2026-10-30</b> (الموجَة ١٢ F1 البَند ٨): أَربَعَةُ أَسطُرٍ في بابِ الخُروجِ تُعطي <c>ForgetDeviceAsync</c> عَناوينَ المُتَصَفِّحِ
     /// وشَرطَ الجَلسَة. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3176;
+    /// <remarks><b>‏3176 ← 3177 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٣ — F2B-1): سَطرُ عَدَدِ الرِحلاتِ الجارِيَةِ في نُقطَةِ الحَذف (<c>AccountErasure.OpenTripsAsync</c>)؛
+    /// وبابُ العَرضِ يَسأَلُ <c>AccountErasure.LiveTrip</c> بِلا سَطرٍ زائِد. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3177;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

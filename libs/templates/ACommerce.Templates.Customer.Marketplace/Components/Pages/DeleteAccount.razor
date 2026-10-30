@@ -32,7 +32,7 @@
     else
     {
         @* ‏(‏2026-10-29، د52) رَمزُ الصَفقَةِ الجارِيَةِ لا يُقرَأُ «لَم تُطابِق الكَلِمَة» — بِطاقَتُه أَدناه تَقولُ ما يَفعَلُه، وتُرسَمُ ما دامَت لَه صَفقَةٌ جارِيَة. *@
-        @if (!string.IsNullOrEmpty(Err) && Err != ACommerce.Kit.Auth.AccountDeletion.OpenDeal)
+        @if (!string.IsNullOrEmpty(Err) && Err != ACommerce.Kit.Auth.AccountDeletion.OpenDeal && Err != ACommerce.Kit.Auth.AccountDeletion.OpenTrip)
         {
             <AcCard>
                 <ChildContent>
@@ -63,6 +63,20 @@
                     <p style="color:var(--ac-danger-ink);">@L.Markup("account.delete.open_deal")</p>
                     <div style="display:flex;gap:8px;margin-top:12px;">
                         <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"deals")">@L.Markup("account.delete.open_deal_action")</a>
+                        <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">@L.Markup("account.delete.cancel")</a>
+                    </div>
+                </ChildContent>
+            </AcCard>
+        }
+        else if (openTrips.Count > 0)
+        {
+            @* ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) رِحلَةٌ جارِيَةٌ تَمنَعُ الحَذفَ كَالصَفقَة (`open_trip`): يُرسَمُ رابِطُ صَفحَةِ إعلانِها — حَيثُ استِمارَتا الإنهاءِ
+               والإلغاء — لا استِمارَةٌ تَرُدُّها النُقطَة (القاعِدَة ١٢). والصَفقَةُ قَبلَها: البابُ يَرُدُّ بِأَوَّلِ خَرق. *@
+            <AcCard>
+                <ChildContent>
+                    <p style="color:var(--ac-danger-ink);">@L.Markup("account.delete.open_trip")</p>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"listings/{openTrips[0].Id}")">@L.Markup("account.delete.open_trip_action")</a>
                         <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, Role, $"me")">@L.Markup("account.delete.cancel")</a>
                     </div>
                 </ChildContent>
@@ -119,6 +133,9 @@
     /// <summary>صَفَقاتُه الجارِيَة — <c>AccountQueries.OpenDealsAsync</c>، سُؤالُ النُقطَةِ بِعَينِه.</summary>
     int openDeals;
 
+    /// <summary>رِحلاتُه الجارِيَة — <c>UserDataQueries.OpenTripsAsync</c>، سُؤالُ النُقطَةِ بِعَينِه (‏2026-10-30، F2B-1).</summary>
+    IReadOnlyList<ACommerce.Kit.Offers.ListingMatch> openTrips = Array.Empty<ACommerce.Kit.Offers.ListingMatch>();
+
     /// <summary>صَفَقاتُه المُلغاةُ الَّتي يَرُدُّ فيها البائِعُ ثَمَناً نَقدِيّاً — <c>AccountErasure.CashRefundsOwed</c> (G-7).</summary>
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal> owedCash = Array.Empty<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal>();
 
@@ -127,6 +144,7 @@
         if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
         openDeals = await Accounts.OpenDealsAsync(Slug, Auth.UserId.Value);
+        openTrips = await Data.OpenTripsAsync(Slug, Auth.UserId.Value);
         owedCash = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);
     }
 }

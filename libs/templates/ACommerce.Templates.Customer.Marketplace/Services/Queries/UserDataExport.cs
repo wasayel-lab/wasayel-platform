@@ -226,4 +226,12 @@ public sealed class UserDataQueries
         await using var s = _store.QuerySession(tenantSlug);
         return await Identity.AccountErasure.CashRefundsOwedAsync(s, userId, ct);
     }
+
+    /// <summary>(‏2026-10-30، الموجَة ١٢ F2 · ٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) رِحلاتُه الجارِيَةُ الَّتي تَمنَعُ الحَذفَ بِـ<c>open_trip</c> — سُؤالُ نُقطَةِ الحَذفِ بِعَينِه
+    /// (<see cref="Identity.AccountErasure.OpenTripsAsync"/>)، فَتَرسُمُ صَفحَةُ الحَذفِ رابِطَ الرِحلَةِ لا استِمارَةً تَرُدُّها النُقطَة.</summary>
+    public async Task<IReadOnlyList<ACommerce.Kit.Offers.ListingMatch>> OpenTripsAsync(string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return await Identity.AccountErasure.OpenTripsAsync(s, userId, ct);
+    }
 }

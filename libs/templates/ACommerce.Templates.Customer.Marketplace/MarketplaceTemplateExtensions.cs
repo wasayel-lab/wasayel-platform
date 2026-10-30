@@ -971,8 +971,10 @@ public static class MarketplaceTemplateExtensions
                 // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
                 // ‏(‏2026-10-29، قَرارُ المالِك د52) والصَفَقاتُ الجارِيَةُ تُعَدُّ بِالجَلسَةِ نَفسِها وتَبلُغُ البَوّابَةَ قَبلَ كَلِمَةِ التَأكيد — `AccountErasure.OpenDealsAsync`
                 // سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
+                // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) والرِحلاتُ الجارِيَةُ بَعدَها بِالجَلسَةِ نَفسِها — `AccountErasure.OpenTripsAsync` سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
                 var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
                     user, await Services.Identity.AccountErasure.OpenDealsAsync(session, userId),
+                    (await Services.Identity.AccountErasure.OpenTripsAsync(session, userId)).Count,
                     req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
 
                 if (violation is not null)
@@ -1502,9 +1504,11 @@ public static class MarketplaceTemplateExtensions
             // مَنع تَقديم عَرض جَديد إن كانَ السائِق في رِحلَة نَشِطَة، أَو
             // إن قَطَع رِحلَة في آخِر ٥ دَقائِق (تَهدِئَة لِمَنع الاستِغلال).
             var matches = await s.Query<ACommerce.Kit.Offers.ListingMatch>().ToListAsync();
-            var active = matches.FirstOrDefault(m =>
-                m.OffererId == userId &&
-                m.Status == ACommerce.Kit.Offers.TripStatus.Active);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) والرِحلَةُ عَلى إعلانٍ مَحذوفٍ لَيسَت نَشِطَة (`AccountErasure.LiveTrip`): صَفحَتُه لا تَرسُمُ استِمارَةَ إنهاءٍ ولا إلغاء،
+            // فَكانَ السائِقُ يُحَوَّلُ إلَيها عَن كُلِّ عَرضٍ جَديدٍ ولا نَقرَةَ تُخرِجُه — ويُحَرِّرُ هذا مَن عَلِقَ بِحَذفٍ صَريحٍ أَو بِحَذفِ حِسابٍ قَبلَ مَنعِ الحَذفِ بِالرِحلَة.
+            ACommerce.Kit.Offers.ListingMatch? active = null;
+            foreach (var m in matches.Where(m => m.OffererId == userId && m.Status == ACommerce.Kit.Offers.TripStatus.Active))
+                if (Services.Identity.AccountErasure.LiveTrip(m, await s.LoadAsync<Listing>(m.Id))) { active = m; break; }
             if (active is not null)
                 return Results.Redirect(Link(req, slug, $"listings/{active.Id}?err=active_trip"));
             var lastAbort = matches

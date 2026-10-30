@@ -726,6 +726,66 @@ public class AccountErasureTests
             AccountErasure.CashRefundsOwed(new[] { owed, noteAfter, notOwed, active, asSeller, card, cardRefunded, cashThenCard }, Me).Select(d => d.Id).OrderBy(i => i));
     }
 
+    // ─── رِحلَةٌ جارِيَة (‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) — مُوجَبٌ وسالِبٌ لِلدالَّتَين، وصَفحَةُ الحَذفِ تَسأَلُ السُؤالَ نَفسَه ─────────────
+
+    /// <summary><see cref="AccountErasure.LiveTrip"/>: مُطابَقَةٌ فَعّالَةٌ عَلى إعلانِها القائِمِ ⇒ نَعَم؛ مُنتَهِيَةٌ أَو مَقطوعَةٌ، أَو إعلانُها مَحذوفٌ أَو غائِبٌ أَو غَيرُه ⇒ لا.
+    /// و<see cref="AccountErasure.OpenTrip"/>: حَيَّةٌ وهُوَ سائِقُها أَو مالِكُ إعلانِها ⇒ نَعَم؛ لِغَيرِه، أَو انتَهَت ⇒ لا.</summary>
+    [Fact]
+    public void A_live_trip_is_an_active_match_on_its_standing_listing_and_an_open_trip_is_one_he_drives_or_owns()
+    {
+        var listing = OwnedListing(Me);
+        var deleted = OwnedListing(Me);
+        deleted.Apply(new ACommerce.Kit.Listings.ListingDeleted(deleted.Id, DateTime.UtcNow));
+        ListingMatch Match(ACommerce.Kit.Offers.TripStatus status = ACommerce.Kit.Offers.TripStatus.Active, Guid? id = null, Guid? driver = null)
+            => new() { Id = id ?? listing.Id, OffererId = driver ?? Other, Status = status };
+
+        Assert.True(AccountErasure.LiveTrip(Match(), listing));
+        Assert.False(AccountErasure.LiveTrip(Match(ACommerce.Kit.Offers.TripStatus.Completed), listing));
+        Assert.False(AccountErasure.LiveTrip(Match(ACommerce.Kit.Offers.TripStatus.Aborted), listing));
+        Assert.False(AccountErasure.LiveTrip(Match(id: deleted.Id), deleted));
+        Assert.False(AccountErasure.LiveTrip(Match(), null));
+        Assert.False(AccountErasure.LiveTrip(Match(id: Guid.NewGuid()), listing));
+
+        Assert.True(AccountErasure.OpenTrip(Match(), listing, Me));                  // راكِبٌ يَملِكُ المِشوار
+        Assert.True(AccountErasure.OpenTrip(Match(), listing, Other));               // سائِقُه
+        Assert.False(AccountErasure.OpenTrip(Match(), listing, Guid.NewGuid()));     // رِحلَةُ غَيرِه
+        Assert.False(AccountErasure.OpenTrip(Match(ACommerce.Kit.Offers.TripStatus.Completed), listing, Me));
+        Assert.False(AccountErasure.OpenTrip(Match(ACommerce.Kit.Offers.TripStatus.Aborted), listing, Other));
+        Assert.False(AccountErasure.OpenTrip(Match(id: deleted.Id), deleted, Other));
+        Assert.Equal("open_trip", AccountDeletion.OpenTrip);
+    }
+
+    /// <summary>صَفحَةُ الحَذفِ تَسأَلُ سُؤالَ النُقطَةِ عَن الرِحلاتِ وتَرسُمُ رابِطَ الرِحلَةِ مَكانَ استِمارَةٍ تَرُدُّها النُقطَة (القاعِدَة ١٢)، والنُقطَةُ تَعُدُّها بِجَلسَتِها قَبلَ <c>Erase</c>،
+    /// وبابُ العَرضِ يَسأَلُ <see cref="AccountErasure.LiveTrip"/> قَبلَ <c>active_trip</c>.</summary>
+    [Fact]
+    public void The_deletion_page_and_door_ask_the_trip_question_and_the_offers_door_ignores_a_deleted_listings_match()
+    {
+        var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(DeletePagePath));
+        var body = AccountDeletionRetentionTests.DeleteEndpointBody();
+        var (_, _, offers, _) = ErasureSources();
+        var deals = page.IndexOf("@if (openDeals > 0)", StringComparison.Ordinal);
+        var trips = page.IndexOf("else if (openTrips.Count > 0)", StringComparison.Ordinal);
+        var form = page.IndexOf("/me/delete/confirm", StringComparison.Ordinal);
+        var gate = body.IndexOf("AccountDeletion.Validate(", StringComparison.Ordinal);
+        var count = body.IndexOf("AccountErasure.OpenTripsAsync(session, userId)", StringComparison.Ordinal);
+        var erase = body.IndexOf("AccountDeletion.Erase(", StringComparison.Ordinal);
+        var live = offers.IndexOf("Services.Identity.AccountErasure.LiveTrip(m,", StringComparison.Ordinal);
+        var refuse = offers.IndexOf("err=active_trip", StringComparison.Ordinal);
+        output.WriteLine($"الصَفحَةُ: صَفقَةٌ ثُمَّ رِحلَةٌ ثُمَّ الاستِمارَة {deals < trips && trips < form} · النُقطَةُ تَعُدُّ الرِحلاتِ قَبلَ Erase {gate < count && count < erase} · " +
+                         $"بابُ العَرضِ يَسأَلُ LiveTrip قَبلَ active_trip {live > 0 && live < refuse}");
+        Assert.Contains("openTrips = await Data.OpenTripsAsync(Slug, Auth.UserId.Value);", page, StringComparison.Ordinal);
+        Assert.True(deals > 0 && trips > deals && form > trips, "فَرعُ الرِحلَةِ لَيسَ بَينَ فَرعِ الصَفقَةِ والاستِمارَة.");
+        Assert.Contains("$\"listings/{openTrips[0].Id}\"", page, StringComparison.Ordinal);
+        Assert.Contains("Err != ACommerce.Kit.Auth.AccountDeletion.OpenTrip", page, StringComparison.Ordinal);
+        foreach (var key in new[] { "account.delete.open_trip", "account.delete.open_trip_action" })
+        {
+            Assert.Contains(key, page, StringComparison.Ordinal);
+            Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key));
+        }
+        Assert.True(gate > 0 && count > gate && erase > count, "عَدُّ الرِحلاتِ لا يَقَعُ داخِلَ نِداءِ البَوّابَةِ قَبلَ Erase.");
+        Assert.True(live > 0 && refuse > live, "بابُ العَرضِ لا يَسأَلُ LiveTrip قَبلَ active_trip.");
+    }
+
     private readonly ITestOutputHelper output;
     public AccountErasureTests(ITestOutputHelper output) => this.output = output;
 }
@@ -800,7 +860,7 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await using (var s = store.LightweightSession(slug))
             {
                 var u = await s.LoadAsync<User>(me.Id);
-                var refused = AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), "حذف", "حذف");
+                var refused = AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), (await AccountErasure.OpenTripsAsync(s, me.Id)).Count, "حذف", "حذف");
                 output.WriteLine($"بِصَفقَةٍ جارِيَة: {refused?.Code}");
                 Assert.Equal(AccountDeletion.OpenDeal, refused?.Code);
             }
@@ -818,7 +878,7 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await using (var s = store.LightweightSession(slug))
             {
                 var u = await s.LoadAsync<User>(me.Id);
-                Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), "حذف", "حذف"));
+                Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), (await AccountErasure.OpenTripsAsync(s, me.Id)).Count, "حذف", "حذف"));
                 var now = DateTime.UtcNow;
                 var nameBefore = u!.FullName;
                 var contactsBefore = AccountErasure.ContactsOf(u);   // ‏(2026-10-29، الجَولَة ٢) الصيغَةُ الواحِدَة — وَسيلَتاه قَبلَ Erase كَالنُقطَة
@@ -894,7 +954,7 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
             await using (var s = store.LightweightSession(slug))
             {
                 var u = await s.LoadAsync<User>(me.Id);
-                Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), "حذف", "حذف"));
+                Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, me.Id), (await AccountErasure.OpenTripsAsync(s, me.Id)).Count, "حذف", "حذف"));
                 var nameBefore = ActorName.NamesOf(u!);
                 var contactsBefore = AccountErasure.ContactsOf(u!);
                 AccountDeletion.Erase(u!, DateTime.UtcNow);
@@ -929,7 +989,7 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
     {
         await using var s = store.LightweightSession(slug);
         var u = await s.LoadAsync<User>(userId);
-        Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, userId), "حذف", "حذف"));
+        Assert.Null(AccountDeletion.Validate(u, await AccountErasure.OpenDealsAsync(s, userId), (await AccountErasure.OpenTripsAsync(s, userId)).Count, "حذف", "حذف"));
         var names = ActorName.NamesOf(u!);
         var contacts = AccountErasure.ContactsOf(u!);
         AccountDeletion.Erase(u!, DateTime.UtcNow);
@@ -1609,7 +1669,8 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
 
     /// <summary>مَتجَرٌ بِدَورَي الراكِبِ والسائِقِ مِن الكاتالوج، وراكِبٌ نَشَرَ مِشواراً قَبِلَ فيه عَرضَ سائِق (‏<see cref="ListingMatch"/> فَعّالَة)، ومالِكٌ ثالِثٌ قائِمٌ
     /// لِإعلانٍ آخَرَ يَعرِضُ عَلَيه السائِق. والمُطابَقَةُ وَثيقَةٌ كَما يَكتُبُها بابُ القَبول.</summary>
-    private static async Task<(User Rider, User Driver, Guid Trip, Guid Other)> SeedTripAsync(Marten.IDocumentStore store, string slug)
+    private static async Task<(User Rider, User Driver, Guid Trip, Guid Other)> SeedTripAsync(Marten.IDocumentStore store, string slug,
+        ACommerce.Kit.Offers.TripStatus status = ACommerce.Kit.Offers.TripStatus.Active)
     {
         var rider = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "راكِبٌ يُغلِقُ حِسابَه", Phone = "+966500000571", PhoneVerified = true, ActiveRole = "rider" };
         var driver = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "سائِقُ الرِحلَة", Phone = "+966500000572", PhoneVerified = true, ActiveRole = "driver" };
@@ -1635,7 +1696,8 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
             null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = rider.Id.ToString(), ["accepts_offers"] = "true" }, now));
         s.Events.StartStream<ACommerce.Kit.Listings.Listing>(other, new ACommerce.Kit.Listings.ListingCreated(other, slug, "مِشوارٌ آخَر", null, 40m, "rides",
             null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = third.Id.ToString(), ["accepts_offers"] = "true" }, now));
-        s.Store(new ListingMatch { Id = trip, AcceptedOfferId = Guid.NewGuid(), OffererId = driver.Id, OffererName = driver.FullName, AcceptedPrice = 30m, MatchedAt = now });
+        s.Store(new ListingMatch { Id = trip, AcceptedOfferId = Guid.NewGuid(), OffererId = driver.Id, OffererName = driver.FullName, AcceptedPrice = 30m, MatchedAt = now,
+            Status = status, ResolvedAt = status == ACommerce.Kit.Offers.TripStatus.Active ? null : now, ResolvedBy = status == ACommerce.Kit.Offers.TripStatus.Active ? null : "owner" });
         await s.SaveChangesAsync();
         return (rider, driver, trip, other);
     }
@@ -1657,11 +1719,13 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
     private static (string, string)[] OfferForm()
         => new[] { ("price", "25"), ("lat", "24.7"), ("lng", "46.7"), ("ttl_minutes", "15"), ("as", "driver") };
 
-    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣) — F2B-1</b>: راكِبٌ لَه رِحلَةٌ جارِيَةٌ (مُطابَقَةٌ فَعّالَةٌ بِلا صَفقَة) يَحذِفُ حِسابَه فَيَمُرّ — <c>open_deal</c> يَعُدُّ
-    /// الصَفَقاتِ وَحدَها — فَيُسحَبُ مِشوارُه وتَبقى المُطابَقَةُ فَعّالَة؛ ثُمَّ كُلُّ عَرضٍ لِلسائِقِ عَلى إعلانٍ آخَرَ يُحَوَّلُ إلى الإعلانِ المَحذوفِ بِـ<c>active_trip</c>، وصَفحَةُ
-    /// الإعلانِ المَحذوفِ تَرسُمُ «حُذِف» وَحدَه بِلا استِمارَةِ إنهاءٍ ولا إلغاء — حالٌ مَيِّتَةٌ لا تُخرِجُ مِنها نَقرَة. يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، الموجَة ١٢ F2 · ٣ — كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_a_rider_with_an_active_trip_deletes_and_the_driver_is_sent_to_the_deleted_listing_on_every_offer_on_Postgres</c> (‏<c>7c4dad0</c>: «حَذفُ الراكِب: 302 →
+    /// /{slug}?deleted=1 · مِشوارُه مَحذوف: True · المُطابَقَة: Active · عَرضُ السائِقِ عَلى إعلانٍ آخَر: 302 → …/listings/{المَحذوف}?err=active_trip»). والآن يُرَدُّ حَذفُ الراكِبِ
+    /// بِـ<c>open_trip</c> قَبلَ أَيِّ مَحو: المِشوارُ قائِمٌ والرِحلَةُ فَعّالَةٌ بِاسمِه؛ وعَرضُ السائِقِ عَلى غَيرِه ما زالَ يَرُدُّه <c>active_trip</c> — مُطابَقَةٌ عَلى إعلانٍ
+    /// قائِم (سالِبُ بابِ العَرض) — إلى صَفحَةٍ فيها استِمارَتا الإنهاءِ والإلغاء.</summary>
     [Fact]
-    public async Task Today_a_rider_with_an_active_trip_deletes_and_the_driver_is_sent_to_the_deleted_listing_on_every_offer_on_Postgres()
+    public async Task A_rider_with_an_active_trip_is_refused_open_trip_and_the_driver_still_answers_active_trip_on_Postgres()
     {
         if (!Enabled) return;
         var slug = "zz-trip-" + Guid.NewGuid().ToString("N")[..8];
@@ -1677,18 +1741,113 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
             await using var q = host.Store.QuerySession(slug);
             var listing = (await q.LoadAsync<ACommerce.Kit.Listings.Listing>(trip))!;
             var match = (await q.LoadAsync<ListingMatch>(trip))!;
-            var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
-                "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "Pages", "TenantListingDetail.razor")));
-            var deletedBranch = page.IndexOf("else if (listing.IsDeleted)", StringComparison.Ordinal);
-            var branch = page[deletedBranch..page.IndexOf("else", deletedBranch + "else if (listing.IsDeleted)".Length, StringComparison.Ordinal)];
-            output.WriteLine($"حَذفُ الراكِب: {delStatus} → {delAt} · مِشوارُه مَحذوف: {listing.IsDeleted} · المُطابَقَة: {match.Status} · " +
-                             $"عَرضُ السائِقِ عَلى إعلانٍ آخَر: {offStatus} → {offAt} · فَرعُ الإعلانِ المَحذوفِ يَرسُمُ استِمارَةَ رِحلَة: {branch.Contains("/trips/", StringComparison.Ordinal)}");
-            Assert.Equal((302, $"/{slug}?deleted=1"), (delStatus, delAt));
-            Assert.True(listing.IsDeleted);
+            var after = (await q.LoadAsync<User>(rider.Id))!;
+            output.WriteLine($"حَذفُ الراكِب: {delStatus} → {delAt} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · مِشوارُه مَحذوف: {listing.IsDeleted} · المُطابَقَة: {match.Status} · " +
+                             $"عَرضُ السائِقِ عَلى إعلانٍ آخَر: {offStatus} → {offAt}");
+            Assert.Equal((302, $"/{slug}/me/delete?err={AccountDeletion.OpenTrip}"), (delStatus, delAt));
+            Assert.Null(after.DeletedAt);
+            Assert.Equal(rider.FullName, after.FullName);
+            Assert.False(listing.IsDeleted);
             Assert.Equal(ACommerce.Kit.Offers.TripStatus.Active, match.Status);
             Assert.Equal((302, $"/{slug}/listings/{trip}?err=active_trip"), (offStatus, offAt));
-            Assert.Contains("listings.detail.deleted", branch, StringComparison.Ordinal);
-            Assert.DoesNotContain("/trips/", branch, StringComparison.Ordinal);
+        }
+        finally { await CleanTripAsync(host.Store, slug, trip, other); }
+    }
+
+    /// <summary><b>المُوجَبُ الثاني</b>: سائِقُ الرِحلَةِ الجارِيَةِ يُرَدُّ حَذفُه بِـ<c>open_trip</c> كَراكِبِها — الطَرَفُ الَّذي بَدَأَ التَنفيذَ مَحمِيٌّ مِن الجِهَتَين.</summary>
+    [Fact]
+    public async Task A_driver_with_an_active_trip_is_refused_open_trip_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-trip-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (_, driver, trip, other) = await SeedTripAsync(host.Store, slug);
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(driver.Id, slug, driver.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(driver.Id))!;
+            var match = (await q.LoadAsync<ListingMatch>(trip))!;
+            output.WriteLine($"حَذفُ السائِق: {status} → {at} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · اسمُه عَلى المُطابَقَة: {match.OffererName}");
+            Assert.Equal((302, $"/{slug}/me/delete?err={AccountDeletion.OpenTrip}"), (status, at));
+            Assert.Null(after.DeletedAt);
+            Assert.Equal(driver.FullName, match.OffererName);
+        }
+        finally { await CleanTripAsync(host.Store, slug, trip, other); }
+    }
+
+    /// <summary><b>السالِب</b>: رِحلَةٌ انتَهَت (<c>Completed</c>) يَحذِفُ راكِبُها حِسابَه، ورِحلَةٌ قُطِعَت (<c>Aborted</c>) يَحذِفُ سائِقُها حِسابَه — لا رِحلَةَ جارِيَة.</summary>
+    [Theory]
+    [InlineData(ACommerce.Kit.Offers.TripStatus.Completed, true)]
+    [InlineData(ACommerce.Kit.Offers.TripStatus.Aborted, false)]
+    public async Task A_trip_that_ended_or_was_aborted_does_not_block_its_rider_or_driver_on_Postgres(ACommerce.Kit.Offers.TripStatus ended, bool riderDeletes)
+    {
+        if (!Enabled) return;
+        var slug = "zz-trip-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (rider, driver, trip, other) = await SeedTripAsync(host.Store, slug, ended);
+        try
+        {
+            var who = riderDeletes ? rider : driver;
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(who.Id, slug, who.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(who.Id))!;
+            output.WriteLine($"رِحلَةٌ {ended} · حَذفُ {(riderDeletes ? "الراكِب" : "السائِق")}: {status} → {at} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.NotNull(after.DeletedAt);
+        }
+        finally { await CleanTripAsync(host.Store, slug, trip, other); }
+    }
+
+    /// <summary><b>السالِب الثاني</b>: رِحلَةُ غَيرِه الجارِيَةُ لا تَمنَعُ حَذفَه — عُضوٌ ثالِثٌ يَحذِفُ حِسابَه والرِحلَةُ بَينَ الراكِبِ والسائِقِ فَعّالَة.</summary>
+    [Fact]
+    public async Task Another_members_active_trip_does_not_block_a_deletion_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-trip-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (_, _, trip, other) = await SeedTripAsync(host.Store, slug);
+        try
+        {
+            var stranger = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "عُضوٌ لا رِحلَةَ لَه", Phone = "+966500000574", PhoneVerified = true };
+            await using (var s = host.Store.LightweightSession(slug)) { s.Store(stranger); await s.SaveChangesAsync(); }
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(stranger.Id, slug, stranger.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var match = (await q.LoadAsync<ListingMatch>(trip))!;
+            output.WriteLine($"حَذفُ عُضوٍ ثالِث: {status} → {at} · رِحلَةُ غَيرِه: {match.Status}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal(ACommerce.Kit.Offers.TripStatus.Active, match.Status);
+        }
+        finally { await CleanTripAsync(host.Store, slug, trip, other); }
+    }
+
+    /// <summary><b>بابُ العَرض — المُوجَب</b>: مُطابَقَةٌ فَعّالَةٌ عَلى إعلانٍ حُذِفَ (الحَذفُ الصَريحُ بِـ<c>ListingDeleted</c>، أَو حَذفُ حِسابٍ قَبلَ هذا) لا تَحبِسُ السائِق: عَرضُه
+    /// عَلى إعلانٍ آخَرَ يُقبَلُ ويُكتَب — كانَ يُحَوَّلُ إلى صَفحَةٍ لا تُخرِجُه مِنها نَقرَة.</summary>
+    [Fact]
+    public async Task A_match_on_a_deleted_listing_no_longer_holds_the_driver_and_his_offer_elsewhere_is_written_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-trip-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (_, driver, trip, other) = await SeedTripAsync(host.Store, slug);
+        try
+        {
+            await using (var s = host.Store.LightweightSession(slug))
+            {
+                s.Events.Append(trip, new ACommerce.Kit.Listings.ListingDeleted(trip, DateTime.UtcNow));
+                await s.SaveChangesAsync();
+            }
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(driver.Id, slug, driver.SessionVersion);
+            var (status, at) = await host.PostFormAsync(OffersDoor, new Dictionary<string, string> { ["slug"] = slug, ["id"] = other.ToString() }, slug, token, OfferForm());
+            await using var q = host.Store.QuerySession(slug);
+            var offers = await Marten.QueryableExtensions.ToListAsync(q.Query<Offer>().Where(o => o.ListingId == other && o.OffererId == driver.Id));
+            var match = (await q.LoadAsync<ListingMatch>(trip))!;
+            output.WriteLine($"مُطابَقَةٌ {match.Status} عَلى إعلانٍ مَحذوف · عَرضُ السائِقِ عَلى غَيرِه: {status} → {at} · عُروضُه المَكتوبَة: {offers.Count}");
+            Assert.Equal((302, $"/{slug}/listings/{other}?offer=submitted"), (status, at));
+            Assert.Single(offers);
         }
         finally { await CleanTripAsync(host.Store, slug, trip, other); }
     }

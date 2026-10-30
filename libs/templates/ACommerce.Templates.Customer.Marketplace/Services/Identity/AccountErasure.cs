@@ -53,6 +53,30 @@ public static class AccountErasure
     public static async Task<int> OpenDealsAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
         => OpenDeals(await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct), userId);
 
+    // ─── رِحلَةٌ جارِيَة (‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1؛ تَوصيفُه 7c4dad0؛ قَرارُ «أ»: د52 (١) مُطَبَّقاً) ─────────────────────────────
+
+    /// <summary>
+    /// <para><b>رِحلَةٌ حَيَّة</b>: مُطابَقَةٌ فَعّالَةٌ (<see cref="TripStatus.Active"/>) عَلى إعلانِها القائِم. ومُطابَقَةٌ عَلى إعلانٍ مَحذوفٍ — حَذفٌ صَريحٌ أَو حَذفُ حِسابٍ قَبلَ
+    /// هذا — لا رِحلَةَ فيها: صَفحَتُه تَرسُمُ «حُذِف» وَحدَه بِلا استِمارَةِ إنهاءٍ ولا إلغاء، فَلا تَمنَعُ عَرضاً جَديداً ولا حَذفاً. نَقِيَّة.</para>
+    /// </summary>
+    public static bool LiveTrip(ListingMatch match, Listing? listing)
+        => match.Status == TripStatus.Active && listing is { IsDeleted: false } && listing.Id == match.Id;
+
+    /// <summary>رِحلَتُه الجارِيَة: <see cref="LiveTrip"/>، وهُوَ سائِقُها (<c>OffererId</c>) أَو مالِكُ إعلانِها بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة.</summary>
+    public static bool OpenTrip(ListingMatch match, Listing? listing, Guid userId)
+        => LiveTrip(match, listing)
+           && (match.OffererId == userId || ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy(listing!, userId));
+
+    /// <summary>الاستِعلامُ الواحِدُ لِرِحلاتِه الجارِيَة، أَحدَثُها أَوَّلاً — تَسأَلُه نُقطَةُ الحَذفِ بِجَلسَتِها وصَفحَةُ الحَذفِ بِجَلسَةِ قِراءَة (<c>UserDataQueries.OpenTripsAsync</c>).
+    /// المُطابَقاتُ الفَعّالَةُ في المَتجَرِ وإعلاناتُها، والقَرارُ لِـ<see cref="OpenTrip"/> في الذاكِرَة: المالِكُ في <c>Attributes</c> لا يُرَشِّحُه Marten.</summary>
+    public static async Task<IReadOnlyList<ListingMatch>> OpenTripsAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
+    {
+        var active = await s.Query<ListingMatch>().Where(m => m.Status == TripStatus.Active).ToListAsync(ct);
+        if (active.Count == 0) return Array.Empty<ListingMatch>();
+        var listings = (await s.LoadManyAsync<Listing>(ct, active.Select(m => m.Id).Distinct().ToArray())).ToDictionary(l => l.Id);
+        return active.Where(m => OpenTrip(m, listings.GetValueOrDefault(m.Id), userId)).OrderByDescending(m => m.MatchedAt).ToList();
+    }
+
     // ─── ثَمَنٌ نَقدِيٌّ يَرُدُّه البائِع (‏2026-10-30، تَدقيقُ الموجَة ١١ G-7؛ تَوصيفُه 228b1be) ───────────────────────────────────────────────
 
     /// <summary>أَسطُرُ المالِ في سِجِلِّ الصَفقَة — ما يَكتُبُه القَبضُ والاستِرجاعُ والإلغاءُ عَن مال؛ وآخِرُها حالُ المالِ الآن.</summary>

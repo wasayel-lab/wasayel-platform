@@ -29,11 +29,12 @@ public class AccountDeletionOpenDealTests(ITestOutputHelper output)
         var user = new User { Id = Guid.NewGuid(), TenantSlug = "zz-del", FullName = "طَرَفٌ في صَفقَة" };
         output.WriteLine($"رُموزُ المَعجَم: {AccountDeletion.All.Count} ({string.Join(", ", AccountDeletion.All)}) · وَسائِطُ Validate: {validate.GetParameters().Length} · العَدُّ قَبلَ الحَذف: {count > gate && count < erase}");
 
-        Assert.Equal(5, AccountDeletion.All.Count);
-        Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.All[^1]);
-        Assert.Equal(new[] { typeof(User), typeof(int), typeof(string), typeof(string) }, validate.GetParameters().Select(p => p.ParameterType));
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) والسادِسُ `open_trip` بَعدَه، ووَسيطُ عَدَدِ الرِحلاتِ الجارِيَةِ بَعدَ الصَفَقات — كانَ «5 · OpenDeal آخِراً · (User, int, string, string)».
+        Assert.Equal(6, AccountDeletion.All.Count);
+        Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.All[4]);
+        Assert.Equal(new[] { typeof(User), typeof(int), typeof(int), typeof(string), typeof(string) }, validate.GetParameters().Select(p => p.ParameterType));
         Assert.True(gate > 0 && count > gate && erase > count, "العَدُّ لا يَقَعُ داخِلَ نِداءِ البَوّابَةِ قَبلَ Erase.");
-        Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.Validate(user, 1, "حذف", "حذف")!.Code);
+        Assert.Equal(AccountDeletion.OpenDeal, AccountDeletion.Validate(user, 1, 0, "حذف", "حذف")!.Code);
     }
 
     // ─── «الجارِيَة»: دالَّةٌ واحِدَة — مُوجَبٌ وسالِب ──────────────────────────────────────────────────────

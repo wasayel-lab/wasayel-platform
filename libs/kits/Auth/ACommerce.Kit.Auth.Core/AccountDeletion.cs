@@ -79,9 +79,14 @@ public static class AccountDeletion
     /// طَرَفُها الآخَرُ بِصَفقَةٍ طَرَفُها مَمحُوّ. ما «الجارِيَةُ» يُقَرِّرُه القالِبُ (الَّذي يَعرِفُ الصَفقَة) ويُمَرِّرُ عَدَدَها — هذِه النَواةُ لا تَعرِفُ وَثيقَتَها.</summary>
     public const string OpenDeal = "open_deal";
 
-    /// <summary>المَعجَمُ المُغلَق — خَمسَةٌ لا سادِسَ لَها (‏2026-10-29: الخامِسُ <see cref="OpenDeal"/>، د52).</summary>
+    /// <summary>‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1؛ تَوصيفُه <c>7c4dad0</c>) لِلحِسابِ رِحلَةٌ جارِيَة — مُطابَقَةُ عَرضٍ فَعّالَةٌ هُوَ سائِقُها أَو صاحِبُ إعلانِها،
+    /// ولا صَفقَةَ فيها فَلا يَعُدُّها <see cref="OpenDeal"/>. يُنهيها أَو يُلغيها مِن صَفحَةِ الإعلانِ أَوَّلاً — د52 (١) «حِمايَةً لِلطَرَفِ الَّذي بَدَأَ التَنفيذ» — بَدَلَ أَن
+    /// يُسحَبَ الإعلانُ وتَبقى المُطابَقَةُ فَعّالَةً فَيُرَدَّ السائِقُ عَن كُلِّ عَرضٍ جَديد. ما «الجارِيَةُ» يُقَرِّرُه القالِبُ ويُمَرِّرُ عَدَدَها، كَالصَفقَة.</summary>
+    public const string OpenTrip = "open_trip";
+
+    /// <summary>المَعجَمُ المُغلَق — سِتَّةٌ لا سابِعَ لَها (‏2026-10-29: الخامِسُ <see cref="OpenDeal"/>، د52؛ ‏2026-10-30: السادِسُ <see cref="OpenTrip"/>، F2B-1).</summary>
     public static readonly IReadOnlyList<string> All =
-        new[] { NotAuthenticated, UserNotFound, AlreadyDeleted, ConfirmationMismatch, OpenDeal };
+        new[] { NotAuthenticated, UserNotFound, AlreadyDeleted, ConfirmationMismatch, OpenDeal, OpenTrip };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -118,9 +123,11 @@ public static class AccountDeletion
     /// <para><b>‏2026-10-29 (قَرارُ المالِك د52 (١) «أ»؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: و<paramref name="openDeals"/> — عَدَدُ صَفَقاتِه الجارِيَةِ
     /// كَما عَدَّها القالِبُ — وَسيطٌ إلزامِيٌّ لا افتِراضِيّ: مُنادٍ يَنسى الصَفَقاتِ لا يُبنى. ومَوضِعُه بَعدَ الحالَةِ وقَبلَ كَلِمَةِ التَأكيد: حالٌ لا حَقل،
     /// فَلا يَكتُبُ المُستَخدِمُ الكَلِمَةَ ثُمَّ يُقالُ لَه إنّ الحَذفَ مُمتَنِع.</para>
+    /// <para><b>‏2026-10-30 (الموجَة ١٢ F2 · ٣ — F2B-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: و<paramref name="openTrips"/> — عَدَدُ رِحلاتِه الجارِيَةِ كَما عَدَّها القالِبُ
+    /// — إلزامِيٌّ كَالصَفَقات، ومَوضِعُه بَعدَها: حالٌ ثانِيَةٌ قَبلَ الحَقل، والرَدُّ بِأَوَّلِ خَرقٍ (‏ADR-038).</para>
     /// </summary>
     public static AccountDeletionViolation? Validate(
-        User? user, int openDeals, string? typedConfirmation, string expectedConfirmation)
+        User? user, int openDeals, int openTrips, string? typedConfirmation, string expectedConfirmation)
     {
         if (user is null)
             return new(UserNotFound, "لا وَثيقَةَ مُستَخدِمٍ بِهذا المُعَرِّف.");
@@ -131,6 +138,9 @@ public static class AccountDeletion
         if (openDeals > 0)
             return new(OpenDeal, "لِلحِسابِ صَفقَةٌ جارِيَة — تُكمَلُ أَو تُلغى أَوَّلاً، ولَم يُحذَف شَيء.");
 
+        if (openTrips > 0)
+            return new(OpenTrip, "لِلحِسابِ رِحلَةٌ جارِيَة — تُنهى أَو تُلغى أَوَّلاً، ولَم يُحذَف شَيء.");
+
         if (!string.Equals((typedConfirmation ?? "").Trim(), expectedConfirmation,
                 StringComparison.Ordinal))
             return new(ConfirmationMismatch,
@@ -139,8 +149,8 @@ public static class AccountDeletion
         return null;
     }
 
-    public static bool IsAllowed(User? user, int openDeals, string? typed, string expected) =>
-        Validate(user, openDeals, typed, expected) is null;
+    public static bool IsAllowed(User? user, int openDeals, int openTrips, string? typed, string expected) =>
+        Validate(user, openDeals, openTrips, typed, expected) is null;
 
     // ─── الأَثَر ───────────────────────────────────────────────────
 
