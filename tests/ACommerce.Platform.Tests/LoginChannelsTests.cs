@@ -79,6 +79,66 @@ public class LoginChannelsTests(ITestOutputHelper output)
         Assert.Equal(4, asking);
     }
 
+    // ─── A-SESS-1 (الموجَة ١٢ F1 البَند ٥، ‏2026-10-30): بابا نَفاذٍ لا يَسأَلانِ قَناةَ المَتجَر ─────────────────────────────────────────
+    //
+    // ‏«أ» F1·٤ و‏ADR-042 §٥: «قَناةُ المَتجَرِ وَحدَها تُسَجِّل»، وأَبوابُ الجَوّالِ والبَريدِ تَرُدُّ غَيرَها بِـ`channel_not_offered` (`7869039`، `8f2a604`). وبابا
+    // نَفاذٍ (`/{slug}/auth/nafath/login` و`/verify`) يَسأَلانِ `tenant.IsResolved` و`channel is null` وَحدَهُما ثُمَّ يُناديانِ `RequestNafathHandler` و
+    // `VerifyNafathHandler` — والثاني يُنشِئُ حِساباً (`GetOrCreateUserAsync(phone: "NID-…")`) لِهُوِيَّةٍ لا يَحمِلُها حِساب، ومِثلُه مَسارُ `[WolverinePost]`
+    // بِجِسمِ JSON. وفي التَطويرِ يُسَجِّلُ `Program.cs` ‏MockNafath لِكُلِّ مَتجَر، وفي الإنتاجِ يُسَجِّلُه `Auth__Nafath__Provider=nafath` لِأَيِّ مَتجَرِ نَفاذ —
+    // فَمَتجَرُ جَوّالٍ أَو بَريدٍ يُنشِئُ لِلشَخصِ حِساباً ثانِياً بِقَناةٍ لا يَعرِضُها (ضَرَرُ د27) ويَتَجاوَزُ اختِيارَ صاحِبِه (P2). **تَوصيفُ «اليَوم»** — يُقلَبُ
+    // بِاسمِه في كوميتِ التَبديل.
+
+    internal static readonly string[] NafathDoors = ["/{slug}/auth/nafath/login", "/{slug}/auth/nafath/verify"];
+
+    [Fact]
+    public void Today_the_nafath_sign_in_doors_never_ask_the_store_channel()
+    {
+        var asking = NafathDoors.Count(r => Door(r).Contains("Services.LoginChannels.Offers(", StringComparison.Ordinal));
+        var creates = Door("/{slug}/auth/nafath/verify").Contains("AuthHandlers.VerifyNafathHandler(", StringComparison.Ordinal);
+        output.WriteLine($"اليَوم: بابا نَفاذٍ يَسأَلانِ قَناةَ المَتجَر {asking}/{NafathDoors.Length} · بابُ التَأكيدِ يُنادي المُعالِجَ الَّذي يُنشِئ {creates}");
+        Assert.Equal(2, NafathDoors.Length);
+        Assert.Equal(0, asking);
+        Assert.True(creates);
+    }
+
+    /// <summary>نَفاذٌ يُوافِقُ فَوراً — بَديلُ MockNafath (تَسجيلُ <c>Program.cs</c> في التَطوير) بِلا انتِظارِ الثَواني الخَمس.</summary>
+    internal sealed class ApprovingNafath : ACommerce.Kit.Auth.INafathChannel
+    {
+        public string ChannelName => "approving";
+        public Task<ACommerce.Kit.Auth.NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+            => Task.FromResult(new ACommerce.Kit.Auth.NafathStartResult(Guid.NewGuid().ToString("N"), "00", 0));
+        public Task<bool> IsApprovedAsync(string attemptId, CancellationToken ct) => Task.FromResult(true);
+    }
+
+    /// <summary>مُستَأجِرٌ مَحلولٌ بِقَناةٍ تُعطى — <c>VendorRegisterBucketTests.ResolvedTenant</c> قَناتُه الجَوّالُ وَحدَه.</summary>
+    internal sealed class ChannelTenant(string slug, string authChannel) : ACommerce.Platform.Shared.ITenantContext
+    {
+        public string Slug => slug;
+        public string Name => slug;
+        public string BrandColor => "#000000";
+        public string AuthChannel => authChannel;
+        public string TagLine => "";
+        public string City => "";
+        public bool IsResolved => true;
+        public bool HasRoles => false;
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» بِلا قاعِدَة</b>: <c>VerifyNafathHandler</c> بِمُحاوَلَةٍ مُوافَقٍ عَلَيها في مَتجَرِ جَوّالٍ يَمضي إلى المَخزَن (لِيَجِدَ
+    /// الحِسابَ أَو يُنشِئَه) — والمَخزَنُ البَديلُ يَرمي عِندَ أَوَّلِ جَلسَة، فَالرَميُ هُوَ القِياس: لا سُؤالَ عَن قَناةِ المَتجَرِ قَبلَه.</summary>
+    [Fact]
+    public async Task Today_the_nafath_verify_handler_reaches_the_store_in_a_phone_store()
+    {
+        var slug = "zz-nf-" + Guid.NewGuid().ToString("N")[..6];
+        var nid = "1012345678";
+        var tenant = new ChannelTenant(slug, ACommerce.Kit.Auth.AuthChannels.Phone);
+        var channel = new ApprovingNafath();
+        var pending = await ACommerce.Kit.Auth.Server.AuthHandlers.RequestNafathHandler(new ACommerce.Kit.Auth.RequestNafath(nid), tenant, channel, default);
+        var ex = await Record.ExceptionAsync(() => ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(
+            new ACommerce.Kit.Auth.VerifyNafath(pending.AttemptId, nid), tenant, channel, AccountStub.Store(null), default));
+        output.WriteLine($"اليَوم: مَتجَرُ {tenant.AuthChannel} ⇒ المُعالِجُ {(ex is NotSupportedException ? "بَلَغَ المَخزَن" : ex?.GetType().Name ?? "رَدَّ بِلا مَخزَن")}");
+        Assert.IsType<NotSupportedException>(ex);
+    }
+
     // ─── القَرارُ النَقِيّ — مَتجَرٌ × نَوع، مُوجَبٌ وسالِب ──────────────────────────────────────────────────
 
     [Theory]
@@ -314,6 +374,33 @@ public class LiveSecondChannelProofTests(ITestOutputHelper output)
         return ACommerce.Kit.Auth.Server.AuthHandlers.VerifyPhoneOtpAsync(new ACommerce.Kit.Auth.VerifyPhoneOtp(phone, Code),
             new VendorRegisterBucketTests.ResolvedTenant(slug), store,
             ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Registers(storeChannel, ACommerce.Kit.Auth.AuthChannels.Phone));
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» (الموجَة ١٢ F1 البَند ٥، A-SESS-1)</b>: بابا نَفاذٍ في مَتجَرِ جَوّالٍ بِحَرفِهِما اليَوم — لا سُؤالَ عَن قَناةِ المَتجَر
+    /// (الصَفُّ النَقِيُّ <c>Today_the_nafath_sign_in_doors_never_ask_the_store_channel</c> يُثبِتُه) ثُمَّ المُعالِجانِ اللَّذانِ يُناديانِهِما — فَهُوِيَّةٌ لا يَحمِلُها
+    /// حِسابٌ تُنشِئُ حِساباً ثانِياً جَوّالُه <c>NID-…</c>.</summary>
+    [Fact]
+    public async Task Today_a_national_id_signs_up_in_a_phone_store_through_the_nafath_doors_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "sc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        var nid = "10" + Random.Shared.Next(10_000_000, 99_999_999);
+        try
+        {
+            var member = await SeedAsync(store, slug, "+966500000297", "");
+            var tenant = new LoginChannelsTests.ChannelTenant(slug, ACommerce.Kit.Auth.AuthChannels.Phone);
+            var channel = new LoginChannelsTests.ApprovingNafath();
+            var pending = await ACommerce.Kit.Auth.Server.AuthHandlers.RequestNafathHandler(new ACommerce.Kit.Auth.RequestNafath(nid), tenant, channel, default);
+            var result = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyNafathHandler(new ACommerce.Kit.Auth.VerifyNafath(pending.AttemptId, nid), tenant, channel, store, default);
+            var accounts = await AccountsAsync(store, slug);
+            var created = accounts.Any(a => a.Phone == $"NID-{nid}");
+            output.WriteLine($"اليَوم: مَتجَرُ {tenant.AuthChannel}، هُوِيَّةٌ لا يَحمِلُها حِساب ⇒ {(result is null ? "لا جَلسَة" : "جَلسَة")} · الحِسابات {accounts.Count} · جَوّالُ الجَديد NID-… {created}");
+            Assert.NotNull(result);
+            Assert.Equal(2, accounts.Count);
+            Assert.Contains(accounts, a => a.Id != member.Id && a.Phone == $"NID-{nid}" && a.NationalId == nid);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_an_email_no_account_holds_creates_a_second_account_in_a_phone_store_on_Postgres</c>
