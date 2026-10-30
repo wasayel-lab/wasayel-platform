@@ -166,7 +166,7 @@ public class OtpSendGuardTests
 // (`220 …`) الَّتي لا تَأتي. `TcpListener` يَقبَل ولا يَكتُب شَيئاً يُعيدُ
 // المَشهَدَ نَفسَه مَحَلِّيّاً وبِلا شَبَكَةٍ خارِجِيَّة.
 
-public class SmtpEmailChannelTimeoutTests
+public class SmtpEmailChannelTimeoutTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     private static SmtpEmailChannel Channel(int port, int timeoutSeconds) =>
         new(Options.Create(new SmtpEmailOptions
@@ -183,41 +183,75 @@ public class SmtpEmailChannelTimeoutTests
         => Assert.Equal(OtpSendGuard.DefaultTimeoutSeconds,
             new SmtpEmailOptions().TimeoutSeconds);
 
+    /// <summary>
+    /// <para><b>(‏2026-10-30، الموجَة ١٢ F1 البَند ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) الكَمِّيَّةُ المَقيسَةُ صارَت حَتمِيَّة</b>: كانَ الحَدُّ
+    /// «أَقَلُّ مِن ‏15 ثانِيَةً بِساعَةِ الحائِط» تَخميناً مُطلَقاً، وقَبولُ الاتِّصالِ لا يُنتَظَر. ومَقيسٌ (القاعِدَة ١٠): ‏47 تَشغيلاً
+    /// تَحتَ الحِمل (‏30 لِلصِنفِ بِجِوارِ ثَمانِيَةِ حارِقاتِ مُعالِجٍ وحَقيبَةٍ كامِلَةٍ مُتَزامِنَة، وستُّ حَقائِبَ كامِلَة، وأَحَدَ عَشَرَ بِإشغالِ مُجَمَّعِ الخُيوطِ
+    /// في العَمَلِيَّةِ نَفسِها) خَضراءُ كُلُّها بِمُدَّةِ ‏4.0–6.0 ثانِيَة؛ وإيقافُ مُضيفِ الاختِبارِ (‏SIGSTOP) ‏5 ثَوانٍ في مُنتَصَفِ الإرسالِ يُبقي ‏send_timeout ‏6/6،
+    /// و‏16 ثانِيَةً يُحمِرُّ ‏3/3 بِالحَدِّ وَحدَه («الإرسالُ عَلِقَ: 00:00:16.4»). فَالحَدُّ هُوَ ما يَقيسُ تَوَقُّفَ الآلَةِ لا تَعليقَ الكود.</para>
+    /// <para><b>وصارَ</b>: الصَفُّ <b>يَنتَظِرُ قَبولَ الاتِّصالِ</b> قَبلَ أَن يَحكُمَ عَلى شَيء (خادِمٌ صامِتٌ قَبِلَ، لا مَنفَذٌ رَدَّ)؛ ورَمزُ الحارِسِ نَفسُه (<c>send_timeout</c>) ونافِذَتُه في رِسالَتِه؛ والزَمَنُ لا يَنزِلُ
+    /// عَن النافِذَةِ (القَطعُ مِنها لا مِن فَشَلٍ سَريع)؛ والسَقفُ <b>مُشتَقٌّ مِن النافِذَة</b> — ضِعفُها (سَقفُ <c>SmtpClient.Timeout</c> الاحتِياطيّ) ونافِذَةٌ
+    /// هامِشاً — <b>زائِداً تَوَقُّفَ العَمَلِيَّةِ المَقيس</b> (أَطوَلُ فَجوَةٍ بَينَ نَبَضاتٍ كُلَّ ‏50 ميلّي‌ثانِيَة)، فَتَوَقُّفُ الآلَةِ لا يُحسَبُ عَلى الكود، والتَعليقُ
+    /// يُحسَب: حارِسٌ بِلا رَمزٍ يُقطَعُ بِالسَقفِ الاحتِياطيِّ بِرِسالَةٍ عامَّة فَيَحمَرّ، وبِلا الاثنَينِ يَبلُغُ سَقفَ الانتِظارِ الصَلبَ (‏60 ثانِيَة) فَيَحمَرّ.</para>
+    /// </summary>
     [Fact]
     public async Task ASilentServer_FailsWithinTheTimeout_InsteadOfHanging()
     {
+        const int timeoutSeconds = 2;
+        var window = OtpSendGuard.Timeout(timeoutSeconds);
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         // نَقبَل الاتِّصالَ ولا نَكتُب حَرفاً — بِلا هذا يُغلَق المِقبَسُ
-        // فَيَفشَل الاتِّصالُ فَوراً ولا يُقاسُ شَيء.
+        // فَيَفشَل الاتِّصالُ فَوراً ولا يُقاسُ شَيء. والقَبولُ يُعلَنُ لِلصَفِّ فَلا يُحكَمُ عَلى مَنفَذٍ رَدَّ الاتِّصال.
+        var accepted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var accepting = Task.Run(async () =>
         {
             try
             {
                 using var socket = await listener.AcceptSocketAsync();
+                accepted.TrySetResult(true);
                 await Task.Delay(TimeSpan.FromSeconds(20));
             }
-            catch { /* الاختِبارُ انتَهى */ }
+            catch { accepted.TrySetResult(false); /* الاختِبارُ انتَهى */ }
+        });
+
+        using var done = new CancellationTokenSource();
+        var clock = Stopwatch.StartNew();
+        var stall = TimeSpan.Zero;
+        var heartbeat = Task.Run(async () =>
+        {
+            var last = clock.Elapsed;
+            while (!done.IsCancellationRequested)
+            {
+                try { await Task.Delay(50, done.Token); } catch (OperationCanceledException) { }
+                var now = clock.Elapsed;
+                if (now - last - TimeSpan.FromMilliseconds(50) > stall) stall = now - last - TimeSpan.FromMilliseconds(50);
+                last = now;
+            }
         });
 
         try
         {
             var sw = Stopwatch.StartNew();
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                Channel(port, timeoutSeconds: 2)
-                    .SendOtpAsync("owner@wasayel.test", "123456", CancellationToken.None));
+            var send = Channel(port, timeoutSeconds).SendOtpAsync("owner@wasayel.test", "123456", CancellationToken.None);
+            Assert.True(await accepted.Task.WaitAsync(TimeSpan.FromSeconds(60)), "الاتِّصالُ لَم يُقبَل — لا يُقاسُ قَطعُ الحارِس.");
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => send.WaitAsync(TimeSpan.FromSeconds(60)));
             sw.Stop();
+            done.Cancel();
+            await heartbeat;
 
             Assert.Contains("send_timeout", ex.Message);
-            // ‏90 ثانِيَة كانَ المَقيسَ قَبل. الحَدُّ هُنا أَوسَعُ مِن
-            // المُهلَةِ بِهامِشٍ لِبُطءِ آلَةِ البِناء، وأَضيَقُ بِكَثيرٍ
-            // مِن نافِذَةِ التَعليقِ الَّتي كَتَبَت المَوجَة.
-            Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15),
-                $"الإرسالُ عَلِقَ: {sw.Elapsed}");
+            Assert.Contains(OtpSendGuard.TimeoutMessage(window), ex.Message);
+            // ‏90 ثانِيَة كانَ المَقيسَ قَبل. والسَقفُ مُشتَقٌّ مِن النافِذَةِ لا رَقَمٌ مُطلَق، وتَوَقُّفُ العَمَلِيَّةِ المَقيسُ لا يُحسَبُ عَلى الكود.
+            var bound = window * 2 + window + stall;
+            output.WriteLine($"النافِذَة {window.TotalSeconds:0.#} ث · مِن الإرسالِ إلى الرَدّ {sw.Elapsed.TotalSeconds:0.000} ث · تَوَقُّفُ العَمَلِيَّة {stall.TotalSeconds:0.000} ث · السَقف {bound.TotalSeconds:0.000} ث");
+            Assert.True(sw.Elapsed >= window - TimeSpan.FromMilliseconds(50), $"قُطِعَ قَبلَ نافِذَتِه — لَيسَ قَطعَ الحارِس: {sw.Elapsed}");
+            Assert.True(sw.Elapsed < bound, $"الإرسالُ عَلِقَ: {sw.Elapsed} (السَقف {bound}، تَوَقُّفُ العَمَلِيَّة {stall})");
         }
         finally
         {
+            done.Cancel();
             listener.Stop();
             await Task.WhenAny(accepting, Task.Delay(TimeSpan.FromSeconds(2)));
         }
