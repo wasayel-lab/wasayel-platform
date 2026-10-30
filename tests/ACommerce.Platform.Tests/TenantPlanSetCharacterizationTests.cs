@@ -43,7 +43,7 @@ public class TenantPlanSetCharacterizationTests
     /// <summary>نِداءُ الخِدمَةِ كَما تُناديه <c>/admin/tenants/{slug}/plan/save</c>.</summary>
     private static Task<IReadOnlyList<TenantPlanViolation>> Save(
         DocWorld w, string planId, DateTime starts, DateTime expires, int grace, decimal price)
-        => Task.FromResult(TenantPlanAdminService.Set(w.Session, Slug, planId, starts, expires, grace, price, "studio · admin-2", At));
+        => TenantPlanAdminService.SetAsync(w.Session, Slug, planId, starts, expires, grace, price, "studio · admin-2", At);
 
     /// <summary>(١) قِيَمُ الاستِمارَةِ تُكتَب، والمَوقوفَةُ تَعودُ سارِيَة — كَما صُمِّمَ التَعيين.</summary>
     [Fact]
@@ -83,12 +83,30 @@ public class TenantPlanSetCharacterizationTests
         Assert.Equal("I-SUB-42", stored.PayPalSubscriptionId);
     }
 
-    /// <summary>(٣) <b>اليَوم</b>: إعادَةُ الحِفظِ تُسقِطُ رَبطَ PayPal ورابِطَ الدَفعِ وعَلامَةَ إلغاءِ التَجديد — فَيَختَفي رابِطُ الدَفعِ
-    /// مِن استوديو صاحِبِ المَتجَر وسَطرُ «لَن يُجَدَّد تِلقائِيّاً». يُقلَبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary>(٣) <b>مَقلوبٌ بِاسمِه</b> (كانَ <c>Re_saving_a_plan_today_drops_its_paypal_subscription_its_pay_link_and_its_renewal_cancelled_mark</c>،
+    /// ‏<c>24d5fb1</c>): إعادَةُ الحِفظِ تَحمِلُ رَبطَ PayPal ورابِطَ الدَفعِ وعَلامَةَ إلغاءِ التَجديدِ مِن المَحفوظ — فَيَبقى رابِطُ الدَفعِ في
+    /// استوديو صاحِبِ المَتجَرِ وسَطرُ «لَن يُجَدَّد تِلقائِيّاً»، والحالَةُ سارِيَةٌ كَما صُمِّمَ التَعيين.</summary>
     [Fact]
-    public async Task Re_saving_a_plan_today_drops_its_paypal_subscription_its_pay_link_and_its_renewal_cancelled_mark()
+    public async Task Re_saving_a_plan_keeps_its_paypal_subscription_its_pay_link_and_its_renewal_cancelled_mark()
     {
-        var w = new DocWorld().Put(StoredPlan());
+        var stored = StoredPlan();
+        var w = new DocWorld().Put(stored);
+
+        Assert.Empty(await Save(w, "manual", Starts, Expires, 14, 99m));
+
+        var plan = Assert.IsType<TenantPlan>(Assert.Single(w.Stored));
+        Assert.Equal("I-SUB-42", plan.PayPalSubscriptionId);
+        Assert.Equal(stored.PayPalApproveUrl, plan.PayPalApproveUrl);
+        Assert.Equal(new DateTime(2026, 10, 15, 7, 0, 0, DateTimeKind.Utc), plan.RenewalCancelledAt);
+        Assert.Equal(PlatformPlanStatuses.Active, plan.Status);
+        Assert.Contains("LoadAsync", w.Members);
+    }
+
+    /// <summary>(٤) <b>السالِب</b>: أَوَّلُ تَعيينٍ لِمَتجَرٍ بِلا باقَةٍ لا يَختَرِعُ رَبطاً ولا عَلامَة — الثَلاثَةُ فارِغَةٌ كَما كانَت.</summary>
+    [Fact]
+    public async Task A_first_setting_without_a_stored_plan_carries_nothing()
+    {
+        var w = new DocWorld();
 
         Assert.Empty(await Save(w, "manual", Starts, Expires, 14, 99m));
 
@@ -96,5 +114,6 @@ public class TenantPlanSetCharacterizationTests
         Assert.Null(plan.PayPalSubscriptionId);
         Assert.Null(plan.PayPalApproveUrl);
         Assert.Null(plan.RenewalCancelledAt);
+        Assert.Equal(PlatformPlanStatuses.Active, plan.Status);
     }
 }

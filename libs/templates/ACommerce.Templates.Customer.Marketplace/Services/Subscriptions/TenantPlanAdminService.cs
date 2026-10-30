@@ -31,12 +31,19 @@ public static class TenantPlanAdminService
     ///
     /// <para>يُرجِع قائِمَةَ الخُروق — فارِغَةٌ تَعني أَنّ الوَثيقَةَ
     /// خُزِّنَت في الجَلسَة. <b>ولا يُخَزَّن شَيءٌ عِندَ أَيّ خَرق.</b></para>
+    ///
+    /// <para><b>وما لا تَكتُبُه الاستِمارَةُ يُحمَلُ مِن المَحفوظ</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ F-SDC-1؛ تَوصيفُه
+    /// <c>TenantPlanSetCharacterizationTests</c> عِندَ <c>24d5fb1</c>): مُعَرِّفُ اشتِراكِ PayPal، ورابِطُ المُوافَقَةِ الَّذي يَراه صاحِبُ
+    /// المَتجَرِ في الاستوديو، وعَلامَةُ «لَن يُجَدَّد تِلقائِيّاً» — يَكتُبُها غَيرُ هذا البابِ (المُشرِفُ مِن بِطاقَةِ PayPal، ورَسائِلُ PayPal)،
+    /// وكانَ التَعيينُ يَبني وَثيقَةً جَديدَةً فَيُسقِطُها. <b>والحالَةُ <c>Active</c> عِندَ التَعيينِ كَما صُمِّمَت</b>: «مَن أَوقَفَ بِالخَطَأ
+    /// يُعيدُها بِتَعيينٍ واحِد» (<see cref="Stop"/>). والتَحميلُ هُنا لا في النُقطَة: نُقطَةٌ تَنسى التَحميلَ تُعيدُ العَطَبَ صامِتَة.</para>
     /// </summary>
-    public static IReadOnlyList<TenantPlanViolation> Set(
+    public static async Task<IReadOnlyList<TenantPlanViolation>> SetAsync(
         IDocumentSession session, string tenantSlug, string planId,
         DateTime startsAt, DateTime expiresAt, int graceDays, decimal price,
         string setBy, DateTime at)
     {
+        var stored = await session.LoadAsync<TenantPlan>(tenantSlug);
         var plan = new TenantPlan
         {
             Id        = tenantSlug,
@@ -48,6 +55,9 @@ public static class TenantPlanAdminService
             Price     = price,
             SetBy     = setBy,
             SetAt     = at,
+            PayPalSubscriptionId = stored?.PayPalSubscriptionId,
+            PayPalApproveUrl     = stored?.PayPalApproveUrl,
+            RenewalCancelledAt   = stored?.RenewalCancelledAt,
         };
 
         var violations = TenantPlanPolicy.Validate(plan);

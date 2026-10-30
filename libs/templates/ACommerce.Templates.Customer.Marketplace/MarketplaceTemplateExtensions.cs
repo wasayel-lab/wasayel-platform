@@ -2441,7 +2441,7 @@ public static class MarketplaceTemplateExtensions
                 req.Form["grace"], req.Form["price"], DateTime.UtcNow);
 
             await using var s = store.LightweightSession();
-            var violations = Services.Subscriptions.TenantPlanAdminService.Set(
+            var violations = await Services.Subscriptions.TenantPlanAdminService.SetAsync(
                 s, slug, f.PlanId, f.StartsAt, f.ExpiresAt,
                 f.GraceDays, f.Price, by, DateTime.UtcNow);
             if (violations.Count > 0)
