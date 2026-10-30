@@ -38,11 +38,13 @@ public class DealCancelAuthorizationTests
     // ─── المَعجَم ──────────────────────────────────────────────────────
 
     /// <summary>(‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4 — ولا يُعادُ حَرفٌ فَوقَه: كانَ <c>Exactly_three_violation_codes_and_they_are_these</c>؛
-    /// ورابِعُها <c>deal_past_cancel_stage</c> — مُوجِبُه وسالِبُه في <c>DealCancelStageTests</c>.)</summary>
+    /// ورابِعُها <c>deal_past_cancel_stage</c> — مُوجِبُه وسالِبُه في <c>DealCancelStageTests</c>.)
+    /// (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — ولا يُعادُ حَرفٌ فَوقَه: كانَ <c>Exactly_four_violation_codes_and_they_are_these</c>؛ وخامِسُها <c>deal_in_shared_waybill</c> —
+    /// مُوجِبُه وسالِبُه في <c>DealWaybillCancelTests</c>.)</summary>
     [Fact]
-    public void Exactly_four_violation_codes_and_they_are_these()
+    public void Exactly_five_violation_codes_and_they_are_these()
         => Assert.Equal(
-            new[] { "deal_not_found", "actor_not_party", "deal_not_active", "deal_past_cancel_stage" },
+            new[] { "deal_not_found", "actor_not_party", "deal_not_active", "deal_past_cancel_stage", "deal_in_shared_waybill" },
             DealCancelAuthorization.All);
 
     [Fact]
@@ -54,7 +56,7 @@ public class DealCancelAuthorizationTests
     {
         foreach (var c in DealCancelAuthorization.All)
             Assert.Equal(c, DealCancelAuthorization.Require(c));
-        Assert.Equal(4, DealCancelAuthorization.All.Count);   // 3 ← 4 (‏2026-10-24، lens-money-integrity-4: deal_past_cancel_stage)
+        Assert.Equal(5, DealCancelAuthorization.All.Count);   // 3 ← 4 (‏2026-10-24، lens-money-integrity-4: deal_past_cancel_stage) ← 5 (‏2026-10-30، F1: deal_in_shared_waybill)
     }
 
     // ─── مُوجِب — مَن يَملِك الإلغاء ────────────────────────────────────

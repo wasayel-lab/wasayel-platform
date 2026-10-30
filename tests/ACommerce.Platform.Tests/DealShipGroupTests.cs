@@ -33,7 +33,9 @@ public class DealShipGroupTests(ITestOutputHelper output)
 
     /// <summary>صَفقَتا نَقدٍ لِمُشتَرٍ واحِدٍ مِن بائِعٍ واحِدٍ عِندَ «تأكيد» — كَما تَلِدُهُما سَلَّةٌ واحِدَةٌ بِبَندَين (العُنوانُ والهاتِفُ واحِد)، وخَصائِصُ
     /// <paramref name="extra"/> فَوقَها لِكُلٍّ مِنهُما. والناقِلُ مَدخَلُ البائِعِ في خِزانَةِ العالَم.</summary>
-    internal static async Task<Pair> TwoConfirmedCashDeals(Func<int, Dictionary<string, string>>? extra = null, Guid? first = null, Guid? second = null)
+    /// <remarks>و<paramref name="notices"/> (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3): أُنبوبُ الإشعارِ لِلشَحنِ بِقامُوسٍ عَرَبِيّ — فَيُخبِرُ الوارِدُ صاحِبَ المَتجَر؛ والافتِراضُ بِلا أُنبوبٍ كَما كان.</remarks>
+    internal static async Task<Pair> TwoConfirmedCashDeals(Func<int, Dictionary<string, string>>? extra = null, Guid? first = null, Guid? second = null,
+        Func<DocWorld, DealNotices>? notices = null)
     {
         var docs = new DocWorld();
         var deals = new DealsService(docs.Store, new ForbiddenPaymentProvider());
@@ -62,7 +64,8 @@ public class DealShipGroupTests(ITestOutputHelper output)
         var oto = new OtoRouteHandler();
         var options = Options.Create(new OtoOptions { Environment = OtoEnvironment.Staging, RefreshToken = DealShipTests.ConfigToken });
         var client = new OtoClient(new HttpClient(oto), options, new OtoTokenCache(), NullLogger<OtoClient>.Instance);
-        var shipping = new DealShipping(deals, client, options, null, new TenantProviderService(docs.Store), vault, new FixedClock(DealShipTests.Now));
+        var shipping = new DealShipping(deals, client, options, null, new TenantProviderService(docs.Store), vault, new FixedClock(DealShipTests.Now),
+            notices?.Invoke(docs), notices is null ? null : new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()));
         return new Pair(docs, deals, shipping, oto, ids[0], ids[1]);
     }
 

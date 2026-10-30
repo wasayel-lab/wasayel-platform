@@ -74,6 +74,7 @@ public static class DealRefusalTexts
         DealShipping.DealAwaitsCarrier,
         GatewayPayments.DealAwaitsPayment,
         GatewayInvoiceShare.Shared,   // (‏2026-10-13، G5 M4)
+        DealCancelAuthorization.DealInSharedWaybill,   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1): إلغاءُ صَفقَةٍ وَحدَها مِن شُحنَةٍ مُشتَرَكَةٍ سائِرَة
         DealsService.PaymentMissing,  // (‏2026-10-13، G5 (xv-g))
         DealDisputeResolution.DealNotDisputed,   // (‏2026-10-29، قَرارُ المالِك د38): بابُ حَسمِ النِزاعِ لِصَفقَةٍ حُسِمَت — النَقرَةُ الثانِيَة
     };

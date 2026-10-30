@@ -652,6 +652,12 @@ public sealed class DealsService
             return new(DealCancelResult.Refused(refused, deal), Array.Empty<Deal>());
 
         var targets = GatewayInvoiceShare.OwedOnInvoice(deal!, await InvoiceSiblingsAsync(tenantSlug, deal!, ct));
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **والطَلَبُ كُلُّه يَشمَلُ أَخَواتِ شُحنَتِها السائِرَةِ عِندَ OTO** — الشُحنَةُ الواحِدَةُ
+        // وَحدَةٌ واحِدَةٌ كَالفاتورَةِ الواحِدَة، فَإلغاءُ إحداها وَحدَها مَردودٌ بِـ`deal_in_shared_waybill` وهذا بابُها. وما تُسَمّيه الفاتورَةُ والشُحنَةُ مَعاً مَرَّةً.
+        var onWaybill = DealCancelAuthorization.LiveOnWaybill(deal!, await WaybillSiblingsAsync(tenantSlug, deal!, ct))
+            .Where(d => d.Status == DealStatus.Active).ToArray();
+        if (onWaybill.Length > 0)
+            targets = (targets.Count == 0 ? new[] { deal! } : targets).Concat(onWaybill).DistinctBy(d => d.Id).ToArray();
         if (targets.Count == 0) targets = new[] { deal! };
         foreach (var t in targets)
             if (DealCancelAuthorization.Validate(t, by) is { } notTheirs)
@@ -668,6 +674,33 @@ public sealed class DealsService
         }
         return new(requested ?? DealCancelResult.Cancelled(cancelled[^1]), cancelled);
     }
+
+    /// <summary>
+    /// <para><b>صَفَقاتُ طَلَبٍ عِندَ OTO غَيرُ الصَفقَة</b> (‏2026-10-29، د13 «ب» — نُقِلَت بِحَرفِها ‏2026-10-30 مِن <c>DealShipping.OrderSiblingsAsync</c> لِيَقرَأَها الإلغاءُ
+    /// وصَفحَةُ الاستوديو أَيضاً، تَدقيقُ الموجَة ١١ F1 — القاعِدَة ٨: الأُنبوبُ القائِمُ لا نُسخَةٌ ثانِيَة): ما سَمَّته أولاها في <see cref="DealShipping.OrderMembersRef"/> ومَرجِعُ
+    /// طَلَبِها هذا المُعَرِّف — مُحَمَّلَةً الآن. وطَلَبٌ بِصَفقَةٍ واحِدَةٍ لا أَخَواتَ لَه: لا تَحميلَ ولا كِتابَةَ زائِدَة.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<Deal>> OrderSiblingsAsync(string tenantSlug, Deal deal, string orderId, CancellationToken ct = default)
+    {
+        if (!Guid.TryParseExact(orderId, "N", out var leadId)) return Array.Empty<Deal>();
+        var lead = leadId == deal.Id ? deal : await LoadAsync(tenantSlug, leadId, ct);
+        if (lead is null || !string.Equals(DealShipping.OrderIdOf(lead), orderId, StringComparison.Ordinal)) return Array.Empty<Deal>();
+        var siblings = new List<Deal>();
+        foreach (var id in DealShipping.OrderMembersOf(lead).Where(id => id != deal.Id))
+        {
+            var sibling = id == lead.Id ? lead : await LoadAsync(tenantSlug, id, ct);
+            if (sibling is not null && string.Equals(sibling.Refs.GetValueOrDefault(DealShipping.OrderRef), orderId, StringComparison.Ordinal))
+                siblings.Add(sibling);
+        }
+        return siblings;
+    }
+
+    /// <summary>أَخَواتُ الصَفقَةِ في طَلَبِها المَكتوبِ عِندَ OTO (<see cref="OrderSiblingsAsync"/> بِمَرجِعِها) — وفارِغَةٌ لِصَفقَةٍ بِلا طَلَب. يَقرَؤُها الإلغاءُ وصَفحَةُ
+    /// صَفقَةِ الاستوديو (‏2026-10-30، تَدقيقُ الموجَة ١١ F1).</summary>
+    public Task<IReadOnlyList<Deal>> WaybillSiblingsAsync(string tenantSlug, Deal deal, CancellationToken ct = default)
+        => DealShipping.IsPlaced(deal)
+            ? OrderSiblingsAsync(tenantSlug, deal, DealShipping.OrderIdOf(deal), ct)
+            : Task.FromResult<IReadOnlyList<Deal>>(Array.Empty<Deal>());
 
     /// <summary>أَخَواتُ الصَفقَةِ عَلى فاتورَتِها كَما سَمّاها <see cref="GatewayPayments.InvoiceDealsRef"/> — كُلٌّ بِجَلسَةِ قِراءَة، بِلا الصَفقَةِ نَفسِها،
     /// ثَلاثونَ عَلى الأَكثَر (حَدُّ الفاتورَة). فارِغَةٌ حينَ لا مَرجِع. يَقرَؤُها الإلغاءُ وصَفحَتا الصَفقَة.</summary>
@@ -731,6 +764,11 @@ public sealed class DealsService
         if (!wholeInvoice && await InvoiceSiblingsAsync(tenantSlug, deal, ct) is var siblings
             && (resolvingDispute ? GatewayInvoiceShare.ValidateDisputed(deal, siblings) : GatewayInvoiceShare.Validate(deal, siblings)).FirstOrDefault() is { } shared)
             return DealCancelResult.Refused(new DealCancelViolation(shared.Code, shared.MessageAr), deal);
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1؛ تَوصيفُه `8029031` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **ولا تُلغى وَحدَها صَفقَةٌ في شُحنَةٍ سائِرَةٍ عِندَ OTO
+        // مَعَ أُختٍ لَم تُسَلَّم** — الطَلَبُ يُحَصِّلُ مَجموعَها (د13)، فَكانَ إلغاءُ صاحِبِ المَتجَرِ «ب» يَترُكُ المَندوبَ يُحَصِّلُ ثَمَنَها أَو يُميتُ شُحنَةَ «أ». قَبلَ أَيِّ كِتابَة،
+        // ولِلإلغاءِ وحَسمِ النِزاعِ مَعاً؛ والطَلَبُ كُلُّه بِـ`CancelWholeInvoiceAsync`، أَو الإلغاءُ بَعدَ التَسليم.
+        if (!wholeInvoice && DealCancelAuthorization.ValidateWaybill(deal, await WaybillSiblingsAsync(tenantSlug, deal, ct)) is { } waybill)
+            return DealCancelResult.Refused(waybill, deal);
 
         deal.Status = DealStatus.Cancelled;
         deal.CancelReason = reason;
@@ -945,6 +983,35 @@ public sealed class DealsService
             WriteRef(deal, key, value);
             return true;
         }, ct);
+
+    /// <summary>
+    /// <para><b>الإلحاقُ بِشَرطِه ومَعَه أَثَرٌ في الكِتابَةِ نَفسِها</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3؛ تَوصيفُه <c>8029031</c>): الحِملُ أَعلاه بِحَرفِه، ثُمَّ <paramref name="alongside"/>
+    /// عَلى الوَثيقَةِ نَفسِها قَبلَ حِفظِها — فَلا يُكتَبُ المَرجِعُ ويَسقُطُ ما مَعَه بِانقِطاعٍ بَينَ حِفظَين، والشَرطُ يَحرُسُهُما مَعاً. مُستَهلِكُه سَطرُ «سُلِّمَت بَعدَ الإلغاء»
+    /// ومَعَه رَدُّ ثَمَنِ النَقدِ مُستَحَقّاً (<see cref="RecordCashRefundDueOnDelivery"/>).</para>
+    /// </summary>
+    public Task<Deal?> AttachRefAsync(
+        string tenantSlug, Guid dealId, string key, string value, Func<Deal, bool> stillDue, Action<Deal> alongside,
+        CancellationToken ct = default)
+        => RecordAsync(tenantSlug, dealId, deal =>
+        {
+            if (!stillDue(deal)) return false;
+            WriteRef(deal, key, value);
+            alongside(deal);
+            return true;
+        }, ct);
+
+    /// <summary>
+    /// <para><b>المَندوبُ سَلَّمَ صَفقَةً مُلغاةً وحَصَّلَ نَقدَها ⇒ رَدُّه مُستَحَقٌّ عَلى البائِع</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3): لِصَفقَةِ نَقدٍ
+    /// (<see cref="DealsPolicy.IsCashOnDelivery(Deal)"/>) لَم يُكتَب لَها <see cref="DealEvent.CashRefundDue"/> يُكتَبُ السَطرُ بِفاعِلِه المَنصَّة (<see cref="DealPatternCatalog.PlatformActor"/> — لا نَقرَةَ
+    /// لِأَحَد) وكَلِمَةِ حالِ OTO؛ وتُرجِعُ هَل كَتَبَت. كانَ سَطرُ «سُلِّمَت بَعدَ الإلغاء» وَحدَه، و<see cref="DealsPolicy.CollectedInCash"/> كاذِبٌ لِصَفقَةٍ لَم تَبلُغ «تَسليم» بِكاتِبِ
+    /// الانتِقال، فَلا يُسَمّي <see cref="DealNotices.OwnerActionOf"/> شَيئاً والمُشتَري دَفَعَ ثَمَنَ مُلغاة. المالُ بِيَدِ البائِعِ لا عِندَنا (‏ق‑٦) — سَطرٌ لا نِداء.</para>
+    /// </summary>
+    public static bool RecordCashRefundDueOnDelivery(Deal deal, string otoStatus)
+    {
+        if (!DealsPolicy.IsCashOnDelivery(deal) || deal.Timeline.Any(e => e.Action == DealEvent.CashRefundDue)) return false;
+        deal.Timeline.Add(new(deal.Stage, deal.Stage, DealEvent.CashRefundDue, Guid.Empty, DealPatternCatalog.PlatformActor, otoStatus, DateTime.UtcNow));
+        return true;
+    }
 
     /// <summary>ما يَكتُبُه الإلحاق: المَرجِعُ وسَطرُه في السِجِلّ — بِحَرفِ ما كانَ في جِسمِ <see cref="AttachRefAsync(string, Guid, string, string, CancellationToken)"/>
     /// قَبلَ ‏2026-10-25، أُخرِجَ لِيَكتُبَ بِه الحِملانِ لا نُسخَتان.</summary>

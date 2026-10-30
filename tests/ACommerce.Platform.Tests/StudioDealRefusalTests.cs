@@ -231,7 +231,8 @@ public class StudioDealRefusalTests(ITestOutputHelper output)
         // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — إلغاءُ صَفقَةٍ واحِدَةٍ مِن فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَةٍ يُرَدُّ بِه: 6 ← 7.
         // (‏2026-10-13، G5 (xv-g)): +`deal_payment_missing` — `AdminPathRefusal` لِصَفقَةِ بِطاقَةٍ بِلا مَرجِعِ دَفعٍ تاليها «دَفع»: 7 ← 8.
         // (‏2026-10-29، قَرارُ المالِك د38): +`deal_not_disputed` — بابُ حَسمِ النِزاعِ لِعَمَلِيَّةٍ لَم تَعُد في «نِزاع»: 8 ← 9.
-        Assert.Equal(9, checked_);
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1): +`deal_in_shared_waybill` — إلغاءُ عَمَلِيَّةٍ وَحدَها مِن شُحنَةٍ مُشتَرَكَةٍ سائِرَةٍ عِندَ OTO: 9 ← 10.
+        Assert.Equal(10, checked_);
         Assert.Equal(DealRefusalTexts.StudioCodes.Count, DealRefusalTexts.StudioCodes.Distinct(StringComparer.Ordinal).Count());
     }
 

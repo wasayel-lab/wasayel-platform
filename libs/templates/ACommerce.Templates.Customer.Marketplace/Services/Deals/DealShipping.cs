@@ -809,20 +809,9 @@ public sealed class DealShipping
     /// <para><b>صَفَقاتُ الطَلَبِ نَفسِه غَيرُ الصَفقَة</b> (‏2026-10-29، د13 «ب»): ما سَمَّته أولاها في <see cref="OrderMembersRef"/> ومَرجِعُ طَلَبِها هذا
     /// المُعَرِّف — مُحَمَّلَةً الآن. وطَلَبٌ بِصَفقَةٍ واحِدَةٍ لا أَخَواتَ لَه: لا تَحميلَ ولا كِتابَةَ زائِدَة.</para>
     /// </summary>
-    private async Task<IReadOnlyList<Deal>> OrderSiblingsAsync(string tenantSlug, Deal deal, string orderId, CancellationToken ct)
-    {
-        if (!Guid.TryParseExact(orderId, "N", out var leadId)) return Array.Empty<Deal>();
-        var lead = leadId == deal.Id ? deal : await _deals.LoadAsync(tenantSlug, leadId, ct);
-        if (lead is null || !string.Equals(OrderIdOf(lead), orderId, StringComparison.Ordinal)) return Array.Empty<Deal>();
-        var siblings = new List<Deal>();
-        foreach (var id in OrderMembersOf(lead).Where(id => id != deal.Id))
-        {
-            var sibling = id == lead.Id ? lead : await _deals.LoadAsync(tenantSlug, id, ct);
-            if (sibling is not null && string.Equals(sibling.Refs.GetValueOrDefault(OrderRef), orderId, StringComparison.Ordinal))
-                siblings.Add(sibling);
-        }
-        return siblings;
-    }
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — ولا يُعادُ حَرفٌ فَوقَه: الجِسمُ نُقِلَ بِحَرفِه إلى <see cref="DealsService.OrderSiblingsAsync"/> فَيَقرَؤُه الإلغاءُ أَيضاً.)</remarks>
+    private Task<IReadOnlyList<Deal>> OrderSiblingsAsync(string tenantSlug, Deal deal, string orderId, CancellationToken ct)
+        => _deals.OrderSiblingsAsync(tenantSlug, deal, orderId, ct);
 
     /// <summary>سَطرُ الرَفضِ بَعدَ سُؤالِ OTO — الرَمزُ وكَلِمَةُ حالِها وَحدَهُما (لا رَمزَ وُصولٍ ولا جِسم)، ومُعَرِّفُ الصَفقَة؛ ويُعيدُ النَتيجَةَ كَما هي.</summary>
     private DealShipResult Logged(string tenantSlug, DealShipResult result)
@@ -968,6 +957,18 @@ public sealed class DealShipping
         return new(OtoOrderStatusGate.Intervention, stored);
     }
 
+    /// <summary>صاحِبُ المَتجَرِ يُخبَرُ بِما يُسَمّيه <see cref="DealNotices.OwnerActionOf"/> — بِالأُنبوبِ القائِم (<see cref="DealNotices.NotifyStoreOwnerAsync"/>)، وفَشَلُه سَطرٌ
+    /// لا يَرُدُّ الوارِد (نَسَقُ <see cref="FlagInterventionAsync"/>: أَثَرُ رِسالَةٍ لا مال، والسَطرُ في الصَفقَة). (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3.)</summary>
+    private async Task TellStoreOwnerAsync(string tenantSlug, Deal deal)
+    {
+        if (_notices is null || _l is null) return;
+        try { await _notices.NotifyStoreOwnerAsync(tenantSlug, deal, _l, CancellationToken.None); }
+        catch (Exception ex)
+        {
+            _log.LogWarning("[OTO] owner notice {Slug}/{Deal} not sent: {Error}", tenantSlug, deal.Id.ToString("N"), ex.GetType().Name);
+        }
+    }
+
     /// <summary>عَلى الصَفقَةِ عَلامَةُ «يَحتاجُ تَدَخُّلاً» بِهذِه الكَلِمَةِ نَفسِها — فَلا تُكتَبُ ثانِيَة.</summary>
     internal static bool FlaggedWith(Deal deal, string status)
         => deal.Refs.TryGetValue(InterventionRef, out var had) && string.Equals(had, status, StringComparison.Ordinal);
@@ -1011,9 +1012,16 @@ public sealed class DealShipping
                 // و«سُلِّمَ» عَلى صَفقَةٍ مُلغاةٍ يُكتَبُ سَطراً في سِجِلِّها مَرَّةً ولا يُبتلَع (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4) — والرَمزُ هو هو.
                 // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1؛ تَوصيفُه `4520dad` — ولا يُعادُ حَرفٌ فَوقَه: و«مَرَّةً» تُسأَلُ ثانِيَةً عَلى المَخزونِ داخِلَ الكِتابَة —
                 // كانَ القَرارُ عَلى `current` وَحدَه فَإشعارانِ مُتَداخِلانِ يَمُرّانِ بِه ويَكتُبانِ سَطرَين.)
+                // (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3؛ تَوصيفُه `8029031` — ولا يُعادُ حَرفٌ فَوقَه: **ومَعَه رَدُّ ثَمَنِ النَقدِ مُستَحَقّاً عَلى البائِع** في الكِتابَةِ نَفسِها،
+                // ويُخبَرُ صاحِبُ المَتجَرِ بِالأُنبوبِ القائِم — كانَ السَطرُ وَحدَه فَلا يَقولُ شَيءٌ إنّ المُشتَري دَفَعَ ثَمَنَ مُلغاة.)
                 if (OtoOrderStatusGate.DeliveredAfterCancel(current, refusal))
+                {
+                    var owed = false;   // يُصَفَّرُ في كُلِّ مُحاوَلَة: الشَرطُ يُسأَلُ أَوَّلاً عَلى المَخزون، فَلا يُخبَرُ مَرَّتَينِ مَن أَعادَ بَعدَ تَعارُض.
                     current = await _deals.AttachRefAsync(tenantSlug, current.Id, DeliveredAfterCancelRef, state.Status,
-                        stored => OtoOrderStatusGate.DeliveredAfterCancel(stored, refusal), CancellationToken.None) ?? current;
+                        stored => { owed = false; return OtoOrderStatusGate.DeliveredAfterCancel(stored, refusal); },
+                        stored => owed = DealsService.RecordCashRefundDueOnDelivery(stored, state.Status), CancellationToken.None) ?? current;
+                    if (owed) await TellStoreOwnerAsync(tenantSlug, current);
+                }
                 return new(shipped && refusal.Code == OtoOrderStatusGate.NotDelivered ? OtoOrderStatusGate.Shipped : refusal.Code, current);
             }
             if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);

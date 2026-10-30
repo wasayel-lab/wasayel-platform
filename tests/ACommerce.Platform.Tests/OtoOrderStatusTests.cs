@@ -587,8 +587,10 @@ public class OtoOrderStatusTests(ITestOutputHelper output)
         Assert.Equal(OtoOrderStatusGate.DealNotActive, outcome.Code);
         Assert.Equal(200, OtoOrderStatusGate.StatusFor(outcome.Code));
         Assert.Equal(saves + 1, w.Docs.SaveCalls);
-        Assert.Equal(lines + 1, Stored(w).Timeline.Count);
-        var line = Stored(w).Timeline.Last();
+        // (‏2026-10-30، تَدقيقُ الموجَة ١١ G-3؛ تَوصيفُه `8029031` — ولا يُعادُ حَرفٌ فَوقَه: ومَعَ السَطرِ في الكِتابَةِ نَفسِها `cash_refund_due` لِصَفقَةِ النَقد — +2 لا +1.)
+        Assert.Equal(lines + 2, Stored(w).Timeline.Count);
+        Assert.Equal(DealEvent.CashRefundDue, Stored(w).Timeline[^1].Action);
+        var line = Stored(w).Timeline[^2];
         Assert.Equal(DealEvent.RefNote, line.Action);
         Assert.Equal("deals.detail.ref_oto_delivered_after_cancel", DealRefLabels.LabelKeyFor(line.Note));
         Assert.Equal("delivered", Stored(w).Refs[DealShipping.DeliveredAfterCancelRef]);
