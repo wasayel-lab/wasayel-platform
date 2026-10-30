@@ -233,6 +233,109 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     public void The_browser_fetch_pattern_sees_what_it_counts(string code, string host)
         => Assert.Equal(host, BrowserFetch.Matches(code).Select(m => m.Groups["h"].Value).FirstOrDefault() ?? "");
 
+    // ─── والرابِطُ الَّذي يَبنيه الكود (‏2026-10-30، الموجَة ١٢ F2 · ٢ — مُراجَعَةُ c644737 الأَخيرَة) ─────────────────────────────────────
+    //
+    // `BrowserFetch` يَحتاجُ `src="https://…` حَرفِيّاً في الوَسم، فَما يَبنيه الكودُ لا يَراه: `AcMapPin.razor` يَكتُبُ
+    // `<iframe src="@ACommerce.Kit.Maps.OsmLinks.EmbedUrl(...)">` فَيَطلُبُ مُتَصَفِّحُ كُلِّ زائِرٍ لِصَفحَةِ إعلانٍ بِمَوقِع `www.openstreetmap.org`
+    // وفي الرابِطِ إحداثِيّاتُ الإعلانِ (الصُندوقُ والعَلامَة) — والجَردُ عَدَّ أَربَعَةَ مُضيفينَ والمُتَصَفِّحُ يَبلُغُ خَمسَة (القاعِدَة ١٠: أَداةٌ عَمياء).
+    // فَهُنا: كُلُّ `src`/`href` في وُسومِ الجَلبِ قيمَتُه نِداءُ دالَّة (`@Ns.Type.Method(`) يُحَلُّ إلى جِسمِ الدالَّةِ في مَصدَرِ `libs`/`apps`، ومُضيفُ كُلِّ
+    // سِلسِلَةٍ `"https://…` فيه يُعَدّ. ونِداءٌ لا يُحَلُّ يُعَدُّ ويُقال — لا يُبتَلَع.
+
+    private static readonly Regex CodeBuiltFetch = new(
+        @"<(?:link|script|img|iframe|source)\b[^>]*?\b(?:href|src)\s*=\s*[""']@(?<call>[A-Za-z_][\w.]*)\s*\(",
+        RegexOptions.Compiled);
+
+    private static readonly Regex UrlLiteral = new(@"""https?://(?<h>[A-Za-z0-9.-]+)", RegexOptions.Compiled);
+
+    /// <summary>جِسمُ الدالَّةِ <paramref name="method"/> (تُعيدُ <c>string</c>) في النَوعِ <paramref name="type"/> — مِن تَوقيعِها إلى العُضوِ التالي. نَقِيَّة.</summary>
+    private static string? MethodBody(string code, string type, string method)
+    {
+        var decl = Regex.Match(code, $@"\b(?:class|record|struct)\s+{Regex.Escape(type)}\b");
+        if (!decl.Success) return null;
+        var sig = Regex.Match(code[decl.Index..], $@"\bstring\s+{Regex.Escape(method)}\s*\(");
+        if (!sig.Success) return null;
+        var start = decl.Index + sig.Index + sig.Length;
+        var next = Regex.Match(code[start..], @"\n\s*(?:public|private|internal|protected)\s|\n\}");
+        return code[start..(next.Success ? start + next.Index : code.Length)];
+    }
+
+    /// <summary><b>المُضيفونَ في روابِطَ يَبنيها الكود</b> — لِكُلِّ نِداءِ دالَّةٍ في <c>src</c>/<c>href</c> وُسومِ الجَلب: الدالَّةُ في <paramref name="code"/>
+    /// ومُضيفُ كُلِّ سِلسِلَةٍ <c>"https://…</c> في جِسمِها؛ والنِداءُ الَّذي لا تُوجَدُ دالَّتُه في <c>Unresolved</c>. دالَّةٌ نَقِيَّةٌ عَلى نُصوصٍ مُعطاة.</summary>
+    internal static (IReadOnlyList<(string Host, string File, string Call)> Hosts, int Calls, IReadOnlyList<string> Unresolved) CodeBuiltHosts(
+        IEnumerable<(string File, string Text)> markup, IEnumerable<(string File, string Text)> code)
+    {
+        var sources = code.Select(c => WriteEndpointGuardTests.StripComments(c.Text)).ToList();
+        var hosts = new List<(string, string, string)>();
+        var unresolved = new List<string>();
+        var calls = 0;
+        foreach (var (file, text) in markup)
+            foreach (Match m in CodeBuiltFetch.Matches(text))
+            {
+                calls++;
+                var call = m.Groups["call"].Value;
+                var parts = call.Split('.');
+                var bodies = parts.Length < 2 ? new List<string>()
+                    : sources.Select(c => MethodBody(c, parts[^2], parts[^1])).OfType<string>().ToList();
+                if (bodies.Count == 0) { unresolved.Add(call); continue; }
+                foreach (var body in bodies)
+                    foreach (Match u in UrlLiteral.Matches(body))
+                        hosts.Add((u.Groups["h"].Value, file, call));
+            }
+        return (hosts, calls, unresolved);
+    }
+
+    private static IEnumerable<(string File, string Text)> RepoFiles(params string[] extensions)
+    {
+        var sep = Path.DirectorySeparatorChar;
+        foreach (var root in new[] { "libs", "apps" })
+            foreach (var f in Directory.EnumerateFiles(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, root), "*.*", SearchOption.AllDirectories))
+                if (!f.Contains($"{sep}bin{sep}") && !f.Contains($"{sep}obj{sep}") && extensions.Any(e => f.EndsWith(e, StringComparison.Ordinal)))
+                    yield return (Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, f), File.ReadAllText(f));
+    }
+
+    /// <summary>ما يَبنيه الكودُ في المُستَودَع: وُسومُ <c>.razor</c>/<c>.html</c> ودَوالُّ <c>.cs</c>.</summary>
+    internal static (IReadOnlyList<(string Host, string File, string Call)> Hosts, int Calls, IReadOnlyList<string> Unresolved) CodeBuiltBrowserHosts()
+        => CodeBuiltHosts(RepoFiles(".razor", ".html"), RepoFiles(".cs"));
+
+    /// <summary>المُحَلِّلُ يَرى ما يَعُدّ (القاعِدَة ١٠) — عَيِّنَةٌ مَحقونَة: <c>src="@Helper.Url(...)"</c> يُحَلُّ إلى مُضيفِ سِلسِلَةِ الدالَّة، ووَسمٌ مُتَعَدِّدُ الأَسطُر
+    /// كَـ<c>AcMapPin</c>؛ ورابِطُ التَصَفُّحِ (<c>&lt;a href&gt;</c>) لا يُعَدّ، ونِداءٌ بِلا دالَّةٍ يُقالُ «لا يُحَلّ»، ودالَّةٌ تَبني رابِطاً نِسبِيّاً بِلا مُضيف.</summary>
+    [Theory]
+    [InlineData("<img src=\"@Helper.Url(x)\" />", "cdn.example.org", 1, 0)]
+    [InlineData("<iframe loading=\"lazy\"\n        src=\"@Ns.Helper.Url(1, 2)\"></iframe>", "cdn.example.org", 1, 0)]
+    [InlineData("<a href=\"@Helper.Url(x)\">", "", 0, 0)]
+    [InlineData("<script src=\"@Missing.Url()\"></script>", "", 1, 1)]
+    [InlineData("<img src=\"@Helper.Local(x)\" />", "", 1, 0)]
+    public void The_code_built_url_resolver_sees_what_it_counts(string markup, string host, int calls, int unresolved)
+    {
+        const string helper = "public static class Helper\n{\n    public static string Url(int x) => $\"https://cdn.example.org/{x}\";\n    public static string Local(int x) => $\"/uploads/{x}\";\n}\n";
+        var found = CodeBuiltHosts(new[] { ("x.razor", markup) }, new[] { ("Helper.cs", helper) });
+        Assert.Equal(host, found.Hosts.Select(h => h.Host).FirstOrDefault() ?? "");
+        Assert.Equal((calls, unresolved), (found.Calls, found.Unresolved.Count));
+    }
+
+    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣)</b>: المُتَصَفِّحُ يَبلُغُ <c>www.openstreetmap.org</c> بِرابِطٍ يَبنيه <c>OsmLinks.EmbedUrl</c>، والجَردُ
+    /// (<see cref="BrowserHosts"/>) لا يَراه، ولا جِهَةَ لَه في <see cref="BrowserHostParties"/>، وسَطرُ <c>share_maps</c> العَرَبِيُّ لا يُسَمّي «OpenStreetMap».
+    /// يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    [Fact]
+    public void Today_the_browser_reaches_openstreetmap_through_a_code_built_url_the_inventory_cannot_see()
+    {
+        var literal = BrowserHosts().Select(h => h.Host).Distinct(StringComparer.Ordinal).ToList();
+        var built = CodeBuiltBrowserHosts();
+        var builtHosts = built.Hosts.Select(h => h.Host).Distinct(StringComparer.Ordinal).ToList();
+        var unnamed = UnnamedBrowserParties(literal.Concat(builtHosts).Distinct(StringComparer.Ordinal));
+        var ar = LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_maps")!;
+        output.WriteLine($"مُضيفونَ حَرفِيّون: {literal.Count} · نِداءاتُ دالَّةٍ في وُسومِ الجَلب: {built.Calls} (لا يُحَلّ: {built.Unresolved.Count}) · مُضيفونَ يَبنيهِم الكود: " +
+                         $"{builtHosts.Count} ({string.Join(", ", built.Hosts.Select(h => $"{h.Host} ← {h.Call} في {Path.GetFileName(h.File)}").Distinct())}) · " +
+                         $"جِهاتٌ غَيرُ مُسَمّاة: {string.Join("، ", unnamed)} · share_maps بِالعَرَبِيَّةِ يُسَمّي OpenStreetMap: {ar.Contains("OpenStreetMap", StringComparison.Ordinal)}");
+        Assert.Equal(4, literal.Count);
+        Assert.DoesNotContain("www.openstreetmap.org", literal);
+        Assert.Equal(new[] { "www.openstreetmap.org" }, builtHosts);
+        Assert.Empty(built.Unresolved);
+        Assert.False(BrowserHostParties.ContainsKey("www.openstreetmap.org"));
+        Assert.Equal(new[] { "«www.openstreetmap.org» بِلا جِهَة" }, unnamed);
+        Assert.DoesNotContain("OpenStreetMap", ar, StringComparison.Ordinal);
+    }
+
     /// <summary>حُقولُ تَسجيلِ البائِعِ المُسَجَّلِ في الضَريبَةِ كَما يَكتُبُها <c>OtoClient.RegisterVendorAsync</c> تَحتَ <c>if (vendor.IsVatRegistered)</c>.</summary>
     internal static readonly string[] VatRegistrationFields =
     [
