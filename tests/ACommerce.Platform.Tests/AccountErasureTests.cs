@@ -308,6 +308,24 @@ public class AccountErasureTests
             new List<AuditEntry> { new() { ActorId = Other, ActorName = "مُدير" } }, new HashSet<Guid>()).Select(a => a.ActorName));
     }
 
+    // ─── سِجِلُّ التَدقيق: اسمُ العُضوِ هَدَفاً في الحاشِيَة (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-4) — تَوصيفٌ قَبلَ التَبديل ───────────────────
+
+    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): بابا مَنحِ الإدارَةِ وسَحبِها يَكتُبانِ اسمَ العُضوِ الهَدَفِ في الحاشِيَة (<c>note: user.FullName</c>)،
+    /// والفاعِلُ صاحِبُ المَتجَر؛ و<see cref="AuditLogQueries.HideErasedActors"/> يُخفي اسمَ الفاعِلِ وَحدَه — فَعُضوٌ رُقِّيَ ثُمَّ حَذَفَ حِسابَه يَبقى «user.grant_admin · سارة».</summary>
+    [Fact]
+    public void Today_a_grant_admin_row_keeps_the_erased_members_name_in_its_note()
+    {
+        var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        var notes = System.Text.RegularExpressions.Regex.Matches(mte, @"note:\s*user\.FullName").Count;
+        var member = Guid.NewGuid();
+        var row = new AuditEntry { ActorId = Other, ActorName = "صاحِبُ المَتجَر", Action = "user.grant_admin", EntityType = "User", EntityId = member.ToString(), Note = "سارة" };
+        var shown = AuditLogQueries.HideErasedActors(new List<AuditEntry> { row }, new HashSet<Guid> { member });
+        output.WriteLine($"حَواشٍ بِاسمِ الهَدَف: {notes} · المَعروض: {shown[0].Action} · {shown[0].ActorName} · {shown[0].Note}");
+        Assert.Equal(2, notes);
+        Assert.Equal(("صاحِبُ المَتجَر", "سارة"), (shown[0].ActorName, shown[0].Note));
+    }
+
     // ─── العَرضُ يُمحى في مَجراه، والقَبولُ يَرُدُّ عَرضَ مَن حُذِف (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29) ───────────────────
 
     /// <summary>مُوجَب: عَرضُه المُعَلَّقُ — اسمُه في المَجرى «حِسابٌ مَحذوف» ويُسحَب؛ والمَقبولُ يُمحى اسمُه ولا يُسحَب. والأَحداثُ تُطَبَّقُ عَلى لَقطَةٍ بِالاسمِ
