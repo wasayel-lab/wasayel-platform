@@ -310,20 +310,29 @@ public class AccountErasureTests
 
     // ─── سِجِلُّ التَدقيق: اسمُ العُضوِ هَدَفاً في الحاشِيَة (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-4) — تَوصيفٌ قَبلَ التَبديل ───────────────────
 
-    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): بابا مَنحِ الإدارَةِ وسَحبِها يَكتُبانِ اسمَ العُضوِ الهَدَفِ في الحاشِيَة (<c>note: user.FullName</c>)،
-    /// والفاعِلُ صاحِبُ المَتجَر؛ و<see cref="AuditLogQueries.HideErasedActors"/> يُخفي اسمَ الفاعِلِ وَحدَه — فَعُضوٌ رُقِّيَ ثُمَّ حَذَفَ حِسابَه يَبقى «user.grant_admin · سارة».</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-4)</b> — كانَ <c>Today_a_grant_admin_row_keeps_the_erased_members_name_in_its_note</c> (‏<c>f1cfe75</c>: «حَواشٍ بِاسمِ
+    /// الهَدَف: 2 · المَعروض: … · سارة»). والآن البابانِ لا يَكتُبانِ اسمَ الهَدَف، والسَطرُ القَديمُ الَّذي يَحمِلُه تُخفى حاشِيَتُه عِندَ العَرضِ إذا حُذِفَ حِسابُه (مُوجَب)؛
+    /// وحاشِيَةُ حِسابٍ قائِمٍ وحاشِيَةُ سَطرٍ هَدَفُه غَيرُ حِسابٍ — ولو كانَ مُعَرِّفُه مُعَرِّفَ المَحذوف — كَما كُتِبَتا (سالِب).</summary>
     [Fact]
-    public void Today_a_grant_admin_row_keeps_the_erased_members_name_in_its_note()
+    public void A_grant_admin_row_hides_the_erased_members_note_and_writes_no_name_any_more()
     {
         var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
         var notes = System.Text.RegularExpressions.Regex.Matches(mte, @"note:\s*user\.FullName").Count;
+        var doors = System.Text.RegularExpressions.Regex.Matches(mte, @"""user\.(?:grant|revoke)_admin"", ""User"", userId\.ToString\(\), ip:").Count;
         var member = Guid.NewGuid();
+        var live = Guid.NewGuid();
         var row = new AuditEntry { ActorId = Other, ActorName = "صاحِبُ المَتجَر", Action = "user.grant_admin", EntityType = "User", EntityId = member.ToString(), Note = "سارة" };
-        var shown = AuditLogQueries.HideErasedActors(new List<AuditEntry> { row }, new HashSet<Guid> { member });
-        output.WriteLine($"حَواشٍ بِاسمِ الهَدَف: {notes} · المَعروض: {shown[0].Action} · {shown[0].ActorName} · {shown[0].Note}");
-        Assert.Equal(2, notes);
-        Assert.Equal(("صاحِبُ المَتجَر", "سارة"), (shown[0].ActorName, shown[0].Note));
+        var kept = new AuditEntry { ActorId = Other, ActorName = "صاحِبُ المَتجَر", Action = "user.revoke_admin", EntityType = "User", EntityId = live.ToString(), Note = "هِند" };
+        var listing = new AuditEntry { ActorId = Other, ActorName = "صاحِبُ المَتجَر", Action = "listing.hide", EntityType = "listing", EntityId = member.ToString(), Note = "مُخالَفَة" };
+        var shown = AuditLogQueries.HideErasedActors(new List<AuditEntry> { row, kept, listing }, new HashSet<Guid> { member });
+        output.WriteLine($"حَواشٍ بِاسمِ الهَدَف: {notes} · بابانِ بِلا حاشِيَة: {doors} · المَعروض: {shown[0].Note} · {shown[1].Note} · {shown[2].Note}");
+        Assert.Equal(0, notes);
+        Assert.Equal(2, doors);
+        Assert.Equal((AccountDeletion.ErasedName, "صاحِبُ المَتجَر"), (shown[0].Note, shown[0].ActorName));
+        Assert.Equal(("هِند", "مُخالَفَة"), (shown[1].Note, shown[2].Note));
+        Assert.Equal(member, AuditLogQueries.TargetAccount(row));
+        Assert.Null(AuditLogQueries.TargetAccount(listing));
     }
 
     // ─── العَرضُ يُمحى في مَجراه، والقَبولُ يَرُدُّ عَرضَ مَن حُذِف (مُراجَعَةُ تَيّارِ S2 الجَولَة ٢، ‏2026-10-29) ───────────────────
@@ -1016,6 +1025,45 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         {
             await using var s = store.LightweightSession(slug);
             s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty); s.DeleteWhere<Notification>(n => n.Id != Guid.Empty);
+            await s.SaveChangesAsync();
+        }
+    }
+
+    /// <summary><b>حَيّاً (‏2026-10-30، B-PRIV-4)</b>: سَطرُ مَنحِ إدارَةٍ قَديمٌ بِاسمِ العُضوِ في حاشِيَتِه — بَعدَ حَذفِ حِسابِه يَبقى في المَخزَنِ كَما كُتِب، و<c>RecentAsync</c>
+    /// تَعرِضُه «حِسابٌ مَحذوف»؛ وسَطرُ عُضوٍ قائِمٍ كَما كُتِب.</summary>
+    [Fact]
+    public async Task An_old_grant_admin_row_hides_the_deleted_members_note_when_shown_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = BuildStore();
+        var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
+        var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "سارة المُرَقّاة", Phone = "+966500000561" };
+        var liveId = Guid.NewGuid();
+        var granted = new AuditEntry { Id = Guid.NewGuid(), Scope = slug, ActorId = Guid.NewGuid(), ActorName = "صاحِبُ المَتجَر", Action = "user.grant_admin",
+            EntityType = "User", EntityId = me.Id.ToString(), Note = me.FullName };
+        var other = new AuditEntry { Id = Guid.NewGuid(), Scope = slug, ActorId = Guid.NewGuid(), ActorName = "صاحِبُ المَتجَر", Action = "user.grant_admin",
+            EntityType = "User", EntityId = liveId.ToString(), Note = "هِند القائِمَة" };
+        try
+        {
+            await using (var s = store.LightweightSession(slug))
+            {
+                s.Store(me); s.Store(new User { Id = liveId, TenantSlug = slug, FullName = "هِند القائِمَة" }); s.Store(granted, other);
+                await s.SaveChangesAsync();
+            }
+            await EraseLikeTheDoorAsync(store, slug, me.Id);
+            var shown = await new AuditLogQueries(store).RecentAsync(slug);
+            await using var q = store.QuerySession(slug);
+            var stored = (await q.LoadAsync<AuditEntry>(granted.Id))!;
+            output.WriteLine($"في المَخزَن: {stored.Note} · في العَرض: {shown.Single(a => a.Id == granted.Id).Note} · سَطرُ القائِمَة: {shown.Single(a => a.Id == other.Id).Note}");
+            Assert.Equal("سارة المُرَقّاة", stored.Note);
+            Assert.Equal(AccountDeletion.ErasedName, shown.Single(a => a.Id == granted.Id).Note);
+            Assert.Equal("هِند القائِمَة", shown.Single(a => a.Id == other.Id).Note);
+        }
+        finally
+        {
+            await using var s = store.LightweightSession(slug);
+            s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<AuditEntry>(a => a.Id != Guid.Empty);
             await s.SaveChangesAsync();
         }
     }

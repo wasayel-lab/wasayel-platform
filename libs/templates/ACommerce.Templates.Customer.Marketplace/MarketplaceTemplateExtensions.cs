@@ -2324,8 +2324,8 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             // تَصعيد صَلاحِيّات — يُسَجَّل دائِماً (نَفس scope الـ tenant).
             await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
-                "user.grant_admin", "User", userId.ToString(),
-                note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+                // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-4) بِلا اسمِ الهَدَفِ في الحاشِيَة — المُعَرِّفُ يُسَمّي الصَفّ، والاسمُ يَبقى بَعدَ حَذفِ حِسابِه في سِجِلٍّ لا يُعَدَّل.
+                "user.grant_admin", "User", userId.ToString(), ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: "tenant_admin");
             return Results.Redirect($"/admin/tenants/{slug}/users?saved=1");
         }).DisableAntiforgery();
@@ -2351,8 +2351,8 @@ public static class MarketplaceTemplateExtensions
             s.Store(user);
             await s.SaveChangesAsync();
             await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
-                "user.revoke_admin", "User", userId.ToString(),
-                note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+                // ‏(‏2026-10-30، B-PRIV-4) ولا اسمَ الهَدَفِ هُنا أَيضاً.
+                "user.revoke_admin", "User", userId.ToString(), ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: user.ActiveRole);
             return Results.Redirect($"/admin/tenants/{slug}/users?saved=1");
         }).DisableAntiforgery();

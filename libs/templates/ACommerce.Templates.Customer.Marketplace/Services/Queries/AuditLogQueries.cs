@@ -39,7 +39,9 @@ public sealed class AuditLogQueries
             await using var s = _store.QuerySession(scope);
             var rows = (await s.Query<AuditEntry>()
                 .OrderByDescending(a => a.At).Take(take).ToListAsync(ct)).ToList();
-            var actors = rows.Where(a => a.ActorId is not null).Select(a => a.ActorId!.Value).Distinct().ToList();
+            // ‏(‏2026-10-30، B-PRIV-4) والحِسابُ هَدَفاً (`EntityType == "User"`) مَعَ الفاعِل — يُسأَلانِ بِالاستِعلامِ نَفسِه.
+            var actors = rows.Where(a => a.ActorId is not null).Select(a => a.ActorId!.Value)
+                .Concat(rows.Select(TargetAccount).OfType<Guid>()).Distinct().ToList();
             var erased = actors.Count == 0
                 ? new HashSet<Guid>()
                 : (await s.Query<ACommerce.Kit.Auth.User>().Where(u => actors.Contains(u.Id) && u.DeletedAt != null)
@@ -53,14 +55,25 @@ public sealed class AuditLogQueries
     }
 
     /// <summary>نَقِيَّة: القُيودُ كَما هي، واسمُ فاعِلٍ في <paramref name="erasedActors"/> «حِسابٌ مَحذوف» — عَلى النُسخَةِ المَعروضَة، لا في المَخزَن
-    /// (جَلسَةُ قِراءَةٍ لا تَحفَظ).</summary>
+    /// (جَلسَةُ قِراءَةٍ لا تَحفَظ).
+    /// <para><b>‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-4؛ تَوصيفُه <c>f1cfe75</c>) والحِسابُ هَدَفاً</b>: سَطرٌ هَدَفُه حِسابٌ (<see cref="TargetAccount"/>) مَحذوفٌ تُخفى
+    /// حاشِيَتُه — كانَ بابا مَنحِ الإدارَةِ وسَحبِها يَكتُبانِ فيها اسمَه، فَتَبقى السُطورُ القَديمَةُ بِه في المَخزَنِ وتُخفى عِندَ العَرض. وحاشِيَةُ سَطرٍ هَدَفُه غَيرُ حِسابٍ،
+    /// أَو حِسابٌ قائِم، لا تُمَسّ.</para></summary>
     public static IReadOnlyList<AuditEntry> HideErasedActors(IReadOnlyList<AuditEntry> rows, IReadOnlySet<Guid> erasedActors)
     {
         foreach (var a in rows)
+        {
             if (a.ActorId is { } id && erasedActors.Contains(id))
                 a.ActorName = ACommerce.Kit.Auth.AccountDeletion.ErasedName;
+            if (TargetAccount(a) is { } target && erasedActors.Contains(target) && !string.IsNullOrEmpty(a.Note))
+                a.Note = ACommerce.Kit.Auth.AccountDeletion.ErasedName;
+        }
         return rows;
     }
+
+    /// <summary>الحِسابُ الَّذي يَتَناوَلُه السَطر — <c>EntityType == "User"</c> ومُعَرِّفُه — أَو <c>null</c>.</summary>
+    public static Guid? TargetAccount(AuditEntry a)
+        => string.Equals(a.EntityType, "User", StringComparison.Ordinal) && Guid.TryParse(a.EntityId, out var id) ? id : null;
 
     /// <summary>
     /// <para><b>آخِرُ قَيدٍ بِفِعلٍ بِعَينِه في نِطاق</b> — تَسأَلُه
