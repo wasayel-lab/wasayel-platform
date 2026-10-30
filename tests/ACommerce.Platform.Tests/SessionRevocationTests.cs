@@ -954,6 +954,11 @@ public class LiveAccountConcurrencyProofTests(ITestOutputHelper output)
     /// <summary><b>الإعادَةُ تُطَبِّقُ تَغييرَ الكاتِبِ وَحدَه مَرَّةً عَلى ما كُتِب</b> (‏<c>AccountWrites.UpdateAsync</c>): كاتِبٌ يَرفَعُ الإصدارَ بَينَ قِراءَةِ
     /// الاشتِراكِ وحِفظِه — فَيُرَدُّ الحِفظُ الأَوَّل، ويُعادُ التَغييرُ عَلى الوَثيقَةِ الجَديدَة: الإصدارُ المَرفوعُ والاشتِراكُ مَعاً (مُوجَب). وكاتِبٌ يَسبِقُ
     /// المُحاوَلَتَينِ كِلتَيهِما يُفشِلُ الطَلَبَ مُغلَقاً ولا يَكتُبُ فَوقَه (سالِب).</summary>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>هذا الصَفُّ يَقيسُ العُدَّةَ بِلا شَرطِ جَلسَة</b> — كاتِبٌ لا جَلسَةَ لَه
+    /// (‏<c>admit</c> غائِب)، فَـ«الاشتِراكُ مَعَ الإصدارِ المَرفوع» أَعلاه سُلوكُ العُدَّةِ لا سُلوكُ البابِ. وبابُ <c>/api/{slug}/push/subscribe</c> يُعلِنُ
+    /// <c>SessionVersionGate.StillOpen</c> مُنذُ <c>ec856fd</c>، فَاشتِراكٌ يُسابِقُ الرَفعَ يُرَدُّ في إعادَتِه والاشتِراكاتُ صِفر —
+    /// <c>LiveSessionWriteProofTests.A_subscribe_racing_the_revoke_is_refused_on_its_retry_on_Postgres</c> (مُوجَب) و
+    /// <c>A_live_session_racing_an_unrelated_writer_still_subscribes_on_Postgres</c> (سالِب).</remarks>
     [Fact]
     public async Task The_writer_reapplies_only_its_own_change_once_and_fails_closed_on_a_second_conflict_on_Postgres()
     {
