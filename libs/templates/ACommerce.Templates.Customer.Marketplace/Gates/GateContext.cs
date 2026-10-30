@@ -107,4 +107,17 @@ public static class TermsPolicy
         => user is not null
         && user.AcceptedTermsAt is not null
         && user.AcceptedTermsVersion >= CurrentVersion;
+
+    /// <summary>
+    /// <para><b>ما تَغَيَّرَ مُنذُ قَبِلَ</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO9؛ تَوصيفُه <c>e36cdb6</c>): الإصداراتُ بَعدَ ما قَبِلَه حَتّى الحاليّ — لِكُلٍّ سَطرٌ في القامُوسِ
+    /// (<see cref="ChangeKey"/>) تَرسُمُه صَفحَةُ الشُروطِ فَوقَ النَصّ، فَيَعرِفُ ما الجَديدُ فيما يُطلَبُ قَبولُه (والبَندُ الرابِعُ يَعِدُه بِذلك). وفارِغَةٌ لِمَن قَبِلَ
+    /// الحاليّ، ولِمَن لَم يَقبَل شَيئاً بَعدُ (لا «تَغَيَّرَ» عِندَ مَن لَم يَرَ إصداراً — الشُروطُ كُلُّها جَديدَةٌ عَلَيه). دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<int> ChangesSince(ACommerce.Kit.Auth.User? user)
+        => user is null || user.AcceptedTermsAt is null || user.AcceptedTermsVersion < 1 || user.AcceptedTermsVersion >= CurrentVersion
+            ? Array.Empty<int>()
+            : Enumerable.Range(user.AcceptedTermsVersion + 1, CurrentVersion - user.AcceptedTermsVersion).ToList();
+
+    /// <summary>مِفتاحُ سَطرِ «ما تَغَيَّرَ في الإصدارِ N» — ولِكُلِّ إصدارٍ نُشِرَ سَطرُه (<c>TermsChangesTests</c> يَعُدُّها ويَفشَلُ عَلى الناقِص).</summary>
+    public static string ChangeKey(int version) => $"terms.changes.v{version}";
 }

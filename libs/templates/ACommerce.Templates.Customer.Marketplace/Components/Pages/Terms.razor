@@ -3,6 +3,7 @@
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Gates
 
@@ -39,6 +40,23 @@ else
                 @Tenant.Name · @L.Markup("terms.page.version_label") @TermsPolicy.CurrentVersion
             </p>
         </div>
+
+        @* ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO9) عُضوٌ قَبِلَ إصداراً سابِقاً يُرَدُّ إلى هُنا عِندَ أَوَّلِ كِتابَة: يُقالُ لَه ما تَغَيَّرَ في كُلِّ إصدارٍ بَعدَ ما قَبِلَه
+           (`TermsPolicy.ChangesSince`)، والنَصُّ كامِلاً تَحتَه. ومَن قَبِلَ الحاليَّ أَو لَم يَقبَل شَيئاً بَعدُ لا يَرى هذا. *@
+        @if (changes.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Format("terms.changes.since_title", acceptedVersion)</h3>
+                    <ul style="margin:0;padding-inline-start:20px;font-size:14px;line-height:2;">
+                        @foreach (var v in changes)
+                        {
+                            <li><strong>@L.Format("terms.changes.version_label", v)</strong> @L.Markup(TermsPolicy.ChangeKey(v))</li>
+                        }
+                    </ul>
+                </ChildContent>
+            </AcCard>
+        }
 
         <AcCard>
             <ChildContent>
@@ -85,4 +103,17 @@ else
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+
+    /// <summary>الإصداراتُ بَعدَ ما قَبِلَه حَتّى الحاليّ — <c>TermsPolicy.ChangesSince</c> عَلى وَثيقَتِه (‏CO9).</summary>
+    IReadOnlyList<int> changes = Array.Empty<int>();
+    int acceptedVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx && Tenant.IsResolved) { Auth.SetTenant(Tenant.Slug); Auth.Load(ctx, Tenant.Slug); }
+        if (!Auth.IsAuthenticated || Auth.UserId is null) return;
+        var me = await Accounts.ProfileAsync(Slug, Auth.UserId.Value);
+        acceptedVersion = me?.AcceptedTermsVersion ?? 0;
+        changes = TermsPolicy.ChangesSince(me);
+    }
 }
