@@ -32,6 +32,13 @@ internal sealed class MoyasarScriptedHandler : HttpMessageHandler
         return this;
     }
 
+    /// <summary>رَدٌّ يَسبِقُه أَثَرٌ — ما يَقَعُ عِندَ البَوّابَةِ أَو في المَتجَرِ بَينَ نِداءَين (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-2: دَفعٌ يَكتُبُه الإشعارُ أَثناءَ جَلبِ المُهلَة).</summary>
+    public MoyasarScriptedHandler ThenDoing(Action effect, HttpStatusCode status, string body)
+    {
+        _replies.Enqueue(() => { effect(); return new HttpResponseMessage(status) { Content = new StringContent(body) }; });
+        return this;
+    }
+
     public MoyasarScriptedHandler ThenThrow()
     {
         _replies.Enqueue(() => throw new HttpRequestException("لا اتِّصال"));
