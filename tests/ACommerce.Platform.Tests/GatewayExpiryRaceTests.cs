@@ -29,7 +29,7 @@ public class GatewayExpiryRaceTests(ITestOutputHelper output)
 
     /// <summary>سَلَّةٌ تُفتَحُ فاتورَتُها لِـ<paramref name="onInvoice"/> صَفقَةً مِنها عِندَ <see cref="Opened"/>، وبَوّابَةٌ بِساعَةٍ بَعدَ المُهلَةِ بِثانِيَة — نَسَقُ
     /// <c>GatewayInvoiceExpiryTests.OpenedCart</c>، والصَفقَتانِ مَربوطَتانِ بِبائِعٍ ومُلغي فاتورَةٍ عَلى مُعالِجِ العالَم.</summary>
-    private static async Task<(World W, GatewayPayments Gateway, Guid[] OnInvoice)> ExpiredCart(int onInvoice = 2)
+    internal static async Task<(World W, GatewayPayments Gateway, Guid[] OnInvoice)> ExpiredCart(int onInvoice = 2)
     {
         ProviderVault? sealedWith = null;
         var w = await PaidCart(v => { sealedWith = v; return PaymentsBinding(v); }, withSeller: true, invoice: false);
@@ -47,7 +47,7 @@ public class GatewayExpiryRaceTests(ITestOutputHelper output)
         return (w with { Deals = deals }, At(Opened + TimeSpan.FromHours(24) + TimeSpan.FromSeconds(1)), ids);
     }
 
-    private static string Invoice(Guid[] ids, string status, long amount = 15000)
+    internal static string Invoice(Guid[] ids, string status, long amount = 15000)
         => MoyasarClientTests.InvoiceJson(status, amount, metadata: GatewayPaymentProof.MetadataFor(ids));
 
     /// <summary>ما يَكتُبُه إشعارُ الدَفعِ — بِالكاتِبِ القائِمِ نَفسِه وبِبُرهانِ البَوّابَة — أَثناءَ جَلبِ المُهلَة.</summary>
