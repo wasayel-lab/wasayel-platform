@@ -401,6 +401,36 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     public void The_stored_type_patterns_see_what_they_count(string line, string expected)
         => Assert.Contains(expected, StoredTypeNames(line));
 
+    // ─── ٣ب‑٢. اسمٌ داخِلَ حَقلٍ لا يَنتَهي بِـName (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-2) — تَوصيفٌ قَبلَ التَبديل ───────────────────────────
+    //
+    // المَقيسُ عِندَ `7062c20`: بابُ `/{slug}/users/{userId}/chat` يَكتُبُ `Subject = l.Format("chats.direct.subject", partner.FullName)` («تَواصُل مَع {الاسم}»)،
+    // و`EraseFrom(Conversation)` يَمحو `OwnerName`/`PartnerName` وَحدَهُما، والماسِحُ أَعلاه يَجمَعُ خَصائِصَ النَصِّ المُنتَهِيَةَ بِـName وَحدَها — فَلا يَرى `Subject`
+    // (القاعِدَة ١٠: أَداةٌ عَمياء). صَفّا «اليَوم» يُقلَبانِ بِاسمَيهِما في كوميتِ التَبديل.
+
+    /// <summary><b>تَوصيفُ اليَوم</b>: مُحادَثَةٌ بَدَأَها المُشتَري مَعَ بائِعٍ ثُمَّ حَذَفَ البائِعُ حِسابَه — اسمُه طَرَفاً «حِسابٌ مَحذوف»، ومَوضوعُها «تَواصُل مَع {اسمِه}» كَما كُتِب.</summary>
+    [Fact]
+    public void Today_a_deleted_partners_name_stays_in_the_conversation_subject()
+    {
+        var me = Guid.NewGuid();
+        const string name = "أحمد الزهراني";
+        var subject = ACommerce.Platform.I18n.LocaleCatalog.Text(LocaleCatalog.Arabic, "chats.direct.subject").Replace("{0}", name, StringComparison.Ordinal);
+        var conv = new Conversation { OwnerId = Guid.NewGuid(), OwnerName = "مُشتَرٍ", PartnerId = me, PartnerName = name, Subject = subject };
+        Assert.True(AccountErasure.EraseFrom(conv, me));
+        output.WriteLine($"الطَرَف: {conv.PartnerName} · المَوضوع: {conv.Subject}");
+        Assert.Equal(AccountDeletion.ErasedName, conv.PartnerName);
+        Assert.Contains(name, conv.Subject, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>تَوصيفُ اليَوم</b>: ماسِحُ خَصائِصِ الاسمِ يَرى ما يَنتَهي بِـName وَحدَه — <c>Conversation.Subject</c> خارِجَه وإن كُتِبَ فيه اسمُ شَخص.</summary>
+    [Fact]
+    public void Today_the_name_inventory_sees_only_fields_ending_in_Name_so_the_conversation_subject_is_unseen()
+    {
+        var (_, closure, names) = StoredNameFields();
+        output.WriteLine($"خَصائِصُ اسمٍ يَراها الماسِح: {names.Count} · Conversation في ما يَبلُغُه: {closure.Contains(typeof(Conversation))}");
+        Assert.Contains(typeof(Conversation), closure);
+        Assert.DoesNotContain("Conversation.Subject", names.Select(n => n.Key));
+    }
+
     // ─── ٣ج. مَن يَكتُبُ `Notification` وما يَحمِلُه ─────────────────────────────────────────────────────────
 
     internal sealed record NoticeWriter(string File, int Line, string Label, IReadOnlyList<string> Personal)
