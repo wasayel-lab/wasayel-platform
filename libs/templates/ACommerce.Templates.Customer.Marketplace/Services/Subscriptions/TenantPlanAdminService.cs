@@ -115,3 +115,46 @@ public static class TenantPlanAdminService
         session.Store(settings);
     }
 }
+
+/// <summary>
+/// <para><b>تَرميمُ باقاتٍ حُفِظَت قَبلَ د51 — يَومُها يَنتَهي آخِرَه بِتَوقيتِ المَنَصَّةِ لا مُنتَصَفَ لَيلِه UTC</b> (‏2026-10-30، تَدقيقُ الموجَة ١١
+/// F-SDC-1؛ ‏ADR-039 مُلحَق د51). القَرارُ هُنا دالَّةً نَقِيَّة، والسكربتُ <c>scripts/repair-plan-day-end.cs</c> يَعرِضُ ثُمَّ يُنَفِّذُ بِعَدَدٍ يُؤَكَّد.</para>
+///
+/// <para><b>ولِماذا سكربتٌ لا «أَعِد الحِفظ»</b>: <c>e3c8b2d</c> غَيَّرَ قِراءَةَ التاريخِ لَحظَةَ الحِفظ، فَبَقِيَت الباقاتُ المَحفوظَةُ قَبلَه عَلى
+/// مُنتَصَفِ لَيلِ UTC (الثالِثَةَ فَجراً بِتَوقيتِ الرِياض)، وكانَ فِعلُ المالِكِ إعادَةَ حِفظِ كُلٍّ مِنها — والحِفظُ يُعيدُ الحالَةَ سارِيَةً
+/// (يُظهِرُ مَتجَراً أَوقَفَه المُشرِف) وكانَ يُسقِطُ رَبطَ PayPal (<c>24d5fb1</c>). فَالسكربتُ يَكتُبُ التاريخَينِ وَحدَهُما.</para>
+///
+/// <para><b>المُرَشَّحُ باقَةٌ انتِهاؤُها مُنتَصَفُ لَيلٍ UTC بِالضَبط</b> — وهو ما يَقرَؤُه <see cref="TenantPlanPolicy.Derive"/>، وما يَعُدُّه أَمرُ
+/// «ج» د51 (<c>like '%T00:00:00Z'</c>). ويُكتَبُ البَدءُ مَعَه إن كانَ مُنتَصَفَ لَيلٍ أَيضاً، فَيَبقى طولُ المُدَّةِ أَيّاماً كامِلَةً كَما يَكتُبُه
+/// الحِفظُ اليَوم (‏«أ» S6·٢). <b>وبَدءٌ وَحدَه عَلى مُنتَصَفِ اللَيلِ لا يُمَسّ</b>: <c>Derive</c> لا يَقرَؤُه، ونَقلُه وَحدَه يُقَصِّرُ المُدَّةَ
+/// الَّتي يُضيفُها تَمديدُ PayPal. وما سِوى التاريخَينِ — الحالَةُ وPayPal وعَلامَةُ إلغاءِ التَجديدِ ومَن ضَبَطَ ومَتى — لا يُمَسّ.</para>
+/// </summary>
+public static class TenantPlanDayEndRepair
+{
+    /// <summary>سَطرُ التَدقيقِ لِكُلِّ باقَةٍ تُرَمَّم — <c>before</c>/<c>after</c> تاريخُ الانتِهاءِ قَبلُ وبَعدُ.</summary>
+    public const string AuditAction = "platform.tenant_plan_day_end_repair";
+
+    /// <summary>لَحظَةٌ عَلى مُنتَصَفِ لَيلٍ UTC بِالضَبط (ولا تُعَدُّ <see cref="DateTime.MinValue"/> تاريخاً).</summary>
+    public static bool IsMidnightUtc(DateTime at) => at != DateTime.MinValue && at.TimeOfDay == TimeSpan.Zero;
+
+    /// <summary>أَتُرَمَّمُ هذه الباقَة؟ انتِهاؤُها عَلى مُنتَصَفِ لَيلٍ UTC.</summary>
+    public static bool IsCandidate(TenantPlan plan) => IsMidnightUtc(plan.ExpiresAt);
+
+    /// <summary>آخِرُ اليَومِ (بِتاريخِ UTC المُخَزَّن) بِتَوقيتِ المَنَصَّة — الدالَّةُ الَّتي يَقرَأُ بِها الحِفظُ اليَومَ المَكتوب.</summary>
+    public static DateTime DayEnd(DateTime midnightUtc)
+        => ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(DateOnly.FromDateTime(midnightUtc));
+
+    /// <summary>يَكتُبُ التاريخَينِ وَحدَهُما ويُرجِعُ عَدَدَ ما تَغَيَّرَ مِنهُما (صِفرٌ لِغَيرِ المُرَشَّح، فَإعادَةُ التَشغيلِ لا تَجِدُ شَيئاً).</summary>
+    public static int Apply(TenantPlan plan)
+    {
+        if (!IsCandidate(plan)) return 0;
+        var changed = 1;
+        if (IsMidnightUtc(plan.StartsAt))
+        {
+            plan.StartsAt = DayEnd(plan.StartsAt);
+            changed++;
+        }
+        plan.ExpiresAt = DayEnd(plan.ExpiresAt);
+        return changed;
+    }
+}
