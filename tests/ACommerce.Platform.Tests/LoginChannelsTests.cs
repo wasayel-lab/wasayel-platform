@@ -114,6 +114,34 @@ public class LoginChannelsTests(ITestOutputHelper output)
         Assert.Equal("&via=phone", ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.ViaSuffix("email", "phone"));
     }
 
+    // ─── A2 الجَولَةُ الأُولى (مُراجَعَةُ الموجَة ١١ لِلمَسار F1، ‏2026-10-30): القَناةُ الثانِيَةُ تُسَجِّلُ حِساباً جَديداً ─────────────────────
+    //
+    // بَعدَ `7869039` يَفتَحُ مَتجَرُ الجَوّالِ بابَي البَريد (ومَتجَرُ البَريدِ بابَي الجَوّال)، وبابُ التَأكيدِ يُنادي المُعالِجَ الَّذي تُناديه قَناةُ المَتجَرِ
+    // نَفسُها — `GetOrCreateUserAsync` — فَبَريدٌ لا يَحمِلُه حِسابٌ يُنشِئُ حِساباً ثانِياً بِلا جَوّال: «مَن دَخَلَ مَرَّةً بِجَوّالِه ومَرَّةً بِبَريدِه صارَ
+    // حِسابَين» (ADR-042 §١)، وهِيَ المُشكِلَةُ الَّتي قَرَّرَ د27 «ج» عِلاجَها بِالرَبط. **تَوصيفُ «اليَوم»** — يُقلَبُ بِاسمِه في كوميتِ التَبديل.
+
+    /// <summary><b>تَوصيفُ «اليَوم» (القاعِدَة ٣)</b>: مَتجَرُ الجَوّالِ يَعرِضُ البَريدَ ومَتجَرُ البَريدِ الجَوّال، وبابا التَأكيدِ يُناديانِ المُعالِجَ المُسَجِّلَ
+    /// ولا يَسأَلانِ أَيُّ القَناتَينِ تُسَجِّل.</summary>
+    [Fact]
+    public void Today_the_verify_doors_of_the_second_channel_call_the_registering_handler()
+    {
+        var email = Door("/{slug}/auth/email/verify");
+        var phone = Door("/{slug}/auth/phone/verify");
+        var registering = new[]
+        {
+            email.Contains("AuthHandlers.VerifyEmailOtpHandler(", StringComparison.Ordinal),
+            phone.Contains("AuthHandlers.VerifyPhoneOtpHandler(", StringComparison.Ordinal),
+        };
+        var asking = new[] { email, phone }.Count(b => b.Contains("LoginChannels.Registers(", StringComparison.Ordinal));
+        output.WriteLine($"اليَوم: مَتجَرُ الجَوّالِ يَعرِضُ البَريد {ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers("phone", "email", true)} · " +
+                         $"مَتجَرُ البَريدِ يَعرِضُ الجَوّال {ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers("email", "phone", true)} · " +
+                         $"بابا التَأكيدِ يُناديانِ المُعالِجَ المُسَجِّل {registering.Count(r => r)}/2 · يَسأَلانِ أَيُّ القَناتَينِ تُسَجِّل {asking}");
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers("phone", "email", true));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.Offers("email", "phone", true));
+        Assert.Equal(new[] { true, true }, registering);
+        Assert.Equal(0, asking);
+    }
+
     private sealed class CapturingEmail : ACommerce.Kit.Auth.IEmailOtpChannel
     {
         public string? Code;
@@ -143,5 +171,90 @@ public class LoginChannelsTests(ITestOutputHelper output)
         Assert.NotNull(started.AttemptId);
         Assert.Contains(ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.NotOffered,
             ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Codes);
+    }
+}
+
+/// <summary>
+/// <para><b>القَناةُ الثانِيَةُ عَلى Postgres</b> (‏<c>WASAYEL_LIVE_PROOF=1</c>، ‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2): عُضوٌ بِالجَوّالِ في مَتجَرِ
+/// جَوّال، ورَمزٌ صَحيحٌ إلى بَريدٍ لا يَحمِلُه حِساب — بِالمُعالِجِ الَّذي يُناديه بابُ <c>/{slug}/auth/email/verify</c> (الصَفُّ النَقِيُّ أَعلاه يُثبِتُ النِداء).
+/// ونَظيرُه في مَتجَرِ البَريد. مُستَأجِرٌ مُؤَقَّتٌ يُمسَحُ بَعدَه، ولا يُطبَعُ بَريدٌ ولا جَوّال.</para>
+/// </summary>
+[Collection(LiveProofCollection.Name)]
+public class LiveSecondChannelProofTests(ITestOutputHelper output)
+{
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    private const string Code = "424242";
+
+    internal static async Task<ACommerce.Kit.Auth.User> SeedAsync(Marten.IDocumentStore store, string slug, string phone, string email, bool emailVerified = true)
+    {
+        var user = new ACommerce.Kit.Auth.User
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, FullName = "عُضوٌ قائِم",
+            Phone = phone, PhoneVerified = phone != "", Email = email, EmailVerified = email != "" && emailVerified,
+        };
+        await using var s = store.LightweightSession(slug);
+        s.Store(user);
+        await s.SaveChangesAsync();
+        return user;
+    }
+
+    internal static async Task<List<ACommerce.Kit.Auth.User>> AccountsAsync(Marten.IDocumentStore store, string slug)
+    {
+        await using var q = store.QuerySession(slug);
+        return (await Marten.QueryableExtensions.ToListAsync(q.Query<ACommerce.Kit.Auth.User>())).ToList();
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم» (القاعِدَة ٣)</b>: في مَتجَرِ الجَوّال، بَريدٌ لا يَحمِلُه حِسابٌ يَدخُلُ حِساباً جَديداً بِلا جَوّالٍ بِجِوارِ العُضو.</summary>
+    [Fact]
+    public async Task Today_an_email_no_account_holds_creates_a_second_account_in_a_phone_store_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "sc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var member = await SeedAsync(store, slug, "+966500000293", "");
+            ACommerce.Kit.Auth.Server.AuthHandlers.IssueAttempt(slug, "unlinked.sc@example.com", Code, ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind.EmailOtp);
+            var r = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyEmailOtpHandler(new ACommerce.Kit.Auth.VerifyEmailOtp("unlinked.sc@example.com", Code),
+                new VendorRegisterBucketTests.ResolvedTenant(slug), store);
+            var accounts = await AccountsAsync(store, slug);
+            var created = accounts.SingleOrDefault(a => a.Id != member.Id);
+            var bare = created is not null && created.Phone == "";
+            var opened = r is null ? "رُدّ" : r.UserId == member.Id ? "حِسابُ العُضو" : "حِسابٌ جَديد";
+            output.WriteLine($"اليَوم (مَتجَرُ جَوّال، بَريدٌ غَيرُ مَربوط): الدُخول {opened} · الحِسابات {accounts.Count} · الجَديدُ بِلا جَوّال {bare}");
+            Assert.NotNull(r);
+            Assert.NotEqual(member.Id, r!.UserId);
+            Assert.Equal(2, accounts.Count);
+            Assert.Equal("", created!.Phone);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
+    }
+
+    /// <summary><b>تَوصيفُ «اليَوم»</b>: ونَظيرُه في مَتجَرِ البَريد — جَوّالٌ لا يَحمِلُه حِسابٌ يَدخُلُ حِساباً جَديداً بِلا بَريد.</summary>
+    [Fact]
+    public async Task Today_a_phone_no_account_holds_creates_a_second_account_in_an_email_store_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "sc-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var member = await SeedAsync(store, slug, "", "member.sc@example.com");
+            ACommerce.Kit.Auth.Server.AuthHandlers.IssueAttempt(slug, "966500000294", Code, ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind.PhoneOtp);
+            var r = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyPhoneOtpHandler(new ACommerce.Kit.Auth.VerifyPhoneOtp("966500000294", Code),
+                new VendorRegisterBucketTests.ResolvedTenant(slug), store);
+            var accounts = await AccountsAsync(store, slug);
+            var created = accounts.SingleOrDefault(a => a.Id != member.Id);
+            var bare = created is not null && created.Email == "";
+            var opened = r is null ? "رُدّ" : r.UserId == member.Id ? "حِسابُ العُضو" : "حِسابٌ جَديد";
+            output.WriteLine($"اليَوم (مَتجَرُ بَريد، جَوّالٌ غَيرُ مَربوط): الدُخول {opened} · الحِسابات {accounts.Count} · الجَديدُ بِلا بَريد {bare}");
+            Assert.NotNull(r);
+            Assert.NotEqual(member.Id, r!.UserId);
+            Assert.Equal(2, accounts.Count);
+            Assert.Equal("", created!.Email);
+        }
+        finally { await LiveZeroRoleAdminProofTests.CleanAsync(store, slug); }
     }
 }
