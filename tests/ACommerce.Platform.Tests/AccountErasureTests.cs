@@ -588,7 +588,9 @@ public class AccountErasureTests
     public void The_erasure_withdraws_the_listings_and_the_offer_and_cart_doors_refuse_a_gone_owner()
     {
         var violations = WithdrawalViolations(ErasureSources());
-        output.WriteLine($"مَصادِرُ مَفحوصَة: 4 · مُخالَفات: {violations.Count}");
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ١) الشَكلُ وَحدَه لا يُثبِتُ أَنّ الإعادَةَ تُعيد — حَلقَةٌ تَخرُجُ عِندَ التَعارُضِ (`{ break; }`) تَمُرُّ مِنه خَضراءَ (مَقيسٌ بِحَقنِها)؛
+        // فَالإعادَةُ نَفسُها يَقيسُها `LiveAccountDeletionDoorProofTests` بِجِسمِ البابِ عَلى Postgres، ويَبقى هذا لِلتَرتيبِ وأَبوابِ العَرضِ والسَلَّة.
+        output.WriteLine($"مَصادِرُ مَفحوصَة: 4 · شُروطُ شَكلٍ مَعدودَة: {WithdrawalConditions} · مُخالَفات: {violations.Count} · والإعادَةُ نَفسُها: LiveAccountDeletionDoorProofTests (حَيّ)");
         Assert.True(violations.Count == 0, string.Join(" · ", violations));
     }
 
@@ -600,7 +602,7 @@ public class AccountErasureTests
         var before = WithdrawalViolations(("var deals = …; return new Counts(", "var violation = …; await session.SaveChangesAsync();",
             "var listing = await s.Events.AggregateStreamAsync<Listing>(id); s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);",
             "if (!Services.Deals.CheckoutCart.Buyable(listing)) return x; s.Store(cart);"));
-        Assert.Equal(7, before.Count);
+        Assert.Equal(WithdrawalConditions, before.Count);
         var (copies, door, offers, cartAdd) = ErasureSources();
         var early = door.Replace("try { await session.SaveChangesAsync();", "try { await deals.CancelAsync(); await session.SaveChangesAsync();", StringComparison.Ordinal);
         Assert.Equal(new[] { "الإلغاءُ قَبلَ الحِفظ" }, WithdrawalViolations((copies, early, offers, cartAdd)));
@@ -622,6 +624,9 @@ public class AccountErasureTests
         return (copies, AccountDeletionRetentionTests.DeleteEndpointBody(), Door("app.MapPost(\"/{slug}/listings/{id:guid}/offers\""),
             Door("app.MapPost(\"/{slug}/listings/{id:guid}/cart/add\""));
     }
+
+    /// <summary>شُروطُ الشَكلِ الَّتي يَعُدُّها <see cref="WithdrawalViolations"/> — كُلُّها تُحمِرُّ عَلى شَكلِ <c>0e95601</c> (العَيِّنَةُ المَحقونَة).</summary>
+    private const int WithdrawalConditions = 7;
 
     private static List<string> WithdrawalViolations((string Copies, string Door, string Offers, string CartAdd) src)
     {
@@ -1455,5 +1460,146 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
                 await s.SaveChangesAsync();
             }
         }
+    }
+}
+
+/// <summary>
+/// <para><b>إعادَةُ بابِ الحَذفِ بِجِسمِه لا بِشَكلِه</b> (‏2026-10-30، الموجَة ١٢ F2 · ١ — مُراجَعَةُ <c>8357c95</c> (أ)): كانَت إعادَةُ <c>/{slug}/me/delete/confirm</c> عِندَ
+/// <c>ConcurrencyException</c> لا يَقيسُها إلّا فاحِصُ شَكلٍ (<c>WithdrawalViolations</c>: نَصُّ الحَلقَةِ ونَصُّ الـ<c>catch</c>)، وصُفوفُ الحَذفِ الحَيَّةُ تُعيدُ كِتابَةَ
+/// التَسلسُلِ في الاختِبار — فَحَلقَةٌ لا تُعيدُ فِعلاً تَبقى خَضراء. والآن <see cref="LiveTemplateDoorHost"/> يُنادي البابَ المُسَجَّلَ بِمُرَشِّحاتِه عَلى Postgres،
+/// ومُستَمِعُ جَلسَةٍ في مَخزَنِ المُضيفِ يُدخِلُ كاتِباً مُوازِياً عَلى وَثيقَةِ الحِسابِ <b>بَينَ قِراءَةِ الحَذفِ وحِفظِه</b> — فَالحِفظُ الأَوَّلُ يُرَدُّ بِـ<c>ConcurrencyException</c>
+/// حَقّاً.</para>
+/// </summary>
+[Collection(LiveProofCollection.Name)]
+public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHelper output)
+{
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    private const string DeleteDoor = "/{slug}/me/delete/confirm";
+
+    /// <summary>يَعُدُّ حِفظَ جَلسَةِ الحَذفِ (وَثيقَةُ حِسابٍ مَمحُوَّةٌ في ما سيُحفَظ)، ويُشَغِّلُ الكاتِبَ المُوازِيَ قَبلَ أَوَّلِ حِفظٍ مِنها — أَو قَبلَ كُلِّ حِفظٍ إن طُلِب.</summary>
+    internal sealed class ConflictOnDeletionSave(Func<Task> concurrentWrite, bool everyTime) : Marten.DocumentSessionListenerBase
+    {
+        public int DeletionSaves;
+        public Func<Task> Write { get; set; } = concurrentWrite;
+
+        public override async Task BeforeSaveChangesAsync(Marten.IDocumentSession session, CancellationToken token)
+        {
+            if (session.PendingChanges.AllChangedFor<User>().Any(u => u.DeletedAt is not null)
+                && (Interlocked.Increment(ref DeletionSaves) == 1 || everyTime))
+                await Write();
+        }
+    }
+
+    private static async Task<(User Seller, Guid Listing, Guid Offer)> SeedAsync(Marten.IDocumentStore store, string slug)
+    {
+        var seller = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "بائِعٌ يُغلِقُ حِسابَه", Phone = "+966500000561", PhoneVerified = true };
+        var (listing, offer) = (Guid.NewGuid(), Guid.NewGuid());
+        var now = DateTime.UtcNow;
+        await using var s = store.LightweightSession(slug);
+        s.Store(seller);
+        s.Events.StartStream<ACommerce.Kit.Listings.Listing>(listing, new ACommerce.Kit.Listings.ListingCreated(listing, slug, "سِلعَةُ البائِع", null, 100m, "c",
+            null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = seller.Id.ToString() }, now));
+        s.Events.StartStream<Offer>(offer, new OfferSubmitted(offer, listing, Guid.NewGuid(), "مُقَدِّمُ عَرض", 90m, null, 24.7, 46.7, now.AddDays(3), now));
+        await s.SaveChangesAsync();
+        return (seller, listing, offer);
+    }
+
+    private static async Task CleanAsync(Marten.IDocumentStore store, string slug, params Guid[] streams)
+    {
+        await using (var s = store.LightweightSession(slug))
+        {
+            s.DeleteWhere<Offer>(o => o.Id != Guid.Empty);
+            s.DeleteWhere<ACommerce.Kit.Listings.Listing>(l => l.Id != Guid.Empty);
+            foreach (var id in streams) s.Events.ArchiveStream(id);
+            await s.SaveChangesAsync();
+        }
+        await LiveZeroRoleAdminProofTests.CleanAsync(store, slug);
+    }
+
+    private static (string, string) Confirm()
+        => ("confirm", ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.confirm_word"));
+
+    /// <summary><b>المُوجَب</b>: كاتِبٌ مُوازٍ (قَبولُ شُروطٍ مِن جِهازٍ آخَر) بَينَ قِراءَةِ الحَذفِ وحِفظِه يَرُدُّ الحِفظَ الأَوَّل، فَيُعيدُ البابُ مِن قِراءَةٍ جَديدَةٍ مَرَّةً
+    /// ويَنجَح: حِفظانِ لِلحَذفِ بِالعَدّ، وما كَتَبَه المُوازي باقٍ (القِراءَةُ الثانِيَةُ جَديدَة)، والحِسابُ مَمحُوٌّ مَرَّةً (الإصدارُ 1)، والإعلانُ مَسحوبٌ بِحَدَثٍ واحِد،
+    /// والعَرضُ عَلَيه مَرفوضٌ بِحَدَثٍ واحِد.</summary>
+    [Fact]
+    public async Task A_concurrent_account_write_between_load_and_save_is_retried_on_a_fresh_read_and_erases_once_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-deldoor-" + Guid.NewGuid().ToString("N")[..8];
+        Guid sellerId = Guid.Empty;
+        Marten.IDocumentStore? hostStore = null;
+        var listener = new ConflictOnDeletionSave(() => Task.CompletedTask, everyTime: false);
+        listener.Write = () => ACommerce.Kit.Auth.Server.AccountWrites.UpdateAsync<User>(hostStore!, slug, sellerId, u =>
+        {
+            u.AcceptedTermsVersion = 99;
+            return true;
+        });
+        await using var host = LiveTemplateDoorHost.Build(o => o.Listeners.Add(listener));
+        hostStore = host.Store;
+        var (seller, listing, offer) = await SeedAsync(host.Store, slug);
+        sellerId = seller.Id;
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, location) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+
+            await using var q = host.Store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(seller.Id))!;
+            var listingEvents = await q.Events.FetchStreamAsync(listing);
+            var offerEvents = await q.Events.FetchStreamAsync(offer);
+            var withdrawals = listingEvents.Count(e => e.Data is ACommerce.Kit.Listings.ListingDeleted);
+            var rejections = offerEvents.Count(e => e.Data is OfferRejected);
+            output.WriteLine($"البابُ: {status} → {location} · حِفظُ جَلسَةِ الحَذف: {listener.DeletionSaves} · ما كَتَبَه المُوازي باقٍ: {after.AcceptedTermsVersion == 99} · " +
+                             $"DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · الاسم {after.FullName} · الإصدار {after.SessionVersion} · سَحبُ الإعلان: {withdrawals} · رَفضُ العَرض: {rejections}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, location));
+            Assert.Equal(2, listener.DeletionSaves);
+            Assert.Equal(99, after.AcceptedTermsVersion);
+            Assert.NotNull(after.DeletedAt);
+            Assert.Equal((AccountDeletion.ErasedName, 1), (after.FullName, after.SessionVersion));
+            Assert.Equal((1, 1), (withdrawals, rejections));
+        }
+        finally { await CleanAsync(host.Store, slug, listing, offer); }
+    }
+
+    /// <summary><b>السالِب — يَفشَلُ مُغلَقاً</b>: كاتِبٌ مُوازٍ يَسبِقُ المُحاوَلَتَينِ كِلتَيهِما — يَرمي البابُ <c>ConcurrencyException</c> بَعدَ حِفظَينِ مَردودَين
+    /// (‏<c>AccountWrites.Attempts</c>)، ولا يُكتَبُ شَيء: الحِسابُ قائِمٌ بِاسمِه، والإعلانُ قائِم، والعَرضُ مُعَلَّق.</summary>
+    [Fact]
+    public async Task A_concurrent_write_before_both_attempts_fails_the_deletion_closed_and_writes_nothing_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-deldoor-" + Guid.NewGuid().ToString("N")[..8];
+        Guid sellerId = Guid.Empty;
+        Marten.IDocumentStore? hostStore = null;
+        var listener = new ConflictOnDeletionSave(() => Task.CompletedTask, everyTime: true);
+        listener.Write = () => ACommerce.Kit.Auth.Server.AccountWrites.UpdateAsync<User>(hostStore!, slug, sellerId, u =>
+        {
+            u.AcceptedTermsVersion++;
+            return true;
+        });
+        await using var host = LiveTemplateDoorHost.Build(o => o.Listeners.Add(listener));
+        hostStore = host.Store;
+        var (seller, listing, offer) = await SeedAsync(host.Store, slug);
+        sellerId = seller.Id;
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var thrown = await Record.ExceptionAsync(() => host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm()));
+
+            await using var q = host.Store.QuerySession(slug);
+            var after = (await q.LoadAsync<User>(seller.Id))!;
+            var l = (await q.LoadAsync<ACommerce.Kit.Listings.Listing>(listing))!;
+            var o = (await q.LoadAsync<Offer>(offer))!;
+            output.WriteLine($"البابُ: {thrown?.GetType().Name ?? "لَم يَرمِ"} · حِفظُ جَلسَةِ الحَذف: {listener.DeletionSaves} · DeletedAt {(after.DeletedAt is null ? "فارِغ" : "قائِم")} · " +
+                             $"الاسم {after.FullName} · الإعلانُ مَحذوف: {l.IsDeleted} · العَرض: {o.Status}");
+            Assert.IsType<JasperFx.ConcurrencyException>(thrown);
+            Assert.Equal(ACommerce.Kit.Auth.Server.AccountWrites.Attempts, listener.DeletionSaves);
+            Assert.Null(after.DeletedAt);
+            Assert.Equal(seller.FullName, after.FullName);
+            Assert.Equal((false, OfferStatus.Pending), (l.IsDeleted, o.Status));
+        }
+        finally { await CleanAsync(host.Store, slug, listing, offer); }
     }
 }
