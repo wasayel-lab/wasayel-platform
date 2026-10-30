@@ -508,7 +508,14 @@ else
     {
         <section class="acm-details-section">
             <h2 class="acm-details-section-title">@(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_deal"])</h2>
-            @if (Auth.IsAuthenticated)
+            @if (Auth.IsAuthenticated && ownerGone)
+            {
+                @* (‏2026-10-30، الموجَة ١٢ F2 · ٨) مالِكُه أَغلَقَ حِسابَه — أَبوابُ السَلَّةِ والعَرضِ والمُحادَثَةِ تَرُدُّه بِالسُؤالِ نَفسِه، فَلا تُرسَمُ استِماراتٌ تَرُدُّها. *@
+                <div class="acm-role-empty" style="margin:0 0 16px;">
+                    <p>@L.Markup("listings.detail.err_offer_owner_gone")</p>
+                </div>
+            }
+            else if (Auth.IsAuthenticated)
             {
                 @* السَّلَّة فَقَط لِلأَنماط الَّتي تَدعَمُها (مَتجَر/خَدَمات).
                    إيجار/سَكَن مُشتَرَك/مَشاوير لا تَملِك سَلَّة — CTA يَتَحَوَّل
@@ -793,11 +800,14 @@ else
         if (ownerId is { } owner)
             ownerReviews = await Reviews.SummaryAsync(Slug, owner);
         // ولا يُقرَأُ حِسابُ المالِكِ إلّا حَيثُ تُرسَمُ استِمارَةُ العَرض.
-        if (showOffers && ownerId is { } seller)
-            ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, await Accounts.ProfileAsync(Slug, seller));
-        // وحِسابُه حَيثُ يُرسَمُ زِرُّ المُحادَثَة: قِسمُ التَواصُلِ لِصاحِبِ جَلسَةٍ غَيرِ المالِك.
-        if (Auth.IsAuthenticated && !isOwner && !isOfferBased && ownerId is { } partner)
-            chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, partner));
+        // وحِسابُه يُقرَأُ مَرَّةً حَيثُ يُرسَمُ ما يَسأَلُه: قِسمُ العُروض، وقِسمُ التَواصُلِ لِصاحِبِ جَلسَةٍ غَيرِ المالِك (زِرُّ المُحادَثَة، ‏F2 · ٥؛ واستِمارَتا
+        // السَلَّةِ والصَفقَة، ‏F2 · ٨ — سُؤالُ أَبوابِها بِعَينِه).
+        var contact = Auth.IsAuthenticated && !isOwner && !isOfferBased;
+        var ownerAccount = ownerId is { } seller && (showOffers || contact) ? await Accounts.ProfileAsync(Slug, seller) : null;
+        if ((showOffers || contact) && ownerId is not null)
+            ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, ownerAccount);
+        if (contact && ownerId is not null)
+            chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(ownerAccount);
 
         // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
         pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");

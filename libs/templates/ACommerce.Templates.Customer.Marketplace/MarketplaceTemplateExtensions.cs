@@ -3604,6 +3604,9 @@ public static class MarketplaceTemplateExtensions
             await using var qs = store.QuerySession(slug);
             var listing = await qs.LoadAsync<Listing>(id);
             if (listing is null || listing.IsDeleted) return Results.Redirect(Link(req, slug, "explore"));
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٨؛ تَوصيفُه 557b8e2) ولا عَرضَ عَلى إعلانٍ أَغلَقَ مالِكُه حِسابَه — سُؤالُ بابَي السَلَّةِ والعَرضِ بِعَينِه (`CheckoutCart.OwnerGoneAsync`)؛
+            // كانَ يُولِدُ صَفقَةً مَربوطَةً بِحِسابٍ مَمحُوٍّ لا يُنَفِّذُها أَحَد. والصَفحَةُ لا تَرسُمُ الاستِمارَةَ لَه بِالسُؤالِ نَفسِه.
+            if (await Services.Deals.CheckoutCart.OwnerGoneAsync(qs, listing)) return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
             if (listing.Attributes.TryGetValue("owner_id", out var oid) && oid == userId.ToString())
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=self"));
 

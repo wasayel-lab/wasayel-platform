@@ -94,7 +94,9 @@ public class ChatPartnerGoneSourceTests(ITestOutputHelper output)
         output.WriteLine($"أَزرارُ المُحادَثَة: {forms.Count} · شُروطُها: {string.Join(" | ", conditions)}");
         Assert.Equal(2, forms.Count);
         Assert.All(conditions, c => Assert.Equal("chatOpens)", c));
-        Assert.Contains("chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, partner));", page, StringComparison.Ordinal);
+        // ‏(‏2026-10-30، F2 · ٨) حِسابُ المالِكِ يُقرَأُ مَرَّةً لِقِسمِ التَواصُل (`ownerAccount`) ويَسأَلُه سُؤالا الزِرِّ والاستِمارَتَين — كانَ يُقرَأُ هُنا وَحدَه.
+        Assert.Contains("chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(ownerAccount);", page, StringComparison.Ordinal);
+        Assert.Contains("var ownerAccount = ownerId is { } seller && (showOffers || contact) ? await Accounts.ProfileAsync(Slug, seller) : null;", page, StringComparison.Ordinal);
         Assert.Contains("else if (Err == ACommerce.Templates.Customer.Marketplace.Services.ChatStartReturn.PartnerMissing)", page, StringComparison.Ordinal);
         Assert.Contains("L[\"listings.detail.err_partner_missing\"]", page, StringComparison.Ordinal);
     }

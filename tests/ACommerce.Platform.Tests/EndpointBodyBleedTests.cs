@@ -439,7 +439,9 @@ public class EndpointBodyBleedTests
         // أَبوابِ المُحادَثَة — سَطرٌ في بابِ البائِعِ وسَطرٌ في بابِ الإرسال (وسَطرُ `recipientId` نُقِلَ لا زيد)، وأَربَعَةٌ في بابِ الإعلانِ الَّذي صارَ طَرَفُه مالِكَه
         // (`CheckoutCart.OwnerOf`) بَدَلَ `Guid.NewGuid()`: المَنشَأ، والمالِك، ورَدُّ المالِكِ نَفسِه، وقِراءَةُ حِسابِه؛ وبابُ المُحادَثَةِ المُباشِرَةِ بَدَّلَ شَرطَه بِلا زِيادَة.
         // طَبَعَ العَدّادُ «‏2829 → 2835» و«‏3177 → 3183»، و**‏6**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2835),
+        // ‏2835 ← **2836** يَوم ‏2026-10-30 (الموجَة ١٢ F2 · ٨): سَطرُ `CheckoutCart.OwnerGoneAsync` في `/{slug}/listings/{id}/deal` — سُؤالُ بابَي السَلَّةِ والعَرضِ بِعَينِه،
+        // يَرُدُّ بِـ`owner_gone` قَبلَ `StartAsync`. طَبَعَ العَدّادُ «‏2835 → 2836» و«‏3183 → 3184»، و**‏1**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2836),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1199,7 +1201,8 @@ public class EndpointBodyBleedTests
     /// وبابُ العَرضِ يَسأَلُ <c>AccountErasure.LiveTrip</c> بِلا سَطرٍ زائِد. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3177 ← 3183 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٥ — F2B-2): سُؤالُ <c>AccountErasure.PartnerGone</c> قَبلَ أَيِّ كِتابَةٍ في أَبوابِ المُحادَثَة،
     /// وطَرَفُ بابِ الإعلانِ مالِكُه (<c>CheckoutCart.OwnerOf</c>) لا <c>Guid.NewGuid()</c>. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3183;
+    /// <remarks><b>‏3183 ← 3184 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٨): سَطرُ <c>CheckoutCart.OwnerGoneAsync</c> في بابِ «قَدِّم عَرضاً» عَلى الإعلان. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3184;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
