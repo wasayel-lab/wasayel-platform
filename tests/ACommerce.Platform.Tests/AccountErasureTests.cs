@@ -398,10 +398,12 @@ public class AccountErasureTests
         return cart;
     }
 
-    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل): بائِعٌ حَذَفَ حِسابَه (<c>Erase</c>) وإعلانُه قائِم — بَندُه في السَلَّةِ يَمُرُّ بِمُراجَعَةِ الإتمامِ
-    /// (<see cref="CheckoutCart.RefreshAsync"/> لا تُغَيِّرُ شَيئاً)، والصَفقَةُ الَّتي تولَدُ مِنه يَربِطُ <c>BindListingOwnerAsync</c> مالِكَها المَمحُوَّ طَرَفاً مُقابِلاً بِاسمِ «حِسابٌ مَحذوف».</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-1)</b> — كانَ <c>Today_a_deleted_sellers_listing_survives_the_cart_review_and_its_checkout_binds_the_erased_owner</c>
+    /// (‏<c>0e95601</c>: المُراجَعَةُ لا تُغَيِّرُ شَيئاً و<c>BindListingOwnerAsync</c> يَربِطُ المَمحُوَّ طَرَفاً مُقابِلاً). والآن بَندُ إعلانٍ أَغلَقَ مالِكُه حِسابَه يُحذَفُ في
+    /// المُراجَعَةِ (<see cref="CheckoutCart.OwnerGone"/> كَالغائِب) فَيَعودُ المُشتَري بِـ<c>cart_changed</c> ولا تولَدُ صَفقَةٌ تَربِطُه — والإعلانُ نَفسُه ما زالَ
+    /// <see cref="CheckoutCart.Buyable"/> بِحالِه: القاعِدَةُ الجَديدَةُ عَن المالِكِ لا عَن الإعلان. والخِدمَةُ (<c>BindListingOwnerAsync</c>) لَم تُمَسّ: لا يَبلُغُها هذا البَند.</summary>
     [Fact]
-    public async Task Today_a_deleted_sellers_listing_survives_the_cart_review_and_its_checkout_binds_the_erased_owner()
+    public async Task A_deleted_sellers_listing_leaves_the_cart_review_so_no_checkout_binds_the_erased_owner()
     {
         var world = new DocWorld();
         var seller = AccountDeletion.Erase(new User { Id = Guid.NewGuid(), TenantSlug = "zz", FullName = "بائِعُ الجَولَة" }, DateTime.UtcNow);
@@ -410,14 +412,60 @@ public class AccountErasureTests
         world.Put(seller).Put(listing).Put(cart);
 
         var reviewed = await CheckoutCart.RefreshAsync(world.Session, cart);
-        var deals = new DealsService(world.Store, new DealMoneyClaimFirstTests.RecordingPaymentProvider());
-        var deal = await deals.StartAsync("zz", "marketplace", Other, "مُشتَرٍ", listing.Id, listing.Title, listing.Price);
-        var bound = await deals.BindListingOwnerAsync("zz", deal.Id, seller.Id.ToString());
 
         Assert.True(CheckoutCart.Buyable(listing));
-        Assert.False(reviewed);
-        Assert.Single(cart.Items);
-        Assert.Equal((seller.Id, AccountDeletion.ErasedName), (bound!.CounterpartyId, bound.CounterpartyName));
+        Assert.True(CheckoutCart.OwnerGone(listing, seller));
+        Assert.True(reviewed);
+        Assert.Empty(cart.Items);
+        Assert.Equal(1, world.SaveCalls);
+    }
+
+    /// <summary>مُوجَبٌ وسالِب لِـ<see cref="CheckoutCart.OwnerGone"/>: مالِكٌ حَذَفَ حِسابَه أَو لا وَثيقَةَ لَه ⇒ نَعَم؛ مالِكٌ قائِم، وإعلانٌ بِلا مالِكٍ أَو بِمالِكٍ
+    /// لَيسَ مُعَرِّفاً (إعلاناتُ البَذر) ⇒ لا. والرَمزُ ثابِتٌ وصَفحَةُ الإعلانِ تَقرَؤُه بِنَصٍّ في القامُوس.</summary>
+    [Fact]
+    public void An_owner_gone_listing_is_one_whose_named_owner_deleted_or_never_had_an_account()
+    {
+        var gone = AccountDeletion.Erase(new User { Id = Guid.NewGuid(), FullName = "بائِع" }, DateTime.UtcNow);
+        var live = new User { Id = Guid.NewGuid(), FullName = "قائِم" };
+        var seed = OwnedListing(null);
+        seed.Attributes[ListingEditService.OwnerAttribute] = "seed-vendor";
+        Assert.True(CheckoutCart.OwnerGone(OwnedListing(gone.Id), gone));
+        Assert.True(CheckoutCart.OwnerGone(OwnedListing(live.Id), null));
+        Assert.False(CheckoutCart.OwnerGone(OwnedListing(live.Id), live));
+        Assert.False(CheckoutCart.OwnerGone(OwnedListing(null), null));
+        Assert.False(CheckoutCart.OwnerGone(seed, null));
+        Assert.Equal("owner_gone", CheckoutCart.OwnerGoneCode);
+        Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "listings.detail.err_offer_owner_gone"));
+    }
+
+    /// <summary>مُوجَبٌ وسالِب لِـ<see cref="AccountErasure.Withdraws"/> و<see cref="AccountErasure.IncomingUnaccepted"/>: إعلانُه القائِمُ يُسحَبُ ومَحذوفُه وإعلانُ غَيرِه لا؛
+    /// والوارِدَةُ الفَعّالَةُ عَلى إعلانِه بِلا طَرَفٍ مُقابِلٍ تُلغى، وما رُبِطَ بِه طَرَفاً (يَمنَعُ الحَذفَ بِـ<c>open_deal</c>) أَو انتَهى أَو لِغَيرِه لا يُمَسّ. والمُلغي
+    /// المَنصَّةُ بِسُلطَةِ صاحِبِ المَتجَرِ — تُجيزُها <see cref="DealCancelAuthorization.Validate"/> عِندَ «عَرض».</summary>
+    [Fact]
+    public void Deletion_withdraws_only_the_users_live_listings_and_closes_only_offer_deals_he_never_accepted()
+    {
+        var mine = OwnedListing(Me);
+        var mineDeleted = OwnedListing(Me);
+        mineDeleted.Apply(new ACommerce.Kit.Listings.ListingDeleted(mineDeleted.Id, DateTime.UtcNow));
+        Assert.True(AccountErasure.Withdraws(mine, Me));
+        Assert.False(AccountErasure.Withdraws(mineDeleted, Me));
+        Assert.False(AccountErasure.Withdraws(OwnedListing(Other), Me));
+        Assert.False(AccountErasure.Withdraws(OwnedListing(null), Me));
+
+        Deal Incoming(Guid? counterparty = null, DealStatus status = DealStatus.Active, Guid? owner = null) => new()
+        {
+            Id = Guid.NewGuid(), InitiatorId = Guid.NewGuid(), CounterpartyId = counterparty, Status = status, Stage = DealStage.Offered,
+            Refs = new() { [DealsService.ListingOwnerRef] = (owner ?? Me).ToString() },
+        };
+        var open = Incoming();
+        Assert.True(AccountErasure.IncomingUnaccepted(open, Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(Incoming(counterparty: Me), Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(Incoming(status: DealStatus.Cancelled), Me));
+        Assert.False(AccountErasure.IncomingUnaccepted(Incoming(owner: Other), Me));
+        Assert.Null(DealCancelAuthorization.Validate(open, AccountErasure.ClosingCanceller));
+        Assert.Equal((Guid.Empty, DealPatternCatalog.PlatformActor, true),
+            (AccountErasure.ClosingCanceller.ActorId, AccountErasure.ClosingCanceller.ActorName, AccountErasure.ClosingCanceller.IsStoreAdmin));
+        Assert.NotNull(ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason"));
     }
 
     /// <summary><b>السالِبُ — يَبقى بِحَرفِه بَعدَ التَبديل</b>: إعلانُ بائِعٍ قائِمٍ وإعلانٌ بِلا مالِكٍ (إعلاناتُ البَذر) يَمُرّانِ بِمُراجَعَةِ الإتمامِ بِلا تَغيير.</summary>
@@ -436,15 +484,40 @@ public class AccountErasureTests
         Assert.Equal(0, world.SaveCalls);
     }
 
-    /// <summary><b>تَوصيفُ اليَوم</b> (يُقلَبُ بِاسمِه في كوميتِ التَبديل) — في المَصدَر: مَحوُ النُسَخِ لا يَذكُرُ إعلاناً ولا يَرفُضُ عَرضاً عَلَيه، ونُقطَةُ الحَذفِ لا تُلغي صَفقَة،
-    /// وبابُ تَقديمِ العَرضِ وبابُ السَلَّةِ لا يَسأَلانِ عَن مالِكٍ حَذَفَ حِسابَه — والعَرضُ لا يَسأَلُ حَتّى عَن إعلانٍ مَحذوف.</summary>
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-1)</b> — كانَ <c>Today_the_erasure_names_no_listing_and_the_offer_and_cart_doors_ask_no_owner</c> (‏<c>0e95601</c>).
+    /// والآن في المَصدَر: مَحوُ النُسَخِ يُلحِقُ <c>ListingDeleted</c> ويَرفُضُ العُروضَ بِـ<c>OfferRejected</c>؛ ونُقطَةُ الحَذفِ تُعيدُ مَرَّةً مِن قِراءَةٍ جَديدَة (G-1) وتَسأَلُ
+    /// الجَلسَةَ عَلَيها، ثُمَّ تُلغي الوارِدَةَ <b>بَعدَ</b> الحِفظِ وتُخبِرُ بِالأُنبوبِ القائِم؛ وبابا العَرضِ والسَلَّةِ يَسأَلانِ <c>OwnerGoneAsync</c> قَبلَ أَوَّلِ كِتابَة،
+    /// والعَرضُ يَرُدُّ الإعلانَ المَحذوف.</para>
+    /// </summary>
     [Fact]
-    public void Today_the_erasure_names_no_listing_and_the_offer_and_cart_doors_ask_no_owner()
+    public void The_erasure_withdraws_the_listings_and_the_offer_and_cart_doors_refuse_a_gone_owner()
+    {
+        var violations = WithdrawalViolations(ErasureSources());
+        output.WriteLine($"مَصادِرُ مَفحوصَة: 4 · مُخالَفات: {violations.Count}");
+        Assert.True(violations.Count == 0, string.Join(" · ", violations));
+    }
+
+    /// <summary><b>والفاحِصُ يُحمِرُّ</b> (القاعِدَة ١٠): الشَكلُ عِندَ <c>0e95601</c> — بِلا سَحبٍ ولا إعادَةٍ ولا إلغاءٍ ولا سُؤالٍ عَن المالِك — بِمُخالَفاتِه كُلِّها، وإلغاءٌ قَبلَ الحِفظِ
+    /// بِمُخالَفَتِه وَحدَها.</summary>
+    [Fact]
+    public void The_withdrawal_checker_goes_red_on_the_shape_before_and_on_a_cancel_before_the_save()
+    {
+        var before = WithdrawalViolations(("var deals = …; return new Counts(", "var violation = …; await session.SaveChangesAsync();",
+            "var listing = await s.Events.AggregateStreamAsync<Listing>(id); s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);",
+            "if (!Services.Deals.CheckoutCart.Buyable(listing)) return x; s.Store(cart);"));
+        Assert.Equal(7, before.Count);
+        var (copies, door, offers, cartAdd) = ErasureSources();
+        var early = door.Replace("try { await session.SaveChangesAsync();", "try { await deals.CancelAsync(); await session.SaveChangesAsync();", StringComparison.Ordinal);
+        Assert.Equal(new[] { "الإلغاءُ قَبلَ الحِفظ" }, WithdrawalViolations((copies, early, offers, cartAdd)));
+        output.WriteLine($"عَيِّنَةُ ما قَبلُ: {before.Count} مُخالَفات · الإلغاءُ المُبَكِّر: 1");
+    }
+
+    private static (string Copies, string Door, string Offers, string CartAdd) ErasureSources()
     {
         var tpl = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
         var erasure = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(tpl, "Services", "Identity", "AccountErasure.cs")));
         var copies = erasure[erasure.IndexOf("public static async Task<Counts> EraseCopiesAsync(", StringComparison.Ordinal)..];
-        var door = AccountDeletionRetentionTests.DeleteEndpointBody();
         var mte = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(tpl, "MarketplaceTemplateExtensions.cs")));
         string Door(string route)
         {
@@ -452,16 +525,30 @@ public class AccountErasureTests
             Assert.True(start > 0, $"لا بابَ «{route}» — الأَداةُ عَمياء.");
             return mte[start..mte.IndexOf("RequireStoreWritable", start, StringComparison.Ordinal)];
         }
-        var offers = Door("app.MapPost(\"/{slug}/listings/{id:guid}/offers\"");
-        var cartAdd = Door("app.MapPost(\"/{slug}/listings/{id:guid}/cart/add\"");
-        output.WriteLine($"مَحوُ النُسَخِ {copies.Length} مِحرَفاً · نُقطَةُ الحَذفِ {door.Length} · بابُ العَرضِ {offers.Length} · بابُ السَلَّةِ {cartAdd.Length}");
+        return (copies, AccountDeletionRetentionTests.DeleteEndpointBody(), Door("app.MapPost(\"/{slug}/listings/{id:guid}/offers\""),
+            Door("app.MapPost(\"/{slug}/listings/{id:guid}/cart/add\""));
+    }
 
-        Assert.DoesNotContain("ListingDeleted", copies, StringComparison.Ordinal);
-        Assert.DoesNotContain("OfferRejected", copies, StringComparison.Ordinal);
-        Assert.DoesNotContain("CancelAsync(", door, StringComparison.Ordinal);
-        Assert.DoesNotContain("OwnerGone", offers, StringComparison.Ordinal);
-        Assert.DoesNotContain("IsDeleted", offers, StringComparison.Ordinal);
-        Assert.DoesNotContain("OwnerGone", cartAdd, StringComparison.Ordinal);
+    private static List<string> WithdrawalViolations((string Copies, string Door, string Offers, string CartAdd) src)
+    {
+        var v = new List<string>();
+        int At(string text, string what) => text.IndexOf(what, StringComparison.Ordinal);
+        if (At(src.Copies, "new ListingDeleted(") < 0) v.Add("المَحوُ لا يَسحَبُ الإعلانات");
+        if (At(src.Copies, "new OfferRejected(") < 0) v.Add("المَحوُ لا يَرفُضُ العُروض");
+        if (At(src.Door, "for (var attempt = 1; ; attempt++)") < 0 || At(src.Door, "catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts)") < 0)
+            v.Add("الحَذفُ لا يُعادُ مِن قِراءَةٍ جَديدَة");
+        if (At(src.Door, "Services.SessionVersionGate.StillOpen(user, token)") < 0) v.Add("الحَذفُ لا يَسأَلُ الجَلسَةَ عَلى القِراءَة");
+        var save = At(src.Door, "await session.SaveChangesAsync();");
+        var cancel = At(src.Door, "deals.CancelAsync(");
+        if (cancel < 0 || At(src.Door, "notices.NotifyCancelledAsync(") < 0) v.Add("الوارِدَةُ لا تُلغى ولا يُخبَرُ أَصحابُها");
+        else if (save < 0 || cancel < save) v.Add("الإلغاءُ قَبلَ الحِفظ");
+        var offerGone = At(src.Offers, "CheckoutCart.OwnerGoneAsync(s, listing)");
+        var offerWrite = At(src.Offers, "s.Events.StartStream<ACommerce.Kit.Offers.Offer>(");
+        if (offerGone < 0 || offerWrite < offerGone || At(src.Offers, "listing.IsDeleted") < 0) v.Add("بابُ العَرضِ لا يَرُدُّ مالِكاً غائِباً أَو إعلاناً مَحذوفاً قَبلَ الكِتابَة");
+        var cartGone = At(src.CartAdd, "CheckoutCart.OwnerGoneAsync(s, listing)");
+        var cartWrite = At(src.CartAdd, "s.Store(cart);");
+        if (cartGone < 0 || cartWrite < cartGone) v.Add("بابُ السَلَّةِ لا يَرُدُّ مالِكاً غائِباً قَبلَ الكِتابَة");
+        return v;
     }
 
     private readonly ITestOutputHelper output;
@@ -846,11 +933,12 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         }
     }
 
-    /// <summary><b>تَوصيفُ اليَوم حَيّاً</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1؛ يُقلَبُ بِاسمِه في كوميتِ التَبديل): بائِعٌ لا صَفقَةَ جارِيَةَ لَه طَرَفاً يَحذِفُ حِسابَه —
-    /// وعَلى إعلانِه عَرضٌ مُعَلَّقٌ مِن عُضوٍ آخَر، وصَفقَةُ مَسارِ العَرضِ وارِدَةٌ لَم يَقبَلْها (فَعّالَةٌ عِندَ «عَرض»، مَرجِعُ مالِكِها هُو ولا طَرَفَ مُقابِل). تَسلسُلُ النُقطَةِ
-    /// بِعَينِه عَلى Postgres: الإعلانُ قائِم، والعَرضُ مُعَلَّق، والصَفقَةُ فَعّالَةٌ — كُلُّها مَربوطَةٌ بِحِسابٍ مَمحُوّ.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-30، B-PRIV-1)</b> — كانَ <c>Today_a_deleted_sellers_listing_its_pending_offer_and_its_incoming_deal_stay_open_on_Postgres</c>
+    /// (‏<c>0e95601</c>: «مُحِيَ: 0 · الإعلانُ مَحذوف: False · العَرضُ عَلَيه: Pending · الصَفقَةُ الوارِدَة: Active عِندَ Offered · مالِكُها المَمحُوّ: True»). والآن تَسلسُلُ النُقطَةِ
+    /// بِعَينِه عَلى Postgres — الحِفظُ الواحِدُ ثُمَّ إلغاءُ الوارِدَةِ بِـ<see cref="AccountErasure.ClosingCanceller"/> وسَبَبِ القامُوس: الإعلانُ مَحذوفٌ في لَقطَتِه، والعَرضُ عَلَيه
+    /// مَرفوض، والصَفقَةُ مُلغاةٌ بِسَطرِ المَنصَّة؛ وإعلانُ عُضوٍ آخَرَ والعَرضُ عَلَيه كَما هُما.</summary>
     [Fact]
-    public async Task Today_a_deleted_sellers_listing_its_pending_offer_and_its_incoming_deal_stay_open_on_Postgres()
+    public async Task A_deleted_sellers_listing_is_withdrawn_its_pending_offer_rejected_and_its_incoming_deal_cancelled_on_Postgres()
     {
         if (!Enabled) return;
 
@@ -858,7 +946,7 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
         var slug = "zz-erase-" + Guid.NewGuid().ToString("N")[..8];
         var seller = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "بائِعُ الإعلانِ الحَيّ", Phone = "+966500000557" };
         var buyer = Guid.NewGuid();
-        var (listingId, offerId) = (Guid.NewGuid(), Guid.NewGuid());
+        var (listingId, offerId, othersListing, othersOffer) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
         var incoming = new Deal
         {
             Id = Guid.NewGuid(), TenantSlug = slug, ListingId = listingId, ListingTitle = "سِلعَةُ البائِع", InitiatorId = buyer, InitiatorName = "مُشتَرٍ",
@@ -876,24 +964,43 @@ public class LiveAccountErasureProofTests(ITestOutputHelper output)
                 s.Store(incoming);
                 await s.SaveChangesAsync();
             }
+            await using (var s = store.LightweightSession(slug))
+            {
+                var now = DateTime.UtcNow;
+                s.Events.StartStream<ACommerce.Kit.Listings.Listing>(othersListing, new ACommerce.Kit.Listings.ListingCreated(othersListing, slug, "سِلعَةُ غَيرِه", null, 50m, "c",
+                    null, null, new Dictionary<string, string> { [ListingEditService.OwnerAttribute] = buyer.ToString() }, now));
+                s.Events.StartStream<Offer>(othersOffer, new OfferSubmitted(othersOffer, othersListing, Guid.NewGuid(), "مُقَدِّمٌ ثالِث", 45m, null, 24.7, 46.7, now.AddDays(3), now));
+                await s.SaveChangesAsync();
+            }
             var counts = await EraseLikeTheDoorAsync(store, slug, seller.Id);
+            // ما تَفعَلُه النُقطَةُ بَعدَ الحِفظ — بِالمُلغي والسَبَبِ نَفسَيهِما.
+            var deals = new DealsService(store, new DealMoneyClaimFirstTests.RecordingPaymentProvider());
+            var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
+            var cancelled = new List<DealCancelResult>();
+            foreach (var id in counts.IncomingDeals) cancelled.Add(await deals.CancelAsync(slug, id, AccountErasure.ClosingCanceller, reason));
             await using var q = store.QuerySession(slug);
             var listing = (await q.LoadAsync<ACommerce.Kit.Listings.Listing>(listingId))!;
             var offer = (await q.LoadAsync<Offer>(offerId))!;
             var deal = (await q.LoadAsync<Deal>(incoming.Id))!;
-            output.WriteLine($"مُحِيَ: {counts.Total} · الإعلانُ مَحذوف: {listing.IsDeleted} · العَرضُ عَلَيه: {offer.Status} · الصَفقَةُ الوارِدَة: {deal.Status} " +
-                             $"عِندَ {deal.Stage} · مالِكُها المَمحُوّ: {DealAcceptAuthorization.OwnerIdOf(deal) == seller.Id}");
-            Assert.False(listing.IsDeleted);
-            Assert.Equal(OfferStatus.Pending, offer.Status);
-            Assert.Equal((DealStatus.Active, DealStage.Offered), (deal.Status, deal.Stage));
-            Assert.Equal(seller.Id, DealAcceptAuthorization.OwnerIdOf(deal));
+            var theirs = (await q.LoadAsync<ACommerce.Kit.Listings.Listing>(othersListing))!;
+            var theirOffer = (await q.LoadAsync<Offer>(othersOffer))!;
+            output.WriteLine($"مُحِيَ: {counts.Total} · إعلاناتٌ مَسحوبَة: {counts.Listings} · عُروضٌ مَرفوضَة: {counts.RejectedOffers} · وارِدَةٌ تُلغى: {counts.IncomingDeals.Count} · " +
+                             $"الإعلانُ مَحذوف: {listing.IsDeleted} · العَرضُ عَلَيه: {offer.Status} · الصَفقَةُ الوارِدَة: {deal.Status} بِسَطرِ المَنصَّة: {DealEvent.IsByPlatform(deal.Timeline[^1])} · " +
+                             $"إعلانُ غَيرِه: {(theirs.IsDeleted ? "مَحذوف" : "قائِم")}/{theirOffer.Status}");
+            Assert.Equal((1, 1, 1), (counts.Listings, counts.RejectedOffers, counts.IncomingDeals.Count));
+            Assert.True(listing.IsDeleted);
+            Assert.Equal(OfferStatus.Rejected, offer.Status);
+            Assert.True(Assert.Single(cancelled).Ok);
+            Assert.Equal((DealStatus.Cancelled, reason), (deal.Status, deal.CancelReason));
+            Assert.True(DealEvent.IsByPlatform(deal.Timeline[^1]));
+            Assert.Equal((false, OfferStatus.Pending), (theirs.IsDeleted, theirOffer.Status));
         }
         finally
         {
             await using var s = store.LightweightSession(slug);
             s.DeleteWhere<User>(u => u.Id != Guid.Empty); s.DeleteWhere<Offer>(o => o.Id != Guid.Empty); s.DeleteWhere<Deal>(d => d.Id != Guid.Empty);
             s.DeleteWhere<ACommerce.Kit.Listings.Listing>(l => l.Id != Guid.Empty);
-            s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(listingId);
+            s.Events.ArchiveStream(offerId); s.Events.ArchiveStream(listingId); s.Events.ArchiveStream(othersListing); s.Events.ArchiveStream(othersOffer);
             await s.SaveChangesAsync();
         }
     }

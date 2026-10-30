@@ -239,7 +239,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     /// <para><b>‏2026-10-29 (د52)</b>: كانَت تَقولُ ما يَبقى (‏<c>Deal</c>/<c>DealSeller</c>/<c>Records</c>/<c>Notifications</c>/<c>AdminNotices</c>/<c>StoreRecords</c>)،
     /// وصارَت تَقولُ ما يُمحى وما يَبقى ولِماذا: الاسمُ المَمحُوُّ في السِجِلّاتِ وفي الإشعارات، والعُنوانُ والهاتِفُ المَمحُوّانِ مِن الطَلَبات،
     /// وسِجِلُّ الأَحداث، وسِجِلُّ التَدقيق، وما وَصَلَ قَبلَ الحَذفِ إلى الناقِلِ وأَجهِزَةِ الآخَرين، والصَفقَةُ الجارِيَةُ الَّتي تَمنَعُه.</para></summary>
-    internal enum Disclosure { None, Renamed, NoticesRenamed, AddressErased, EventLog, AuditLog, Delivered, OpenDeal }
+    // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1) والتاسِعُ `ListingsWithdrawn`: الحَذفُ يَسحَبُ إعلاناتِه ويَرفُضُ العُروضَ عَلَيها ويُلغي الوارِدَةَ الَّتي لَم يَقبَلْها.
+    internal enum Disclosure { None, Renamed, NoticesRenamed, AddressErased, EventLog, AuditLog, Delivered, OpenDeal, ListingsWithdrawn }
 
     internal sealed record NameField(NameKind Kind, Disclosure Said, string WhyAr);
 
@@ -684,6 +685,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         [Disclosure.AuditLog]       = new[] { "سجل تدقيق المتجر", "ويخفى عند عرضه" },
         [Disclosure.Delivered]      = new[] { "إلى شركة الشحن", "إلى أجهزة غيرك في إشعارات المتصفح" },
         [Disclosure.OpenDeal]       = new[] { "صفقة جارية" },
+        [Disclosure.ListingsWithdrawn] = new[] { "وتحذف إعلاناتك", "لم تقبله بعد" },
     };
 
     /// <summary>كُلُّ إفصاحٍ يَحتاجُه ما يَجِدُه المَسحان — مِن خَصائِصِ الاسمِ ومِن كُتّابِ الإشعار — ومَعَها ثَلاثَةٌ لَيسَت أَسماءً: العُنوانُ والهاتِفُ
@@ -691,7 +693,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     internal static IReadOnlyList<Disclosure> NeededDisclosures()
         => PersonNameFields.Values.Where(f => f.Said != Disclosure.None).Select(f => f.Said)
             .Concat(PersonalNoticeWriters.Values)
-            .Concat(new[] { Disclosure.AddressErased, Disclosure.Delivered, Disclosure.OpenDeal })
+            .Concat(new[] { Disclosure.AddressErased, Disclosure.Delivered, Disclosure.OpenDeal, Disclosure.ListingsWithdrawn })
             .Distinct().OrderBy(d => d).ToList();
 
     internal static IReadOnlyList<Disclosure> Unsaid(string text)
@@ -705,7 +707,9 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     {
         var needed = NeededDisclosures();
         output.WriteLine($"إفصاحاتٌ يَحتاجُها المَسحان: {string.Join(", ", needed)}");
-        Assert.Equal(new[] { Disclosure.Renamed, Disclosure.NoticesRenamed, Disclosure.AddressErased, Disclosure.EventLog, Disclosure.AuditLog, Disclosure.Delivered, Disclosure.OpenDeal }, needed);
+        // ‏(‏2026-10-30، B-PRIV-1) والتاسِعُ يُضافُ بِلا تَبديلٍ لِما قَبلَه: الإعلاناتُ المَسحوبَةُ والوارِدَةُ المُلغاة.
+        Assert.Equal(new[] { Disclosure.Renamed, Disclosure.NoticesRenamed, Disclosure.AddressErased, Disclosure.EventLog, Disclosure.AuditLog, Disclosure.Delivered, Disclosure.OpenDeal,
+                             Disclosure.ListingsWithdrawn }, needed);
         foreach (var k in new[] { StorePrivacyKey, PlatformRetentionKey, RetainedNoteKey })
         {
             var unsaid = Unsaid(Text(k));
@@ -716,7 +720,7 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         foreach (var phrase in new[] { "\"Deleted account\"", "deals, conversations, reviews, offers and support tickets", "in the notifications stored for other people",
                                        "the delivery address and phone number you entered in your orders are erased", "the internal event log, which is never edited and no screen displays",
                                        "the store's audit log", "where it is hidden when shown", "the shipping company or other people's devices in browser notifications",
-                                       "while you have an open deal" })
+                                       "while you have an open deal", "your listings are withdrawn from the store", "you have not yet accepted is cancelled" })
             Assert.Contains(phrase, En(PlatformRetentionKey), StringComparison.Ordinal);
         Assert.Null(LocaleCatalog.Find("en", StorePrivacyKey));
         Assert.Null(LocaleCatalog.Find("en", RetainedNoteKey));

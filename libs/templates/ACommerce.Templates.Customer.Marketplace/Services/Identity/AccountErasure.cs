@@ -1,5 +1,6 @@
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Chat;
+using ACommerce.Kit.Listings;
 using ACommerce.Kit.Notifications;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.Reviews;
@@ -30,6 +31,12 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// <para><b>والصَفقَةُ الجارِيَةُ تَمنَعُ الحَذفَ قَبلَ أَيِّ مَحو</b> (<see cref="AccountDeletion.OpenDeal"/>): <see cref="IsOpen"/> — فَعّالَةٌ أَو في نِزاع
 /// — لِصَفقَةٍ هُوَ طَرَفُها (مُبادِراً أَو مُقابِلاً). وعَرضٌ وارِدٌ عَلى إعلانِه لَم يَقبَلْه بَعدُ لا يَمنَع: لَيسَ طَرَفاً فيه حَتّى يَقبَل. والسُؤالُ واحِدٌ
 /// تَسأَلُه النُقطَةُ وصَفحَةُ الحَذفِ (<see cref="OpenDealsAsync"/>)، فَلا تَرسُمُ الصَفحَةُ استِمارَةً تَرُدُّها النُقطَة (القاعِدَة ١٢).</para>
+///
+/// <para><b>‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1 + G-5؛ تَوصيفُه <c>0e95601</c>) وإغلاقُ الحِسابِ يَسحَبُ إعلاناتِه</b> (قَرارُ «أ» F2·١، P1): كانَ إعلانُ
+/// البائِعِ المَحذوفِ يَبقى في الواجِهَةِ يُشتَرى ويُعرَضُ عَلَيه، فَتولَدُ صَفقَةٌ مَربوطَةٌ بِحِسابٍ مَمحُوٍّ لا يُنَفِّذُها أَحَد — الحالُ الَّتي بُنِيَ <c>open_deal</c>
+/// لِيَمنَعَها. فَفي مُعامَلَةِ الحَذفِ نَفسِها: <c>ListingDeleted</c> لِكُلِّ إعلانٍ قائِمٍ لَه (<see cref="Withdraws"/>)، و<c>OfferRejected</c> لِكُلِّ عَرضٍ مُعَلَّقٍ
+/// عَلَيها، وتُعادُ صَفَقاتُ مَسارِ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها (<see cref="IncomingUnaccepted"/>) لِتُلغيها النُقطَةُ بَعدَ الحِفظِ بِاسمِ المَنصَّة
+/// (<see cref="ClosingCanceller"/>) ويُخبَرَ صاحِبُ كُلٍّ مِنها. ولِحِسابٍ حُذِفَ قَبلَ هذا: <c>CheckoutCart.OwnerGone</c> في بابَي السَلَّةِ والعَرض.</para>
 /// </summary>
 public static class AccountErasure
 {
@@ -143,6 +150,20 @@ public static class AccountErasure
     /// ولا مُحادَثَةً مَعَ حِسابٍ لا وُجودَ لَه.</summary>
     public static bool OffererGone(User? offerer) => offerer is null || offerer.DeletedAt is not null;
 
+    /// <summary>إعلانٌ يَسحَبُه حَذفُ حِسابِه (‏2026-10-30، B-PRIV-1): قائِمٌ لَم يُحذَف، ومالِكُه هُوَ بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة
+    /// (<see cref="ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy"/>).</summary>
+    public static bool Withdraws(Listing listing, Guid userId)
+        => !listing.IsDeleted && ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy(listing, userId);
+
+    /// <summary>صَفقَةُ مَسارِ العَرضِ الوارِدَةُ عَلى إعلانِه ولَم يَقبَلْها (‏2026-10-30، B-PRIV-1): فَعّالَةٌ، ومَرجِعُ مالِكِها هُو، ولَيسَ طَرَفاً فيها — فَلا يَمنَعُ
+    /// حَذفَه (<see cref="IsOpen"/> لِلطَرَفِ وَحدَه) ويُلغيها بَعدَه، بَدَلَ أَن تَبقى مَربوطَةً بِحِسابٍ لا يَقبَلُ ولا يَرفُض.</summary>
+    public static bool IncomingUnaccepted(Deal deal, Guid userId)
+        => deal.Status == DealStatus.Active && DealAcceptAuthorization.OwnerIdOf(deal) == userId && !IsParty(deal, userId);
+
+    /// <summary>مُلغي تِلكَ الصَفَقاتِ — المَنصَّةُ لا شَخص (بِلا مُعَرِّفٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، فَتُسَمّيه صَفحَتا الصَفقَةِ مِن
+    /// القامُوس)، وبِسُلطَةِ صاحِبِ المَتجَرِ في <see cref="DealCancelAuthorization.Validate"/> — نَسَقُ <c>GatewayPayments.ExpiryCanceller</c>.</summary>
+    public static readonly DealCanceller ClosingCanceller = new(Guid.Empty, DealPatternCatalog.PlatformActor, IsStoreAdmin: true);
+
     public static bool EraseFrom(ListingMatch m, Guid userId) => m.OffererId == userId && Set(m.OffererName, v => m.OffererName = v);
 
     /// <summary>تَذكِرَتُه: اسمُه كاتِباً، واسمُه عَلى رُدودِه هُو (<c>FromStaff = false</c>) — ورَدُّ الفَريقِ يَبقى بِتَوقيعِه.</summary>
@@ -231,6 +252,14 @@ public static class AccountErasure
     public sealed record Counts(int Deals, int Conversations, int Reviews, int Offers, int Matches, int Tickets, int Keys, int Notifications)
     {
         public int Total => Deals + Conversations + Reviews + Offers + Matches + Tickets + Keys + Notifications;
+
+        /// <summary>‏(‏2026-10-30، B-PRIV-1) إعلاناتُه المَسحوبَة (<c>ListingDeleted</c>)، والعُروضُ المُعَلَّقَةُ المَرفوضَةُ عَلَيها (<c>OfferRejected</c>) — في المُعامَلَةِ نَفسِها.</summary>
+        public int Listings { get; init; }
+        public int RejectedOffers { get; init; }
+
+        /// <summary>صَفَقاتُ مَسارِ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها (<see cref="IncomingUnaccepted"/>) — تُلغيها النُقطَةُ بَعدَ الحِفظ (<c>DealsService.CancelAsync</c> تَفتَحُ
+        /// جَلسَتَها وتَحفَظ) ويُخبَرُ صاحِبُ كُلٍّ مِنها. لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
+        public IReadOnlyList<Guid> IncomingDeals { get; init; } = Array.Empty<Guid>();
     }
 
     /// <summary>
@@ -308,6 +337,17 @@ public static class AccountErasure
             foreach (var n in await s.Query<Notification>().Where(n => n.UserId != userId && (n.Title.Contains(contact) || n.Body.Contains(contact))).ToListAsync(ct))
                 if (notices.All(x => x.Id != n.Id)) notices.Add(n);
 
+        // ‏(‏2026-10-30، B-PRIV-1) إعلاناتُه تُسحَبُ بِمَجاريها والعُروضُ المُعَلَّقَةُ عَلَيها تُرفَضُ بِحَدَثِ القَبولِ نَفسِه لِأَخَواتِه (`OfferRejected`)، والوارِدَةُ الَّتي
+        // لَم يَقبَلْها تُعادُ لِلنُقطَة. و`Attributes` لا يُرَشِّحُها Marten في LINQ (`AccountQueries.MyListingsAsync`)، فَالمالِكُ يُرَشَّحُ في الذاكِرَة.
+        var closedAt = DateTime.UtcNow;
+        var withdrawn = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct)).Where(l => Withdraws(l, userId)).Select(l => l.Id).ToHashSet();
+        foreach (var id in withdrawn) s.Events.Append(id, new ListingDeleted(id, closedAt));
+        var rejected = (await s.Query<Offer>().Where(o => o.Status == OfferStatus.Pending && o.OffererId != userId).ToListAsync(ct))
+            .Where(o => withdrawn.Contains(o.ListingId)).ToList();
+        foreach (var o in rejected) s.Events.Append(o.Id, new OfferRejected(o.Id, closedAt));
+        var incoming = (await s.Query<Deal>().Where(d => d.Status == DealStatus.Active).ToListAsync(ct))
+            .Where(d => IncomingUnaccepted(d, userId)).Select(d => d.Id).ToList();
+
         return new Counts(
             Deals: Mark(deals.Concat(others), d => EraseFrom(d, userId)),
             Conversations: Mark(convs, c => EraseFrom(c, userId)),
@@ -316,6 +356,11 @@ public static class AccountErasure
             Matches: Mark(matches, m => EraseFrom(m, userId)),
             Tickets: Mark(tickets, t => EraseFrom(t, userId)),
             Keys: Mark(keys, k => EraseFrom(k, tenantSlug, userId)),
-            Notifications: Mark(notices, n => EraseFrom(n, userId, names, urls, contacts, ownReports)));
+            Notifications: Mark(notices, n => EraseFrom(n, userId, names, urls, contacts, ownReports)))
+        {
+            Listings = withdrawn.Count,
+            RejectedOffers = rejected.Count,
+            IncomingDeals = incoming,
+        };
     }
 }

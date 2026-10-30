@@ -937,7 +937,8 @@ public static class MarketplaceTemplateExtensions
         // مَحقونَةً بِمُستَأجِرِها.
         app.MapPost("/{slug}/me/delete/confirm",
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
-                   Services.Queries.TenantDirectory tenants, L l, IMemoryCache cache) =>
+                   Services.Queries.TenantDirectory tenants, L l, IMemoryCache cache,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -945,34 +946,48 @@ public static class MarketplaceTemplateExtensions
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
 
-            await using var session = store.LightweightSession(slug);
-            var user = await session.LoadAsync<User>(userId);
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-1 — F1 جَعَلَ `User` بِتَزامُنٍ تَفاؤُلِيّ) الحَذفُ كُلُّه يُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة إن كَتَبَ غَيرُه الحِسابَ بَينَ القِراءَةِ
+            // والحِفظ — نَسَقُ `AccountWrites.UpdateAsync` بِعَدَدِ مُحاوَلاتِه — والجَلسَةُ تُسأَلُ عَلى كُلِّ قِراءَة (`StillOpen`)؛ والثانِيَةُ إن رُدَّت تَرمي: يَفشَلُ مُغلَقاً.
+            IReadOnlyList<Guid> incoming = Array.Empty<Guid>();
+            for (var attempt = 1; ; attempt++)
+            {
+                await using var session = store.LightweightSession(slug);
+                var user = await session.LoadAsync<User>(userId);
+                if (user is { DeletedAt: null } && !Services.SessionVersionGate.StillOpen(user, token)) return Results.Redirect(Link(req, slug, $"login"));
 
-            // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
-            // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
-            // ‏(‏2026-10-29، قَرارُ المالِك د52) والصَفَقاتُ الجارِيَةُ تُعَدُّ بِالجَلسَةِ نَفسِها وتَبلُغُ البَوّابَةَ قَبلَ كَلِمَةِ التَأكيد — `AccountErasure.OpenDealsAsync`
-            // سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
-            var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
-                user, await Services.Identity.AccountErasure.OpenDealsAsync(session, userId),
-                req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
+                // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
+                // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
+                // ‏(‏2026-10-29، قَرارُ المالِك د52) والصَفَقاتُ الجارِيَةُ تُعَدُّ بِالجَلسَةِ نَفسِها وتَبلُغُ البَوّابَةَ قَبلَ كَلِمَةِ التَأكيد — `AccountErasure.OpenDealsAsync`
+                // سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
+                var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
+                    user, await Services.Identity.AccountErasure.OpenDealsAsync(session, userId),
+                    req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
 
-            if (violation is not null)
-                return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
+                if (violation is not null)
+                    return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
 
-            var now = DateTime.UtcNow;
-            // ‏(2026-10-29، د40) والأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه: اسمُ نَشاطِه صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه (إشعارُ القَبولِ مَثَلاً).
-            var nameBefore = Services.Queries.ActorName.NamesOf(user!);
-            var contactsBefore = Services.Identity.AccountErasure.ContactsOf(user!);   // ‏(مُراجَعَةُ S2 الجَولَة ١) وإشعارُ التَسجيلِ القَديمِ يَحمِلُ وَسيلَتَه
-            ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
-            session.Store(user!);
-            // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
-            session.Delete<ACommerce.Kit.Cart.Cart>(userId);
-            // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
-            await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
-            // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`.
-            await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore);
-            await session.SaveChangesAsync();
+                var now = DateTime.UtcNow;
+                // ‏(2026-10-29، د40) والأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه: اسمُ نَشاطِه صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه (إشعارُ القَبولِ مَثَلاً).
+                var nameBefore = Services.Queries.ActorName.NamesOf(user!);
+                var contactsBefore = Services.Identity.AccountErasure.ContactsOf(user!);   // ‏(مُراجَعَةُ S2 الجَولَة ١) وإشعارُ التَسجيلِ القَديمِ يَحمِلُ وَسيلَتَه
+                ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
+                session.Store(user!);
+                // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
+                session.Delete<ACommerce.Kit.Cart.Cart>(userId);
+                // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
+                await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
+                // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`؛ ‏(‏2026-10-30، B-PRIV-1) ومَعَها إعلاناتُه
+                // تُسحَبُ والعُروضُ المُعَلَّقَةُ عَلَيها تُرفَض، وتَعودُ الصَفَقاتُ الوارِدَةُ الَّتي لَم يَقبَلْها.
+                var erased = await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore);
+                try { await session.SaveChangesAsync(); incoming = erased.IncomingDeals; break; }
+                catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
+            }
             Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
+            // ‏(‏2026-10-30، B-PRIV-1) الوارِدَةُ تُلغيها المَنصَّةُ بَعدَ الحِفظِ (`CancelAsync` تَفتَحُ جَلسَتَها) بِسَبَبٍ مِن القامُوس، ويُخبَرُ صاحِبُ كُلٍّ بِالأُنبوبِ القائِم
+            // بِاسمِ «حِسابٌ مَحذوف» — والمَحذوفُ هُوَ المُلغي فَلا يُكتَبُ في صُندوقِه شَيء.
+            foreach (var dealId in incoming)
+                if (await deals.CancelAsync(slug, dealId, Services.Identity.AccountErasure.ClosingCanceller, l["account.delete.cancel_reason"]) is { Ok: true } closed)
+                    await notices.NotifyCancelledAsync(slug, closed.Deal!, userId, ACommerce.Kit.Auth.AccountDeletion.ErasedName, l);
 
             var tenant = await tenants.FindAsync(slug);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,
@@ -1463,6 +1478,10 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
             if (listing is null) return Results.Redirect($"/{slug}");
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1) ولا عَرضَ عَلى إعلانٍ مَحذوفٍ أَو أَغلَقَ مالِكُه حِسابَه: الحَذفُ يَسحَبُ إعلاناتِه (`ListingDeleted`)، وكانَ
+            // هذا البابُ لا يَسأَلُ `IsDeleted` فَيولَدُ عَرضٌ عَلى إعلانٍ لا يَراه أَحَد؛ ولِحِسابٍ حُذِفَ قَبلَ ذلك `CheckoutCart.OwnerGone` القاعِدَةُ نَفسُها لِلسَلَّة.
+            if (listing.IsDeleted || await Services.Deals.CheckoutCart.OwnerGoneAsync(s, listing))
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
             // مَنع صاحِب الإعلان مِن تَقديم عَرض عَلى نَفسه.
             if (listing.Attributes.TryGetValue("owner_id", out var ownerStr2) &&
                 ownerStr2 == userId.ToString())
@@ -3112,6 +3131,8 @@ public static class MarketplaceTemplateExtensions
             var listing = await s.LoadAsync<Listing>(id);
             // ولا يوضَعُ في السَلَّةِ إعلانٌ حُذِفَ أَو أَخفاه المُشرِف (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-3): الحَذفُ ناعِمٌ فَكانَ `listing is null` لا يُمسِكُه.
             if (!Services.Deals.CheckoutCart.Buyable(listing)) return Results.Redirect(Link(req, slug, "explore"));
+            // ولا إعلانَ أَغلَقَ مالِكُه حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1): وُلِدَت عَلَيه صَفقَةٌ مَربوطَةٌ بِحِسابٍ مَمحُوٍّ لا يُنَفِّذُها أَحَد.
+            if (await Services.Deals.CheckoutCart.OwnerGoneAsync(s, listing)) return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
             // **ولا يَشتَري المَرءُ إعلانَه** (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11): كانَ هذا البابُ يَأخُذُ أَيَّ
             // إعلانٍ — والشاشَةُ وَحدَها تُخفي زِرَّ السَلَّةِ عَن مالِكِه، و`curl` لا يَرى الشاشَة — فَتولَدُ صَفقَةٌ
             // يَطلُبُ فيها المالِكُ مِن نَفسِه. يُرَدُّ قَبلَ أَيِّ كِتابَةٍ بِرَمزِ مَسارِ العَرضِ نَفسِه (`?err=self`)

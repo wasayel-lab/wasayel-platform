@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Listings;
 using Marten;
 
@@ -21,6 +22,28 @@ public static class CheckoutCart
     /// <summary><b>أَيُشتَرى هذا الإعلان؟</b> — مَوجودٌ ولا محذوفٌ ولا مُخفىً إشرافِيّاً. دالَّةٌ نَقِيَّةٌ يَسأَلُها <c>cart/add</c> وحَلقَةُ الإتمامِ ومُراجَعَةُ السَلَّة.</summary>
     public static bool Buyable([NotNullWhen(true)] Listing? listing)
         => listing is { IsDeleted: false, IsHiddenByModerator: false };
+
+    /// <summary>رَمزُ رَدِّ بابَي السَلَّةِ والعَرضِ حينَ يَكونُ مالِكُ الإعلانِ قَد أَغلَقَ حِسابَه — تَقرَؤُه صَفحَةُ الإعلانِ (<c>listings.detail.err_offer_owner_gone</c>).</summary>
+    public const string OwnerGoneCode = "owner_gone";
+
+    /// <summary>
+    /// <para><b>أَغلَقَ مالِكُ الإعلانِ حِسابَه؟</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1؛ تَوصيفُه <c>0e95601</c>) — دالَّةٌ نَقِيَّة: الإعلانُ يُسَمّي مالِكاً
+    /// (<c>owner_id</c> بِصيغَةِ مُعَرِّف) و<paramref name="owner"/> — وَثيقَتُه كَما قُرِئَت — غائِبَةٌ أَو مَحذوفَة (<c>AccountErasure.OffererGone</c>: القاعِدَةُ نَفسُها
+    /// لِصاحِبِ العَرض). وإعلانٌ بِلا مالِكٍ (إعلاناتُ البَذر) لا يُعَدُّ كَذلك: يُشتَرى كَما كان.</para>
+    /// <para>الحَذفُ صارَ يَسحَبُ إعلاناتِ صاحِبِه (<c>AccountErasure.EraseCopiesAsync</c>)، فَهذِه لِحِسابٍ حُذِفَ قَبلَ ذلك: إعلانُه قائِمٌ ولا يَنبَغي أَن يولَدَ عَلَيه
+    /// طَلَبٌ أَو عَرضٌ مَربوطٌ بِحِسابٍ مَمحُوّ.</para>
+    /// </summary>
+    public static bool OwnerGone(Listing listing, User? owner)
+        => OwnerOf(listing) is { } id && (owner is null || owner.Id != id || ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.OffererGone(owner));
+
+    /// <summary>مُعَرِّفُ مالِكِ الإعلانِ مِن <c>owner_id</c> بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة، أَو <c>null</c>.</summary>
+    public static Guid? OwnerOf(Listing listing)
+        => listing.Attributes.TryGetValue(ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.OwnerAttribute, out var raw)
+           && Guid.TryParse(raw, out var id) ? id : null;
+
+    /// <summary><see cref="OwnerGone"/> عَلى جَلسَةِ البابِ — تَقرَأُ وَثيقَةَ المالِكِ حينَ يُسَمّي الإعلانُ مالِكاً، ولا تَقرَأُ شَيئاً حينَ لا.</summary>
+    public static async Task<bool> OwnerGoneAsync(IQuerySession session, Listing listing, CancellationToken ct = default)
+        => OwnerOf(listing) is { } id && OwnerGone(listing, await session.LoadAsync<User>(id, ct));
 
     /// <summary>
     /// <para><b>المُراجَعَةُ النَقِيَّة</b>: يُحذَفُ مِن <paramref name="cart"/> كُلُّ بَندٍ لا يُشتَرى إعلانُه (أَو غابَ مِن <paramref name="listings"/>)، ويُضبَطُ سِعرُ
@@ -47,8 +70,10 @@ public static class CheckoutCart
     public static async Task<bool> RefreshAsync(IDocumentSession session, ACommerce.Kit.Cart.Cart cart, CancellationToken ct = default)
     {
         var listings = new Dictionary<Guid, Listing?>();
+        // ‏(‏2026-10-30، B-PRIV-1) وإعلانٌ أَغلَقَ مالِكُه حِسابَه كَالغائِب (<see cref="OwnerGone"/>) — يُحذَفُ بَندُه ويَعودُ المُشتَري بِـ<see cref="Changed"/>.
         foreach (var item in cart.Items)
-            listings[item.ListingId] = await session.LoadAsync<Listing>(item.ListingId, ct);
+            listings[item.ListingId] = await session.LoadAsync<Listing>(item.ListingId, ct) is { } listing && !await OwnerGoneAsync(session, listing, ct)
+                ? listing : null;
         if (!Reconcile(cart, listings)) return false;
         cart.UpdatedAt = DateTime.UtcNow;
         session.Store(cart);

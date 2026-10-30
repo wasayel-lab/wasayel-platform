@@ -216,6 +216,12 @@ else
            فَلا يَبلُغُه إلّا عَرضٌ سَبَقَ حَذفُه ذلك — ويُقالُ ولا يُبتلَع. *@
         <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_gone"]" />
     }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGoneCode)
+    {
+        @* `owner_gone` — رَدُّ بابَي السَلَّةِ والعَرضِ حينَ أَغلَقَ مالِكُ الإعلانِ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1): الحَذفُ يَسحَبُ إعلاناتِه،
+           فَلا يَبلُغُه إلّا إعلانُ حِسابٍ حُذِفَ قَبلَ ذلك — والاستِمارَةُ لا تُرسَمُ لَه (`ownerGone`) — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_owner_gone"]" />
+    }
     else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)
     {
         @* `cart_closed` — رَمزُ `cart/add` عَلى مَتجَرٍ لا يَستَعمِلُ نَمَطُه السَلَّة (`CartDoor`، تَيّارُ S15 البَند L): الصَفحَةُ لا تَرسُمُ
@@ -369,7 +375,14 @@ else
                 @* (‏2026-10-25، W8-7 — lens-dead-doors-7): الاستِمارَةُ لِدَورٍ يَحمِلُ `offer.submit` وَحدَه — بابُ النُقطَةِ نَفسُه (`PermissionDoor.Opens`
                    عَلى الأَدوارِ المُجَسَّدَةِ الَّتي تَقرَؤُها `HasPermissionAsync`)؛ ولِسِواه سَطرٌ يَقولُ لِماذا، ورابِطُ `me/role` حينَ تَعرِضُ صَفحَةُ الأَدوارِ
                    دَوراً يُقَدِّم. كانَت تُرسَمُ لِكُلِّ صاحِبِ جَلسَةٍ فَيُرَدُّ المُضيفُ والبائِعُ والراكِبُ بِلا كَلِمَة. *@
-                @if (Auth.IsAuthenticated && !isOwner && canOffer)
+                @if (ownerGone)
+                {
+                    @* (‏2026-10-30، B-PRIV-1) مالِكُه أَغلَقَ حِسابَه — بابُ العَرضِ يَرُدُّ بِـ`owner_gone`، فَلا تُرسَمُ استِمارَةٌ يَرُدُّها (القاعِدَة ١٢). *@
+                    <div class="acm-role-empty" style="margin:0 0 16px;">
+                        <p>@L.Markup("listings.detail.err_offer_owner_gone")</p>
+                    </div>
+                }
+                else if (Auth.IsAuthenticated && !isOwner && canOffer)
                 {
                     @* نَموذَج مُبَسَّط: السِعر فَقَط ظاهِراً. الـ ttl ثابِت
                        ١٥ دَقيقَة. المَوقِع يُلتَقَط تِلقائيّاً عَبر
@@ -680,6 +693,8 @@ else
     bool canOffer;
     /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يُقَدِّمُ عُروضاً (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ الاستِمارَة.</summary>
     bool canSwitchToOffer;
+    /// <summary>مالِكُ الإعلانِ أَغلَقَ حِسابَه (‏2026-10-30، B-PRIV-1) — <c>CheckoutCart.OwnerGone</c> سُؤالُ بابِ العَرضِ بِعَينِه، فَلا تُرسَمُ استِمارَتُه.</summary>
+    bool ownerGone;
     double? pickupLat, pickupLng, dropoffLat, dropoffLng;
     /// <summary>نَمَط تَدَفُّق الصَّفقَة لِهذا المُستَأجِر — نَفس الدالَّة
     /// الَّتي يَستَخدِمُها endpoint بَدء الصَّفقَة، لا اشتِقاق مُوازٍ.</summary>
@@ -754,6 +769,9 @@ else
 
         if (ownerId is { } owner)
             ownerReviews = await Reviews.SummaryAsync(Slug, owner);
+        // ولا يُقرَأُ حِسابُ المالِكِ إلّا حَيثُ تُرسَمُ استِمارَةُ العَرض.
+        if (showOffers && ownerId is { } seller)
+            ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, await Accounts.ProfileAsync(Slug, seller));
 
         // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
         pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");

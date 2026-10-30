@@ -414,7 +414,12 @@ public class EndpointBodyBleedTests
         // ‏2802 ← **2804** يَوم ‏2026-10-30 (مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2): سَطرُ `if (refusal is not null) return …` في بابَي التَأكيدِ بِالبَريدِ
         // والجَوّال — القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل؛ ونِداءُ `Verify*OtpAsync` بِقَرارِ `LoginChannels.Registers` سَطرُ المُعالِجِ القَديمِ نَفسُه.
         // طَبَعَ العَدّادُ «‏2802 → 2804» و«‏3150 → 3152»، و**‏1 + 1 = 2**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2804),
+        // ‏2804 ← **2817** يَوم ‏2026-10-30 (تَدقيقُ الموجَة ١١ B-PRIV-1 مَعَ G-1 — المَسار F2): عَشَرَةُ أَسطُرٍ في `/{slug}/me/delete/confirm` — سَطرُ وَسيطَي
+        // `DealsService`/`DealNotices` في التَوقيع، وحَلقَةُ الإعادَةِ مَرَّةً مِن قِراءَةٍ جَديدَة (المُتَغَيِّرُ والرَأسُ والقَوسانِ وسَطرُ `catch`، والحِفظُ صارَ سَطرَ `try`)،
+        // وسُؤالُ الجَلسَةِ عَلى القِراءَةِ الجَديدَة (`StillOpen`)، وإلغاءُ الصَفَقاتِ الوارِدَةِ وإخبارُ أَصحابِها بَعدَ الحِفظ (ثَلاثَة) — والقَرارُ في `AccountErasure`
+        // (`Withdraws`/`IncomingUnaccepted`/`ClosingCanceller`) والإلغاءُ والإشعارُ بِالخِدمَتَينِ القائِمَتَين؛ وسَطرٌ في `cart/add` وسَطرانِ في بابِ العَرضِ يَسأَلانِ
+        // `CheckoutCart.OwnerGoneAsync` ويَرُدّانِ بِرَمزِها. طَبَعَ العَدّادُ «‏2804 → 2817» و«‏3152 → 3165»، و**‏10 + 1 + 2 = 13**؛ والنِقاطُ ‏145.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2817),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1157,7 +1162,10 @@ public class EndpointBodyBleedTests
     /// <c>/{slug}/auth/email/verify</c> و<c>/{slug}/auth/phone/verify</c> — القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل؛ والقَرارُ في
     /// <c>LoginChannels.Registers</c> والبَحثُ في <c>AuthHandlers.VerifyEmailOtpAsync</c>/<c>VerifyPhoneOtpAsync</c>، ونِداؤُهُما سَطرُ المُعالِجِ القَديمِ نَفسُه.
     /// وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3152;
+    /// <remarks><b>‏3152 ← 3165 يَوم ‏2026-10-30</b> (تَدقيقُ الموجَة ١١ B-PRIV-1 مَعَ G-1، المَسار F2): عَشَرَةُ أَسطُرٍ في نُقطَةِ الحَذف — الإعادَةُ مِن قِراءَةٍ جَديدَة
+    /// وسُؤالُ الجَلسَةِ وإلغاءُ الصَفَقاتِ الوارِدَةِ بَعدَ الحِفظ — وثَلاثَةٌ في بابَي السَلَّةِ والعَرضِ تَسأَلُ <c>CheckoutCart.OwnerGoneAsync</c>؛ والقَرارُ في
+    /// <c>AccountErasure</c> و<c>CheckoutCart</c>. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3165;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ
