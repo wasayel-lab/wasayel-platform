@@ -61,7 +61,6 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
         <script>
-            window.acRealtimeToken = 'NORMALIZED';
             window.acRealtimeSlug  = 'ejar';
         </script>
         <script src="_content/ACommerce.Templates.Customer.Marketplace/realtime-nav.js" defer></script><script>
@@ -121,10 +120,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

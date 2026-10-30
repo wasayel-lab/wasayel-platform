@@ -20,8 +20,7 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631; &#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62C;&#x631;&#x650;&#x628;&#x64E;&#x629;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8; --ac-primary-dark:#1D4ED8; --ac-primary-light:#1D4ED8; --ac-primary-hover:#1D4ED8;"><main><div class="ac-auth-wrap" style="--ac-primary:#1D4ED8;"><div class="ac-auth-card"><div class="ac-auth-logo" style="background:#1D4ED8;"><svg class="ac-icon " width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5"/><path d="m11.5 11.5 8.5 8.5M16 16l2-2M18.5 18.5l1.5-1.5"/></svg></div>
             <h1 class="ac-auth-title">&#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631; &#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62C;&#x631;&#x650;&#x628;&#x64E;&#x629;</h1>
             <p class="ac-auth-sub">تَسجيل الدُخول بِـ &#x646;&#x64E;&#x641;&#x627;&#x630;</p><form method="post" action="/theme-demo/auth/nafath/verify"><input type="hidden" name="nid" value="1122334455" />
@@ -32,7 +31,7 @@
         <div class="acs-nafath-code-wrap"><div class="acs-nafath-code-circle"><div class="acs-nafath-code-num">42</div></div></div><div class="acs-nafath-state acs-nafath-state--waiting" style="margin-top:10px;text-align:center;display:flex;gap:6px;align-items:center;justify-content:center;"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
                 <span>وَضع التَطوير: يُعتَبَر مُؤَكَّداً تلقائيّاً بَعد 5 ثَوانٍ</span></div><button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block "><span>&#x62A;&#x64E;&#x623;&#x643;&#x64E;&#x651;&#x62F;&#x62A; &#x641;&#x64A; &#x62A;&#x64E;&#x637;&#x628;&#x64A;&#x642; &#x646;&#x64E;&#x641;&#x627;&#x630; &#x2014; &#x623;&#x64E;&#x643;&#x645;&#x650;&#x644; &#x627;&#x644;&#x62F;&#x64F;&#x62E;&#x648;&#x644;</span></button>
 
-        <a href="/theme-demo/login" style="display:block;text-align:center;margin-top:10px;&#xD;&#xA;                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
+        <a href="/theme-demo/login" style="display:block;text-align:center;margin-top:10px;&#xA;                  color:var(--ac-text-muted);font-size:13px;text-decoration:none;">
             تَغيير الرَقم
         </a></form><p class="ac-auth-back"><a href="/theme-demo">← العَودَة لِـ &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631; &#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62C;&#x631;&#x650;&#x628;&#x64E;&#x629;</a></p></div></div>
 
@@ -101,10 +100,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

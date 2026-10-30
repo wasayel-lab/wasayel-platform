@@ -18,16 +18,11 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8;"><main><div class="acs-page"><h1 class="wsl-doc-title">تَواصَل مَعَنا</h1>
     <p class="wsl-doc-lead">نُجيبُ عَلى رَسائِلِ الدَعمِ وطَلَباتِ الاستِردادِ وأَسئِلَةِ الخُصوصِيَّةِ خِلالَ يَومَي عَمَل.</p>
 
     <p class="wsl-placeholder wsl-doc-note">الحُقولُ المُلَوَّنَةُ بِاللَونِ التَحذيريِّ في هذِه الصَفحَةِ نائِبَةٌ لَم تُملَأ بَعد. يَملَؤُها مالِكُ المَنَصَّةِ قَبلَ نَشرِ الوَثيقَةِ أَو تَقديمِها لِأَيِّ جِهَةِ مُراجَعَة.</p>
-
-    <section class="wsl-doc-section"><h2>البَريدُ الإلِكترونيّ</h2>
-        <p><span class="wsl-placeholder">[[ بَريدُ التَواصُل — يَملَؤُه المالِك ]]</span></p>
-        <p>لِلمَسائِلِ المُتَعَلِّقَةِ بِمَتجَرٍ بِعَينِه، اذكُر اسمَ المَتجَرِ في رِسالَتِكَ لِيَصِلَ الطَلَبُ إلى مَوضِعِه مِن أَوَّلِ رِسالَة.</p></section>
 
     <section class="wsl-doc-section"><h2>الكِيانُ النِظاميّ</h2>
         <ul class="wsl-doc-facts"><li><span class="wsl-placeholder">[[ اسمُ الكِيانِ النِظاميّ — يَملَؤُه المالِك ]]</span></li>
@@ -104,10 +99,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

@@ -20,8 +20,7 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="/branding/ejar.css" /><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x625;&#x64A;&#x62C;&#x627;&#x631;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1d4ed8; --ac-primary-dark:#1d4ed8; --ac-primary-light:#1d4ed8; --ac-primary-hover:#1d4ed8;"><main><script>
         (function () {
             try { history.replaceState(null, '', '/ejar'); } catch (_) {}
@@ -40,7 +39,6 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
         <script>
-            window.acRealtimeToken = 'NORMALIZED';
             window.acRealtimeSlug  = 'ejar';
         </script>
         <script src="_content/ACommerce.Templates.Customer.Marketplace/realtime-nav.js" defer></script><script>
@@ -100,10 +98,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

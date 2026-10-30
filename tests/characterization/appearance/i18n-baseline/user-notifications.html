@@ -35,7 +35,7 @@
                 <small style="display:block;color:var(--ac-text-muted);">
                     اِستَلِم تَنبيهات لِلرَسائِل وَالعُروض حَتَّى وَالتَّطبيق مُغلَق.
                 </small></div>
-            <button type="button" class="ac-btn ac-btn-primary ac-btn-sm" onclick="acEnableNotifications().then(ok =&gt; {&#xD;&#xA;                        if (ok) document.getElementById(&#x27;ac-push-banner&#x27;).style.display=&#x27;none&#x27;;&#xD;&#xA;                    });">
+            <button type="button" class="ac-btn ac-btn-primary ac-btn-sm" onclick="acEnableNotifications().then(ok =&gt; {&#xA;                        if (ok) document.getElementById(&#x27;ac-push-banner&#x27;).style.display=&#x27;none&#x27;;&#xA;                    });">
                 تَفعيل
             </button></div></div>
     <script>
@@ -63,7 +63,6 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="_content/ACommerce.Kit.Maps.Web/maps.js" defer></script><script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
         <script>
-            window.acRealtimeToken = 'NORMALIZED';
             window.acRealtimeSlug  = 'theme-demo';
         </script>
         <script src="_content/ACommerce.Templates.Customer.Marketplace/realtime-nav.js" defer></script><script>
@@ -123,10 +122,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

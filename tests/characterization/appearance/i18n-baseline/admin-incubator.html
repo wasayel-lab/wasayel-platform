@@ -18,13 +18,12 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8;"><main><div class="acs-page acm-admin"><div class="acm-admin-head"><div style="display:flex;align-items:center;gap:8px;"><a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin" aria-label="&#x627;&#x644;&#x631;&#x64F;&#x62C;&#x648;&#x639;"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
             <div><h1 class="acm-wizard-title" style="margin:0;"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg> حاضِنَة الأَفكار</h1>
                 <p style="color:var(--ac-text-muted);margin:2px 0 0;font-size:13px;">
                     حَلِّل جَدوى فِكرَتِكَ في السوق السعودي قَبل الإطلاق
-                </p></div></div></div><div class="ac-alert ac-alert-warning ">&#x644;&#x627; &#x64A;&#x648;&#x62C;&#x64E;&#x62F; &#x645;&#x650;&#x641;&#x62A;&#x627;&#x62D; LLM &#x645;&#x64E;&#x636;&#x628;&#x648;&#x637;. &#x623;&#x64E;&#x636;&#x650;&#x641; Agent:ApiKey &#x641;&#x64A; appsettings.Local.json &#x644;&#x650;&#x62A;&#x64E;&#x641;&#x639;&#x64A;&#x644; &#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62D;&#x644;&#x64A;&#x644;.</div><div class="ac-card  "><div class="ac-card-body"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><span style="font-size:42px;"><svg class="ac-icon " width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3Z"/></svg></span>
+                </p></div></div></div><div class="ac-card  "><div class="ac-card-body"><div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;"><span style="font-size:42px;"><svg class="ac-icon " width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.3 1 2.5h6c0-1.2.3-1.8 1-2.5A6 6 0 0 0 12 3Z"/></svg></span>
                 <div style="flex:1;min-width:200px;"><h3 style="margin:0 0 4px;">عِندَكَ فِكرَة مَتجَر؟</h3>
                     <p style="margin:0;color:var(--ac-text-muted);font-size:13px;line-height:1.7;">
                         أَجِب على أَسئِلَة سَريعَة، نَقتَرِح لَكَ نَمَطاً مُناسِباً،
@@ -98,10 +97,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

@@ -577,3 +577,224 @@ export WSL_CAPTURE_ROLELESS_NID=1033333333     # اختِياريّ: WSL_CAPTURE
 **وصَفحَتان**: `roleless-store-root` (`/owner-test` لِذلكَ العُضو) و`member2-store-root` (`/ejar` لِمِلَفِّ `member2` بِدَورِ `host`). التِقاطُهُما الأَوَّلُ مِن قاعِدَةٍ
 مَحَلِّيَّةٍ جَديدَة (`wasayel_f4_tpl` بِإقلاعَينِ و`TEST_DATA_SEED`/`INCUBATOR_SAMPLE_SEED`/`APPEARANCE_BASELINE_SEED`/`CART_SAMPLE_SEED`، والمِلَفّاتُ السَبعَة) عِندَ
 `8ef3c96`؛ **والأَداةُ مَقيسَةٌ قَبلَه**: التِقاطانِ مُتَتالِيانِ عَلى نُسخَتَينِ مِن القاعِدَةِ نَفسِها ‏**0 / 140**. وصُفوفُهُما في `StoreRootVisitorCharacterizationTests`.
+
+### ‏2026-10-30 — إعادَةُ الالتِقاطِ الكامِلَة: ‏140 لَقطَةً مِن قاعِدَةٍ مَحَلِّيَّةٍ واحِدَة، ولِكُلِّ صَفحَةٍ تَغَيَّرَت سَبَبُها (تَدقيقُ الموجَة ١١ CO15 + CO14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)
+
+**لِماذا الآن، والأَقسامُ السابِقَةُ رَفَضَت «إعادَةً كامِلَةً تَبتَلِعُ الانجِراف»**: المُودَعُ كانَ خَليطَ بيئات — ‏96 مِن 139 لَقطَةً آخِرُ ما كَتَبَها
+أَوَّلُ كوميتٍ في المُستَودَع (`ace0e04`، أَي التُقِطَت قَبلَه)، والباقي رُقِّعَ بِفَرقِه. **مَقيساً**: التِقاطٌ حَيٌّ لِلرَأسِ عَلى القاعِدَةِ المَحَلِّيَّةِ أَدناه
+قورِنَ بِالمُودَعِ بِـ`compare-appearance.sh` نَفسِه ⇐ **‏139 / 139 حَمراء، صِفرٌ خَضراء** — بَوّابَةٌ حَمراءُ في كُلِّ صَفحَةٍ لا تَحرُسُ شَيئاً. فَلا يُبتَلَعُ
+الانجِرافُ هُنا بَل **يُسَمّى**: لِكُلِّ صَفحَةٍ تَغَيَّرَت سَبَبُها في الجَدوَلِ أَدناه، بيئَةً أَو كوميتاً.
+
+**البيئَةُ مُعلَنَة** (لا Neon): قاعِدَةٌ مَحَلِّيَّةٌ جَديدَة `wasayel_f4_final_tpl` بِإقلاعَينِ بارِدَينِ عِندَ `7b6d352` والبَذراتُ الأَربَع، وكُلُّ التِقاطٍ عَلى
+نُسخَةٍ مِنها (`create database … template …`)، والخادِمُ عَلى ‏5050 (`<link rel="canonical">` يَحمِلُ المَنفَذ)، ومُزَوِّدُ تَحليلٍ بَديلٌ لا يُنادى كَما في قِسمَي S14
+البَند G وS3 (بِلاه تُخفي `StudioAnalysisDoor` روابِطَ `/studio/new`)، والمِلَفّاتُ السَبعَة:
+
+```bash
+export ConnectionStrings__Postgres="Host=localhost;Database=<نُسخَةٌ مِن قاعِدَةٍ مَبذورَة>;Username=postgres;Password=…"
+export ASPNETCORE_ENVIRONMENT=Development PLATFORM_ADMIN_PHONE=0500000001
+export TEST_DATA_SEED=1 APPEARANCE_BASELINE_SEED=1 INCUBATOR_SAMPLE_SEED=1 CART_SAMPLE_SEED=1
+export Agents__Analysis__Provider=openai Agents__Analysis__ApiKey=stand-in-never-called Agents__Analysis__BaseUrl=http://localhost:9
+dotnet run -c Release --no-launch-profile --project apps/V1.App --urls=http://localhost:5050      # مَرَّتَينِ عَلى قاعِدَةٍ جَديدَة، ثُمَّ الالتِقاط:
+WSL_CAPTURE_ADMIN_PHONE=0500000001 WSL_CAPTURE_STUDIO_PHONE=0500000002 WSL_CAPTURE_OWNER_PHONE=0500000001 \
+WSL_CAPTURE_USER_NID=1052001001 WSL_CAPTURE_USER_TENANT=theme-demo \
+WSL_CAPTURE_MEMBER_PHONE=05101234567 WSL_CAPTURE_MEMBER2_PHONE=05111234567 WSL_CAPTURE_MEMBER_TENANT=ejar \
+WSL_CAPTURE_ROLELESS_NID=1033333333 WSL_CAPTURE_ROLELESS_TENANT=owner-test \
+  scripts/capture-appearance.sh <مُجَلَّدٌ مُؤَقَّت> http://localhost:5050
+```
+
+**والأَداةُ مَقيسَةٌ قَبلَ الإيداع**: السكربتُ يَطبَعُ ما كَتَبَ ويَفشَلُ عَلى الصِفر (`7b6d352`) — «الصَفَحاتُ المُلتَقَطَة: 140» في كُلِّ جَولَة؛ والتِقاطانِ
+مُتَتالِيانِ عَلى نُسخَتَينِ مِن القاعِدَة **‏0 / 148** (‏140 صَفحَةً و8 أَوراق)؛ و`compare-appearance.sh` عَلى المُودَعِ الجَديدِ والتِقاطٍ حَيٍّ ثالِث: **‏140 مُقارَنَة، صِفرٌ
+حَمراء**؛ ونُسخَةٌ مِنه حُقِنَ فيها حَرفٌ (`<base href="/x">` في `studio-billing.html`) ⇐ «✗ studio-billing.html» وَحدَها ومَخرَج 1. **وعَلى قاعِدَةٍ مَحَلِّيَّةٍ
+ثانِيَةٍ بُذِرَت مُستَقِلَّةً** (`wasayel_f4_other_tpl`): ‏13 / 140 تَختَلِف، وكُلُّها مُعَرِّفاتُ البَذرِ وأَوقاتُه وتَواريخُه وَحدَها (صِفرٌ بَعدَ تَطبيعِ GUID و`HH:MM`
+والتاريخ): `ashare-explore` · `ashare-explore-filters` · `ashare-portal` · `ashare-role-customer` · `member-chats` · `member-deals` · `member-listings` · `member-notifications`
+· `member2-store-root` · `owner-app-console` · `owner-app-deals` · `owner-app-listings` · `studio-home-with-apps` — فَالمُقارَنَةُ بِالمُودَعِ تَصدُقُ عَلى نُسخَةٍ مِن القاعِدَةِ
+الَّتي التُقِطَ مِنها، وبُرهانُ التَغييرِ عَلى غَيرِها يَبقى شَجَرَتَينِ عَلى قاعِدَةٍ واحِدَة كَما في الأَقسامِ السابِقَة.
+
+**والإيداعُ هُوَ الالتِقاطُ مَنزوعاً مِنه كُتلَةُ `wsl-theme`** بِتَعبيرِ `compare-appearance.sh` نَفسِه — لِأَنّ البَوّابَةَ تَنزِعُها مِن الالتِقاطِ وحدَه وتُقارِنُ بِالمُودَعِ
+كَما هُو. **وتَصحيحٌ يُقال**: `db7adbd` أَودَعَ `roleless-store-root` و`member2-store-root` **بِكُتلَتِها**، فَكانَت البَوّابَةُ حَمراءَ عَلَيهِما لا لِفَرقٍ بَل لِلكُتلَة
+(مَقيساً في المُقارَنَةِ بِالمُودَعِ القَديمِ أَعلاه: سَطرا `<style id="wsl-theme">` في فَرقِهِما)؛ وهُنا مَنزوعَتان.
+
+**ومِفتاحُ الأَسباب** — بيئَةٌ (لا كود):
+
+| الرَمز | السَبَب |
+|---|---|
+| ر | رَأسُ الصَفحَة: `<meta name="apple-mobile-web-app-title">` في سَطرٍ يَلي `<link rel="apple-touch-icon">` في المُودَعِ وفي سَطرِه مَحَلِّيّاً (تَطبيعُ S14 البَند G الثاني) |
+| CR | `&#xD;&#xA;` في المُودَعِ و`&#xA;` مَحَلِّيّاً داخِلَ قيَمِ سِمَاتٍ مُتَعَدِّدَةِ الأَسطُر — المُودَعُ مِن نُسخَةٍ أَسطُرُها CRLF (تَطبيعُ S14 البَند G الثالِث) |
+| ب | بَياناتُ البَذرِ المَحَلِّيّ لا بَياناتُ مَصدَرِ المُودَع: مُعَرِّفاتٌ وأَوقاتٌ وتَواريخُ وأَعداد، وقَوائِمُ المَتاجِرِ (`theme-demo` و`owner-test` في الهُبوطِ والإشرافِ والتَدقيق)، ولَونُ `ashare` (‏`#345454` مِن `PlatformSeed.cs` لا `#7a288a`)، وعُضوُ ejar بِلا إعلانات، وصَفقاتُ البَذرِ بِمَرحَلَتِها |
+| ن | عُنوانُ الصَفحَةِ يَحمِلُ مُعَرِّفاً مِن بَياناتِ Neon (`capture-appearance.sh`) فَيُرسَمُ فَرعُ الغِيابِ مَحَلِّيّاً — «العَمَلِيَّة غَير مَوجودَة» وما يُقابِلُها |
+| م | مُزَوِّدُ التَحليلِ البَديلُ مَضبوط — والمُودَعُ التُقِطَ بِلا مِفتاح («لا يوجَد مِفتاح LLM مَضبوط») |
+| ق | المُودَعُ أَقدَمُ مِن أَوَّلِ كوميتٍ في المُستَودَع: الكودُ عِندَ `ace0e04` يَرسُمُ الجَديدَ أَصلاً (اسمُ المَتجَرِ في `apple-mobile-web-app-title` لا «وَسايِل»، وبَيانُ PWA لِمَتجَرٍ بِلا أَدوار، ونَصُّ رَأسِ صَفحَةِ الباقات) — فَلا كوميتَ هُنا يُسَمّى |
+| db7adbd·ث | كُتلَةُ `wsl-theme` أُودِعَت مَعَ اللَقطَةِ في `db7adbd` — التَصحيحُ أَعلاه |
+| جديدة | لَقطَةٌ لَم تُودَع قَبلُ: `studio-home-with-apps` — عِلَّةُ تَركِها («ما يَملِكُه مِلَفُّ admin بيئَتُه»، قِسمُ S12 في `ADR-032` §٦‑ج 3(ج)) سَقَطَت بِإعلانِ بيئَةِ المُودَعِ كُلِّه |
+
+— وكوميتٌ (كودٌ تَغَيَّرَ بَعدَ اللَقطَةِ المُودَعَة): `38d1da9` (‏2026-10-24، الاتِّصالُ الحَيُّ يَقرَأُ الكوكي والرابِطُ المَتجَرَ وَحدَه — سَطرا `acRealtime*` في كُلِّ صَفحَة)؛
+`5151208` (‏2026-08-30، «0/1» ← «0/40» في تَذييلِ الاستوديو وحُدودُ الباقات)؛ `3fe191b` (‏2026-10-30، خِيارُ «تَرفيه» الحادي عَشَر)؛ `1ca3f36` (‏2026-10-28، تَنبيهُ
+الحِفظِ بِلا دَور)؛ `4f61e8a` (‏2026-10-28، صِفرُ الأَدوارِ صَلاحِيّاتُ العُضو ⇐ «لا صَلاحِيَّة» في `user-manage`)؛ `9ca4e06` (‏2026-10-25، «إعلان جَديد» بِبابِ
+`listing.create` ⇐ «صَلاحِيَّة غَير كافِيَة» لِعُضوِ ejar بِدَورِ المُشتَري، وزِرُّ «إعلاناتي»)؛ `c901bde` (‏2026-10-29، صَفحَةُ التَذكِرَةِ تَقرَأُ اللَقطَةَ لا المَجرى)؛
+`2d20144` (‏2026-10-25، لَحظَةٌ لَم تُضبَط لا تُطبَع)؛ `85cf1f4` (‏2026-10-24، «رَفضٌ وخُروج» زِرُّ POST)؛ `f37045a` (‏2026-10-25، استِمارَةُ الرَمز)؛ `2db0bfb` (‏2026-10-13،
+الدَرَجَةُ الَّتي لا تُباعُ بِلا سِعر)؛ `2e65882` (‏2026-10-28، «اخرج مِن كُلِّ الأَجهِزَة»)؛ `d66f280` (‏2026-10-29، نَمَطُ السَلَّة)؛ `5069737` (‏2026-08-30، طَريقَةُ الدُخول)؛
+`44c0105` · `b6256f5` · `f7abb82` (‏2026-08-30) و`bd240f9` (‏2026-09-02) (صُفوفُ المَظهَرِ والمُستَخدِمينَ والباقاتِ والتَكامُلاتِ والامتِثالِ في لَوحَةِ التَطبيق)؛ `b6a8575`
+(‏2026-08-31، نَمَطٌ مَجهولٌ يَسقُطُ إلى marketplace فَلَونُه `#2563eb`)؛ `150753f` و`eff1639` (‏2026-10-25، رابِطُ «تَواصَل مَعَنا لِلسِعر» وقِسمُ البَريدِ النائِب)؛
+`88e0f3a` (‏2026-10-29، الجِهاتُ بِأَسمائِها والمُعالَجَةُ خارِجَ المَملَكَة) و`8965745` (‏2026-10-25، الناقِل) و`ce026d5`/`462f258` (نَصُّ الحَذف) و`98162ab` (‏2026-10-29،
+«بَياناتي») و`548ea4d` (‏2026-10-29، الاسمُ وَحدَه) و`2ad660c` (‏2026-10-25، الاستِرجاع)؛ `48d6c2a` (‏2026-10-11، لا بِطاقَةَ بِلا مُزَوِّدٍ يَقبِض — ولا بَوّابَةَ مَربوطَةً
+مَحَلِّيّاً، فَتُرسَمُ `member-checkout-pay` بِالنَقدِ وَحدَه و`-confirm-card` بِـ«نَقد عِندَ التَّسليم»)؛ `a1db706` (‏2026-10-30، تَيّارُ F3: جُملَتا الشَحن).
+
+**ولِكُلِّ لَقطَةٍ سَبَبُها** — ‏140 صَفّاً (139 تَغَيَّرَت بايتاتُها أَو كُتلَتُها، وواحِدَةٌ جَديدَة):
+
+| اللَقطَة | السَبَب |
+|---|---|
+| `admin-anon` | ر · 38d1da9 |
+| `admin-audit` | ر · 38d1da9 · ب |
+| `admin-fixtures` | ر · 38d1da9 |
+| `admin-forbidden` | ر · 38d1da9 |
+| `admin-home` | ر · CR · 38d1da9 · ب |
+| `admin-incubator-study` | ر · 38d1da9 |
+| `admin-incubator-wizard` | ر · 38d1da9 · م |
+| `admin-incubator` | ر · 38d1da9 · م |
+| `admin-monitor` | ر · 38d1da9 · ب |
+| `admin-tenant-anon` | ر · 38d1da9 |
+| `admin-tenant-attributes` | ر · 38d1da9 |
+| `admin-tenant-branding` | ر · 38d1da9 |
+| `admin-tenant-categories` | ر · CR · 38d1da9 · 3fe191b |
+| `admin-tenant-edit` | ر · 38d1da9 |
+| `admin-tenant-new` | ر · 38d1da9 · 3fe191b |
+| `admin-tenant-pwa` | ر · CR · 38d1da9 |
+| `admin-tenant-regions` | ر · 38d1da9 |
+| `admin-tenant-roles` | ر · 38d1da9 · 1ca3f36 |
+| `admin-tenant-theme` | ر · 38d1da9 |
+| `admin-tenant-users` | ر · 38d1da9 |
+| `adwar-demo-portal` | ر · 38d1da9 |
+| `ashare-explore-empty` | 38d1da9 · ب |
+| `ashare-explore-filters` | 38d1da9 · ب |
+| `ashare-explore` | 38d1da9 · ب |
+| `ashare-legal-privacy` | 38d1da9 · ب · 548ea4d · 98162ab |
+| `ashare-legal-returns` | 38d1da9 · ب · 2ad660c |
+| `ashare-legal-terms` | 38d1da9 · ب |
+| `ashare-plans` | 38d1da9 · ب |
+| `ashare-portal` | ر · 38d1da9 · ب · ق |
+| `ashare-role-customer` | 38d1da9 · ب |
+| `ashare-role-host` | 38d1da9 · ب |
+| `ashare-role-vendor` | 38d1da9 · ب |
+| `ejar-area-anon` | 38d1da9 |
+| `ejar-cart-anon` | 38d1da9 |
+| `ejar-chats-anon` | 38d1da9 |
+| `ejar-checkout-anon` | 38d1da9 |
+| `ejar-create-listing-anon` | 38d1da9 |
+| `ejar-deal-anon` | 38d1da9 |
+| `ejar-deals-anon` | 38d1da9 |
+| `ejar-drivers` | 38d1da9 |
+| `ejar-favorites-anon` | 38d1da9 |
+| `ejar-listing` | 38d1da9 · ن |
+| `ejar-listings-anon` | 38d1da9 |
+| `ejar-login-err-approve` | ر · 38d1da9 · ق |
+| `ejar-login-err-code` | ر · 38d1da9 · ق |
+| `ejar-login-err-email-bad` | ر · 38d1da9 · ق |
+| `ejar-login-err-email-req` | ر · 38d1da9 · ق |
+| `ejar-login-err-nid` | ر · 38d1da9 · ق |
+| `ejar-login-err-phone` | ر · 38d1da9 · ق |
+| `ejar-login-err-send` | ر · 38d1da9 · ق |
+| `ejar-login-verify` | ر · CR · 38d1da9 · ق |
+| `ejar-login` | ر · 38d1da9 · ق |
+| `ejar-offers-anon` | 38d1da9 |
+| `ejar-onboarding-anon` | 38d1da9 |
+| `ejar-role-anon` | 38d1da9 |
+| `ejar-vendor-missing` | 38d1da9 |
+| `ejar-vendor` | CR · 38d1da9 · ن |
+| `landing` | ر · 38d1da9 · ب |
+| `login-unknown` | ر · 38d1da9 |
+| `member-area` | 38d1da9 |
+| `member-cart` | 38d1da9 |
+| `member-chat` | CR · 38d1da9 · ن |
+| `member-chats` | CR · 38d1da9 · ب |
+| `member-checkout-confirm-card` | CR · 38d1da9 · 48d6c2a |
+| `member-checkout-confirm-cash` | CR · 38d1da9 |
+| `member-checkout-pay` | CR · 38d1da9 · 48d6c2a · a1db706 |
+| `member-checkout` | CR · 38d1da9 |
+| `member-create-listing-cat` | 38d1da9 · 9ca4e06 |
+| `member-create-listing-invalid` | 38d1da9 · 9ca4e06 |
+| `member-create-listing` | 38d1da9 · 9ca4e06 |
+| `member-deal-active` | CR · 38d1da9 · ن |
+| `member-deal-done` | CR · 38d1da9 · ن |
+| `member-deal-missing` | 38d1da9 |
+| `member-deal-waiting` | CR · 38d1da9 · ن |
+| `member-deals` | 38d1da9 · ب |
+| `member-favorites` | 38d1da9 |
+| `member-listings` | 38d1da9 · 9ca4e06 · ب |
+| `member-login` | ر · 38d1da9 · ق |
+| `member-manage` | 38d1da9 |
+| `member-notifications` | CR · 38d1da9 · ب |
+| `member-offers` | 38d1da9 |
+| `member-onboarding` | 38d1da9 |
+| `member-role` | 38d1da9 |
+| `member2-checkout-empty` | 38d1da9 |
+| `member2-store-root` | db7adbd·ث · ب |
+| `order-drivers` | 38d1da9 · ب |
+| `owner-app-attributes` | ر · CR · 38d1da9 · 5151208 |
+| `owner-app-console` | ر · CR · 38d1da9 · ب · 5151208 |
+| `owner-app-deal-detail` | ر · CR · 38d1da9 · 5151208 · ن |
+| `owner-app-deals` | ر · CR · 38d1da9 · ب · 5151208 |
+| `owner-app-home` | ر · CR · 38d1da9 · 5151208 · 44c0105 · b6256f5 · f7abb82 · bd240f9 |
+| `owner-app-listings` | ر · CR · 38d1da9 · ب · 5151208 |
+| `owner-app-pwa` | ر · CR · 38d1da9 · 5151208 |
+| `platform-contact` | ر · 38d1da9 · eff1639 |
+| `platform-pricing` | ر · 38d1da9 · 150753f |
+| `platform-privacy-en` | ر · 38d1da9 · ب · 88e0f3a · 8965745 · 462f258 · 98162ab |
+| `platform-privacy` | ر · 38d1da9 · ب · 88e0f3a · 8965745 · ce026d5 · 98162ab |
+| `platform-refunds-en` | ر · 38d1da9 |
+| `platform-refunds` | ر · 38d1da9 |
+| `platform-terms-en` | ر · 38d1da9 |
+| `platform-terms-unknown-lang` | ر · 38d1da9 |
+| `platform-terms` | ر · 38d1da9 |
+| `roleless-store-root` | db7adbd·ث |
+| `studio-app-attributes` | ر · CR · 38d1da9 |
+| `studio-app-branding` | ر · CR · 38d1da9 · 5151208 · 5069737 · d66f280 |
+| `studio-app-categories` | ر · CR · 38d1da9 · 3fe191b |
+| `studio-app-console` | ر · CR · 38d1da9 · 5151208 · 2d20144 |
+| `studio-app-deals` | ر · CR · 38d1da9 |
+| `studio-app-listings` | ر · CR · 38d1da9 |
+| `studio-app-pwa` | ر · CR · 38d1da9 |
+| `studio-app-regions` | ر · CR · 38d1da9 |
+| `studio-app-roles` | ر · CR · 38d1da9 · 1ca3f36 |
+| `studio-app-ticket-missing` | ر · CR · 38d1da9 · c901bde |
+| `studio-app-tickets` | ر · CR · 38d1da9 · 5151208 · 2d20144 |
+| `studio-app` | ر · CR · 38d1da9 · 5151208 · 44c0105 · b6256f5 · f7abb82 · bd240f9 |
+| `studio-auth-verify` | ر · 38d1da9 · f37045a |
+| `studio-auth` | ر · 38d1da9 |
+| `studio-billing` | ر · CR · 38d1da9 · 5151208 · 2db0bfb · 2e65882 · ق |
+| `studio-consent` | ر · CR · 38d1da9 · 85cf1f4 |
+| `studio-home` | ر · CR · 38d1da9 |
+| `studio-new` | ر · CR · 38d1da9 |
+| `studio-study-print` | ر · 38d1da9 · ب |
+| `studio-study` | ر · CR · 38d1da9 · 5151208 · b6a8575 |
+| `studio-upgrade-analyze` | ر · CR · 38d1da9 · ب |
+| `studio-upgrade-build` | ر · CR · 38d1da9 |
+| `studio-upgrade-export` | ر · CR · 38d1da9 |
+| `studio-upgrade-feature` | ر · CR · 38d1da9 |
+| `studio-upgrade-refine` | ر · CR · 38d1da9 · ب |
+| `theme-demo-city` | ر · 38d1da9 · ق |
+| `theme-demo-listing-offers` | 38d1da9 |
+| `theme-demo-login-verify` | ر · CR · 38d1da9 · ق |
+| `theme-demo-login` | ر · CR · 38d1da9 · ق |
+| `theme-demo-manage-anon` | 38d1da9 |
+| `theme-demo-portal` | ر · 38d1da9 · ق |
+| `user-listing-offers` | 38d1da9 |
+| `user-listing-own` | 38d1da9 |
+| `user-manage` | 38d1da9 · 4f61e8a |
+| `user-notifications` | CR · 38d1da9 |
+| `user-searches` | 38d1da9 |
+| `studio-home-with-apps` | جديدة |
+
+
+**وأَوراقُ الأَنماط** (`css/`): السَبعُ الَّتي تَغَيَّرَت أَسطُرُها CRLF في المُودَع (‏966 / 966 سَطراً في `app.css`) وLF مَحَلِّيّاً — وبِنَزعِ CR وَحدَه تَتَطابَقُ السِتّ،
+و`premium.css` بِالفَرقِ المَقيسِ في `c026f58` (‏29 سَطراً: قَواعِدُ الشارَتَين)؛ و`branding-ashare.css` كَما هِيَ بايتاً.
+
+**وما يُكَلِّفُه الالتِقاطُ الكامِل — يُقالُ ولا يُبتلَع** (القاعِدَتانِ ١٠ و١٢): لَقَطاتٌ لا تَرسُمُ الفَرعَ الَّذي يُسَمّيه اسمُها في هذِه البيئَة —
+السَبعُ «ن» (`member-deal-active` · `-waiting` · `-done` · `owner-app-deal-detail` · `ejar-listing` · `ejar-vendor` · `member-chat`) تَرسُمُ الغِياب؛ و`studio-app-ticket-missing`
+تَرسُمُ تَذكِرَةَ `owner-test` المَبذورَةَ الفارِغَةَ مُنذُ `c901bde` (والبَذّارُ يَقولُ إنّها «غَير مَوجودَة» لِأَنّها بِلا مَجرى — صَدَقَ قَبلَه)؛ وثَلاثُ `member-create-listing*`
+فَرعَ الرَفضِ نَفسَه مُنذُ `9ca4e06` (مِلَفُّ `member` بِدَورِ المُشتَري)؛ و`user-manage` «لا صَلاحِيَّة» مُنذُ `4f61e8a`. وكُلُّ فَرعٍ مِنها مَحروسٌ بِصُفوفِ اختِبارِه لا بِاللَقطَة؛
+وتَثبيتُ مُعَرِّفاتٍ مَحَلِّيَّةٍ لَها (بَذرَةٌ أَو مِلَفّ) بابٌ مُسَمّى في تَقريرِ التَيّار. **و`member-checkout-pay.html` التِقاطٌ حَقيقِيٌّ الآن** لا فَرقٌ مُرَقَّع (قِسمُ ‏2026-10-28).
+
+**وما أُعيدَ تَثبيتُه مِن الاختِبارات** — عائِلَةٌ واحِدَةٌ حَمراءُ عَلى الالتِقاطِ الجَديد، والباقي أَخضَرُ بِلا مَسّ: `LegalCheckoutTextsCharacterizationTests`
+(`c055ceb`، تَلميحُ البِطاقَةِ في `member-checkout-pay.html` ‏1 ← 0 مَعَ خِيارِ البِطاقَة ‏1 ← 0 — صارَ الشَرطُ عِلاقَةً بَينَهُما ومَكانَه في المَصدَر). وأَخضَرُ كَما هُو:
+`RoleLandingBrowseLinkTests` · `StoreRootVisitorCharacterizationTests` · `StudioConsentCharacterizationTests` · `StudioHomeKindBadgeCharacterizationTests` · `TenantUsersFirstAdminHintTests`
+· `AppearanceBaselineCaptureEntryTests` (‏140 لَقطَةً، يَتيمَةٌ صِفر).

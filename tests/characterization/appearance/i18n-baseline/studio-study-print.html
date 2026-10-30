@@ -18,8 +18,7 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /><title>دِراسَة جَدوى — للطِّباعَة</title>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /><title>دِراسَة جَدوى — للطِّباعَة</title>
     <style>@page { size: A4; margin: 18mm 16mm; }
         body { font-family: 'Cairo', system-ui, sans-serif; color: #0f172a;
                background: #fff; direction: rtl; line-height: 1.7;
@@ -56,7 +55,7 @@
 </div><div class="print-head"><div class="print-mark">A</div>
         <div><h1>دِراسَة جَدوى</h1>
             <div class="print-meta">
-                مُولَّدَة في 2026-01-01 00:00 ·
+                مُولَّدَة في 2026-01-01 03:00 ·
                 جَودَة 0% · ACommerce
             </div></div></div><p style="margin:0 0 14px;color:#475569;"><strong>الفِكرَة: </strong>
         &#x639;&#x64E;&#x64A;&#x650;&#x651;&#x646;&#x64E;&#x629; &#x628;&#x650;&#x646;&#x64A;&#x64E;&#x629; &#x2014; &#x644;&#x627; &#x62A;&#x64E;&#x62D;&#x644;&#x64A;&#x644;&#x64E; &#x647;&#x64F;&#x646;&#x627; &#x2014; &#x648;&#x64E;&#x635;&#x641;&#x64F; &#x627;&#x644;&#x641;&#x650;&#x643;&#x631;&#x64E;&#x629;</p><div class="print-stats"><div class="print-stat"><div class="print-stat-label">حَجم السوق</div>
@@ -142,10 +141,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });

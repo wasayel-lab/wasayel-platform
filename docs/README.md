@@ -238,6 +238,10 @@ dotnet run scripts/verify-runtime.cs -- [--viewport 390x844] <url>
 > القَديمَة لِأَنّ `baseline/css/*` هو الطَرَف المُجَمَّد الَّذي تَقرَؤُه
 > `ThemeZeroEquivalenceTests`. التَفصيل في
 > [`../tests/characterization/appearance/README.md`](../tests/characterization/appearance/README.md).
+>
+> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO15 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «‏67 صَفحَة» عَتيق: `i18n-baseline/` اليَومَ ‏140 لَقطَةً
+> مِن التِقاطٍ كامِلٍ واحِدٍ عَلى قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَةٍ مُعلَنَة، والبَوّابَةُ عَلَيها ‏140 / 140 خَضراء (وكانَت ‏139 / 139 حَمراءَ عَلى المُودَعِ قَبلَه) —
+> والسَبَبُ لِكُلِّ صَفحَةٍ تَغَيَّرَت في README المَظهَر (القِسمُ بِتاريخِه).
 
 ووَثيقَتا القِياس المُرافِقَتان — لَيسَتا تَوثيقاً بَل **أَدَوات**:
 [`../tests/characterization/appearance/README.md`](../tests/characterization/appearance/README.md)
