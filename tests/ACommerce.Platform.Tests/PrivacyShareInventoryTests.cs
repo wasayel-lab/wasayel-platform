@@ -165,6 +165,8 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         ["fonts.gstatic.com"]    = "Google Fonts",
         ["cdn.jsdelivr.net"]     = "jsDelivr",
         ["cdn.paddle.com"]       = "Paddle",
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٢) رابِطٌ يَبنيه الكود (`OsmLinks.EmbedUrl` في `AcMapPin`) — لَم يَكُن الجَردُ يَراه (`CodeBuiltHosts`).
+        ["www.openstreetmap.org"] = "OpenStreetMap",
     };
 
     private static readonly Regex BrowserFetch = new(
@@ -172,8 +174,13 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         RegexOptions.Compiled);
 
     /// <summary>كُلُّ مُضيفٍ خارِجِيٍّ في وُسومِ <c>link/script/img/iframe/source</c> وفي <c>url(…)</c>/<c>@import</c> — في كُلِّ <c>.razor</c>/<c>.html</c>/<c>.css</c>
-    /// تَحتَ <c>libs</c> و<c>apps</c> (‏<c>App.razor</c> وأَوراقُ الأَنماطِ مِنها) — بِمِلَفِّه.</summary>
+    /// تَحتَ <c>libs</c> و<c>apps</c> (‏<c>App.razor</c> وأَوراقُ الأَنماطِ مِنها) — بِمِلَفِّه.
+    /// ‏(‏2026-10-30، الموجَة ١٢ F2 · ٢) <b>ومَعَها ما يَبنيه الكود</b> (<see cref="CodeBuiltBrowserHosts"/>): كانَ الحَرفِيُّ وَحدَه، فَعَدَّ أَربَعَةً والمُتَصَفِّحُ يَبلُغُ خَمسَة.</summary>
     internal static IReadOnlyList<(string Host, string File)> BrowserHosts()
+        => LiteralBrowserHosts().Concat(CodeBuiltBrowserHosts().Hosts.Select(h => (h.Host, h.File))).ToList();
+
+    /// <summary>المُضيفُ مَكتوباً حَرفِيّاً في الوَسمِ أَو الوَرَقَة.</summary>
+    internal static IReadOnlyList<(string Host, string File)> LiteralBrowserHosts()
     {
         var found = new List<(string, string)>();
         foreach (var root in new[] { "libs", "apps" })
@@ -207,11 +214,14 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     public void Every_host_the_browser_fetches_from_has_its_party_named_in_a_share_line()
     {
         var hosts = BrowserHosts();
+        var built = CodeBuiltBrowserHosts();
         var distinct = hosts.Select(h => h.Host).Distinct(StringComparer.Ordinal).OrderBy(h => h, StringComparer.Ordinal).ToList();
         var unnamed = UnnamedBrowserParties(distinct);
         output.WriteLine($"طَلَباتُ مُتَصَفِّحٍ إلى مُضيفٍ خارِجِيّ: {hosts.Count} في {hosts.Select(h => h.File).Distinct().Count()} مِلَفّ · مُضيفون: {distinct.Count} " +
-                         $"({string.Join(", ", distinct)}) · جِهاتٌ غَيرُ مُسَمّاة: {unnamed.Count}");
-        Assert.True(hosts.Count > 0, "أَداةٌ عَمياء: صِفرُ طَلَبٍ خارِجِيّ.");
+                         $"({string.Join(", ", distinct)}) · مِنها يَبنيه الكود: {built.Hosts.Select(h => h.Host).Distinct().Count()} بِـ{built.Calls} نِداء (لا يُحَلّ: {built.Unresolved.Count}) · " +
+                         $"جِهاتٌ غَيرُ مُسَمّاة: {unnamed.Count}");
+        Assert.True(hosts.Count > 0 && distinct.Count > 0, "أَداةٌ عَمياء: صِفرُ طَلَبٍ خارِجِيّ.");
+        Assert.True(built.Unresolved.Count == 0, "نِداءُ دالَّةٍ في وَسمِ جَلبٍ لا يُحَلُّ — الأَداةُ عَمياءُ عَنه: " + string.Join("، ", built.Unresolved));
         Assert.Contains(hosts, h => h.File.EndsWith("App.razor", StringComparison.Ordinal));
         Assert.Contains(hosts, h => h.File.EndsWith("app.css", StringComparison.Ordinal));
         Assert.True(unnamed.Count == 0, "جِهَةٌ يَطلُبُ مِنها المُتَصَفِّحُ ولا يُسَمّيها سَطر: " + string.Join("، ", unnamed));
@@ -313,27 +323,32 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         Assert.Equal((calls, unresolved), (found.Calls, found.Unresolved.Count));
     }
 
-    /// <summary><b>تَوصيفٌ قَبلَ التَبديل (القاعِدَة ٣)</b>: المُتَصَفِّحُ يَبلُغُ <c>www.openstreetmap.org</c> بِرابِطٍ يَبنيه <c>OsmLinks.EmbedUrl</c>، والجَردُ
-    /// (<see cref="BrowserHosts"/>) لا يَراه، ولا جِهَةَ لَه في <see cref="BrowserHostParties"/>، وسَطرُ <c>share_maps</c> العَرَبِيُّ لا يُسَمّي «OpenStreetMap».
-    /// يَنقَلِبُ بِاسمِه في كوميتِ التَبديل.</summary>
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، الموجَة ١٢ F2 · ٢)</b> — كانَ <c>Today_the_browser_reaches_openstreetmap_through_a_code_built_url_the_inventory_cannot_see</c>
+    /// (‏<c>32c1ed0</c>: «مُضيفونَ حَرفِيّون 4 · مُضيفونَ يَبنيهِم الكود 1 (www.openstreetmap.org ← OsmLinks.EmbedUrl في AcMapPin.razor) · جِهاتٌ غَيرُ مُسَمّاة:
+    /// «www.openstreetmap.org» بِلا جِهَة · share_maps بِالعَرَبِيَّةِ يُسَمّي OpenStreetMap: False»). والآن الجَردُ يَعُدُّ خَمسَةً، ولِلمُضيفِ جِهَتُه، وسَطرُ
+    /// <c>share_maps</c> يُسَمّيها بِالعَرَبِيَّةِ والإنجليزِيَّةِ ويَقولُ ما يَظهَرُ لَها: عُنوانُ الشَبَكَةِ والمَوقِعُ المَعروض — الإحداثِيّاتُ في رابِطِ <c>EmbedUrl</c>.</summary>
     [Fact]
-    public void Today_the_browser_reaches_openstreetmap_through_a_code_built_url_the_inventory_cannot_see()
+    public void The_browser_reaches_openstreetmap_through_a_code_built_url_and_both_share_lines_name_it()
     {
-        var literal = BrowserHosts().Select(h => h.Host).Distinct(StringComparer.Ordinal).ToList();
+        var all = BrowserHosts().Select(h => h.Host).Distinct(StringComparer.Ordinal).ToList();
         var built = CodeBuiltBrowserHosts();
         var builtHosts = built.Hosts.Select(h => h.Host).Distinct(StringComparer.Ordinal).ToList();
-        var unnamed = UnnamedBrowserParties(literal.Concat(builtHosts).Distinct(StringComparer.Ordinal));
-        var ar = LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_maps")!;
-        output.WriteLine($"مُضيفونَ حَرفِيّون: {literal.Count} · نِداءاتُ دالَّةٍ في وُسومِ الجَلب: {built.Calls} (لا يُحَلّ: {built.Unresolved.Count}) · مُضيفونَ يَبنيهِم الكود: " +
-                         $"{builtHosts.Count} ({string.Join(", ", built.Hosts.Select(h => $"{h.Host} ← {h.Call} في {Path.GetFileName(h.File)}").Distinct())}) · " +
-                         $"جِهاتٌ غَيرُ مُسَمّاة: {string.Join("، ", unnamed)} · share_maps بِالعَرَبِيَّةِ يُسَمّي OpenStreetMap: {ar.Contains("OpenStreetMap", StringComparison.Ordinal)}");
-        Assert.Equal(4, literal.Count);
-        Assert.DoesNotContain("www.openstreetmap.org", literal);
+        var unnamed = UnnamedBrowserParties(all);
+        var ar = AccountDeletionRetentionTests.Bare(LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_maps")!);
+        var en = LocaleCatalog.Find("en", "platform.privacy.share_maps")!;
+        var embed = UpgradePromptPriceTests.Code("libs", "kits", "Maps", "ACommerce.Kit.Maps.Core", "Location.cs");
+        output.WriteLine($"مُضيفون: {all.Count} · مُضيفونَ يَبنيهِم الكود: {builtHosts.Count} ({string.Join(", ", built.Hosts.Select(h => $"{h.Host} ← {h.Call} في {Path.GetFileName(h.File)}").Distinct())}) · " +
+                         $"جِهاتٌ غَيرُ مُسَمّاة: {unnamed.Count} · share_maps يُسَمّي OpenStreetMap: ar {ar.Contains("OpenStreetMap", StringComparison.Ordinal)} / en {en.Contains("OpenStreetMap", StringComparison.Ordinal)}");
+        Assert.Equal(5, all.Count);
         Assert.Equal(new[] { "www.openstreetmap.org" }, builtHosts);
         Assert.Empty(built.Unresolved);
-        Assert.False(BrowserHostParties.ContainsKey("www.openstreetmap.org"));
-        Assert.Equal(new[] { "«www.openstreetmap.org» بِلا جِهَة" }, unnamed);
-        Assert.DoesNotContain("OpenStreetMap", ar, StringComparison.Ordinal);
+        Assert.Equal("OpenStreetMap", BrowserHostParties["www.openstreetmap.org"]);
+        Assert.Empty(unnamed);
+        Assert.Contains("OpenStreetMap", ar, StringComparison.Ordinal);
+        // وما يَقولُه هُوَ ما يُرسَل: الصُندوقُ والعَلامَةُ في رابِطِ الإطار.
+        Assert.Contains("&marker={Inv(lat)}%2C{Inv(lng)}", embed, StringComparison.Ordinal);
+        Assert.Contains("الموقع المعروض", ar, StringComparison.Ordinal);
+        Assert.Contains("location shown", en, StringComparison.Ordinal);
     }
 
     /// <summary>حُقولُ تَسجيلِ البائِعِ المُسَجَّلِ في الضَريبَةِ كَما يَكتُبُها <c>OtoClient.RegisterVendorAsync</c> تَحتَ <c>if (vendor.IsVatRegistered)</c>.</summary>

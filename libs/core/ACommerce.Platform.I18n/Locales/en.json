@@ -100,7 +100,7 @@
   "platform.privacy.share_hosting": "The hosting and database providers (Hugging Face and Neon today) — they hold all of the platform's data, stored to run and keep it.",
   "platform.privacy.share_files": "The uploaded image store ({0}) — it holds the profile photo and listing photos you upload.",
   "platform.privacy.share_fonts": "The web font service (Google Fonts) and the web file delivery network (jsDelivr) — your browser requests the font and the live-connection library from them, so your network address is visible to them.",
-  "platform.privacy.share_maps": "OpenStreetMap — map tiles are requested from it when a screen containing a map is opened.",
+  "platform.privacy.share_maps": "OpenStreetMap — your browser requests the map from it when a screen containing a map is opened, so your network address and the location shown on it are visible to it.",
   "platform.privacy.share_legal": "Competent authorities — on a binding legal request.",
   "platform.privacy.s5_abroad": "Some of these parties process data outside the Kingdom of Saudi Arabia.",
   "platform.privacy.names_pair": "{0} and {1}",
