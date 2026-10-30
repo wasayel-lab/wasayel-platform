@@ -99,6 +99,50 @@ public class StoreRootVisitorCharacterizationTests
         }
     }
 
+    // ─── (٣) جَذرُ المَتجَرِ لِلمُسَجَّل (‏2026-10-30، تَدقيقُ الموجَة ١١ CO5 — التَوصيفُ قَبلَ التَبديل) ──────────
+    //
+    // لَقطَتانِ جَديدَتانِ بِالأَداةِ نَفسِها (`capture-appearance.sh`، مِلَفُّ `roleless` الجَديدُ ومِلَفُّ `member2`) عَلى قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَة.
+    // **ما يُقلَبُ في كوميتِ التَبديل**: صَفُّ `Today_…` لِلمُسَجَّلِ بِلا دَورٍ فَعّال، وصَفُّ تَطبيقِ دَورِ المُشتَري (`customer`) مِن صَفِّ
+    // تَطبيقاتِ الأَدوارِ أَعلاه. **وما يَبقى بِحَرفِه**: صاحِبُ دَورِ البائِعِ عَلى الجَذرِ يَرى رَئيسِيَّةَ البائِع.
+
+    /// <summary>
+    /// <para><b>اليَوم</b>: عُضوٌ مُسَجَّلٌ بِلا دَورٍ فَعّالٍ (<c>owner-test</c>، فيه دَورُ مُشتَرٍ <c>customer</c>) يَرى عَلى <c>/owner-test</c>
+    /// البَوّابَةَ صَفحَةً كامِلَة — رَأسُها وبِطاقاتُها وسَطرُ «لَدَيكَ حِساب» — بِلا هيرو ولا إجراءات، والشَريطُ ظاهِرٌ (مُسَجَّل).
+    /// بَينَما زائِرُ الجَذرِ نَفسِه يَرى البِضاعَةَ أَوَّلاً (‏ADR-048).</para>
+    /// </summary>
+    [Fact]
+    public void Today_a_signed_in_member_without_an_active_role_sees_the_role_gateway_on_the_store_root()
+    {
+        var html = Snapshot("roleless-store-root");
+
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(1, Count(html, "acm-role-landing-head"));
+        Assert.Equal(5, Count(html, Card));
+        Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/owner-test/login\">"));
+        Assert.Equal(0, Count(html, Hero));
+        Assert.Equal(0, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+    }
+
+    /// <summary>
+    /// <para><b>ويَبقى</b>: صاحِبُ دَورِ البائِعِ (<c>member2</c> بِدَورِ <c>host</c> في <c>ejar</c>) يَرى عَلى الجَذرِ رَئيسِيَّةَ البائِعِ بِشَريطِها —
+    /// لا بَوّابَةَ ولا رَئيسِيَّةَ المُشتَري. دَورُه الفَعّالُ يَحكُمُ ما يَراه.</para>
+    /// </summary>
+    [Fact]
+    public void A_signed_in_member_with_a_seller_role_sees_the_seller_home_on_the_store_root()
+    {
+        var html = Snapshot("member2-store-root");
+
+        Assert.Equal(1, Count(html, "class=\"acm-role-home acm-role-home-seller\""));
+        Assert.Equal(0, Count(html, Gateway));
+        Assert.Equal(0, Count(html, Card));
+        Assert.Equal(0, Count(html, Hero));
+        Assert.Equal(0, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+    }
+
     /// <summary>
     /// <para><b>ومَتجَرٌ بِلا أَدوار</b> (<c>theme-demo</c>) يَرى زائِرُه رَئيسِيَّةَ المُشتَري: الهيرو والإجراءات، بِالشَريطِ — ولا بَوّابَة.
     /// <b>وهذِه بِعَينِها «رَئيسِيَّةُ المُشتَري»</b> الَّتي يَعنيها القَرار: الفَرعُ الافتِراضِيُّ في <c>TenantHome</c>.</para>

@@ -493,6 +493,11 @@ GUARDED_PAGES=(
   # سَطرَ التَحويل («جارٍ التَّحويل…») الَّذي لا يَبلُغُه زائِر أَبَداً.
   "member-login:member:/{member}/login"
 
+  # ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5) — **جَذرُ المَتجَرِ لِلمُسَجَّل**: لا لَقطَةَ قَبلَها لِعُضوٍ مُسَجَّلٍ عَلى `/{slug}` نَفسِه، فَما يَراه
+  # المُسَجَّلُ بِلا دَورٍ فَعّال (`roleless`، مَتجَرٌ فيه دَورُ مُشتَر) وصاحِبُ دَورِ البائِع (`member2` بِدَورِ `host`) لا يَحرُسُه شَيء.
+  "roleless-store-root:roleless:/{roleless}"
+  "member2-store-root:member2:/{member}"
+
   "studio-study:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01"
   "studio-study-print:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01/print"
   "admin-incubator-study:admin:/admin/incubator/5a3e1d00-0000-4000-8000-00000000ec01/study"
@@ -516,6 +521,7 @@ SHEETS=(
 DEV_CODE="${WSL_CAPTURE_DEV_CODE:-123456}"
 USER_TENANT="${WSL_CAPTURE_USER_TENANT:-theme-demo}"
 MEMBER_TENANT="${WSL_CAPTURE_MEMBER_TENANT:-ejar}"
+ROLELESS_TENANT="${WSL_CAPTURE_ROLELESS_TENANT:-owner-test}"
 
 JARS="$(mktemp -d)"
 trap 'rm -rf "$JARS"' EXIT
@@ -679,6 +685,18 @@ else
   PROFILES_MISSING="$PROFILES_MISSING member2(WSL_CAPTURE_MEMBER2_PHONE)"
 fi
 
+# ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5) — مِلَفٌّ سابِع: **عُضوٌ مُسَجَّلٌ بِلا دَورٍ فَعّال** في مَتجَرٍ فيه دَورُ مُشتَر. يَبذُرُه
+# `AppearanceBaselineSeeder` بِلا `ActiveRole` في `owner-test` (هُوِيَّةُ نَفاذ `1033333333`)، ويَدخُلُ بِنَفاذِ الوَهمِيِّ كَمِلَفِّ `user`.
+if [ -n "${WSL_CAPTURE_ROLELESS_NID:-}" ]; then
+  if nafath_login "$JARS/roleless" "$ROLELESS_TENANT" "$WSL_CAPTURE_ROLELESS_NID"; then
+    PROFILE_JAR[roleless]="$JARS/roleless"; PROFILES_READY="$PROFILES_READY roleless"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'roleless' — لا كوكي $ROLELESS_TENANT." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING roleless(WSL_CAPTURE_ROLELESS_NID)"
+fi
+
 for entry in "${PAGES[@]}"; do
   name="${entry%%:*}"
   path="${entry#*:}"
@@ -716,6 +734,7 @@ for entry in "${GUARDED_PAGES[@]}"; do
   profile="${rest%%:*}"; path="${rest#*:}"
   path="${path//\{tenant\}/$USER_TENANT}"
   path="${path//\{member\}/$MEMBER_TENANT}"
+  path="${path//\{roleless\}/$ROLELESS_TENANT}"
 
   jar="${PROFILE_JAR[$profile]:-}"
   if [ -z "$jar" ]; then
