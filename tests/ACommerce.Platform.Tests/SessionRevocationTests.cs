@@ -238,27 +238,56 @@ public class SessionRevocationTests(ITestOutputHelper output)
 
     // ─── ذاكِرَةُ الإصدار (الموجَة ١٢ F1 البَند ٧، ‏2026-10-30): قِراءَةٌ فاتَتها الذاكِرَةُ قَبلَ رَفعٍ تُعيدُ حِفظَ ما قَبلَه ──────────────────
 
-    /// <summary>
-    /// <para><b>تَوصيفُ «اليَوم»</b>: <c>AccountVersionAsync</c> تَقرَأُ الإصدارَ ثُمَّ تَحفَظُه دَقيقَة، و<c>Forget</c> يَمحو المَحفوظَ فَورَ الرَفع. فَقِراءَةٌ بَدَأَت
-    /// قَبلَ الرَفعِ (فَأَعادَت الإصدارَ 0) ووَقَعَ الرَفعُ و<c>Forget</c> بَينَها وبَينَ الحِفظ تَحفَظُ 0 بَعدَ المَحو — فَيَعبُرُ رَمزُ ما قَبلَ الرَفعِ البَوّابَةَ دَقيقَةً
-    /// كامِلَة. الصَفُّ نَقِيٌّ بِالمَخزَنِ المُرَتَّب: القِراءَةُ الأُولى 0 ثُمَّ <c>Forget</c> قَبلَ أَن تَعودَ، والثانِيَةُ (إن وَقَعَت) 1. يُقلَبُ بِاسمِه في كوميتِ التَبديل.</para>
-    /// </summary>
+    private static Microsoft.Extensions.Caching.Memory.MemoryCache FreshCache()
+        => new(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+
+    private static User At(Guid id, int version) => new() { Id = id, TenantSlug = NameSlug, SessionVersion = version };
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-30، كوميتُ التَبديل)</b> — كانَ <c>Today_a_read_that_misses_the_cache_before_a_revoke_caches_the_old_version_after_the_forget</c>
+    /// (‏<c>708dbbc</c>): «القِراءَةُ المُتَقاطِعَة ⇒ 0 · الطَلَبُ التالي ⇒ 0 مِن الذاكِرَة · قِراءاتُ المَخزَن 1 · رَمزُ ما قَبلَ الرَفعِ يُرَدّ False». والآن <c>Forget</c>
+    /// بَينَ القِراءَةِ والحِفظِ يَمنَعُ الحِفظ، فَتُعادُ القِراءَةُ مَرَّةً: الطَلَبُ نَفسُه يَرى ما بَعدَ الرَفعِ، والتالي مِن الذاكِرَةِ بِه، ورَمزُ ما قَبلَه يُرَدّ.</summary>
     [Fact]
-    public async Task Today_a_read_that_misses_the_cache_before_a_revoke_caches_the_old_version_after_the_forget()
+    public async Task A_read_that_misses_the_cache_before_a_revoke_reads_again_after_the_forget_and_the_old_token_is_refused()
     {
         var id = Guid.NewGuid();
-        var cache = new Microsoft.Extensions.Caching.Memory.MemoryCache(new Microsoft.Extensions.Caching.Memory.MemoryCacheOptions());
+        var cache = FreshCache();
         var (store, script) = ScriptedAccountStore.Of(
             read => { if (read == 1) ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.Forget(cache, NameSlug, id); },
-            new User { Id = id, TenantSlug = NameSlug, SessionVersion = 0 }, new User { Id = id, TenantSlug = NameSlug, SessionVersion = 1 });
+            At(id, 0), At(id, 1));
         var first = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, id);
         var next = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, id);
         var refused = ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.IsRevoked(0, next);
-        output.WriteLine($"اليَوم: القِراءَةُ المُتَقاطِعَة ⇒ {first} · الطَلَبُ التالي ⇒ {next} مِن الذاكِرَة · قِراءاتُ المَخزَن {script.Reads} · رَمزُ ما قَبلَ الرَفعِ يُرَدّ {refused}");
-        Assert.Equal(0, first);
-        Assert.Equal(0, next);
+        output.WriteLine($"القِراءَةُ المُتَقاطِعَة ⇒ {first} · الطَلَبُ التالي ⇒ {next} مِن الذاكِرَة · قِراءاتُ المَخزَن {script.Reads} · رَمزُ ما قَبلَ الرَفعِ يُرَدّ {refused}");
+        Assert.Equal(1, first);
+        Assert.Equal(1, next);
+        Assert.Equal(2, script.Reads);
+        Assert.True(refused);
+    }
+
+    /// <summary>السالِبانِ: قِراءَةٌ بِلا مَحوٍ تُحفَظُ مَرَّةً والتالي مِن الذاكِرَة (قِراءَةٌ واحِدَة)؛ ومَحوٌ في أَثناءِ القِراءَتَينِ كِلتَيهِما يُعيدُ الثانِيَةَ بِلا حِفظ —
+    /// فَالتالي يَقرَأُ المَخزَنَ مِن جَديد.</summary>
+    [Fact]
+    public async Task A_quiet_read_is_cached_once_and_a_read_forgotten_twice_is_returned_uncached()
+    {
+        var quiet = Guid.NewGuid();
+        var cache = FreshCache();
+        var (store, script) = ScriptedAccountStore.Of(null, At(quiet, 4));
+        var a = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, quiet);
+        var b = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store, cache, NameSlug, quiet);
+
+        var busy = Guid.NewGuid();
+        var (store2, script2) = ScriptedAccountStore.Of(
+            read => { if (read <= 2) ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.Forget(cache, NameSlug, busy); },
+            At(busy, 1), At(busy, 2), At(busy, 2));
+        var c = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store2, cache, NameSlug, busy);
+        var d = await ACommerce.Templates.Customer.Marketplace.Services.SessionVersionGate.AccountVersionAsync(store2, cache, NameSlug, busy);
+        output.WriteLine($"بِلا مَحو: {a} ثُمَّ {b} · قِراءات {script.Reads} — ومَحوانِ في القِراءَتَين: {c} ثُمَّ {d} · قِراءات {script2.Reads}");
+        Assert.Equal(4, a);
+        Assert.Equal(4, b);
         Assert.Equal(1, script.Reads);
-        Assert.False(refused);
+        Assert.Equal(2, c);
+        Assert.Equal(2, d);
+        Assert.Equal(3, script2.Reads);
     }
 
     // ─── الكاتِبُ بِاسمِ جَلسَةٍ يَسأَلُها عَلى القِراءَةِ الجَديدَة (مُراجَعَةُ الموجَة ١١ لِلمَسار F1، ‏2026-10-30) ───────────────────────

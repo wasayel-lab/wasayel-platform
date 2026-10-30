@@ -118,19 +118,62 @@ public static class SessionVersionGate
 
     /// <summary>إصدارُ الحِسابِ المُخَزَّن — مِن الذاكِرَةِ إن حُفِظَ خِلالَ <see cref="CacheFor"/>، وإلّا مِن وَثيقَتِه: <c>StudioUser</c> لِلاستوديو
     /// و<c>User</c> في جَلسَةِ مُستَأجِرِه بِـ<see cref="GateVersion"/>. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>
-    public static async Task<int?> AccountVersionAsync(IDocumentStore store, IMemoryCache cache, string tenant, Guid userId)
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٧؛ تَوصيفُه <c>708dbbc</c>) القِراءَةُ والحِفظُ في <see cref="CachedVersionAsync"/> — فَـ<see cref="Forget"/>
+    /// يَقَعُ بَينَهُما لا يُعيدُ الإصدارَ القَديم.</remarks>
+    public static Task<int?> AccountVersionAsync(IDocumentStore store, IMemoryCache cache, string tenant, Guid userId)
+        => CachedVersionAsync(cache, Key(tenant, userId), async () =>
+        {
+            await using var q = store.QuerySession(tenant);
+            return tenant == StudioAuth.Tenant
+                ? (await q.LoadAsync<StudioUser>(userId))?.SessionVersion
+                : GateVersion(await q.LoadAsync<User>(userId));
+        });
+
+    /// <summary>عَدّادُ المَحوِ لِكُلِّ حِساب — يَزيدُه <see cref="Forget"/>، وتَقرَؤُه القِراءَةُ قَبلَها وبَعدَها. مُدخَلَةٌ لِكُلِّ حِسابٍ رُفِعَ أَو حُذِفَ في عُمرِ
+    /// العَمَلِيَّة (رَقمٌ واحِد)، وتَبدَأُ مِن الصِفرِ مَعَ كُلِّ إقلاع — كَالذاكِرَةِ نَفسِها.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> Forgotten = new(StringComparer.Ordinal);
+
+    private static readonly object CacheSync = new();
+
+    /// <summary>
+    /// <para><b>الذاكِرَةُ لا تَحفَظُ قِراءَةً بَدَأَت قَبلَ مَحو</b> (‏2026-10-30، مُراجَعَةُ F1 الأَخيرَة عَلى <c>5d858d0</c>، الموجَة ١٢ البَند ٧؛ تَوصيفُه
+    /// <c>708dbbc</c>). كانَت تَقرَأُ ثُمَّ تَحفَظ، و<see cref="Forget"/> يَمحو — فَقِراءَةٌ فاتَتها الذاكِرَةُ فَأَعادَت إصدارَ ما قَبلَ الرَفع، ووَقَعَ الرَفعُ و<c>Forget</c>
+    /// قَبلَ حِفظِها، تَحفَظُه بَعدَ المَحوِ دَقيقَةً كامِلَة (مَقيس: «الطَلَبُ التالي ⇒ 0 · رَمزُ ما قَبلَ الرَفعِ يُرَدّ False»). <b>والآن</b>: تُقرَأُ قيمَةُ عَدّادِ المَحوِ
+    /// قَبلَ القِراءَة، ويُحفَظُ الإصدارُ تَحتَ القُفلِ الَّذي يَمحو بِه <c>Forget</c> <b>إن لَم يَتَغَيَّر العَدّاد</b>؛ وإلّا تُعادُ القِراءَةُ مَرَّةً — فَالطَلَبُ نَفسُه يَرى
+    /// ما بَعدَ الرَفعِ، ولا يَبقى في الذاكِرَةِ ما قَبلَه.</para>
+    /// <para><b>ولِماذا عَدّادٌ لا «أَكبَرُ القيمَتَين»</b>: <c>Forget</c> لا يَعرِفُ الإصدارَ الجَديد (يُناديه بابُ الحَذفِ بَعدَ <c>Erase</c> بِلا وَثيقَةٍ مَحفوظَة)،
+    /// فَبَعدَ مَحوِه لا قيمَةَ في الذاكِرَةِ تُقارَنُ بِها قِراءَةٌ قَديمَة؛ والعَدّادُ يُغلِقُ السِباقَ لِكُلِّ مُنادٍ لِـ<c>Forget</c> بِلا تَغييرِ نِدائِه. وإن مُحِيَ
+    /// مَرَّتَينِ في أَثناءِ قِراءَتَين أُعيدَت الثانِيَةُ بِلا حِفظ.</para>
+    /// </summary>
+    internal static async Task<int?> CachedVersionAsync(IMemoryCache cache, string key, Func<Task<int?>> read)
     {
-        if (cache.TryGetValue(Key(tenant, userId), out int? cached)) return cached;
-        await using var q = store.QuerySession(tenant);
-        int? version = tenant == StudioAuth.Tenant
-            ? (await q.LoadAsync<StudioUser>(userId))?.SessionVersion
-            : GateVersion(await q.LoadAsync<User>(userId));
-        cache.Set(Key(tenant, userId), version, CacheFor);
+        if (cache.TryGetValue(key, out int? cached)) return cached;
+        int? version = null;
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var epoch = Forgotten.GetValueOrDefault(key);
+            version = await read();
+            lock (CacheSync)
+            {
+                if (Forgotten.GetValueOrDefault(key) != epoch) continue;
+                cache.Set(key, version, CacheFor);
+                return version;
+            }
+        }
         return version;
     }
 
     /// <summary>يَمحو الإصدارَ المَحفوظ — فَورَ الرَفع، فَلا يَبقى رَمزٌ مُسقَطٌ يَعبُرُ دَقيقَةَ الحِفظ.</summary>
-    public static void Forget(IMemoryCache cache, string tenant, Guid userId) => cache.Remove(Key(tenant, userId));
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٧) ويَزيدُ عَدّادَ المَحوِ تَحتَ القُفلِ نَفسِه — فَقِراءَةٌ بَدَأَت قَبلَه لا تَحفَظُ ما قَرَأَت (<see cref="CachedVersionAsync"/>).</remarks>
+    public static void Forget(IMemoryCache cache, string tenant, Guid userId)
+    {
+        var key = Key(tenant, userId);
+        lock (CacheSync)
+        {
+            Forgotten.AddOrUpdate(key, 1, (_, n) => n + 1);
+            cache.Remove(key);
+        }
+    }
 
     /// <summary>
     /// <para><b>أَثَرُ «اخرج من كل الأجهزة» عَلى وَثيقَةِ حِسابِ المَتجَر</b> — نَقِيّ: يَرفَعُ الإصدارَ، <b>ويَمحو اشتِراكاتِ الإشعارِ كُلَّها</b>
