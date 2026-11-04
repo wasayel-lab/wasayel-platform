@@ -1,5 +1,7 @@
 #!/usr/bin/env dotnet
 #:property JsonSerializerIsReflectionEnabledByDefault=true
+// ‏(‏2026-11-04) `PublishAot=false` لَيسَ زينَة: تَطبيقُ المِلَفِّ الواحِدِ يَفتَرِضُ AOT فَيَستَعيدُ Microsoft.DotNet.ILCompiler (‏NU1903 خَطَأٌ عَمداً تَحتَ إعلانِه) ويُطفِئُ الكودَ الديناميكِيَّ وَقتَ التَشغيل — كَما في count-listing-owners.cs.
+#:property PublishAot=false
 #:project ../libs/core/ACommerce.Platform.Hosting/ACommerce.Platform.Hosting.csproj
 #:project ../libs/templates/ACommerce.Templates.Customer.Marketplace/ACommerce.Templates.Customer.Marketplace.csproj
 // ═══════════════════════════════════════════════════════════════════════
