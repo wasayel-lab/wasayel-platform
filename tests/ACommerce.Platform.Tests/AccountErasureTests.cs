@@ -671,7 +671,8 @@ public class AccountErasureTests
         var save = At(src.Door, "await session.SaveChangesAsync();");
         // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٤) الإلغاءُ صارَ في `AccountErasure.CloseIncomingAsync` (قِراءَةٌ جَديدَةٌ وإعادَةٌ مَرَّة) — كانَ `deals.CancelAsync(` في الجِسم.
         var cancel = At(src.Door, "AccountErasure.CloseIncomingAsync(deals,");
-        if (cancel < 0 || At(src.Door, "notices.NotifyCancelledAsync(") < 0) v.Add("الوارِدَةُ لا تُلغى ولا يُخبَرُ أَصحابُها");
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢) والإخبارُ بِـ`NotifyClosedByErasureAsync` (نَصٌّ لا يُسَمّي مُلغياً) — كانَ `notices.NotifyCancelledAsync(` بِاسمِ «حِسابٌ مَحذوف».
+        if (cancel < 0 || At(src.Door, "notices.NotifyClosedByErasureAsync(") < 0) v.Add("الوارِدَةُ لا تُلغى ولا يُخبَرُ أَصحابُها");
         else if (save < 0 || cancel < save) v.Add("الإلغاءُ قَبلَ الحِفظ");
         var offerGone = At(src.Offers, "CheckoutCart.OwnerGoneAsync(s, listing)");
         var offerWrite = At(src.Offers, "s.Events.StartStream<ACommerce.Kit.Offers.Offer>(");
@@ -844,6 +845,43 @@ public class AccountErasureTests
         }
         Assert.True(gate > 0 && count > gate && erase > count, "عَدُّ الرِحلاتِ لا يَقَعُ داخِلَ نِداءِ البَوّابَةِ قَبلَ Erase.");
         Assert.True(live > 0 && refuse > live, "بابُ العَرضِ لا يَسأَلُ LiveTrip قَبلَ active_trip.");
+    }
+
+    // ─── ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢؛ تَوصيفُه 6610358) إشعارُ مُشتَري العَرضِ الَّذي أَلغاه حَذفُ البائِع — مُوجَبٌ وسالِب ─────────────
+
+    /// <summary><b>المُوجَب</b>: <see cref="DealNotices.ClosedByErasureFor"/> لِمُشتَري الصَفقَةِ بِنَوعِ الإلغاءِ إلى صَفقَتِه، ونَصُّه لا يُسَمّي مُلغياً — لا «حِسابٌ مَحذوف»
+    /// ولا «أَلغى البائِعُ» — ويَقولُ المَنصَّةَ والسَبَبَ كَما يَقولُهُما سَطرُ الصَفقَة (<c>account.delete.cancel_reason</c>)، بِعُنوانِ الإعلان.</summary>
+    [Fact]
+    public void The_closing_notice_names_no_canceller_and_says_the_platform_and_the_reason()
+    {
+        var deal = new Deal { Id = Guid.NewGuid(), InitiatorId = Other, ListingTitle = "سِلعَةُ البائِع", Status = DealStatus.Cancelled };
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        var n = DealNotices.ClosedByErasureFor("zz", deal, l, DateTime.UtcNow);
+        output.WriteLine($"العُنوان «{n.Title}» · المَتن «{n.Body}» · الدَفع «{DealNotices.ClosedByErasurePushBody(deal, l)}»");
+        Assert.Equal((Other, DealNotices.CancelledType, $"/zz/deals/{deal.Id}"), (n.UserId, n.Type, n.RelatedUrl));
+        foreach (var text in new[] { n.Title, n.Body, DealNotices.ClosedByErasurePushBody(deal, l) })
+        {
+            Assert.DoesNotContain(AccountDeletion.ErasedName, text, StringComparison.Ordinal);
+            Assert.DoesNotContain("أَلغى البائِعُ", text, StringComparison.Ordinal);
+        }
+        Assert.Contains("المَنصَّة", n.Title, StringComparison.Ordinal);
+        Assert.Contains("«سِلعَةُ البائِع»", n.Body, StringComparison.Ordinal);
+        Assert.Contains("أَغلَقَ البائِعُ حِسابَه", n.Body, StringComparison.Ordinal);
+        Assert.Contains("«سِلعَةُ البائِع»", DealNotices.ClosedByErasurePushBody(deal, l), StringComparison.Ordinal);
+    }
+
+    /// <summary><b>السالِب</b>: بابُ الحَذفِ يُخبِرُ بِـ<c>NotifyClosedByErasureAsync</c> بَعدَ <c>CloseIncomingAsync</c>، ولا يُمَرِّرُ «حِسابٌ مَحذوف» اسمَ مُلغٍ
+    /// إلى <c>NotifyCancelledAsync</c> — والمَسارُ العادِيُّ (<c>/cancel</c>) يَبقى عَلى <see cref="DealNotices.CancelledFor"/> بِاسمِ مُلغيه.</summary>
+    [Fact]
+    public void The_deletion_door_tells_the_buyer_with_the_closing_notice_not_a_named_cancel()
+    {
+        var body = AccountDeletionRetentionTests.DeleteEndpointBody();
+        var close = body.IndexOf("AccountErasure.CloseIncomingAsync(deals,", StringComparison.Ordinal);
+        var tell = body.IndexOf("await notices.NotifyClosedByErasureAsync(slug, closed, userId, l);", StringComparison.Ordinal);
+        output.WriteLine($"CloseIncomingAsync {close} · NotifyClosedByErasureAsync {tell} · NotifyCancelledAsync {body.IndexOf("NotifyCancelledAsync(", StringComparison.Ordinal)}");
+        Assert.True(close > 0 && tell > close, "الإخبارُ لَيسَ بَعدَ إلغاءِ الوارِدَة.");
+        Assert.DoesNotContain("NotifyCancelledAsync(", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("AccountDeletion.ErasedName, l", body, StringComparison.Ordinal);
     }
 
     private readonly ITestOutputHelper output;
@@ -2001,6 +2039,31 @@ public class LiveAccountDeletionDoorProofTests(Xunit.Abstractions.ITestOutputHel
             Assert.Equal((DealStatus.Cancelled, reason), (deal.Status, deal.CancelReason));
             Assert.True(DealEvent.IsByPlatform(deal.Timeline[^1]));
             Assert.NotEmpty(told);
+        }
+        finally { await CleanDealAsync(host.Store, slug, listing); }
+    }
+
+    /// <summary><b>(‏2026-11-04، الموجَة ١٢ G1 · ٢؛ تَوصيفُه <c>6610358</c>) والمُشتَري يُخبَرُ بِما يَقولُه سَطرُ الصَفقَة</b>: إشعارُه المُخَزَّنُ نَصُّ
+    /// <see cref="DealNotices.ClosedByErasureFor"/> بِعَينِه — لا يُسَمّي «حِسابٌ مَحذوف» مُلغياً ولا يَقولُ «أَلغى البائِعُ» — كانَ «حِسابٌ مَحذوف أَلغى طَلَبَكَ عَلى «…»».</summary>
+    [Fact]
+    public async Task The_buyer_of_an_offer_closed_by_the_sellers_deletion_reads_the_platform_and_the_reason_not_a_deleted_canceller_on_Postgres()
+    {
+        if (!Enabled) return;
+        var slug = "zz-xs1-" + Guid.NewGuid().ToString("N")[..8];
+        await using var host = LiveTemplateDoorHost.Build();
+        var (seller, listing, seeded) = await SeedOfferDealAsync(host.Store, slug, DealStage.Offered, null);
+        try
+        {
+            var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(seller.Id, slug, seller.SessionVersion);
+            var (status, at) = await host.PostFormAsync(DeleteDoor, new Dictionary<string, string> { ["slug"] = slug }, slug, token, Confirm());
+            await using var q = host.Store.QuerySession(slug);
+            var deal = (await q.LoadAsync<Deal>(seeded.Id))!;
+            var told = Assert.Single(await Marten.QueryableExtensions.ToListAsync(q.Query<Notification>().Where(n => n.UserId == seeded.InitiatorId)));
+            var expected = DealNotices.ClosedByErasureFor(slug, deal, new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()), DateTime.UtcNow);
+            output.WriteLine($"حَذفُ البائِع: {status} → {at} · العُنوان «{told.Title}» · المَتن «{told.Body}» · يُسَمّي «{AccountDeletion.ErasedName}»: {told.Body.Contains(AccountDeletion.ErasedName, StringComparison.Ordinal)}");
+            Assert.Equal((302, $"/{slug}?deleted=1"), (status, at));
+            Assert.Equal((expected.Title, expected.Body), (told.Title, told.Body));
+            Assert.DoesNotContain(AccountDeletion.ErasedName, told.Title + told.Body, StringComparison.Ordinal);
         }
         finally { await CleanDealAsync(host.Store, slug, listing); }
     }

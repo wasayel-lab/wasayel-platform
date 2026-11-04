@@ -248,7 +248,9 @@ public class DealNoticesTests
             // والخامِسَةُ (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)) بِالتَرتيبِ نَفسِه: إلغاءُ الاستوديو؛ والثالِثَةُ صارَت تَنتَهي عِندَها.
             ("public async Task<bool> NotifyCancelledAsync(", "public async Task<bool> NotifyCancelledByStoreAsync("),
             // والسادِسَةُ (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1) بِالتَرتيبِ نَفسِه: قَبولُ الاستوديو؛ والخامِسَةُ صارَت تَنتَهي عِندَها.
-            ("public async Task<bool> NotifyCancelledByStoreAsync(", "public async Task<bool> NotifyAcceptedByStoreAsync("),
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢) والثالِثَةَ عَشرَةُ بِالتَرتيبِ نَفسِه: إشعارُ مُشتَري العَرضِ الَّذي أَلغاه حَذفُ البائِع؛ والخامِسَةُ صارَت تَنتَهي عِندَها.
+            ("public async Task<bool> NotifyCancelledByStoreAsync(", "public async Task<bool> NotifyClosedByErasureAsync("),
+            ("public async Task<bool> NotifyClosedByErasureAsync(", "public async Task<bool> NotifyAcceptedByStoreAsync("),
             ("public async Task<bool> NotifyAcceptedByStoreAsync(", "public async Task<int> NotifyPaidAsync("),
             // والسابِعَةُ (‏2026-10-29، قَرارُ المالِك د8) بِالتَرتيبِ نَفسِه: إشعارُ البائِعِ بِالإلغاء؛ والسادِسَةُ صارَت تَنتَهي عِندَها.
             ("public async Task<int> NotifyPaidAsync(", "public async Task<int> NotifyPaymentExpiredAsync("),
@@ -282,7 +284,8 @@ public class DealNoticesTests
         // وعَشَرَةٌ مُنذُ ‏2026-10-29 (قَرارُ المالِك د9 (١) «أ»): `NotifyInterventionAsync` عاشِرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // وأَحَدَ عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د38 (٣) «أ»): `NotifyDisputeResolvedAsync` حادِيَةَ عَشرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
         // واثنا عَشَرَ مُنذُ ‏2026-10-29 (قَرارُ المالِك د30): `NotifyReturnRequestedAsync` ثانِيَةَ عَشرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
-        Assert.Equal(12, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
+        // وثَلاثَةَ عَشَرَ مُنذُ ‏2026-11-04 (الموجَة ١٢ G1 · ٢): `NotifyClosedByErasureAsync` ثالِثَةَ عَشرَتُها — جَرَسٌ واحِدٌ بِالدالَّةِ نَفسِها.
+        Assert.Equal(13, Count(WriteEndpointGuardTests.StripComments(src), "MarketplaceTemplateExtensions.NudgeAsync(_hub, slug,"));
     }
 
     /// <summary><c>/checkout/submit</c>: الصَفَقاتُ ذَواتُ المالِكِ تُجمَعُ في الحَلقَةِ،

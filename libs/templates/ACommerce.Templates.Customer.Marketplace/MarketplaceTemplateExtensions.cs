@@ -1009,8 +1009,10 @@ public static class MarketplaceTemplateExtensions
             // ‏(‏2026-10-30، B-PRIV-1) الوارِدَةُ تُلغيها المَنصَّةُ بَعدَ الحِفظِ (`CancelAsync` تَفتَحُ جَلسَتَها) بِسَبَبٍ مِن القامُوس، ويُخبَرُ صاحِبُ كُلٍّ بِالأُنبوبِ القائِم
             // بِاسمِ «حِسابٌ مَحذوف» — والمَحذوفُ هُوَ المُلغي فَلا يُكتَبُ في صُندوقِه شَيء.
             // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 و8357c95 (ب)) والشَرطُ عَلى قِراءَةٍ جَديدَةٍ قَبلَ كُلِّ مُحاوَلَة، والتَعارُضُ يُعادُ مَرَّة (`AccountErasure.CloseIncomingAsync`).
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢؛ تَوصيفُه 6610358) والمُشتَري يُخبَرُ بِنَصٍّ لا يُسَمّي مُلغياً ويَقولُ السَبَبَ كَسَطرِ الصَفقَة (`NotifyClosedByErasureAsync`) —
+            // كانَ «حِسابٌ مَحذوف أَلغى طَلَبَكَ» والسِجِلُّ يَقولُ المَنصَّة.
             foreach (var closed in await Services.Identity.AccountErasure.CloseIncomingAsync(deals, slug, userId, incoming, l["account.delete.cancel_reason"]))
-                await notices.NotifyCancelledAsync(slug, closed, userId, ACommerce.Kit.Auth.AccountDeletion.ErasedName, l);
+                await notices.NotifyClosedByErasureAsync(slug, closed, userId, l);
 
             var tenant = await tenants.FindAsync(slug);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,

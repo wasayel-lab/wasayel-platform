@@ -150,6 +150,26 @@ public sealed class DealNotices
         => l.Format("notifications.deal_cancelled_by_store.push_body", deal.ListingTitle);
 
     /// <summary>
+    /// <para><b>إشعارُ المُشتَري بِأَنّ المَنصَّةَ أَلغَت طَلَبَه لِأَنّ البائِعَ أَغلَقَ حِسابَه</b> (‏2026-11-04، الموجَة ١٢ G1 · ٢، مُراجَعَةُ <c>f4e1296</c>؛ تَوصيفُه
+    /// <c>6610358</c>): بابُ الحَذفِ يُلغي العَرضَ الوارِدَ الَّذي لَم يَقبَلْه أَحَدٌ بِمُلغٍ هُوَ المَنصَّة (<c>AccountErasure.ClosingCanceller</c>) وسَبَبٍ يَقولُ ذلك
+    /// (<c>account.delete.cancel_reason</c>) — وكانَ يُخبِرُ المُشتَريَ بِـ<see cref="CancelledFor"/> بِاسمِ «حِسابٌ مَحذوف»: «أَلغى البائِعُ طَلَبَكَ» و«حِسابٌ مَحذوف أَلغى
+    /// طَلَبَكَ» وصَفحَةُ الصَفقَةِ تَقولُ المَنصَّة. فَنَصُّه نَسَقُ <see cref="PaymentExpiredFor"/>: لا يُسَمّي مُلغياً، ويَقولُ السَبَبَ كَما يَقولُه سَطرُ الصَفقَة.</para>
+    /// </summary>
+    public static Notification ClosedByErasureFor(string slug, Deal deal, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = deal.InitiatorId,
+        Type = CancelledType,
+        Title = l["account.delete.closed_notice_title"],
+        Body = l.Format("account.delete.closed_notice_body", deal.ListingTitle),
+        RelatedUrl = $"/{slug}/deals/{deal.Id}",
+        At = at,
+    };
+
+    public static string ClosedByErasurePushBody(Deal deal, L l)
+        => l.Format("account.delete.closed_notice_push", deal.ListingTitle);
+
+    /// <summary>
     /// <para><b>إشعارُ المُشتَري بِأَنّ مُهلَةَ دَفعِ طَلَبِه انتَهَت فَأُلغِيَ</b> (‏2026-10-29، قَرارُ المالِك د5 (٤): «ويُخبَر المشتري وكل بائع فيه»): نَوعُه نَوعُ الإلغاء،
     /// ونَصُّه لا يُسَمّي مُلغياً — المَنصَّةُ أَلغَتهُ بِالمُهلَة — ويَقولُ المُدَّةَ مِن ثابِتِها (<see cref="GatewayPayments.InvoiceLifetime"/>، القاعِدَة ١٦) وأَن لا خَصم.</para>
     /// </summary>
@@ -568,6 +588,27 @@ public sealed class DealNotices
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
         await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledByStorePushBody(deal, l),
+            url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        return true;
+    }
+
+    /// <summary>بَعدَ أَن يُلغِيَ بابُ الحَذفِ عَرضاً وارِداً لَم يَقبَلْه البائِعُ المَحذوف (<c>AccountErasure.CloseIncomingAsync</c>): إشعارٌ لِلمُشتَري بِنَصِّ
+    /// <see cref="ClosedByErasureFor"/> — بِتَرتيبِ الأُنبوبِ نَفسِه، والبائِعُ المَحذوفُ لا يُخبَرُ (هُوَ <paramref name="erasedId"/>) وصاحِبُ المَتجَرِ يُخبَرُ كَما في
+    /// <see cref="NotifyCancelledAsync"/>. تُرجِعُ هَل أُشعِر. (‏2026-11-04، الموجَة ١٢ G1 · ٢ — كانَ البابُ يُنادي <see cref="NotifyCancelledAsync"/> بِاسمِ «حِسابٌ مَحذوف».)</summary>
+    public async Task<bool> NotifyClosedByErasureAsync(
+        string slug, Deal deal, Guid erasedId, L l, CancellationToken ct = default)
+    {
+        await NotifyVendorCancelledAsync(slug, deal, erasedId, l, ct);
+        await NotifyStoreOwnerAsync(slug, deal, l, ct);
+        if (!TellsTheBuyer(deal, erasedId)) return false;
+        var n = ClosedByErasureFor(slug, deal, l, DateTime.UtcNow);
+        await using (var s = _store.LightweightSession(slug))
+        {
+            s.Store(n);
+            await s.SaveChangesAsync(ct);
+        }
+        await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, ClosedByErasurePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
