@@ -129,7 +129,7 @@ public class AccountErasureFileKeysTests
         var delete = door.IndexOf("AccountErasure.DeleteFilesAsync(files, done.Files.Keys,", StringComparison.Ordinal);
         Assert.True(save > 0 && delete > save, $"الحِفظ {save} · الحَذفُ مِن المَخزَن {delete}");
         Assert.Contains("ACommerce.Kit.Files.IFileStorage files", door, StringComparison.Ordinal);
-        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(door, @"DeleteFilesAsync\(").Count);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(door, @"DeleteFilesAsync\("));
     }
 }
 
