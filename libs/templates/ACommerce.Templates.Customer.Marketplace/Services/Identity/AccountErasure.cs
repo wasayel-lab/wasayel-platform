@@ -396,6 +396,89 @@ public static class AccountErasure
         /// <summary>صَفَقاتُ مَسارِ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها (<see cref="IncomingUnaccepted"/>) — تُلغيها النُقطَةُ بَعدَ الحِفظ (<c>DealsService.CancelAsync</c> تَفتَحُ
         /// جَلسَتَها وتَحفَظ) ويُخبَرُ صاحِبُ كُلٍّ مِنها. لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
         public IReadOnlyList<Guid> IncomingDeals { get; init; } = Array.Empty<Guid>();
+
+        /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1) إعلاناتُه — القائِمَةُ والمَحذوفَةُ قَبلُ — الَّتي مُحِيَت صُوَرُها أَو إحداثِيّاتُها (<see cref="ScrubEvents"/>).</summary>
+        public int Scrubbed { get; init; }
+
+        /// <summary>مِفاتيحُ مِلَفّاتِه في المَخزَنِ (<see cref="FileKeys"/>) — تُحذَفُ بَعدَ الحِفظِ بِـ<see cref="DeleteFilesAsync"/> لا في المُعامَلَة: المَخزَنُ خارِجَ القاعِدَة.
+        /// لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
+        public ErasedFiles Files { get; init; } = ErasedFiles.None;
+    }
+
+    // ─── مِلَفّاتُه في المَخزَن، وصُوَرُ إعلاناتِه ومَواقِعُها (‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1 + B-5؛ تَوصيفُه 7f2f776) ─────────────
+
+    /// <summary>
+    /// <para><b>خاصِّيَّةُ مَوقِعٍ في إعلان</b>: <c>lat</c>/<c>lng</c> أَو ما يَنتَهي بِـ<c>_lat</c>/<c>_lng</c> — ما يَكتُبُه <c>AcLocationInput</c> (‏<c>{Name}_lat</c>
+    /// و<c>{Name}_lng</c>: <c>pickup_*</c> و<c>dropoff_*</c> اليَوم) وما يُسَمّيه <c>ACommerce.Kit.Maps.Location</c>. نَقِيَّة.</para>
+    /// </summary>
+    public static bool IsLocationAttribute(string key)
+        => key is "lat" or "lng" || key.EndsWith("_lat", StringComparison.Ordinal) || key.EndsWith("_lng", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>إعلانُه بِلا صُوَرِه ولا مَوقِعِه</b>: <c>ListingMediaSet</c> بِقائِمَةٍ فارِغَةٍ إن كانَت لَه صورَة، و<c>ListingEdited</c> بِخَصائِصِه ناقِصَةً خَصائِصَ المَوقِعِ
+    /// (<see cref="IsLocationAttribute"/>) إن كانَ لَه مَوقِع — والمالِكُ وما سِواه يَبقى، فَصَفُّ السِجِلِّ يَبقى بِلا ما يَدُلُّ عَلى مَكانِه (د53 «أ»). وإعلانٌ بِلا صورَةٍ ولا مَوقِعٍ
+    /// لا حَدَثَ لَه. نَقِيَّة — حَدَثانِ في مَجراه لا <c>Store</c> (الإسقاطُ المُباشِرُ يَكتُبُ لَقطَتَه، مُلاحَظَةُ <see cref="EraseEvents(Offer, Guid, DateTime)"/>).</para>
+    /// </summary>
+    public static IReadOnlyList<object> ScrubEvents(Listing listing, DateTime at)
+    {
+        var events = new List<object>();
+        if (listing.MediaUrls.Count > 0) events.Add(new ListingMediaSet(listing.Id, new List<string>(), at));
+        if (listing.Attributes.Keys.Any(IsLocationAttribute))
+            events.Add(new ListingEdited(listing.Id, null, null, null, null, null, null,
+                listing.Attributes.Where(a => !IsLocationAttribute(a.Key)).ToDictionary(a => a.Key, a => a.Value), at));
+        return events;
+    }
+
+    /// <summary>صورَتُه في المَخزَن: المِفتاحُ الحَتمِيُّ الَّذي يَكتُبُه بابُ تَعديلِ المِلَفِّ (<c>tenants/{slug}/avatars/{userId}.{ext}</c>) بِامتِداداتِه الثَلاثَة — صورَةٌ رُفِعَت
+    /// بِنَوعٍ ثُمَّ بِآخَرَ تَبقى بِمِفتاحَين. ويَحرُسُ تَطابُقَ الشَكلِ صَفٌّ يَقرَأُ نَصَّ البابِ (القاعِدَة ٢).</summary>
+    public static IReadOnlyList<string> AvatarKeys(string tenantSlug, Guid userId)
+        => AvatarExtensions.Select(ext => $"tenants/{tenantSlug}/avatars/{userId}.{ext}").ToList();
+
+    /// <summary>امتِداداتُ الصورَةِ الَّتي يَقبَلُها بابُ تَعديلِ المِلَفّ (<c>image/png</c>، <c>image/jpeg</c> ← <c>jpg</c>، <c>image/webp</c>).</summary>
+    public static IReadOnlyList<string> AvatarExtensions { get; } = new[] { "png", "jpg", "webp" };
+
+    /// <summary>مِفاتيحُ مِلَفّاتِه، وعَدَدُ ما تُرِكَ مِن الروابِطِ لِأَنّه خارِجَ مَوضِعِه.</summary>
+    public sealed record ErasedFiles(IReadOnlyList<string> Keys, int Outside)
+    {
+        public static readonly ErasedFiles None = new(Array.Empty<string>(), 0);
+    }
+
+    /// <summary>
+    /// <para><b>مِفاتيحُ مِلَفّاتِه</b>: صورَتُه (<see cref="AvatarKeys"/>)، وكُلُّ صورَةٍ لِإعلانٍ لَه (<paramref name="listings"/>) مِفتاحُها في مَجَلَّدِ ذلكَ الإعلانِ بِعَينِه
+    /// (<c>tenants/{slug}/listings/{id}/</c> — ما يَكتُبُه بابُ النَشرِ وَحدَه). والمِفتاحُ يُشتَقُّ مِن الرابِطِ بِالبادِئَةِ (<c>TenantExportService.KeyFromUrl</c> — الدالَّةُ
+    /// الَّتي تَقرَأُ بِها الحَقيبَةُ المِلَفَّ نَفسَه، القاعِدَة ٨)، ورابِطٌ خارِجَ مَجَلَّدِ إعلانِه لا يُحذَف ويُعَدّ: مِلَفٌّ في مَخزَنٍ آخَر، أَو في مَوضِعٍ قَد يَعرِضُه غَيرُه.
+    /// ولا مِفتاحَ لِغَيرِه. نَقِيَّة.</para>
+    /// </summary>
+    public static ErasedFiles FileKeys(string tenantSlug, Guid userId, IEnumerable<Listing> listings)
+    {
+        var keys = new List<string>(AvatarKeys(tenantSlug, userId));
+        var outside = 0;
+        foreach (var l in listings)
+            foreach (var url in l.MediaUrls)
+            {
+                var key = ACommerce.Templates.Customer.Marketplace.Services.Export.TenantExportService.KeyFromUrl(url, tenantSlug);
+                if (key is not null && key.StartsWith($"tenants/{tenantSlug}/listings/{l.Id}/", StringComparison.Ordinal)) keys.Add(key);
+                else outside++;
+            }
+        return new ErasedFiles(keys.Distinct(StringComparer.Ordinal).ToList(), outside);
+    }
+
+    /// <summary>
+    /// <para><b>حَذفُ مِلَفّاتِه بَعدَ حِفظِ الحَذف — بِأَفضَلِ جُهد</b>: لِكُلِّ مِفتاحٍ <c>IFileStorage.DeleteAsync</c>، وما يَرمي يُكتَبُ في السِجِلِّ بِمِفتاحِه ويُعَدّ ولا يُسقِطُ
+    /// الحَذف — الحِسابُ مَمحُوٌّ في القاعِدَةِ قَبلَه، ومَخزَنٌ لا يُبلَغُ لا يُعيدُه. يُعيدُ عَدَدَ ما حُذِفَ وما تَعَذَّر.</para>
+    /// </summary>
+    public static async Task<(int Deleted, int Failed)> DeleteFilesAsync(ACommerce.Kit.Files.IFileStorage files, IReadOnlyCollection<string> keys,
+        Microsoft.Extensions.Logging.ILogger log, CancellationToken ct = default)
+    {
+        var (deleted, failed) = (0, 0);
+        foreach (var key in keys)
+            try { await files.DeleteAsync(key, ct); deleted++; }
+            catch (Exception ex)
+            {
+                failed++;
+                Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, ex, "حَذفُ الحِساب: تَعَذَّرَ حَذفُ المِلَفِّ {Key} ({Kind})", key, ex.GetType().Name);
+            }
+        return (deleted, failed);
     }
 
     /// <summary>
@@ -509,13 +592,19 @@ public static class AccountErasure
             Listings = plan.Listings.Count,
             RejectedOffers = plan.PendingOffers.Count,
             IncomingDeals = plan.IncomingDeals,
+            Scrubbed = plan.Scrubbed.Count,
+            Files = FileKeys(tenantSlug, userId, plan.Scrubbed),
         };
     }
 
     /// <summary>ما يَسحَبُه حَذفُ حِسابٍ مِن مَتجَرِه: إعلاناتُه القائِمَة، والعُروضُ المُعَلَّقَةُ عَلَيها مِن غَيرِه، وصَفَقاتُ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها أَحَد.</summary>
     public sealed record WithdrawalPlan(IReadOnlyList<Guid> Listings, IReadOnlyList<Guid> PendingOffers, IReadOnlyList<Guid> IncomingDeals)
     {
-        public int Count => Listings.Count + PendingOffers.Count + IncomingDeals.Count;
+        /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1) إعلاناتُه — القائِمَةُ الَّتي تُسحَبُ والمَحذوفَةُ قَبلُ — الَّتي لَها صورَةٌ أَو مَوقِع (<see cref="ScrubEvents"/>):
+        /// كانَ <c>ListingDeleted</c> يَضبِطُ <c>IsDeleted</c> وَحدَه، فَتَبقى الصُوَرُ وإحداثِيّاتُ الالتِقاطِ والإنزالِ في الوَثيقَةِ وفي حَقيبَةِ التَخارُج.</summary>
+        public IReadOnlyList<Listing> Scrubbed { get; init; } = Array.Empty<Listing>();
+
+        public int Count => Listings.Count + PendingOffers.Count + IncomingDeals.Count + Scrubbed.Count;
     }
 
     /// <summary>
@@ -525,19 +614,27 @@ public static class AccountErasure
     /// </summary>
     public static async Task<WithdrawalPlan> WithdrawalPlanAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
     {
-        var withdrawn = (await s.Query<Listing>().Where(l => !l.IsDeleted).ToListAsync(ct)).Where(l => Withdraws(l, userId)).Select(l => l.Id).ToHashSet();
+        // ‏(‏2026-11-04، G1 · ٣) والمَحذوفُ قَبلُ مَعَ القائِم — صُوَرُه ومَوقِعُه باقِيانِ فيه.
+        var his = (await s.Query<Listing>().ToListAsync(ct))
+            .Where(l => ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy(l, userId)).ToList();
+        var withdrawn = his.Where(l => Withdraws(l, userId)).Select(l => l.Id).ToHashSet();
         var rejected = (await s.Query<Offer>().Where(o => o.Status == OfferStatus.Pending && o.OffererId != userId).ToListAsync(ct))
             .Where(o => withdrawn.Contains(o.ListingId)).Select(o => o.Id).ToList();
         var incoming = (await s.Query<Deal>().Where(d => d.Status == DealStatus.Active).ToListAsync(ct))
             .Where(d => IncomingUnaccepted(d, userId)).Select(d => d.Id).ToList();
-        return new WithdrawalPlan(withdrawn.ToList(), rejected, incoming);
+        return new WithdrawalPlan(withdrawn.ToList(), rejected, incoming)
+        {
+            Scrubbed = his.Where(l => ScrubEvents(l, DateTime.UnixEpoch).Count > 0).ToList(),
+        };
     }
 
     /// <summary><b>الأَثَرُ في الجَلسَة</b> بِلا حِفظ: الإعلانُ يُسحَبُ بِمَجراه (<c>ListingDeleted</c>) والعَرضُ يُرفَضُ بِحَدَثِ القَبولِ نَفسِه لِأَخَواتِه (<c>OfferRejected</c>).
-    /// والصَفَقاتُ لا تُمَسُّ هُنا: تُلغى بَعدَ الحِفظِ بِـ<see cref="CloseIncomingAsync"/> — كاتِبُها الواحِدُ وقِراءَتُه الجَديدَة.</summary>
+    /// والصَفَقاتُ لا تُمَسُّ هُنا: تُلغى بَعدَ الحِفظِ بِـ<see cref="CloseIncomingAsync"/> — كاتِبُها الواحِدُ وقِراءَتُه الجَديدَة.
+    /// ‏(‏2026-11-04، G1 · ٣) ولِكُلِّ إعلانٍ لَه صورَةٌ أَو مَوقِعٌ حَدَثا <see cref="ScrubEvents"/> في مَجراه — بَعدَ السَحب، والقائِمُ والمَحذوفُ قَبلُ سَواء.</summary>
     public static void AppendWithdrawal(IDocumentSession s, WithdrawalPlan plan, DateTime at)
     {
         foreach (var id in plan.Listings) s.Events.Append(id, new ListingDeleted(id, at));
         foreach (var id in plan.PendingOffers) s.Events.Append(id, new OfferRejected(id, at));
+        foreach (var l in plan.Scrubbed) s.Events.Append(l.Id, ScrubEvents(l, at).ToArray());
     }
 }

@@ -441,7 +441,10 @@ public class EndpointBodyBleedTests
         // طَبَعَ العَدّادُ «‏2829 → 2835» و«‏3177 → 3183»، و**‏6**.
         // ‏2835 ← **2836** يَوم ‏2026-10-30 (الموجَة ١٢ F2 · ٨): سَطرُ `CheckoutCart.OwnerGoneAsync` في `/{slug}/listings/{id}/deal` — سُؤالُ بابَي السَلَّةِ والعَرضِ بِعَينِه،
         // يَرُدُّ بِـ`owner_gone` قَبلَ `StartAsync`. طَبَعَ العَدّادُ «‏2835 → 2836» و«‏3183 → 3184»، و**‏1**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2836),
+        // ‏2836 ← **2837** يَوم ‏2026-11-04 (الموجَة ١٢ G1 · ٣ — H-SEC-W12-1): سَطرُ `AccountErasure.DeleteFilesAsync` بَعدَ حِفظِ `/{slug}/me/delete/confirm` —
+        // صورَتُه وصُوَرُ إعلاناتِه بِالمَفاتيحِ الَّتي أَعادَها المَحو؛ والحَقنُ في سَطرِ التَوقيعِ القائِم، وحامِلُ «ما مَحاه الحِفظ» بَدَّلَ حامِلَ الوارِداتِ بِلا زِيادَة،
+        // والقَرارُ (أَيُّ مِفتاح) في `AccountErasure.FileKeys` النَقِيَّة. طَبَعَ العَدّادُ «‏2836 → 2837» و«‏3184 → 3185»، و**‏1**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2837),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1202,7 +1205,8 @@ public class EndpointBodyBleedTests
     /// <remarks><b>‏3177 ← 3183 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٥ — F2B-2): سُؤالُ <c>AccountErasure.PartnerGone</c> قَبلَ أَيِّ كِتابَةٍ في أَبوابِ المُحادَثَة،
     /// وطَرَفُ بابِ الإعلانِ مالِكُه (<c>CheckoutCart.OwnerOf</c>) لا <c>Guid.NewGuid()</c>. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3183 ← 3184 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٨): سَطرُ <c>CheckoutCart.OwnerGoneAsync</c> في بابِ «قَدِّم عَرضاً» عَلى الإعلان. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3184;
+    /// <remarks><b>‏3184 ← 3185 يَوم ‏2026-11-04</b> (الموجَة ١٢ G1 · ٣ — H-SEC-W12-1): سَطرُ <c>AccountErasure.DeleteFilesAsync</c> بَعدَ حِفظِ نُقطَةِ الحَذف. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3185;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

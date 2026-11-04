@@ -26,7 +26,7 @@
 //   dotnet run scripts/withdraw-erased-owner-listings.cs -- --apply --confirm 7
 //
 //   --apply              يُنَفِّذ. بِدونِه **عَرضُ ما سَيَتَغَيَّرُ فَقَط**.
-//   --confirm <N>        عَدَدُ التَغييراتِ كَما طَبَعَه العَرض (إعلاناتٌ + عُروضٌ + صَفَقات). اختِلافُه ⇐ تَوَقُّفٌ بِلا كِتابَة.
+//   --confirm <N>        عَدَدُ التَغييراتِ كَما طَبَعَه العَرض (إعلاناتٌ + عُروضٌ + صَفَقات + إعلاناتٌ تُمحى صُوَرُها ومَواقِعُها). اختِلافُه ⇐ تَوَقُّفٌ بِلا كِتابَة.
 //   --backup-dir <path>  مَجَلَّدُ بَيانِ ما سيُمَسّ (‏`backups/`) — يُكتَبُ قَبلَ أَوَّلِ كِتابَة، بِالمُعَرِّفاتِ وإصداراتِها وَحدَها. ولَقطَةُ القاعِدَةِ
 //                        قَبلَ التَنفيذ (`marten-schema.cs --snapshot`، ‏DEPLOY.md §٤‑د) هِيَ النُسخَةُ الَّتي تُستَرجَع.
 //
@@ -115,9 +115,10 @@ foreach (var slug in tenants)
     foreach (var id in erased.OrderBy(i => i))
         if (await AccountErasure.WithdrawalPlanAsync(q, id) is { Count: > 0 } plan) mine.Add((id, plan));
     Console.WriteLine($"{slug,-24} حِساباتٌ مَحذوفَة={erased.Count,-4} لَها ما يُسحَب={mine.Count,-3} إعلانات={mine.Sum(m => m.Plan.Listings.Count),-4} "
-        + $"عُروضٌ تُرفَض={mine.Sum(m => m.Plan.PendingOffers.Count),-4} صَفَقاتُ عَرضٍ تُلغى={mine.Sum(m => m.Plan.IncomingDeals.Count)}");
+        + $"عُروضٌ تُرفَض={mine.Sum(m => m.Plan.PendingOffers.Count),-4} صَفَقاتُ عَرضٍ تُلغى={mine.Sum(m => m.Plan.IncomingDeals.Count),-4} "
+        + $"صُوَرٌ ومَواقِعُ تُمحى={mine.Sum(m => m.Plan.Scrubbed.Count)}");
     foreach (var (owner, plan) in mine)
-        Console.WriteLine($"    # {owner} — إعلانات {plan.Listings.Count} · عُروض {plan.PendingOffers.Count} · صَفَقات {plan.IncomingDeals.Count}");
+        Console.WriteLine($"    # {owner} — إعلانات {plan.Listings.Count} · عُروض {plan.PendingOffers.Count} · صَفَقات {plan.IncomingDeals.Count} · صُوَرٌ ومَواقِع {plan.Scrubbed.Count}");
     work.AddRange(mine.Select(m => (slug, m.Owner, m.Plan)));
 }
 var changes = work.Sum(w => w.Plan.Count);
@@ -153,12 +154,14 @@ foreach (var (slug, owner, plan) in work)
     async Task<long?> Version(Guid stream) => (await q.Events.FetchStreamStateAsync(stream))?.Version;
     var listings = new List<object>();
     foreach (var id in plan.Listings) listings.Add(new { id, version = await Version(id) });
+    var scrubbed = new List<object>();   // ‏(‏2026-11-04، G1 · ٣) إعلاناتُه الَّتي تُمحى صُوَرُها ومَواقِعُها (`WithdrawalPlan.Scrubbed`)
+    foreach (var l in plan.Scrubbed) scrubbed.Add(new { id = l.Id, version = await Version(l.Id) });
     var offers = new List<object>();
     foreach (var id in plan.PendingOffers) offers.Add(new { id, version = await Version(id) });
     var incoming = new List<object>();
     foreach (var id in plan.IncomingDeals)
         if (await q.LoadAsync<Deal>(id) is { } d) incoming.Add(new { id, status = d.Status.ToString(), stage = d.Stage.ToString() });
-    manifest.Add(new { store = slug, owner, listings, offers, deals = incoming });
+    manifest.Add(new { store = slug, owner, listings, offers, deals = incoming, scrubbed });
 }
 await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(new { fingerprint, stamp, changes, items = manifest },
     new JsonSerializerOptions { WriteIndented = true }));
@@ -169,7 +172,7 @@ Console.WriteLine();
 var audit = new AuditWriter(store);
 var dealsService = new DealsService(store, new ACommerce.Kit.Payments.UnavailablePaymentProvider());
 var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
-var (doneListings, doneOffers, doneDeals) = (0, 0, 0);
+var (doneListings, doneOffers, doneDeals, doneScrubbed) = (0, 0, 0, 0);
 foreach (var (slug, owner, _) in work)
 {
     AccountErasure.WithdrawalPlan fresh;
@@ -182,10 +185,10 @@ foreach (var (slug, owner, _) in work)
     var cancelled = await AccountErasure.CloseIncomingAsync(dealsService, slug, owner, fresh.IncomingDeals, reason);
     await audit.WriteAsync(slug, null, "withdraw-erased-owner-listings", "listing.withdraw_erased_owner", "User", owner.ToString(),
         note: $"listings={fresh.Listings.Count} offers={fresh.PendingOffers.Count} deals={cancelled.Count}/{fresh.IncomingDeals.Count}");
-    Console.WriteLine($"OK {slug} {owner} <- إعلانات {fresh.Listings.Count} · عُروض {fresh.PendingOffers.Count} · صَفَقات {cancelled.Count} مِن {fresh.IncomingDeals.Count}");
-    (doneListings, doneOffers, doneDeals) = (doneListings + fresh.Listings.Count, doneOffers + fresh.PendingOffers.Count, doneDeals + cancelled.Count);
+    Console.WriteLine($"OK {slug} {owner} <- إعلانات {fresh.Listings.Count} · عُروض {fresh.PendingOffers.Count} · صَفَقات {cancelled.Count} مِن {fresh.IncomingDeals.Count} · صُوَرٌ ومَواقِع {fresh.Scrubbed.Count}");
+    (doneListings, doneOffers, doneDeals, doneScrubbed) = (doneListings + fresh.Listings.Count, doneOffers + fresh.PendingOffers.Count, doneDeals + cancelled.Count, doneScrubbed + fresh.Scrubbed.Count);
 }
 
 Console.WriteLine();
-Console.WriteLine($"تَمَّ: إعلاناتٌ سُحِبَت {doneListings} · عُروضٌ رُفِضَت {doneOffers} · صَفَقاتٌ أُلغِيَت {doneDeals} (بِلا إشعارِ جَرَسٍ ولا دَفع — سَطرُ الإلغاءِ في صَفحَةِ الصَفقَة).");
+Console.WriteLine($"تَمَّ: إعلاناتٌ سُحِبَت {doneListings} · عُروضٌ رُفِضَت {doneOffers} · صَفَقاتٌ أُلغِيَت {doneDeals} · إعلاناتٌ مُحِيَت صُوَرُها ومَواقِعُها {doneScrubbed} (بِلا إشعارِ جَرَسٍ ولا دَفع — سَطرُ الإلغاءِ في صَفحَةِ الصَفقَة).");
 return 0;

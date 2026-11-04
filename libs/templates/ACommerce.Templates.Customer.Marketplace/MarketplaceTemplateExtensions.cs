@@ -959,7 +959,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/{slug}/me/delete/confirm",
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
                    Services.Queries.TenantDirectory tenants, L l, IMemoryCache cache,
-                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices) =>
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, ACommerce.Kit.Files.IFileStorage files, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -969,7 +969,7 @@ public static class MarketplaceTemplateExtensions
 
             // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-1 — F1 جَعَلَ `User` بِتَزامُنٍ تَفاؤُلِيّ) الحَذفُ كُلُّه يُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة إن كَتَبَ غَيرُه الحِسابَ بَينَ القِراءَةِ
             // والحِفظ — نَسَقُ `AccountWrites.UpdateAsync` بِعَدَدِ مُحاوَلاتِه — والجَلسَةُ تُسأَلُ عَلى كُلِّ قِراءَة (`StillOpen`)؛ والثانِيَةُ إن رُدَّت تَرمي: يَفشَلُ مُغلَقاً.
-            IReadOnlyList<Guid> incoming = Array.Empty<Guid>();
+            Services.Identity.AccountErasure.Counts? done = null;   // ‏ما مَحاه الحِفظُ الناجِح — وارِداتُه ومِلَفّاتُه لِما بَعدَه
             for (var attempt = 1; ; attempt++)
             {
                 await using var session = store.LightweightSession(slug);
@@ -1002,7 +1002,7 @@ public static class MarketplaceTemplateExtensions
                 // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`؛ ‏(‏2026-10-30، B-PRIV-1) ومَعَها إعلاناتُه
                 // تُسحَبُ والعُروضُ المُعَلَّقَةُ عَلَيها تُرفَض، وتَعودُ الصَفَقاتُ الوارِدَةُ الَّتي لَم يَقبَلْها.
                 var erased = await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore);
-                try { await session.SaveChangesAsync(); incoming = erased.IncomingDeals; break; }
+                try { await session.SaveChangesAsync(); done = erased; break; }
                 catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
             }
             Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
@@ -1011,8 +1011,11 @@ public static class MarketplaceTemplateExtensions
             // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 و8357c95 (ب)) والشَرطُ عَلى قِراءَةٍ جَديدَةٍ قَبلَ كُلِّ مُحاوَلَة، والتَعارُضُ يُعادُ مَرَّة (`AccountErasure.CloseIncomingAsync`).
             // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢؛ تَوصيفُه 6610358) والمُشتَري يُخبَرُ بِنَصٍّ لا يُسَمّي مُلغياً ويَقولُ السَبَبَ كَسَطرِ الصَفقَة (`NotifyClosedByErasureAsync`) —
             // كانَ «حِسابٌ مَحذوف أَلغى طَلَبَكَ» والسِجِلُّ يَقولُ المَنصَّة.
-            foreach (var closed in await Services.Identity.AccountErasure.CloseIncomingAsync(deals, slug, userId, incoming, l["account.delete.cancel_reason"]))
+            foreach (var closed in await Services.Identity.AccountErasure.CloseIncomingAsync(deals, slug, userId, done!.IncomingDeals, l["account.delete.cancel_reason"]))
                 await notices.NotifyClosedByErasureAsync(slug, closed, userId, l);
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1؛ تَوصيفُه 7f2f776) ومِلَفّاتُه بَعدَ الحِفظ: صورَتُه بِمِفتاحِها الحَتمِيِّ وصُوَرُ إعلاناتِه — كانَ `Erase` يُفرِغُ
+            // الرابِطَ وَحدَه والمِلَفُّ عامٌّ يَحمِلُ رابِطَه شُرَكاءُ مُحادَثَتِه. بِأَفضَلِ جُهد: ما يَتَعَذَّرُ يُكتَبُ في السِجِلِّ ولا يُعيدُ الحِساب (`AccountErasure.DeleteFilesAsync`).
+            await Services.Identity.AccountErasure.DeleteFilesAsync(files, done.Files.Keys, logs.CreateLogger("ACommerce.AccountErasure"));
 
             var tenant = await tenants.FindAsync(slug);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,
