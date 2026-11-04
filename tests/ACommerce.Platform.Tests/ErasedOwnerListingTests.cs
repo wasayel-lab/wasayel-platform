@@ -52,7 +52,8 @@ public class ErasedOwnerListingSourceTests(ITestOutputHelper output)
         {
             "var apply      = args.Contains(\"--apply\");", "if (!apply)", "return 2;", "if (confirm is null || confirm != changes)",
             "--apply --confirm {changes}", "AutoCreateSchemaObjects = AutoCreate.None", "✗ BLIND CHECK",
-            "AccountErasure.WithdrawalPlanAsync(", "AccountErasure.AppendWithdrawal(", "AccountErasure.CloseIncomingAsync(",
+            // ‏(‏2026-11-04، G1 · ١١ — B-1) والسَحبُ صارَ داخِلَ `EraseCopiesAsync` نَفسِها (تُنادي `WithdrawalPlanAsync` و`AppendWithdrawal`) — كانَ يُنادي الاثنَتَينِ وَحدَهُما.
+            "AccountErasure.WithdrawalPlanAsync(", "AccountErasure.EraseCopiesAsync(", "AccountErasure.NamesOnCopiesAsync(", "AccountErasure.CloseIncomingAsync(",
             "o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);", "o.Projections.Snapshot<Offer>(SnapshotLifecycle.Inline);", "DealsService.RegisterDocument(o);",
             "File.WriteAllTextAsync(manifestPath", "\"listing.withdraw_erased_owner\"",
         };

@@ -738,9 +738,11 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
     public void The_deletion_texts_say_the_deal_keeps_neither_the_name_nor_the_address_typed_in_the_order()
     {
         var me = Guid.NewGuid();
+        // ‏(‏2026-11-04، G1 · ١١ — B-1) صَفقَةٌ مُنتَهِيَة: بابُ الحَذفِ لا يَبلُغُ غَيرَها (`open_deal`)، وعُنوانُ الجارِيَةِ يَبقى لِيُسَلِّمَ البائِع — صَفُّه في
+        // `ErasedOwnerListingScriptSwitchTests`. كانَت الحالُ الافتِراضِيَّةَ (`Active`) ولا تَعني شَيئاً هُنا.
         var typed = new Deal
         {
-            InitiatorId = me, InitiatorName = "اسمٌ كُتِبَ في الاستِمارَة", CounterpartyId = Guid.NewGuid(),
+            InitiatorId = me, InitiatorName = "اسمٌ كُتِبَ في الاستِمارَة", CounterpartyId = Guid.NewGuid(), Status = DealStatus.Completed,
             Attributes = new() { [Deal.DeliveryAddressAttribute] = "حَيُّ المِثال", [Deal.DeliveryPhoneAttribute] = "0500000000", ["qty"] = "1" },
         };
         AccountErasure.EraseFrom(typed, me);

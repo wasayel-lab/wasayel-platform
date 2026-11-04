@@ -184,8 +184,13 @@ public static class AccountErasure
         if (d.InitiatorId == userId)
         {
             changed |= Set(d.InitiatorName, v => d.InitiatorName = v);
-            changed |= d.Attributes.Remove(Deal.DeliveryAddressAttribute);
-            changed |= d.Attributes.Remove(Deal.DeliveryPhoneAttribute);
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ١١ — B-1) وعُنوانُ صَفقَةٍ جارِيَةٍ وهاتِفُها يَبقَيانِ لِيُسَلِّمَ البائِع (د52 يَحميها): بابُ الحَذفِ يَرُدُّ الجارِيَةَ قَبلَ أَيِّ مَحوٍ فَلا يَتَغَيَّرُ لَه
+            // شَيء، وسكربتُ السَحبِ يَبلُغُ حِساباتٍ حُذِفَت قَبلَ `open_deal` (548ea4d) ولَها صَفقَةٌ جارِيَة.
+            if (!IsOpen(d))
+            {
+                changed |= d.Attributes.Remove(Deal.DeliveryAddressAttribute);
+                changed |= d.Attributes.Remove(Deal.DeliveryPhoneAttribute);
+            }
         }
         if (d.CounterpartyId == userId) changed |= Set(d.CounterpartyName, v => d.CounterpartyName = v);
         for (var i = 0; i < d.Timeline.Count; i++)
@@ -431,6 +436,13 @@ public static class AccountErasure
 
         /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ١٠ — B-8) مَدخَلُه عِندَ الناقِل (<see cref="CarrierEntryId"/>) — يُحذَفُ في المُعامَلَةِ نَفسِها: ٠ أَو ١.</summary>
         public int CarrierBindings { get; init; }
+
+        /// <summary>‏(‏2026-11-04، G1 · ١١) ما يُحذَفُ لَه بِمُعَرِّفِه: بَحثُه ومُفَضَّلاتُه وصُفوفُه المُستَورَدَةُ ومَدخَلُه عِندَ الناقِل.</summary>
+        public int Removed => SavedSearches + Favorites + ImportedRows + CarrierBindings;
+
+        /// <summary>‏(‏2026-11-04، G1 · ١١) كُلُّ تَغييرٍ في القاعِدَة: نُسَخٌ أُعيدَ اسمُها، وإعلاناتٌ سُحِبَت، وعُروضٌ رُفِضَت، وصَفَقاتٌ تُلغى بَعدَ الحِفظ، وإعلاناتٌ مُحِيَت صُوَرُها ومَواقِعُها،
+        /// وما حُذِف — يَعُدُّه سكربتُ السَحبِ لِـ<c>--confirm</c>. والمِلَفّاتُ في المَخزَنِ خارِجَه (<see cref="Files"/>).</summary>
+        public int Changes => Total + Listings + RejectedOffers + IncomingDeals.Count + Scrubbed + Removed;
 
         /// <summary>مِفاتيحُ مِلَفّاتِه في المَخزَنِ (<see cref="FileKeys"/>) — تُحذَفُ بَعدَ الحِفظِ بِـ<see cref="DeleteFilesAsync"/> لا في المُعامَلَة: المَخزَنُ خارِجَ القاعِدَة.
         /// لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
@@ -681,6 +693,36 @@ public static class AccountErasure
             ImportedRows = imported.Count,
             CarrierBindings = carrier is null ? 0 : 1,
         };
+    }
+
+    /// <summary>
+    /// <para><b>أَسماؤُه كَما بَقِيَت عَلى نُسَخٍ تَحمِلُ مُعَرِّفَه</b> (‏2026-11-04، الموجَة ١٢ G1 · ١١ — B-1): حِسابٌ حُذِفَ قَبلَ مَحوِ النُسَخِ (<c>548ea4d</c>) وَثيقَتُه مَمحُوَّةٌ فَلا اسمَ فيها
+    /// يُمَرَّرُ إلى <see cref="EraseCopiesAsync"/> — فَالأَسماءُ مِن النُسَخِ نَفسِها: طَرَفاً في صَفقَةٍ وسَطراً فَعَلَه في خَطِّها، وطَرَفاً في مُحادَثَة، وكاتِباً أَو مُقَيَّماً، ومُقَدِّمَ
+    /// عَرضٍ أَو مُطابَقَة، وكاتِبَ تَذكِرَة. ومِفتاحُ الرَبطِ وبَلاغاتُه يَقرَؤُهُما <see cref="EraseCopiesAsync"/> نَفسُه، والمَمحُوُّ والافتِراضِيُّ لَيسا اسماً (<see cref="Identifies"/>).
+    /// يَقرَؤُها سكربتُ السَحب. قِراءَةٌ لا تَكتُب.</para>
+    /// <para><b>وما لا يُدَّعى</b>: وَسيلَتا اتِّصالِه مَمحُوَّتانِ مِن قَبل (<c>Erase</c>) فَلا تُستَعادان — إشعارُ تَسجيلٍ قَديمٌ يَحمِلُ هاتِفَه لا يُربَطُ بِه؛ واسمُ نَشاطٍ لَم يُكتَب عَلى نُسخَةٍ
+    /// مُهَيكَلَةٍ لا يُعرَف.</para>
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> NamesOnCopiesAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
+    {
+        var names = new List<string?>();
+        var deals = (await s.Query<Deal>().Where(d => d.InitiatorId == userId || d.CounterpartyId == userId).ToListAsync(ct))
+            .Concat(await s.Query<Deal>().Where(d => d.Timeline.Any(e => e.ActorId == userId)).ToListAsync(ct))
+            .DistinctBy(d => d.Id);
+        foreach (var d in deals)
+        {
+            if (d.InitiatorId == userId) names.Add(d.InitiatorName);
+            if (d.CounterpartyId == userId) names.Add(d.CounterpartyName);
+            names.AddRange(d.Timeline.Where(e => e.ActorId == userId && !DealEvent.IsByStudio(e) && !DealEvent.IsByPlatform(e)).Select(e => e.ActorName));
+        }
+        foreach (var c in await s.Query<Conversation>().Where(c => c.OwnerId == userId || c.PartnerId == userId).ToListAsync(ct))
+            names.Add(c.OwnerId == userId ? c.OwnerName : c.PartnerName);
+        foreach (var r in await s.Query<Review>().Where(r => r.AuthorId == userId || r.TargetUserId == userId).ToListAsync(ct))
+            names.Add(r.AuthorId == userId ? r.AuthorName : r.TargetUserName);
+        names.AddRange((await s.Query<Offer>().Where(o => o.OffererId == userId).ToListAsync(ct)).Select(o => o.OffererName));
+        names.AddRange((await s.Query<ListingMatch>().Where(m => m.OffererId == userId).ToListAsync(ct)).Select(m => m.OffererName));
+        names.AddRange((await s.Query<Ticket>().Where(t => t.AuthorId == userId).ToListAsync(ct)).Select(t => t.AuthorName));
+        return names.Where(Identifies).Select(n => n!.Trim()).Distinct(StringComparer.Ordinal).ToList();
     }
 
     /// <summary>ما يَسحَبُه حَذفُ حِسابٍ مِن مَتجَرِه: إعلاناتُه القائِمَة، والعُروضُ المُعَلَّقَةُ عَلَيها مِن غَيرِه، وصَفَقاتُ العَرضِ الوارِدَةُ الَّتي لَم يَقبَلْها أَحَد.</summary>

@@ -2,8 +2,9 @@
 #:property JsonSerializerIsReflectionEnabledByDefault=true
 #:property PublishAot=false
 #:project ../libs/templates/ACommerce.Templates.Customer.Marketplace/ACommerce.Templates.Customer.Marketplace.csproj
+#:project ../libs/kits/Files/ACommerce.Kit.Files.Providers.S3/ACommerce.Kit.Files.Providers.S3.csproj
 // ═══════════════════════════════════════════════════════════════════════
-//  سَحبُ إعلاناتِ الحِساباتِ الَّتي حُذِفَت قَبلَ أَن يَسحَبَها الحَذف
+//  إتمامُ حَذفِ الحِساباتِ الَّتي حُذِفَت قَبلَ أَن يَبلُغَ الحَذفُ نُسَخَها
 // ───────────────────────────────────────────────────────────────────────
 //  **لِماذا هذا المِلَفّ** (‏2026-10-30، الموجَة ١٢ F2 · ٨؛ «أ» B-PRIV-1): الحَذفُ صارَ يَسحَبُ إعلاناتِ صاحِبِه في مُعامَلَتِه
 //  (`AccountErasure.EraseCopiesAsync`، `8357c95`) — وما حُذِفَ قَبلَ ذلك بَقِيَت إعلاناتُه قائِمَةً بِمالِكٍ مَمحُوّ: تُعرَضُ في الواجِهَة،
@@ -11,14 +12,19 @@
 //  تَنتَظِرُ مالِكاً لا يَعود. **وهذا السكربتُ يَحِلُّ مَحَلَّ أَيِّ مُرَشِّحٍ في الواجِهَة**: لا يُخفى الإعلانُ عِندَ العَرض، بَل يُسحَبُ كَما
 //  يَسحَبُه الحَذفُ اليَوم — فَتَبقى قاعِدَةٌ واحِدَة.
 //
-//  **والقَرارُ كُلُّه في `AccountErasure` لا هُنا** (القاعِدَة ٨): `WithdrawalPlanAsync` (إعلاناتُه القائِمَةُ بِـ`Withdraws`، والعُروضُ المُعَلَّقَةُ
-//  عَلَيها مِن غَيرِه، و`IncomingUnaccepted` لِلصَفقَة — عِندَ «عَرض» وبِلا طَرَف)، و`AppendWithdrawal` (‏`ListingDeleted` و`OfferRejected`)،
-//  و`CloseIncomingAsync` (إلغاءُ الصَفقَةِ بِـ`ClosingCanceller` بَعدَ الحِفظ، بِقِراءَةٍ جَديدَةٍ ومُحاوَلَةٍ ثانِيَة). وهِيَ بِعَينِها ما يُنادِيه بابُ الحَذف.
-//  ولا استِثناءَ بِاسمِ مَتجَر (`ashare` كَأَيِّ مَتجَر — قَرارُ المالِك).
+//  **‏(‏2026-11-04، الموجَة ١٢ G1 · ١١ — B-1 + B-4 + G-DOCS-4؛ تَوصيفُه `443d914`) وكُلُّ ما يَمحوه الحَذفُ اليَوم، لا الإعلاناتُ وَحدَها**: كُلُّ حَذفٍ في
+//  الإنتاجِ حَتّى اليَومِ سَبَقَ مَحوَ النُسَخ (`548ea4d`)، فَبَقِيَ اسمُه عَلى الصَفَقاتِ والمُحادَثاتِ والتَقييماتِ والعُروضِ والتَذاكِرِ والإشعارات. فَلِكُلِّ حِسابٍ
+//  مَحذوفٍ — في جَلسَةٍ واحِدَةٍ وحِفظٍ واحِد — `AccountErasure.NamesOnCopiesAsync` (أَسماؤُه كَما بَقِيَت عَلى نُسَخٍ تَحمِلُ مُعَرِّفَه) ثُمَّ
+//  `EraseCopiesAsync` نَفسُها بِتِلكَ الأَسماءِ وبِلا وَسيلَتَي اتِّصال: نُسَخُ الاسم، وسَحبُ إعلاناتِه ومَحوُ صُوَرِها ومَواقِعِها، ورَفضُ العُروضِ عَلَيها، وحَذفُ بَحثِه
+//  ومُفَضَّلاتِه وصُفوفِه المُستَورَدَةِ ومَدخَلِه عِندَ الناقِل — ثُمَّ `CloseIncomingAsync` بَعدَ الحِفظ، ولِمُشتَري كُلِّ صَفقَةٍ أُغلِقَت إشعارُ جَرَسٍ بِبانِي البابِ نَفسِه
+//  (`DealNotices.ClosedByErasureFor`). والعَرضُ هُوَ الدالَّةُ نَفسُها في جَلسَةٍ لا تُحفَظ — فَما يُطبَعُ هُوَ ما يُكتَب. والقَرارُ كُلُّه في `AccountErasure`
+//  (القاعِدَة ٨)؛ ولا استِثناءَ بِاسمِ مَتجَر (`ashare` كَأَيِّ مَتجَر — قَرارُ المالِك).
 //
-//  **وما لا يَفعَلُه — يُقال**: لا يُرسِلُ إشعاراً بِجَرَسٍ أَو دَفعٍ لِمُشتَري الصَفقَةِ المُلغاة (`DealNotices` يَحتاجُ مُضيفَ SignalR والدَفعَ الفَوريّ)
-//  — يَكتُبُ الإلغاءُ سَطرَه بِسَبَبِ الحَذفِ في صَفحَةِ الصَفقَة، ويُطبَعُ عَدَدُ المُلغى؛ ولا يَمَسُّ المُخَطَّط (`AutoCreate.None`)؛ ولا يَطبَعُ اسماً
-//  ولا جَوّالاً ولا عُنواناً — المُعَرِّفاتُ وَحدَها.
+//  **وما لا يَفعَلُه — يُقال**: لا دَفعَ فَوريّاً ولا قَرعَ جَرَسٍ لَحظِيّاً (لا مُضيفَ هُنا) — الإشعارُ مُخَزَّنٌ يَراه المُشتَري في «إشعاراتي»؛ ووَسيلَتا الاتِّصالِ
+//  مَمحُوَّتانِ مِن قَبل (`Erase`) فَلا تُستَعادان: إشعارُ تَسجيلٍ قَديمٌ يَحمِلُ هاتِفَه أَو بَريدَه لا يُربَطُ بِه (يُطبَعُ ذلك)؛ وعُنوانُ صَفقَةٍ جارِيَةٍ وهاتِفُها يَبقَيانِ
+//  لِيُسَلِّمَ البائِع (د52)؛ ولا يَمَسُّ المُخَطَّط (`AutoCreate.None`)؛ ولا يَطبَعُ اسماً ولا جَوّالاً ولا عُنواناً — المُعَرِّفاتُ والأَعدادُ وَحدَها.
+//  **والمِلَفّات**: بِمَخزَنٍ مَضبوطٍ (مَفاتيحُ `Files__S3__*` الخَمسَةُ كُلُّها) تُسأَلُ مَفاتيحُه — صورَتُه وصُوَرُ إعلاناتِه (`AccountErasure.FileKeys`) — ويُحذَفُ
+//  الموجودُ بَعدَ الحِفظِ بِأَفضَلِ جُهد (`DeleteFilesAsync`)، ويُعَدُّ في `--confirm`؛ وبِلا مَخزَنٍ يُطبَعُ عَدَدُ المَفاتيحِ الَّتي قَد تَبقى، وهِيَ في البَيان.
 //
 // ─── الاستِعمال ────────────────────────────────────────────────────────
 //   export ConnectionStrings__Postgres="…"        # ولا تُطبَع أَبَداً
@@ -26,13 +32,13 @@
 //   dotnet run scripts/withdraw-erased-owner-listings.cs -- --apply --confirm 7
 //
 //   --apply              يُنَفِّذ. بِدونِه **عَرضُ ما سَيَتَغَيَّرُ فَقَط**.
-//   --confirm <N>        عَدَدُ التَغييراتِ كَما طَبَعَه العَرض (إعلاناتٌ + عُروضٌ + صَفَقات + إعلاناتٌ تُمحى صُوَرُها ومَواقِعُها). اختِلافُه ⇐ تَوَقُّفٌ بِلا كِتابَة.
-//   --backup-dir <path>  مَجَلَّدُ بَيانِ ما سيُمَسّ (‏`backups/`) — يُكتَبُ قَبلَ أَوَّلِ كِتابَة، بِالمُعَرِّفاتِ وإصداراتِها وَحدَها. ولَقطَةُ القاعِدَةِ
-//                        قَبلَ التَنفيذ (`marten-schema.cs --snapshot`، ‏DEPLOY.md §٤‑د) هِيَ النُسخَةُ الَّتي تُستَرجَع.
+//   --confirm <N>        عَدَدُ التَغييراتِ كَما طَبَعَه العَرض (`Counts.Changes` لِكُلِّ حِساب، ومِلَفّاتٌ مَوجودَةٌ بِمَخزَنٍ مَضبوط). اختِلافُه ⇐ تَوَقُّفٌ بِلا كِتابَة.
+//   --backup-dir <path>  مَجَلَّدُ بَيانِ ما سيُمَسّ (‏`backups/`) — يُكتَبُ قَبلَ أَوَّلِ كِتابَة، بِالمُعَرِّفاتِ وإصداراتِها والأَعدادِ ومَفاتيحِ المِلَفّاتِ وَحدَها.
+//                        ولَقطَةُ القاعِدَةِ قَبلَ التَنفيذ (`marten-schema.cs --snapshot`، ‏DEPLOY.md §٤‑د) هِيَ النُسخَةُ الَّتي تُستَرجَع.
 //
 // ─── رُموزُ الخُروج ────────────────────────────────────────────────────
-//   0 — لا شَيءَ لِيُسحَب، أَو نُفِّذَ بِنَجاح.
-//   2 — عَرضٌ وَجَدَ ما يُسحَب (لَم يُكتَب شَيء).
+//   0 — لا شَيءَ لِيُفعَل، أَو نُفِّذَ بِنَجاح.
+//   2 — عَرضٌ وَجَدَ ما يُفعَل (لَم يُكتَب شَيء).
 //   1 — خَطَأ، أَو صِفرُ مَتجَرٍ مَفحوص، أَو --confirm لا يُطابِق.
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -40,15 +46,19 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Files;
+using ACommerce.Kit.Files.Providers.S3;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Shared;
 using ACommerce.Templates.Customer.Marketplace.Services.Audit;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Identity;
 using JasperFx;
 using JasperFx.Events.Projections;
 using Marten;
+using Microsoft.Extensions.Logging.Abstractions;
 
 var apply      = args.Contains("--apply");
 var confirmIdx = Array.IndexOf(args, "--confirm");
@@ -64,9 +74,9 @@ if (string.IsNullOrWhiteSpace(cs))
 }
 var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cs))).ToLowerInvariant()[..12];
 
-// ‏المَخزَنُ كَما يُرَكِّبُه المُضيفُ لِما يَمَسُّه السَحب (‏`HostingExtensions.AddPlatformHost` و`MarketplaceTemplateExtensions`): الإيجارُ المُقتَرِنُ لِلوَثائِقِ
-// والأَحداث، و`Tenant` عامّ، و**نُسخَتا `Listing` و`Offer` تُحَدَّثانِ في المُعامَلَة** — فَحَدَثُ السَحبِ يَبلُغُ ما تَقرَؤُه الواجِهَة —
-// والصَفقَةُ والحِسابُ بِتَزامُنٍ تَفاؤُلِيّ (`DealsService.RegisterDocument` نَفسُها)، فَإلغاءٌ يُسابِقُ قَبولاً يُرَدُّ ويُعادُ مِن قِراءَةٍ جَديدَة.
+// ‏المَخزَنُ كَما يُرَكِّبُه المُضيفُ لِما يَمَسُّه المَحو (‏`HostingExtensions.AddPlatformHost` و`MarketplaceTemplateExtensions`): الإيجارُ المُقتَرِنُ لِلوَثائِقِ
+// والأَحداث، و`Tenant` و`ApiKeyDocument` عامّانِ، و**نُسَخُ `Listing` و`Offer` و`Ticket` تُحَدَّثُ في المُعامَلَة** — فَحَدَثُ السَحبِ والتَسمِيَةِ يَبلُغُ ما تَقرَؤُه
+// الشاشات — والصَفقَةُ والحِسابُ بِتَزامُنٍ تَفاؤُلِيّ (`DealsService.RegisterDocument` نَفسُها)، فَإلغاءٌ يُسابِقُ قَبولاً يُرَدُّ ويُعادُ مِن قِراءَةٍ جَديدَة.
 using var store = DocumentStore.For(o =>
 {
     o.Connection(cs);
@@ -76,10 +86,23 @@ using var store = DocumentStore.For(o =>
     o.Events.TenancyStyle = JasperFx.MultiTenancy.TenancyStyle.Conjoined;
     o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
     o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);
+    o.Schema.For<ACommerce.Templates.Customer.Marketplace.Services.Api.ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);
     o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
     o.Projections.Snapshot<Offer>(SnapshotLifecycle.Inline);
+    o.Projections.Snapshot<ACommerce.Kit.Support.Ticket>(SnapshotLifecycle.Inline);
     DealsService.RegisterDocument(o);
 });
+
+// ‏المَخزَنُ إن ضُبِطَت مَفاتيحُه الخَمسَةُ كُلُّها (`FileStorageSelection.ConfigKeys` — لا نُسخَةٌ مِن أَسمائِها) — وإلّا لا مَخزَن، وتُطبَعُ المَفاتيحُ الَّتي قَد تَبقى.
+string? Env(string key) => Environment.GetEnvironmentVariable(key.Replace(":", "__"));
+IFileStorage? files = FileStorageSelection.ConfigKeys.All(k => !string.IsNullOrWhiteSpace(Env(k)))
+    ? new S3FileStorage(Microsoft.Extensions.Options.Options.Create(new S3FileStorageOptions
+    {
+        Endpoint = Env(FileStorageSelection.EndpointKey)!, Bucket = Env(FileStorageSelection.BucketKey)!,
+        AccessKeyId = Env(FileStorageSelection.AccessKeyIdKey)!, SecretAccessKey = Env(FileStorageSelection.SecretAccessKeyKey)!,
+        PublicBaseUrl = Env(FileStorageSelection.PublicBaseUrlKey)!,
+    }), NullLogger<S3FileStorage>.Instance)
+    : null;
 
 List<string> tenants;
 try
@@ -96,38 +119,67 @@ catch (Exception ex)
 
 Console.WriteLine($"القاعِدَة: بَصمَة {fingerprint} · المَتاجِر: {tenants.Count}");
 Console.WriteLine($"الوَضع:   {(apply ? "تَنفيذ (--apply)" : "عَرضُ ما سَيَتَغَيَّر — بِلا كِتابَة")}");
+Console.WriteLine($"المِلَفّات: {(files is null ? "لا مَخزَنَ مَضبوط (Files__S3__* الخَمسَة) — تُطبَعُ المَفاتيحُ الَّتي قَد تَبقى ولا تُحذَف" : "مَخزَنٌ مَضبوط — يُسأَلُ عَن كُلِّ مِفتاح")}");
 Console.WriteLine(new string('-', 78));
 if (tenants.Count == 0)
 {
-    Console.Error.WriteLine("✗ BLIND CHECK: صِفرُ مَتجَرٍ مَفحوص — لا يُقال «لا شَيءَ لِيُسحَب» عَن قاعِدَةٍ لَم تُقرَأ.");
+    Console.Error.WriteLine("✗ BLIND CHECK: صِفرُ مَتجَرٍ مَفحوص — لا يُقال «لا شَيءَ لِيُفعَل» عَن قاعِدَةٍ لَم تُقرَأ.");
     return 1;
 }
 
-// ─── العَرض — قِراءَةٌ لا تَكتُب ─────────────────────────────────────────
-var work = new List<(string Slug, Guid Owner, AccountErasure.WithdrawalPlan Plan)>();
-var erasedSeen = 0;
+// ─── العَرض — الدالَّةُ نَفسُها في جَلسَةٍ لا تُحفَظ ─────────────────────────────
+async Task<IReadOnlyList<string>> ExistingAsync(IReadOnlyList<string> keys)
+{
+    if (files is null) return Array.Empty<string>();
+    var found = new List<string>();
+    foreach (var k in keys)
+        try { if (await files.ExistsAsync(k)) found.Add(k); }
+        catch (Exception ex) { Console.Error.WriteLine($"    ⚠ تَعَذَّرَ سُؤالُ المَخزَنِ عَن مِفتاح ({ex.GetType().Name}) — يُعَدُّ باقِياً."); found.Add(k); }
+    return found;
+}
+
+var work = new List<(string Slug, Guid Owner, AccountErasure.Counts Counts, IReadOnlyList<string> Files)>();
+var (erasedSeen, keysUnchecked, personRows) = (0, 0, 0);
 foreach (var slug in tenants)
 {
-    await using var q = store.QuerySession(slug);
-    var erased = (await q.Query<User>().Where(u => u.DeletedAt != null).Select(u => u.Id).ToListAsync()).ToList();
+    List<Guid> erased;
+    int storePersonRows;
+    await using (var q = store.QuerySession(slug))
+    {
+        erased = (await q.Query<User>().Where(u => u.DeletedAt != null).Select(u => u.Id).ToListAsync()).ToList();
+        var personTables = AccountErasure.ImportedPersonTables.Keys.ToArray();
+        storePersonRows = await q.Query<ImportedRecord>().Where(r => personTables.Contains(r.Table)).CountAsync();
+    }
     erasedSeen += erased.Count;
-    var mine = new List<(Guid Owner, AccountErasure.WithdrawalPlan Plan)>();
+    personRows += storePersonRows;
+    var mine = new List<(Guid Owner, AccountErasure.Counts Counts, IReadOnlyList<string> Files)>();
     foreach (var id in erased.OrderBy(i => i))
-        if (await AccountErasure.WithdrawalPlanAsync(q, id) is { Count: > 0 } plan) mine.Add((id, plan));
-    Console.WriteLine($"{slug,-24} حِساباتٌ مَحذوفَة={erased.Count,-4} لَها ما يُسحَب={mine.Count,-3} إعلانات={mine.Sum(m => m.Plan.Listings.Count),-4} "
-        + $"عُروضٌ تُرفَض={mine.Sum(m => m.Plan.PendingOffers.Count),-4} صَفَقاتُ عَرضٍ تُلغى={mine.Sum(m => m.Plan.IncomingDeals.Count),-4} "
-        + $"صُوَرٌ ومَواقِعُ تُمحى={mine.Sum(m => m.Plan.Scrubbed.Count)}");
-    foreach (var (owner, plan) in mine)
-        Console.WriteLine($"    # {owner} — إعلانات {plan.Listings.Count} · عُروض {plan.PendingOffers.Count} · صَفَقات {plan.IncomingDeals.Count} · صُوَرٌ ومَواقِع {plan.Scrubbed.Count}");
-    work.AddRange(mine.Select(m => (slug, m.Owner, m.Plan)));
+    {
+        AccountErasure.Counts counts;
+        await using (var dry = store.LightweightSession(slug))   // ← لا حِفظَ لِهذِه الجَلسَة: ما عَلَّمَه المَحوُ يُرمى مَعَها
+            counts = await AccountErasure.EraseCopiesAsync(dry, slug, id, await AccountErasure.NamesOnCopiesAsync(dry, id), Array.Empty<string>());
+        var present = await ExistingAsync(counts.Files.Keys);
+        if (files is null) keysUnchecked += counts.Files.Keys.Count;
+        if (counts.Changes > 0 || present.Count > 0) mine.Add((id, counts, present));
+    }
+    Console.WriteLine($"{slug,-24} مَحذوفَة={erased.Count,-3} لَها ما يُفعَل={mine.Count,-3} أَسماءٌ تُمحى={mine.Sum(m => m.Counts.Total),-4} إعلانات={mine.Sum(m => m.Counts.Listings),-3} "
+        + $"عُروض={mine.Sum(m => m.Counts.RejectedOffers),-3} صَفَقات={mine.Sum(m => m.Counts.IncomingDeals.Count),-3} صُوَرٌ ومَواقِع={mine.Sum(m => m.Counts.Scrubbed),-3} "
+        + $"تُحذَف={mine.Sum(m => m.Counts.Removed),-3} مِلَفّات={mine.Sum(m => m.Files.Count),-3} صُفوفُ شَخصٍ مُستَورَدَة={storePersonRows}");
+    foreach (var (owner, k, present) in mine)
+        Console.WriteLine($"    # {owner} — أَسماء {k.Total} · إعلانات {k.Listings} · عُروض {k.RejectedOffers} · صَفَقات {k.IncomingDeals.Count} · صُوَرٌ ومَواقِع {k.Scrubbed} · "
+            + $"بَحث {k.SavedSearches} · مُفَضَّلَة {k.Favorites} · مُستَورَد {k.ImportedRows} · ناقِل {k.CarrierBindings} · مِلَفّات {present.Count}");
+    work.AddRange(mine.Select(m => (slug, m.Owner, m.Counts, m.Files)));
 }
-var changes = work.Sum(w => w.Plan.Count);
+var changes = work.Sum(w => w.Counts.Changes + w.Files.Count);
 
 Console.WriteLine(new string('-', 78));
-Console.WriteLine($"فُحِصَ: {tenants.Count} مَتجَراً · حِساباتٌ مَحذوفَة {erasedSeen} · تَغييرات: {changes}");
+Console.WriteLine($"فُحِصَ: {tenants.Count} مَتجَراً · حِساباتٌ مَحذوفَة {erasedSeen} · تَغييرات: {changes} · صُفوفُ جَداوِلِ الشَخصِ المُستَورَدَةِ في المَتاجِر: {personRows}");
+Console.WriteLine("وَسيلَتا الاتِّصال: مَمحُوَّتانِ مِن قَبل (Erase) — إشعارُ تَسجيلٍ قَديمٌ يَحمِلُ هاتِفَ صاحِبِه أَو بَريدَه لا يُربَطُ بِه ولا تُنزَعُ مِنه.");
+if (files is null && keysUnchecked > 0)
+    Console.WriteLine($"مَفاتيحُ مِلَفّاتٍ قَد تَبقى في المَخزَن: {keysUnchecked} (صورَةُ كُلِّ حِسابٍ مَحذوفٍ وصُوَرُ إعلاناتِه — في البَيانِ عِندَ التَنفيذ؛ اضبِط Files__S3__* لِتُسأَلَ وتُحذَف).");
 if (changes == 0)
 {
-    Console.WriteLine("لا شَيءَ لِيُسحَب.");
+    Console.WriteLine("لا شَيءَ لِيُفعَل.");
     return 0;
 }
 if (!apply)
@@ -143,52 +195,71 @@ if (confirm is null || confirm != changes)
     return 1;
 }
 
-// ─── بَيانُ ما سيُمَسّ — قَبلَ أَوَّلِ كِتابَة، بِالمُعَرِّفاتِ وإصداراتِها وَحدَها ─────────
+// ─── بَيانُ ما سيُمَسّ — قَبلَ أَوَّلِ كِتابَة، بِالمُعَرِّفاتِ وإصداراتِها والأَعدادِ والمَفاتيحِ وَحدَها ─────────
 Directory.CreateDirectory(backupDir);
 var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
 var manifestPath = Path.Combine(backupDir, $"withdraw-erased-owner-listings-{stamp}.json");
 var manifest = new List<object>();
-foreach (var (slug, owner, plan) in work)
+foreach (var (slug, owner, k, present) in work)
 {
     await using var q = store.QuerySession(slug);
     async Task<long?> Version(Guid stream) => (await q.Events.FetchStreamStateAsync(stream))?.Version;
+    var plan = await AccountErasure.WithdrawalPlanAsync(q, owner);
     var listings = new List<object>();
-    foreach (var id in plan.Listings) listings.Add(new { id, version = await Version(id) });
-    var scrubbed = new List<object>();   // ‏(‏2026-11-04، G1 · ٣) إعلاناتُه الَّتي تُمحى صُوَرُها ومَواقِعُها (`WithdrawalPlan.Scrubbed`)
-    foreach (var l in plan.Scrubbed) scrubbed.Add(new { id = l.Id, version = await Version(l.Id) });
+    foreach (var id in plan.Listings.Concat(plan.Scrubbed.Select(l => l.Id)).Distinct()) listings.Add(new { id, version = await Version(id) });
     var offers = new List<object>();
     foreach (var id in plan.PendingOffers) offers.Add(new { id, version = await Version(id) });
     var incoming = new List<object>();
-    foreach (var id in plan.IncomingDeals)
+    foreach (var id in k.IncomingDeals)
         if (await q.LoadAsync<Deal>(id) is { } d) incoming.Add(new { id, status = d.Status.ToString(), stage = d.Stage.ToString() });
-    manifest.Add(new { store = slug, owner, listings, offers, deals = incoming, scrubbed });
+    manifest.Add(new
+    {
+        store = slug, owner, listings, offers, deals = incoming,
+        counts = new { renamed = k.Total, k.Listings, k.RejectedOffers, k.Scrubbed, k.SavedSearches, k.Favorites, k.ImportedRows, k.CarrierBindings },
+        fileKeys = k.Files.Keys, filesOutside = k.Files.Outside, filesPresent = present,
+    });
 }
 await File.WriteAllTextAsync(manifestPath, JsonSerializer.Serialize(new { fingerprint, stamp, changes, items = manifest },
     new JsonSerializerOptions { WriteIndented = true }));
 Console.WriteLine($"بَيانُ ما سيُمَسّ: {manifestPath}");
 Console.WriteLine();
 
-// ─── التَنفيذ — لِكُلِّ حِسابٍ جَلسَتُه، والسُؤالُ يُعادُ عَلى قِراءَةٍ جَديدَة ─────────────────
+// ─── التَنفيذ — لِكُلِّ حِسابٍ جَلسَتُه وحِفظُه، والسُؤالُ يُعادُ عَلى قِراءَةٍ جَديدَة ─────────────────
 var audit = new AuditWriter(store);
 var dealsService = new DealsService(store, new ACommerce.Kit.Payments.UnavailablePaymentProvider());
-var reason = ACommerce.Platform.I18n.LocaleCatalog.Text(ACommerce.Platform.I18n.LocaleCatalog.Arabic, "account.delete.cancel_reason");
-var (doneListings, doneOffers, doneDeals, doneScrubbed) = (0, 0, 0, 0);
-foreach (var (slug, owner, _) in work)
+var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());   // ← لا طَلَب: العَرَبِيَّةُ احتِياطُ القامُوس
+var reason = l["account.delete.cancel_reason"];
+var (doneChanges, doneDeals, doneNotices, doneFiles, failedFiles) = (0, 0, 0, 0, 0);
+foreach (var (slug, owner, _, present) in work)
 {
-    AccountErasure.WithdrawalPlan fresh;
-    await using (var s = store.LightweightSession(slug))
+    AccountErasure.Counts fresh;
+    for (var attempt = 1; ; attempt++)
     {
-        fresh = await AccountErasure.WithdrawalPlanAsync(s, owner);   // ← تَكافُؤ: إعادَةُ التَشغيلِ لا تَجِدُ ما تَسحَبُه
-        AccountErasure.AppendWithdrawal(s, fresh, DateTime.UtcNow);
-        await s.SaveChangesAsync();
+        await using var s = store.LightweightSession(slug);
+        var counts = await AccountErasure.EraseCopiesAsync(s, slug, owner, await AccountErasure.NamesOnCopiesAsync(s, owner), Array.Empty<string>());   // ← تَكافُؤ: إعادَةُ التَشغيلِ لا تَجِدُ شَيئاً
+        try { await s.SaveChangesAsync(); fresh = counts; break; }
+        catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
     }
     var cancelled = await AccountErasure.CloseIncomingAsync(dealsService, slug, owner, fresh.IncomingDeals, reason);
-    await audit.WriteAsync(slug, null, "withdraw-erased-owner-listings", "listing.withdraw_erased_owner", "User", owner.ToString(),
-        note: $"listings={fresh.Listings.Count} offers={fresh.PendingOffers.Count} deals={cancelled.Count}/{fresh.IncomingDeals.Count}");
-    Console.WriteLine($"OK {slug} {owner} <- إعلانات {fresh.Listings.Count} · عُروض {fresh.PendingOffers.Count} · صَفَقات {cancelled.Count} مِن {fresh.IncomingDeals.Count} · صُوَرٌ ومَواقِع {fresh.Scrubbed.Count}");
-    (doneListings, doneOffers, doneDeals, doneScrubbed) = (doneListings + fresh.Listings.Count, doneOffers + fresh.PendingOffers.Count, doneDeals + cancelled.Count, doneScrubbed + fresh.Scrubbed.Count);
+    // ‏ولِمُشتَري كُلِّ صَفقَةٍ أُغلِقَت إشعارُ جَرَسٍ مُخَزَّنٌ بِبانِي البابِ نَفسِه — بِلا دَفعٍ فَوريٍّ ولا قَرعٍ لَحظِيّ.
+    if (cancelled.Count > 0)
+    {
+        await using var n = store.LightweightSession(slug);
+        foreach (var closed in cancelled) n.Store(DealNotices.ClosedByErasureFor(slug, closed, l, DateTime.UtcNow));
+        await n.SaveChangesAsync();
+    }
+    var (deletedFiles, failed) = files is null ? (0, 0) : await AccountErasure.DeleteFilesAsync(files, present, NullLogger.Instance);
+    // ‏سَطرُ التَدقيقِ هَدَفُه المَتجَرُ لا الحِسابُ المَمحُوّ — `HideErasedActors` يُخفي حاشِيَةَ سَطرٍ هَدَفُه حِسابٌ مَحذوف، فَكانَت تُخفى كُلُّها.
+    await audit.WriteAsync(slug, null, "withdraw-erased-owner-listings", "listing.withdraw_erased_owner", "tenant", slug,
+        note: $"owner={owner} listings={fresh.Listings} offers={fresh.RejectedOffers} deals={cancelled.Count}/{fresh.IncomingDeals.Count} renamed={fresh.Total} "
+            + $"scrubbed={fresh.Scrubbed} removed={fresh.Removed} notices={cancelled.Count} files={deletedFiles}");
+    Console.WriteLine($"OK {slug} {owner} <- أَسماء {fresh.Total} · إعلانات {fresh.Listings} · عُروض {fresh.RejectedOffers} · صَفَقات {cancelled.Count} مِن {fresh.IncomingDeals.Count} · "
+        + $"صُوَرٌ ومَواقِع {fresh.Scrubbed} · حُذِف {fresh.Removed} · إشعارات {cancelled.Count} · مِلَفّات {deletedFiles}{(failed > 0 ? $" (تَعَذَّر {failed})" : "")}");
+    (doneChanges, doneDeals, doneNotices, doneFiles, failedFiles) =
+        (doneChanges + fresh.Changes, doneDeals + cancelled.Count, doneNotices + cancelled.Count, doneFiles + deletedFiles, failedFiles + failed);
 }
 
 Console.WriteLine();
-Console.WriteLine($"تَمَّ: إعلاناتٌ سُحِبَت {doneListings} · عُروضٌ رُفِضَت {doneOffers} · صَفَقاتٌ أُلغِيَت {doneDeals} · إعلاناتٌ مُحِيَت صُوَرُها ومَواقِعُها {doneScrubbed} (بِلا إشعارِ جَرَسٍ ولا دَفع — سَطرُ الإلغاءِ في صَفحَةِ الصَفقَة).");
+Console.WriteLine($"تَمَّ: تَغييراتٌ في القاعِدَة {doneChanges} · صَفَقاتٌ أُلغِيَت {doneDeals} · إشعاراتُ جَرَسٍ مُخَزَّنَة {doneNotices} · مِلَفّاتٌ حُذِفَت {doneFiles}"
+    + (failedFiles > 0 ? $" · تَعَذَّرَ {failedFiles} (أَعِد التَشغيل)" : "") + " — بِلا دَفعٍ فَوريّ.");
 return 0;
