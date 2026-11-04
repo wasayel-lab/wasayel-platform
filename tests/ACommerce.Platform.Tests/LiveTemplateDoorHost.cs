@@ -30,7 +30,8 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         _endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>().ToList();
     }
 
-    public static LiveTemplateDoorHost Build(Action<StoreOptions>? marten = null)
+    /// <param name="services">‏(‏2026-11-04، الموجَة ١٢ G1 · ٣) بَديلٌ لِخِدمَةٍ بَعدَ تَركيبِ المُضيف — آخِرُ مُسَجَّلٍ هُوَ ما يَحقِنُه البابُ (مَخزَنُ مِلَفّاتٍ يُسَجِّلُ ما يُحذَفُ مَثَلاً).</param>
+    public static LiveTemplateDoorHost Build(Action<StoreOptions>? marten = null, Action<IServiceCollection>? services = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -51,6 +52,7 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         ACommerce.Kit.Files.UnavailableFileStorageExtensions.AddUnavailableFileStorage(builder.Services);
         builder.Services.AddSingleton<ACommerce.Kit.Payments.IPaymentProvider>(new DealMoneyClaimFirstTests.RecordingPaymentProvider());
         if (marten is not null) builder.Services.ConfigureMarten(marten);
+        services?.Invoke(builder.Services);
         var app = builder.Build();
         ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions.MapCustomerMarketplaceTemplate(app);
         return new LiveTemplateDoorHost(app);
