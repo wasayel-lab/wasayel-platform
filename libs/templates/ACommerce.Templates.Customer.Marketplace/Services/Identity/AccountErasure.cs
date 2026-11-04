@@ -426,10 +426,42 @@ public static class AccountErasure
         public int SavedSearches { get; init; }
         public int Favorites { get; init; }
 
+        /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٨ — B-6) صُفوفُه الخامُّ المَنقولَةُ مِن قاعِدَةِ المَتجَرِ السابِقَة (<see cref="ErasesImported"/>) — تُحذَفُ في المُعامَلَةِ نَفسِها.</summary>
+        public int ImportedRows { get; init; }
+
         /// <summary>مِفاتيحُ مِلَفّاتِه في المَخزَنِ (<see cref="FileKeys"/>) — تُحذَفُ بَعدَ الحِفظِ بِـ<see cref="DeleteFilesAsync"/> لا في المُعامَلَة: المَخزَنُ خارِجَ القاعِدَة.
         /// لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
         public ErasedFiles Files { get; init; } = ErasedFiles.None;
     }
+
+    // ─── صُفوفُه الخامُّ المُستَورَدَة (‏2026-11-04، الموجَة ١٢ G1 · ٨ — B-6؛ تَوصيفُه 8762190) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>جَداوِلُ الشَخصِ في الاستيرادِ الخامّ — مَعجَمٌ مُغلَق: الجَدوَلُ ← أَعمِدَةُ الشَخص</b>. مَقيسٌ مِن نَصِّ المُستَورِد (<c>tools/ACommerce.Importer</c>، لا يُبنى):
+    /// <c>TargetWriter.DumpGenericAsync</c> يَحفَظُ صُفوفَ <c>SELECT *</c> في <c>ImportedRecord.Data</c> — ‏60 جَدوَلاً لِعَشير و11 لِإيجار — ومِنها جَداوِلُ إعدادٍ (مَناطِق، خَصائِص،
+    /// عُمُلات) لا شَخصَ فيها فَلَيسَت هُنا. وعَمودُ الشَخصِ في كُلِّ ما يَقرَؤُه المُستَورِدانِ بِأَسمائِه <c>UserId</c>.</para>
+    /// <para><b>وما لا يُدَّعى</b>: <c>User.Id</c> في إيجار مُعَرِّفُ <c>Users</c> نَفسُه فَيُطابِق؛ وفي عَشير مُعَرِّفُ <c>Profile</c>، وأَعمِدَةُ <c>UserId</c> هُناكَ مُعَرِّفُ <c>AspNetUsers</c>
+    /// (نَصّ) وخَريطَتُه (<c>Profile.UserId</c>) لا تُخَزَّن — فَلا يُطابِقُ صَفٌّ مِنها إلّا أَن يَحمِلَ مُعَرِّفَ الحِساب. وعَدَدُ الباقي يَطبَعُه سكربتُ السَحب (G1-11).</para>
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> ImportedPersonTables = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+    {
+        // عَشير — AshareImporter
+        ["Addresses"] = new[] { "UserId" }, ["ContactPoint"] = new[] { "UserId" }, ["Order"] = new[] { "UserId" }, ["Cart"] = new[] { "UserId" },
+        ["Booking"] = new[] { "UserId" }, ["Vendor"] = new[] { "UserId" }, ["ChatParticipant"] = new[] { "UserId" }, ["MessageRead"] = new[] { "UserId" },
+        ["ComplaintReply"] = new[] { "UserId" }, ["Review"] = new[] { "UserId" }, ["ProductReview"] = new[] { "UserId" }, ["DeviceTokens"] = new[] { "UserId" },
+        ["Subscriptions"] = new[] { "UserId" }, ["SubscriptionInvoices"] = new[] { "UserId" }, ["UserRecipient"] = new[] { "UserId" },
+        ["RecipientGroupUserRecipient"] = new[] { "UserId" },
+        // عَشير وإيجار
+        ["Reports"] = new[] { "UserId" },
+        // إيجار — EjarImporter
+        ["Invoices"] = new[] { "UserId" }, ["SupportMessages"] = new[] { "UserId" }, ["UserPushTokens"] = new[] { "UserId" },
+    };
+
+    /// <summary>صَفٌّ مُستَورَدٌ لَه: جَدوَلُه في <see cref="ImportedPersonTables"/>، وأَحَدُ أَعمِدَةِ الشَخصِ فيه مُعَرِّفُ حِسابِه (بِأَيِّ صيغَةٍ لِلمُعَرِّف). وجَدوَلُ إعدادٍ لا يُطابِقُ
+    /// أَبَداً ولو حَمَلَ المُعَرِّف. نَقِيَّة.</summary>
+    public static bool ErasesImported(ACommerce.Platform.Shared.ImportedRecord row, Guid userId)
+        => ImportedPersonTables.TryGetValue(row.Table, out var columns)
+           && columns.Any(c => row.Data.TryGetValue(c, out var v) && Guid.TryParse(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture), out var id) && id == userId);
 
     // ─── مِلَفّاتُه في المَخزَن، وصُوَرُ إعلاناتِه ومَواقِعُها (‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1 + B-5؛ تَوصيفُه 7f2f776) ─────────────
 
@@ -564,6 +596,12 @@ public static class AccountErasure
         foreach (var x in searches) s.Delete(x);
         var favorites = await s.Query<ACommerce.Kit.Favorites.Favorite>().Where(x => x.UserId == userId).ToListAsync(ct);
         foreach (var x in favorites) s.Delete(x);
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٨ — B-6؛ تَوصيفُه 8762190) وصُفوفُه الخامُّ المُستَورَدَة: جَداوِلُ الشَخصِ وَحدَها (`ImportedPersonTables`)، والقَرارُ لِكُلِّ صَفٍّ في الذاكِرَة
+        // (`ErasesImported`) — الحَقيبَةُ `Data` لا يُرَشِّحُها Marten. وجَداوِلُ الإعدادِ لا تُقرَأُ أَصلاً.
+        var personTables = ImportedPersonTables.Keys.ToArray();
+        var imported = (await s.Query<ACommerce.Platform.Shared.ImportedRecord>().Where(r => personTables.Contains(r.Table)).ToListAsync(ct))
+            .Where(r => ErasesImported(r, userId)).ToList();
+        foreach (var r in imported) s.Delete(r);
 
         // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-2) والصَفقَةُ الَّتي فَعَلَ فيها ولَيسَ طَرَفَها (`others`) تَربِطُ إشعاراتِها كَصَفقَةِ الطَرَف — `RelatedUrls`.
         var urls = RelatedUrls(deals.Concat(others), convs, matches);
@@ -628,6 +666,7 @@ public static class AccountErasure
             Files = FileKeys(tenantSlug, userId, plan.Scrubbed),
             SavedSearches = searches.Count,
             Favorites = favorites.Count,
+            ImportedRows = imported.Count,
         };
     }
 
