@@ -87,6 +87,7 @@ public class DockerImagePinTests(ITestOutputHelper output)
     {
         ["10.0.401"] = "10.0.12",   // ‏إصدارُ ‏2026-09-08
         ["10.0.402"] = "10.0.13",   // ‏إصدارُ ‏2026-10-13 (`security: true`)
+        ["10.0.403"] = "10.0.14",   // ‏إصدارُ ‏2026-10-25 (`security: true`) — مَنقولٌ ‏2026-11-04 (الموجَة ١٢ G1 · ١)
     };
 
     /// <summary><c>null</c> إن كانَ الزَوجُ مِن إصدارٍ واحِد، وإلّا رَمزُ الخَرق: <c>sdk_unknown</c> (لا صَفَّ — يُضافُ مِن releases.json) أَو
@@ -107,7 +108,10 @@ public class DockerImagePinTests(ITestOutputHelper output)
         // ‏حَقنُ عَيب: رَفعُ أَحَدِهِما وَحدَه يُحمِرّ — الصورَةُ القَديمَةُ بِالـSDK الجَديدِ والعَكس، ورُقعَةٌ لا صَفَّ لَها.
         Assert.Equal("runtime_mismatch", PairBreach("10.0.402", "10.0.12"));
         Assert.Equal("runtime_mismatch", PairBreach("10.0.401", "10.0.13"));
-        Assert.Equal("sdk_unknown", PairBreach("10.0.403", "10.0.14"));
+        // ‏(‏2026-11-04) كانَ «10.0.403/10.0.14» عَيِّنَةَ «لا صَفَّ لَها» — وصارَ لَها صَفّ؛ فَالعَيِّنَةُ رُقعَةٌ لَم تُنقَل بَعد، والزَوجُ الجَديدُ مَعَ قَديمِه يُحمِرّ.
+        Assert.Equal("runtime_mismatch", PairBreach("10.0.403", "10.0.13"));
+        Assert.Equal("runtime_mismatch", PairBreach("10.0.402", "10.0.14"));
+        Assert.Equal("sdk_unknown", PairBreach("10.0.404", "10.0.15"));
     }
 
     /// <summary>خُروقُ «CI بِـSDK الصورَة» في سَيرِ عَمَلٍ واحِد، ومَعَها عَدَدُ خُطُواتِ <c>setup-dotnet</c> المَقروءَة. الأَسطُرُ المُعَلَّقَةُ لا تُعَدّ.
