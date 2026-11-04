@@ -232,6 +232,9 @@ public static class AccountErasure
     /// (<c>DeletedAt</c>). الحَذفُ يُبقي الوَثيقَةَ بِاسمِ «حِسابٌ مَحذوف» (<see cref="ACommerce.Kit.Auth.AccountDeletion.Erase"/>)، فَسُؤالُ <c>is null</c> وَحدَه لا يَراه.</para>
     /// <para>يَسأَلُها كُلُّ بابٍ يَفتَحُ مُحادَثَةً أَو يُرسِلُ فيها (<c>users/{userId}/chat</c>، <c>vendor/{vendorId}/chat</c>، <c>listings/{id}/chat</c>،
     /// <c>chats/{id}/send</c>) قَبلَ أَيِّ كِتابَة، وتَسأَلُها الصَفَحاتُ الَّتي تَرسُمُ أَبوابَها (غُرفَةُ المُحادَثَة، صَفحَةُ البائِع، صَفحَةُ الإعلان) — فَلا يُرسَمُ بابٌ يَرُدُّه.</para>
+    /// <para>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصَفحَةٌ رابِعَةٌ ومَسارٌ</b> فاتا <c>af95a46</c>: صَفحَةُ الصَفقَةِ لِلمُشتَري
+    /// (<c>MyDealDetail</c>) تَرسُمُ «تَواصَل مَع البائِع» تَحتَ <c>!vendorGone</c> وسَطرَ الغِيابِ في بَديلِه، وأُنبوبُ طَلَبِ الاستِرجاعِ (<c>DealNotices.NotifyReturnRequestedAsync</c>)
+    /// يَسأَلُها عَلى البائِعِ فَيُخبِرُ إدارَةَ المَتجَرِ بَدَلَ صُندوقِ المَمحُوّ.</para>
     /// </summary>
     public static bool PartnerGone([System.Diagnostics.CodeAnalysis.NotNullWhen(false)] User? partner) => partner is null || partner.DeletedAt is not null;
 

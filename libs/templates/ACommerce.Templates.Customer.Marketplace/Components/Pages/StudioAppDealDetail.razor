@@ -282,7 +282,7 @@
         "cancelled" => L["studio.deal.event_cancelled"],
         "disputed"  => L["studio.deal.event_disputed"],
         DealEvent.DisputeResumed => L["studio.deal.event_dispute_resumed"],   // ‏2026-10-29، قَرارُ المالِك د38
-        DealEvent.ReturnRequested => L["studio.deal.event_return_requested"],   // ‏2026-10-29، قَرارُ المالِك د30
+        DealEvent.ReturnRequested => L[DealNotices.ReturnEventKey(deal!, studio: true)],   // ‏2026-10-29، قَرارُ المالِك د30؛ ‏2026-11-04 G1 · ٤: بِمَن أُخبِر
         "note"      => L["studio.deal.event_note"],
         _ => e.Action
     };

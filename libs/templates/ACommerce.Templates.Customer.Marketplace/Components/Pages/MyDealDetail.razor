@@ -5,6 +5,7 @@
 @inject Services.Deals.DealsService Deals
 @inject Services.Deals.DealShipping Shipping
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
+@inject Services.Queries.AccountQueries Accounts
 @inject IHttpContextAccessor HttpCtx
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
@@ -42,7 +43,7 @@
            والكَلامُ في القامُوس — نَسَقُ `store.locked.write_denied` في `TenantHome`. *@
         @if (DealRefusalTexts.KeyFor(Err) is { } errKey)
         {
-            <AcAlert Variant="danger" Message="@L[errKey]" />
+            <AcAlert Variant="danger" Message="@L[DealNotices.RefusalKeyFor(errKey, deal)]" />
         }
 
         @* ─── «دَورُكَ الآن» ────────────────────────────────────────────
@@ -214,7 +215,9 @@
                    وَحدَه وحَيثُ يُعرَف — لا زِرَّ يَعِدُ بِما لا يَفتَح (القاعِدَة ١٢).
                    والتَسمِيَةُ مِفتاحُ صَفحَةِ البائِعِ نَفسُه، فَالنَصُّ والزِرُّ
                    حَرفٌ واحِدٌ يُقاسُ في `ReturnsPolicyTextTests`. *@
-                @if (isInitiator && vendorId is { } vid)
+                @* ‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2؛ تَوصيفُه 77b8471) والبائِعُ الَّذي أَغلَقَ حِسابَه لا يُرسَمُ لَه بابٌ يَرُدُّه بِـ`partner_missing`
+                   (القاعِدَة ١٢) — `AccountErasure.PartnerGone` سُؤالُ البابِ بِعَينِه، وسَطرُ الغِيابِ نَصُّ صَفحَةِ البائِع. *@
+                @if (isInitiator && vendorId is { } vid && !vendorGone)
                 {
                     <form method="post" action="@($"/{Slug}/users/{vid}/chat")" style="margin-top:8px;">
                         @* المَنشَأ: فَشَلُ الأُنبوبِ (بائِعٌ حُذِفَ حِسابُه) يَعودُ إلى هذِه الصَفحَةِ
@@ -224,6 +227,10 @@
                             <AcIcon Name="message" Size="14" /> @L.Markup("vendors.profile.contact")
                         </button>
                     </form>
+                }
+                else if (isInitiator && vendorId is not null)
+                {
+                    <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">@L.Markup("vendors.profile.contact_gone")</p>
                 }
 
                 @* ─── وَضعُ التَجرِبَةِ يَبقى مُعلَناً **بَعدَ** النَقرَة ───
@@ -479,7 +486,7 @@
             <AcCard>
                 <ChildContent>
                     <h3 style="margin:0 0 6px;">@L.Markup("deals.detail.return_title")</h3>
-                    <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 8px;">@L.Format("deals.detail.return_hint", Culture.FormatTime(DealReturnRequest.WindowEndsAt(deal)!.Value, "yyyy-MM-dd HH:mm"), (int)DealReturnRequest.Window.TotalDays)</p>
+                    <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 8px;">@L.Format(DealNotices.ReturnKey("deals.detail.return_hint", vendorGone), Culture.FormatTime(DealReturnRequest.WindowEndsAt(deal)!.Value, "yyyy-MM-dd HH:mm"), (int)DealReturnRequest.Window.TotalDays)</p>
                     <form method="post" action="@($"/{Slug}/deals/{deal.Id}/return")">
                         <input name="reason" class="ac-input" placeholder="@L["deals.detail.return_reason_placeholder"]" style="margin-bottom:6px;" />
                         <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.return_action"]" />
@@ -568,6 +575,9 @@
     /// <c>Refs[listing_owner]</c>، وإلّا الطَرَفُ المُقابِلُ بَعدَ القَبول؛
     /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ.</summary>
     Guid? vendorId;
+    /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) البائِعُ أَغلَقَ حِسابَه أَو لا وَثيقَةَ لَه — <see cref="Services.Identity.AccountErasure.PartnerGone"/> الَّتي يَسأَلُها
+    /// بابُ المُحادَثَة: فَلا تُرسَمُ استِمارَتُه، ويَقولُ التَلميحُ إنّ إدارَةَ المَتجَرِ تُخبَرُ بِالاستِرجاع.</summary>
+    bool vendorGone;
     /// <summary>مَوقِعي مِن الصَّفقَة — يُغَذّي «دَورُكَ الآن» وَشَرح
     /// التَدَفُّق («صاحِب الطَلَب» تُصبِح «أَنتَ»).</summary>
     Services.Ux.DealSide mySide = Services.Ux.DealSide.Observer;
@@ -590,6 +600,8 @@
         if (!isInitiator && !isListingOwner) { deal = null; return; }
         vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;
         if (vendorId == uid) vendorId = null;
+        vendorGone = isInitiator && vendorId is { } seller
+            && Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, seller));
 
         // بَياناتُ التَوصيلِ لِمَن يُسَلِّمُ وَحدَه — لا لِلمُشتَري (بَياناتُه هُوَ) ولا
         // لِثالِث (أُغلِقَت الصَفحَةُ عَلَيه أَعلاه). وبِثابِتَي `Deal` لا بِحَرفِيَّة،
@@ -675,7 +687,7 @@
         "cancelled" => L["deals.detail.event_cancelled"],
         "disputed" => L["deals.detail.event_disputed"],
         DealEvent.DisputeResumed => L["deals.detail.event_dispute_resumed"],   // ‏2026-10-29، قَرارُ المالِك د38
-        DealEvent.ReturnRequested => L["deals.detail.event_return_requested"],   // ‏2026-10-29، قَرارُ المالِك د30
+        DealEvent.ReturnRequested => L[DealNotices.ReturnEventKey(deal!, studio: false)],   // ‏2026-10-29، قَرارُ المالِك د30؛ ‏2026-11-04 G1 · ٤: بِمَن أُخبِر
         DealEvent.RefNote => L[DealRefLabels.LabelKeyFor(e.Note) ?? "deals.detail.event_note"],
         // ‏(2026-10-29، قَرارُ المالِك د22 (١) «ب») أَسطُرُ الدَفعِ الأَربَعَةُ بِالحالِ المَكتوبَةِ في السَطر — كانَت تَسقُطُ إلى اسمِ الفِعلِ بِالإنكليزِيَّة.
         DealPaymentLines.Captured or DealPaymentLines.CaptureFailed or DealPaymentLines.Refunded or DealPaymentLines.RefundFailed

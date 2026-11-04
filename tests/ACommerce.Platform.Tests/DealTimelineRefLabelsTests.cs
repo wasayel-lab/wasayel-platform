@@ -115,6 +115,8 @@ public class DealTimelineRefLabelsTests
         // (‏2026-10-29، قَرارُ المالِك د13 «ب»): أَخَواتُ الصَفقَةِ مِن السَلَّةِ عِندَ بائِعِها (`DealShipGroup.WriteAsync`)، وصَفَقاتُ الطَلَبِ الواحِدِ عَلى أولاها — داخِلِيّان.
         ["Ref"]                  = new[] { DealShipGroup.Ref },
         ["OrderMembersRef"]      = new[] { DealShipping.OrderMembersRef },
+        // (‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2): مَن أُخبِرَ بِطَلَبِ الاستِرجاعِ حينَ أَغلَقَ البائِعُ حِسابَه (`DealNotices.NotifyReturnRequestedAsync`) — داخِلِيّ.
+        ["ReturnToldRef"]        = new[] { DealNotices.ReturnToldRef },
     };
 
     /// <summary>مَواضِعُ نِداءِ <c>AttachRefAsync(</c> في <c>libs/</c> و<c>apps/</c> (‏<c>.cs</c> و<c>.razor</c>، بِلا تَعليقات، بِلا التَعريف)
@@ -242,12 +244,12 @@ public class DealTimelineRefLabelsTests
 
         // (‏2026-10-29، قَرارُ المالِك د13 «ب»): 18 ← 23 — `ShipAsync` يَكتُبُ مَرجِعَي الطَلَبِ لِكُلِّ صَفقَةٍ في حَلقَةٍ (مَوضِعانِ بَدَلَ مَوضِعَين)، ويَتَبَنّى طَلَبَ أُختٍ
         // (+2: `OrderRef`/`OtoIdRef`)، ويَكتُبُ صَفَقاتِ الطَلَبِ عَلى أولاها (+1: `OrderMembersRef`) وإغلاقَ OTO عَلى أَخَواتِها (+1: `ClosedRef`)، و`DealShipGroup.WriteAsync` (+1: `Ref`).
-        Assert.Equal(24, sites.Count);   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F3): +`ClosedRef` في `ReceiveAsync` (الوارِدُ يَكتُبُ إغلاقَ OTO كَما يَكتُبُه `ShipAsync`، بِشَرطِه) — 23 ← 24؛ المِفتاحُ قائِمٌ فَلا مِفتاحَ جَديد. (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2): +`ExpiryToldRef` في `ClaimExpiryNoticesAsync` — 22 ← 23 (وجَولَةُ الإصلاحِ الأولى لِلمَسار F3: المَوضِعُ نَفسُه في `MarkExpiryToldAsync` — العَدَدُ كَما هو). (‏2026-10-29، قَرارُ المالِك د39 «ب»): 23 ← 22 — حُذِفَ بابُ «التَقييم نِيابَةً» ومَوضِعُ إلحاقِه `review_{cp|init}`. (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): +`InterventionRef` في `FlagInterventionAsync` — 17 ← 18. (‏2026-10-13، G5 M4): +`InvoiceDealsRef` في `OpenInvoiceAsync` — 13 ← 14. (G5 (xvii-g)): +`InvoiceClosedRef` في `VerifyAsync` — 14 ← 15. (‏2026-10-24، lens-money-integrity-4): +`DeliveredAfterCancelRef` في `DeliverAsync` — 15 ← 16. (‏2026-10-29، قَرارُ المالِك د5 (٣)): +`InvoiceExpiresAtRef` في `OpenInvoiceAsync` — 16 ← 17.
+        Assert.Equal(25, sites.Count);   // (‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2): +`ReturnToldRef` في `DealNotices.NotifyReturnRequestedAsync` — 24 ← 25. (‏2026-10-30، تَدقيقُ الموجَة ١١ F3): +`ClosedRef` في `ReceiveAsync` (الوارِدُ يَكتُبُ إغلاقَ OTO كَما يَكتُبُه `ShipAsync`، بِشَرطِه) — 23 ← 24؛ المِفتاحُ قائِمٌ فَلا مِفتاحَ جَديد. (‏2026-10-30، تَدقيقُ الموجَة ١١ CO2): +`ExpiryToldRef` في `ClaimExpiryNoticesAsync` — 22 ← 23 (وجَولَةُ الإصلاحِ الأولى لِلمَسار F3: المَوضِعُ نَفسُه في `MarkExpiryToldAsync` — العَدَدُ كَما هو). (‏2026-10-29، قَرارُ المالِك د39 «ب»): 23 ← 22 — حُذِفَ بابُ «التَقييم نِيابَةً» ومَوضِعُ إلحاقِه `review_{cp|init}`. (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): +`InterventionRef` في `FlagInterventionAsync` — 17 ← 18. (‏2026-10-13، G5 M4): +`InvoiceDealsRef` في `OpenInvoiceAsync` — 13 ← 14. (G5 (xvii-g)): +`InvoiceClosedRef` في `VerifyAsync` — 14 ← 15. (‏2026-10-24، lens-money-integrity-4): +`DeliveredAfterCancelRef` في `DeliverAsync` — 15 ← 16. (‏2026-10-29، قَرارُ المالِك د5 (٣)): +`InvoiceExpiresAtRef` في `OpenInvoiceAsync` — 16 ← 17.
         foreach (var (file, arg) in sites)
             Assert.True(WrittenKeys.ContainsKey(arg), $"مَرجِعٌ يُلحَقُ بِلا تَصنيف في {file}: {arg}");
         foreach (var expr in WrittenKeys.Keys)
             Assert.Contains(sites, s => s.Arg == expr);
-        Assert.Equal(20, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());   // ← 20 (‏2026-10-30، CO2: gateway_expiry_told) · ‏21 ← 19 (‏2026-10-29، د39 «ب»: review_cp، review_init بِلا كاتِب) · 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4) ← 18 (‏2026-10-29، د5 (٣)) ← 19 (‏2026-10-29، د9 (١)) ← 21 (‏2026-10-29، د13: `oto_ship_group`، `oto_order_deals`)
+        Assert.Equal(21, WrittenKeys.Values.SelectMany(k => k).Distinct(StringComparer.Ordinal).Count());   // ← 21 (‏2026-11-04، G1 · ٤: return_told) · ← 20 (‏2026-10-30، CO2: gateway_expiry_told) · ‏21 ← 19 (‏2026-10-29، د39 «ب»: review_cp، review_init بِلا كاتِب) · 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4) ← 18 (‏2026-10-29، د5 (٣)) ← 19 (‏2026-10-29، د9 (١)) ← 21 (‏2026-10-29، د13: `oto_ship_group`، `oto_order_deals`)
 
         // «key» حَلقَةٌ عَلى الرابِطَينِ وَحدَهُما — بِحَرفِها.
         var shipping = WriteEndpointGuardTests.StripComments(Source(Template, "Services", "Deals", "DealShipping.cs"));
@@ -296,6 +298,7 @@ public class DealTimelineRefLabelsTests
         [GatewayPayments.ExpiryToldRef] = "أُخبِرَ طَرَفا صَفقَةٍ أَلغَتها المُهلَة — تُكتَبُ بَعدَ إشعاراتِها فَالرِسالَةُ المُعادَةُ لا تُكَرِّرُ ما وَصَل وتُخبِرُ بِما لَم يَصِل (‏2026-10-30، CO2؛ جَولَةُ الإصلاحِ الأولى لِلمَسار F3: «قَبلَ إرسالِه» صارَ «بَعدَ إشعاراتِها»)",
         [DealShipGroup.Ref]                   = "مُعَرِّفاتُ أَخَواتِ الصَفقَةِ مِن السَلَّةِ عِندَ بائِعِها — يَقرَؤُها الشَحن (‏2026-10-29، قَرارُ المالِك د13 «ب»)",
         [DealShipping.OrderMembersRef]        = "مُعَرِّفاتُ صَفَقاتِ الطَلَبِ الواحِدِ عِندَ OTO عَلى أولاها — يَقرَؤُها الشَحنُ والوارِد (‏2026-10-29، د13 «ب»)",
+        [DealNotices.ReturnToldRef]           = "أُخبِرَت إدارَةُ المَتجَرِ بِطَلَبِ الاستِرجاعِ لِأَنّ البائِعَ أَغلَقَ حِسابَه — تَقرَؤُه تَسمِيَةُ سَطرِ الاستِرجاع (`DealNotices.ReturnEventKey`) لا سَطرُه (‏2026-11-04، G1 · ٤)",
     };
 
     /// <summary>
@@ -315,7 +318,7 @@ public class DealTimelineRefLabelsTests
     {
         var written = WrittenKeys.Values.SelectMany(k => k).ToHashSet(StringComparer.Ordinal);
         output.WriteLine($"مَكتوبَة: {written.Count} · مُسَمّاة: {DealRefLabels.Labels.Count} · داخِلِيَّة: {Internal.Count}");
-        Assert.Equal(20, written.Count);   // ← 20 (‏2026-10-30، CO2: gateway_expiry_told — داخِلِيّ) · ‏21 ← 19 (‏2026-10-29، د39 «ب»: review_cp، review_init — مُتَقاعِدانِ في `Retired`) · ← 21 (‏2026-10-29، د13 «ب»: oto_ship_group، oto_order_deals — داخِلِيّان) · 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4: oto_delivered_after_cancel) ← 18 (‏2026-10-29، د5 (٣): gateway_invoice_expires_at) ← 19 (‏2026-10-29، د9 (١): oto_needs_intervention)
+        Assert.Equal(21, written.Count);   // ← 21 (‏2026-11-04، G1 · ٤: return_told — داخِلِيّ) · ← 20 (‏2026-10-30، CO2: gateway_expiry_told — داخِلِيّ) · ‏21 ← 19 (‏2026-10-29، د39 «ب»: review_cp، review_init — مُتَقاعِدانِ في `Retired`) · ← 21 (‏2026-10-29، د13 «ب»: oto_ship_group، oto_order_deals — داخِلِيّان) · 14 ← 15 (G5 M4) ← 16 (G5 (xvii-g)) ← 17 (‏2026-10-24، lens-money-integrity-4: oto_delivered_after_cancel) ← 18 (‏2026-10-29، د5 (٣): gateway_invoice_expires_at) ← 19 (‏2026-10-29، د9 (١): oto_needs_intervention)
         foreach (var key in written)
             Assert.True(DealRefLabels.Labels.ContainsKey(key) ^ Internal.ContainsKey(key), $"‏{key}: يَجِبُ أَن يَكونَ مُسَمّىً أَو داخِلِيّاً، لا الاثنَين ولا لا شَيء.");
         foreach (var key in DealRefLabels.Labels.Keys.Concat(Internal.Keys).Where(k => !Retired.ContainsKey(k)))
@@ -328,7 +331,7 @@ public class DealTimelineRefLabelsTests
         }
         Assert.Equal(2, Retired.Count);
         Assert.Equal(12, DealRefLabels.Labels.Count);   // 9 ← 10 (‏2026-10-13، G5 (xvii-g): gateway_invoice_closed مُسَمّىً لِلطَرَفَين) ← 11 (‏2026-10-24: oto_delivered_after_cancel) ← 12 (‏2026-10-29، د9 (١): oto_needs_intervention)
-        Assert.Equal(10, Internal.Count);   // ← 10 (‏2026-10-30، CO2: gateway_expiry_told) · 5 ← 6 (G5 M4) ← 7 (‏2026-10-29، قَرارُ المالِك د5 (٣): gateway_invoice_expires_at) ← 9 (‏2026-10-29، د13 «ب»)
+        Assert.Equal(11, Internal.Count);   // ← 11 (‏2026-11-04، G1 · ٤: return_told) · ← 10 (‏2026-10-30، CO2: gateway_expiry_told) · 5 ← 6 (G5 M4) ← 7 (‏2026-10-29، قَرارُ المالِك د5 (٣): gateway_invoice_expires_at) ← 9 (‏2026-10-29، د13 «ب»)
     }
 
     public static IEnumerable<object[]> LabelledKeys() => DealRefLabels.Labels.Select(kv => new object[] { kv.Key, kv.Value });

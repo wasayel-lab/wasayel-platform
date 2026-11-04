@@ -209,7 +209,8 @@ public class DealRefusalTextsTests
 
         Assert.Contains("[SupplyParameterFromQuery(Name = \"err\")] public string? Err { get; set; }", page, StringComparison.Ordinal);
         Assert.Contains("@if (DealRefusalTexts.KeyFor(Err) is { } errKey)", page, StringComparison.Ordinal);
-        Assert.Contains("<AcAlert Variant=\"danger\" Message=\"@L[errKey]\" />", page, StringComparison.Ordinal);
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) ورَدُّ التَكرارِ بِبَديلِه حينَ أُخبِرَت إدارَةُ المَتجَر — الرَمزُ نَفسُه، والمِفتاحُ مِن `DealNotices.RefusalKeyFor`.
+        Assert.Contains("<AcAlert Variant=\"danger\" Message=\"@L[DealNotices.RefusalKeyFor(errKey, deal)]\" />", page, StringComparison.Ordinal);
         // ولا نَصَّ رَفضٍ مَكتوباً بِاليَد في الصَفحَة — المِفتاحُ مِن الدالَّة.
         Assert.DoesNotContain("deals.detail.err_", page, StringComparison.Ordinal);
         // واصطِلاحُ المِفتاحِ ثَلاثَةُ مَقاطِعَ (LocaleValidator.KeyPattern) — الرَمزُ في الثالِث.

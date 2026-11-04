@@ -143,7 +143,7 @@ public class ChatStartReturnTests
     public void The_deal_page_contact_form_carries_its_origin()
     {
         var page = Read(Template, "Components", "Pages", "MyDealDetail.razor");
-        var at = page.IndexOf("@if (isInitiator && vendorId is { } vid)", StringComparison.Ordinal);
+        var at = page.IndexOf("@if (isInitiator && vendorId is { } vid && !vendorGone)", StringComparison.Ordinal);   // ‏(‏2026-11-04، G1 · ٤) وبِلا بائِعٍ غائِب
         Assert.True(at > 0, "فَرعُ زِرِّ البائِعِ غَيرُ مَوجود — الأَداةُ عَمياء.");
         var block = page.Substring(at, page.IndexOf("</form>", at, StringComparison.Ordinal) - at);
         Assert.Contains("action=\"@($\"/{Slug}/users/{vid}/chat\")\"", block, StringComparison.Ordinal);

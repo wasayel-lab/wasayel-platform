@@ -161,7 +161,8 @@ public class ReturnsPolicyTextTests
         Assert.True(page.Length > 1000, "أَداةٌ عَمياء: `MyDealDetail.razor` لَم يُقرَأ.");
 
         Assert.Contains("@L.Markup(\"vendors.profile.contact\")", page, StringComparison.Ordinal);
-        Assert.Contains("@if (isInitiator && vendorId is { } vid)", page, StringComparison.Ordinal);
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) والزِرُّ لِبائِعٍ قائِم: البائِعُ الَّذي أَغلَقَ حِسابَه يَرُدُّه البابُ، فَسَطرُ الغِيابِ مَكانَه.
+        Assert.Contains("@if (isInitiator && vendorId is { } vid && !vendorGone)", page, StringComparison.Ordinal);
         Assert.Contains("action=\"@($\"/{Slug}/users/{vid}/chat\")\"", page, StringComparison.Ordinal);
 
         // والبائِعُ يُقرَأُ مِن المَرجِعِ الَّذي تَكتُبُه نُقاطُ العَرضِ والسَلَّة، لا مِن سِلسِلَةٍ ثانِيَة.

@@ -196,7 +196,8 @@ public class DealReturnRequestTests(ITestOutputHelper output)
         own.CounterpartyId = Buyer;
         Assert.Null(DealNotices.ReturnRecipient(own));
 
-        var docs = new DocWorld();
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) البائِعُ وَثيقَةٌ قائِمَة: البائِعُ الغائِبُ (لا وَثيقَة، أَو `DeletedAt`) لا يُكتَبُ في صُندوقِه — صُفوفُه في `ChatPartnerGoneReturnTests`.
+        var docs = new DocWorld().Put(new ACommerce.Kit.Auth.User { Id = Seller, TenantSlug = Slug, FullName = "بائِع" });
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSignalR();
@@ -204,11 +205,12 @@ public class DealReturnRequestTests(ITestOutputHelper output)
         var notices = new DealNotices(docs.Store, hub, new WebPushService(new ConfigurationBuilder().Build(), NullLogger<WebPushService>.Instance));
         var l = new L(new HttpContextAccessor());
         var deal = Delivered();
-        Assert.True(Now(notices.NotifyReturnRequestedAsync(Slug, deal, l)));
+        var deals = new DealsService(docs.Store, new ACommerce.Kit.Payments.UnavailablePaymentProvider());
+        Assert.True(Now(notices.NotifyReturnRequestedAsync(Slug, deal, deals, l)));
         var n = Assert.Single(docs.Stored.OfType<Notification>());
         Assert.Equal((Seller, DealNotices.NewDealType, $"/{Slug}/deals/{deal.Id}"), (n.UserId, n.Type, n.RelatedUrl));
         Assert.Equal("طَلَبَ المُشتَري استِرجاعَ «سِلعَة» بَعدَ تَسليمِه — تَواصَل مَعَه لِتَرتيبِ الرَّدِّ والاستِرداد، وافتَحِ الصَّفقَة لِلتَفاصيل.", n.Body);
-        Assert.False(Now(notices.NotifyReturnRequestedAsync(Slug, own, l)));
+        Assert.False(Now(notices.NotifyReturnRequestedAsync(Slug, own, deals, l)));
     }
 
     // ═══ ٤) البابُ والصَفحَة ═══════════════════════════════════════════════════════════════════════
@@ -233,7 +235,7 @@ public class DealReturnRequestTests(ITestOutputHelper output)
         Assert.True(session > 0 && session < door.IndexOf("req.Form[", StringComparison.Ordinal), "الجَلسَةُ لا تَسبِقُ قِراءَةَ الحُقول.");
         Assert.Contains("deals.RequestReturnAsync(slug, id, new Services.Deals.DealReturnRequester(userId, userName),", door, StringComparison.Ordinal);
         Assert.Contains("DateTime.UtcNow);", door, StringComparison.Ordinal);
-        Assert.Contains("if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, l);", door, StringComparison.Ordinal);
+        Assert.Contains("if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, deals, l);", door, StringComparison.Ordinal);   // ‏(‏2026-11-04، G1 · ٤) وكاتِبُ المَراجِع
         Assert.Contains("}).DisableAntiforgery().RequireFormBody()", door, StringComparison.Ordinal);
     }
 
@@ -245,8 +247,9 @@ public class DealReturnRequestTests(ITestOutputHelper output)
         Assert.True(form > 0, "استِمارَةُ الاستِرجاعِ غَيرُ مَوجودَة.");
         Assert.True(page.LastIndexOf("@if (canReturn)", form, StringComparison.Ordinal) > 0, "الاستِمارَةُ خارِجَ شَرطِ البَوّابَة.");
         Assert.Contains("canReturn = DealReturnRequest.IsAllowed(deal, new DealReturnRequester(uid, Auth.UserName ?? \"\"), DateTime.UtcNow);", page, StringComparison.Ordinal);
-        Assert.Contains("DealEvent.ReturnRequested => L[\"deals.detail.event_return_requested\"]", page, StringComparison.Ordinal);
-        Assert.Contains("DealEvent.ReturnRequested => L[\"studio.deal.event_return_requested\"]",
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) والتَسمِيَةُ بِمَن أُخبِرَ مِن دالَّةٍ واحِدَةٍ لِلصَفحَتَين (`DealNotices.ReturnEventKey`) — كانَت مِفتاحاً حَرفِيّاً «أُخبِرَ البائِع».
+        Assert.Contains("DealEvent.ReturnRequested => L[DealNotices.ReturnEventKey(deal!, studio: false)]", page, StringComparison.Ordinal);
+        Assert.Contains("DealEvent.ReturnRequested => L[DealNotices.ReturnEventKey(deal!, studio: true)]",
             Source(Template, "Components", "Pages", "StudioAppDealDetail.razor"), StringComparison.Ordinal);
         foreach (var code in DealReturnRequest.All)
             Assert.NotNull(DealRefusalTexts.KeyFor(code));

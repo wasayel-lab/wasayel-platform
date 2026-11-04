@@ -3722,7 +3722,7 @@ public static class MarketplaceTemplateExtensions
             var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             var res = await deals.RequestReturnAsync(slug, id, new Services.Deals.DealReturnRequester(userId, userName),
                 req.Form["reason"].ToString().Trim(), DateTime.UtcNow);
-            if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, l);
+            if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, deals, l);   // ‏(‏2026-11-04، G1 · ٤) والبائِعُ الغائِبُ ⇐ إدارَةُ المَتجَرِ ومَرجِعُ «مَن أُخبِر»
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
