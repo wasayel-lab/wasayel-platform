@@ -303,7 +303,7 @@ public class AccountDeletionTests
             "MarketplaceTemplateExtensions.cs"));
 
         var body = src[src.IndexOf("/{slug}/me/delete/confirm", StringComparison.Ordinal)..];
-        body = body[..body.IndexOf("RequireStoreWritable", StringComparison.Ordinal)];
+        body = body[..body.IndexOf("app.Map", StringComparison.Ordinal)];   // ‏(‏2026-11-04، G1 · ٦) البابُ بِلا بَوّابَةِ باقَة — النِهايَةُ البابُ التالي
 
         Assert.Contains("AccountDeletion.Validate", body, StringComparison.Ordinal);
         Assert.Contains("AccountDeletion.Erase", body, StringComparison.Ordinal);

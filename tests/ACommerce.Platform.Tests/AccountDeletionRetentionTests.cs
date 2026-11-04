@@ -42,7 +42,8 @@ public class AccountDeletionRetentionTests(ITestOutputHelper output)
         var src = WriteEndpointGuardTests.StripComments(Tpl("MarketplaceTemplateExtensions.cs"));
         var start = src.IndexOf("\"/{slug}/me/delete/confirm\"", StringComparison.Ordinal);
         Assert.True(start > 0, "لا نُقطَةَ حَذفٍ في MarketplaceTemplateExtensions.cs — الأَداةُ عَمياء.");
-        var end = src.IndexOf("RequireStoreWritable", start, StringComparison.Ordinal);
+        // ‏(‏2026-11-04، G1 · ٦ — XS-3) النِهايَةُ أَوَّلُ `app.Map` بَعدَه لا `RequireStoreWritable`: صارَ البابُ بِلا بَوّابَةِ باقَة، فَكانَت النِهايَةُ تَقَعُ في بابٍ آخَر.
+        var end = src.IndexOf("app.Map", start, StringComparison.Ordinal);
         Assert.True(end > start, "جِسمُ نُقطَةِ الحَذفِ بِلا نِهايَة — الأَداةُ عَمياء.");
         return src[start..end];
     }

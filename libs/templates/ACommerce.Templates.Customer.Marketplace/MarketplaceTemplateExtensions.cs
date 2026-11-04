@@ -1022,8 +1022,9 @@ public static class MarketplaceTemplateExtensions
                 tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>());
 
             return Results.Redirect($"/{slug}?deleted=1");
-        }).DisableAntiforgery().RequireFormBody()
-          .RequireStoreWritable();
+        }).DisableAntiforgery().RequireFormBody();
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3؛ تَوصيفُه 365dfdc) **وبِلا `RequireStoreWritable`** — مُثَبَّتٌ بِسَبَبِه في `PinnedUngatedStoreWrites`: الحَذفُ بابٌ يَفتَحُه
+        // صاحِبُ الحِسابِ فَيُنفَّذُ دونَ انتِظار (د53)، وأَمانُ حِسابٍ لا مُحتَوىً في المَتجَر — كانَ «السَماحُ» و«التَعليقُ» يَرُدّانِه بِـ`store_locked` ولا يُمحى شَيء.
 
         // ─── «بَياناتي» — تَنزيلُ المِلَفِّ الآليّ (‏2026-10-29، قَرارُ المالِك د53 «ج») ─────────────────────
         // قِراءَةٌ لا كِتابَة: الاستِعلامُ نَفسُه الَّذي تَرسُمُه صَفحَةُ `/{slug}/me/data` (`UserDataQueries.ExportAsync`)، بِصيغَةِ JSON.

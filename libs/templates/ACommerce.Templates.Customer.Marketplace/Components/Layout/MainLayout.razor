@@ -31,7 +31,8 @@
     var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);
 }
 
-@if (Tenant.IsResolved && storeSuspended)
+@* ‏(‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3) إلّا صَفحَتَي صاحِبِ البَيانات — «بَياناتي» و«حَذفُ الحِساب» (`AccountErasure.OwnDataPage`): التِزامُ وَسايِل (د53) لا خِيارُ باقَة. *@
+@if (Tenant.IsResolved && storeSuspended && !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.OwnDataPage(slug, path))
 {
     @* ─── المَتجَرُ مُخفىً ────────────────────────────────────────────
        انقَضَت باقَتُه ومُهلَتُها. **ولا يُحذَف شَيء** — البَياناتُ

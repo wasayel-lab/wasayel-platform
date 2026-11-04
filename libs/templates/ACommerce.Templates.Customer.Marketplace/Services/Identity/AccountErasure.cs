@@ -40,6 +40,22 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Identity;
 /// </summary>
 public static class AccountErasure
 {
+    /// <summary>
+    /// <para><b>صَفحَتا صاحِبِ البَياناتِ في مَتجَرِه</b> (‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3؛ تَوصيفُه <c>365dfdc</c>): «بَياناتي» و«حَذفُ الحِساب» —
+    /// <c>/{slug}/me/data</c> و<c>/{slug}/me/delete</c> وبِبادِئَةِ الدَور <c>/{slug}/r/{role}/…</c>. يَسأَلُها الشِلُّ (<c>MainLayout</c>) فَلا يُخفيهِما في مَتجَرٍ مُعَلَّق:
+    /// الاطِّلاعُ والتَنزيلُ والحَذفُ أَبوابٌ يَفتَحُها صاحِبُها فَتُنَفَّذُ دونَ انتِظار (د53) — التِزامُ وَسايِل لا خِيارُ باقَةِ المَتجَر (P1). نَقِيَّة.</para>
+    /// </summary>
+    public static bool OwnDataPage(string slug, string path)
+    {
+        var p = path.TrimEnd('/');
+        var root = $"/{slug}/";
+        if (!p.StartsWith(root, StringComparison.OrdinalIgnoreCase)) return false;
+        var rest = p[root.Length..].Split('/');
+        if (rest.Length == 4 && rest[0].Equals("r", StringComparison.OrdinalIgnoreCase) && rest[1].Length > 0) rest = rest[2..];
+        return rest.Length == 2 && rest[0].Equals("me", StringComparison.OrdinalIgnoreCase)
+               && (rest[1].Equals("data", StringComparison.OrdinalIgnoreCase) || rest[1].Equals("delete", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>صَفقَةٌ لَم تَنتَهِ — فَعّالَة، أَو في نِزاعٍ يَنتَظِرُ الحَلّ. المُكتَمِلَةُ والمُلغاةُ مُنتَهِيَتان.</summary>
     public static bool IsOpen(Deal deal) => deal.Status is DealStatus.Active or DealStatus.Disputed;
 
