@@ -380,4 +380,37 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
         Assert.Empty(arMissing);
         Assert.Empty(enMissing);
     }
+
+    // ─── ما يَحمِلُه مُزَوِّدُ رَسائِلِ الدُخولِ غَيرَ الرَمز (‏2026-11-04، الموجَة ١٢ G1 · ٩ — H-SEC-W12-2؛ تَوصيفُه da64fc0) ──────────────────────
+
+    /// <summary>أَيُسَمّي سَطرُ <c>share_otp</c> ما يَحمِلُه المُزَوِّدُ غَيرَ الرَمزِ حينَ يُنادى بِـ<c>SendNoticeAsync</c>: إشعارُ أَمانِ الحِسابِ (بِالوَسيلَةِ الجَديدَةِ مُقَنَّعَة)
+    /// وبَريدُ صاحِبِ المَتجَرِ بِفِئاتِه (المَتجَر، الطَلَب، المَبلَغ، العُملَة، صَفحَةُ الاستوديو) — بِاللُغَتَين. وبِلا نِداءٍ لا شَيءَ يُطلَب. نَقِيَّة.</summary>
+    internal static IReadOnlyList<string> ShareOtpMissing(int noticeCallers, string ar, string en)
+    {
+        if (noticeCallers == 0) return Array.Empty<string>();
+        var bareAr = AccountDeletionRetentionTests.Bare(ar);
+        string[] arSaid = ["إشعار أمان حسابك", "مقنعة", "لصاحب المتجر", "اسم المتجر", "عنوان الطلب", "المبلغ وعملته", "الاستوديو"];
+        string[] enSaid = ["account-security notice", "masked", "store owner", "store name", "order title", "amount and its currency", "studio"];
+        return arSaid.Where(w => !bareAr.Contains(w, StringComparison.Ordinal)).Select(w => $"ar: {w}")
+            .Concat(enSaid.Where(w => !en.Contains(w, StringComparison.Ordinal)).Select(w => $"en: {w}")).ToList();
+    }
+
+    /// <summary>قُلِبَ ما طَبَعَه التَوصيف («السَطرُ يَذكُرُ الإشعارات: ar False · en False»). <b>المُوجَب</b>: نِداءاتُ <c>SendNoticeAsync</c> الحَيَّةُ تُعَدُّ (ولا تَكونُ صِفراً)
+    /// والسَطرُ بِاللُغَتَينِ يُسَمّي حُمولَتَيها. <b>والسالِب — حَقنُ عَيب</b>: النَصُّ القَديمُ بِنِداءاتٍ قائِمَةٍ يُحمِرّ، وبِلا نِداءٍ لا يُطلَبُ شَيء.</summary>
+    [Fact]
+    public void Share_otp_names_what_the_notice_callers_send_through_the_sign_in_provider()
+    {
+        var callers = PrivacyShareOtpNoticeTests.NoticeCallers();
+        var ar = LocaleCatalog.Find(LocaleCatalog.Arabic, "platform.privacy.share_otp")!;
+        var en = LocaleCatalog.Find("en", "platform.privacy.share_otp")!;
+        const string oldAr = "مُزَوِّدُ رَسائِلِ رَمزِ الدُخولِ وبَريدِه ({0}) — يَصِلُه رَقمُ هاتِفِكَ أَو بَريدُكَ مَعَ الرَمز، لِإيصالِه إلَيكَ وَحدَك.";
+        const string oldEn = "The sign-in code SMS and email provider ({0}) — receives your phone number or email address with the code, to deliver it to you alone.";
+        var missing = ShareOtpMissing(callers.Count, ar, en);
+        var injected = ShareOtpMissing(callers.Count, oldAr, oldEn);
+        output.WriteLine($"نِداءاتُ SendNoticeAsync: {callers.Count} · ما لا يُسَمّيه السَطر: {missing.Count} · بِالنَصِّ القَديم: {injected.Count}");
+        Assert.True(callers.Count > 0, "أَداةٌ عَمياء: صِفرُ نِداء.");
+        Assert.Empty(missing);
+        Assert.Equal(14, injected.Count);
+        Assert.Empty(ShareOtpMissing(0, oldAr, oldEn));
+    }
 }

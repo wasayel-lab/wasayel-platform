@@ -90,7 +90,7 @@
   "platform.privacy.s4_body": "We use functional cookies only: the sign-in session cookie for each store, the studio session cookie, and the selected-language cookie. There is no tracking or advertising cookie.",
   "platform.privacy.s5_title": "5. Who we share it with",
   "platform.privacy.s5_intro": "We do not sell or rent your data. We share only what is necessary with the following parties, each of them measured from the code rather than listed for safety:",
-  "platform.privacy.share_otp": "The sign-in code SMS and email provider ({0}) — receives your phone number or email address with the code, to deliver it to you alone.",
+  "platform.privacy.share_otp": "The sign-in code SMS and email provider ({0}) — receives your phone number or email address with the code, to deliver it to you alone. It also carries your account-security notice: when a new sign-in contact is added to your account, a message goes to your other contact with the new one masked. And it carries the store owner's email about what needs doing on the store's orders: the store name, the order title, the amount and its currency, and the path of the order page in the studio — without the buyer's name, phone or address.",
   "platform.privacy.share_nafath": "The Nafath digital identity service — only for those who choose it as a sign-in channel.",
   "platform.privacy.share_payment": "The subscription payment provider (PayPal or Paddle) — to carry out the subscription transaction and return its result.",
   "platform.privacy.share_gateway": "The payment gateway the store chooses (Moyasar today) — the order is paid there by card, and you enter your card there directly so it never passes through us; we send it the invoice amount, its description and the deal identifiers.",
