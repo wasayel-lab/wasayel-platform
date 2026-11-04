@@ -422,6 +422,10 @@ public static class AccountErasure
         /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1) إعلاناتُه — القائِمَةُ والمَحذوفَةُ قَبلُ — الَّتي مُحِيَت صُوَرُها أَو إحداثِيّاتُها (<see cref="ScrubEvents"/>).</summary>
         public int Scrubbed { get; init; }
 
+        /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٧ — B-7) بَحثُه المَحفوظُ ومُفَضَّلاتُه — تُحذَفُ في المُعامَلَةِ نَفسِها: لا يَبقى بَحثٌ مُفَعَّلٌ يَكتُبُ لِحِسابٍ مَحذوفٍ إشعاراً.</summary>
+        public int SavedSearches { get; init; }
+        public int Favorites { get; init; }
+
         /// <summary>مِفاتيحُ مِلَفّاتِه في المَخزَنِ (<see cref="FileKeys"/>) — تُحذَفُ بَعدَ الحِفظِ بِـ<see cref="DeleteFilesAsync"/> لا في المُعامَلَة: المَخزَنُ خارِجَ القاعِدَة.
         /// لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
         public ErasedFiles Files { get; init; } = ErasedFiles.None;
@@ -554,6 +558,12 @@ public static class AccountErasure
         var matches = await s.Query<ListingMatch>().Where(m => m.OffererId == userId).ToListAsync(ct);
         var tickets = await s.Query<Ticket>().Where(t => t.AuthorId == userId).ToListAsync(ct);
         var keys = await s.Query<ApiKeyDocument>().Where(k => k.TenantSlug == tenantSlug && k.ActorUserId == userId).ToListAsync(ct);
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٧ — B-7؛ تَوصيفُه 1ba85e0) وما لَه هُوَ بِمُعَرِّفِه — بَحثُه المَحفوظُ ومُفَضَّلاتُه — يُحذَفُ لا يُعادُ اسمُه: كانَ البَحثُ يَبقى مُفَعَّلاً
+        // فَيَكتُبُ لَه نَشرُ كُلِّ إعلانٍ مُطابِقٍ `saved_search_match` إلى الأَبَد، وكِلاهُما يَخرُجُ في حَقيبَةِ التَخارُج. والتَوزيعُ في البابِ لا يُمَسّ: لا بَحثَ لَه يُطابِق.
+        var searches = await s.Query<ACommerce.Kit.SavedSearches.SavedSearch>().Where(x => x.UserId == userId).ToListAsync(ct);
+        foreach (var x in searches) s.Delete(x);
+        var favorites = await s.Query<ACommerce.Kit.Favorites.Favorite>().Where(x => x.UserId == userId).ToListAsync(ct);
+        foreach (var x in favorites) s.Delete(x);
 
         // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-2) والصَفقَةُ الَّتي فَعَلَ فيها ولَيسَ طَرَفَها (`others`) تَربِطُ إشعاراتِها كَصَفقَةِ الطَرَف — `RelatedUrls`.
         var urls = RelatedUrls(deals.Concat(others), convs, matches);
@@ -616,6 +626,8 @@ public static class AccountErasure
             IncomingDeals = plan.IncomingDeals,
             Scrubbed = plan.Scrubbed.Count,
             Files = FileKeys(tenantSlug, userId, plan.Scrubbed),
+            SavedSearches = searches.Count,
+            Favorites = favorites.Count,
         };
     }
 
