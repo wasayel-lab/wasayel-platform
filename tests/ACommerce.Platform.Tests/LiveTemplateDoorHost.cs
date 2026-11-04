@@ -23,6 +23,9 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
 
     public IDocumentStore Store { get; }
 
+    /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤) خِدماتُ المُضيفِ المُرَكَّب — لِرَسمِ صَفحَةٍ بِخِدماتِها هِيَ (<c>HtmlRenderer</c>) لا بِبَدائِل.</summary>
+    public IServiceProvider Services => _app.Services;
+
     private LiveTemplateDoorHost(WebApplication app)
     {
         _app = app;
