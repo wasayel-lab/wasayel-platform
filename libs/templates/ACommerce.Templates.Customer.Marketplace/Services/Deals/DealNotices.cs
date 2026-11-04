@@ -547,7 +547,8 @@ public sealed class DealNotices
     public static string RefusalKeyFor(string key, Deal deal)
         => string.Equals(key, "deals.detail.err_return_already_requested", StringComparison.Ordinal) ? ReturnKey(key, ReturnToldStoreOf(deal)) : key;
 
-    private static string CurrencyOf(Deal deal)
+    /// <summary>عُملَةُ الصَفقَة: عُملَةُ الفاتورَةِ كَما ثَبَتَت، وإلّا عُملَةُ إنشائِها (‏2026-11-04، G1 · ٥: صارَت تَقرَؤُها صَفحَةُ الحَذفِ لِبِطاقَةِ البائِع).</summary>
+    public static string CurrencyOf(Deal deal)
         => deal.Refs.TryGetValue(DealsService.PaymentCurrencyRef, out var c) && !string.IsNullOrWhiteSpace(c) ? c : ACommerce.Kit.Payments.MoyasarClient.Currency;
 
     // ─── الأُنبوب — تَخزينٌ ثُمَّ جَرَسٌ ثُمَّ دَفع ──────────────────────────

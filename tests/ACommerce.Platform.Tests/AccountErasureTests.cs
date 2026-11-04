@@ -708,7 +708,8 @@ public class AccountErasureTests
     {
         var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(DeletePagePath));
         var owed = typeof(AccountErasure).GetMethods().Count(m => m.Name.StartsWith("CashRefund", StringComparison.Ordinal));
-        var load = page.IndexOf("owedCash = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);", StringComparison.Ordinal);
+        // ‏(‏2026-11-04، G1 · ٥ — B-2) والاستِعلامُ الواحِدُ يُقسَمُ جِهَتَين: ما يُرَدُّ إلَيه (`owedCash`، بِطاقَتُه هذِه) وما عَلَيه (`owedByMe`).
+        var load = page.IndexOf("var owed = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);", StringComparison.Ordinal);
         var openBranch = page.IndexOf("@if (openDeals > 0)", StringComparison.Ordinal);
         var warn = page.IndexOf("@if (owedCash.Count > 0)", StringComparison.Ordinal);
         var form = page.IndexOf("/me/delete/confirm", StringComparison.Ordinal);
@@ -733,9 +734,11 @@ public class AccountErasureTests
 
     /// <summary>مُوجَبٌ وسالِبٌ لِـ<see cref="AccountErasure.CashRefundOwed"/>: مُلغاةٌ آخِرُ سَطرِ مالِها «رَدٌّ نَقدِيٌّ مُستَحَقّ» ⇒ نَعَم. وغَيرُ مُلغاةٍ، أَو لِغَيرِه
     /// مُشتَرِياً (هُوَ البائِعُ فيها)، أَو مُلغاةٌ بِلا قَبض، أَو أُعيدَ مالُها إلى البِطاقَة (<c>gateway_refund_due</c>/<c>refunded</c> آخِراً) ⇒ لا. وسَطرٌ لا مالَ فيه
-    /// بَعدَ «المُستَحَقّ» (مُلاحَظَة) لا يَحجُبُه.</summary>
+    /// بَعدَ «المُستَحَقّ» (مُلاحَظَة) لا يَحجُبُه.
+    /// <para><b>‏(‏2026-11-04، الموجَة ١٢ G1 · ٥ — B-2؛ قُلِبَ بِاسمِه)</b> — كانَ <c>A_cash_refund_is_owed_to_the_buyer_of_a_cancelled_deal_whose_latest_money_line_says_so_and_not_otherwise</c>
+    /// و«هُوَ البائِعُ فيها» سالِباً؛ والبائِعُ طَرَفُها الَّذي عَلَيه الرَدّ — فَصارَ مُوجَباً (تَوصيفُه <c>495d7b0</c>: «البائِع: False»).</para></summary>
     [Fact]
-    public void A_cash_refund_is_owed_to_the_buyer_of_a_cancelled_deal_whose_latest_money_line_says_so_and_not_otherwise()
+    public void A_cash_refund_is_owed_on_either_side_of_a_cancelled_deal_whose_latest_money_line_says_so_and_not_otherwise()
     {
         var owed = CashDeal(Me, DealStatus.Cancelled, DealEvent.CashOnDelivery, "cancelled", DealEvent.CashRefundDue);
         var noteAfter = CashDeal(Me, DealStatus.Cancelled, DealEvent.CashOnDelivery, DealEvent.CashRefundDue, DealEvent.RefNote);
@@ -751,11 +754,11 @@ public class AccountErasureTests
         Assert.True(AccountErasure.CashRefundOwed(noteAfter, Me));
         Assert.False(AccountErasure.CashRefundOwed(notOwed, Me));
         Assert.False(AccountErasure.CashRefundOwed(active, Me));
-        Assert.False(AccountErasure.CashRefundOwed(asSeller, Me));
+        Assert.True(AccountErasure.CashRefundOwed(asSeller, Me));
         Assert.False(AccountErasure.CashRefundOwed(card, Me));
         Assert.False(AccountErasure.CashRefundOwed(cardRefunded, Me));
         Assert.False(AccountErasure.CashRefundOwed(cashThenCard, Me));
-        Assert.Equal(new[] { owed.Id, noteAfter.Id }.OrderBy(i => i),
+        Assert.Equal(new[] { owed.Id, noteAfter.Id, asSeller.Id }.OrderBy(i => i),
             AccountErasure.CashRefundsOwed(new[] { owed, noteAfter, notOwed, active, asSeller, card, cardRefunded, cashThenCard }, Me).Select(d => d.Id).OrderBy(i => i));
     }
 

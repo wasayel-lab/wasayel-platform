@@ -101,6 +101,22 @@
                 </ChildContent>
             </AcCard>
         }
+        @* ‏(‏2026-11-04، الموجَة ١٢ G1 · ٥ — B-2) والبائِعُ الَّذي عَلَيه أَن يَرُدَّ: بِطاقَةٌ ثانِيَةٌ بِالمَبلَغِ وعُملَةِ الصَفقَةِ واسمِ مَن يَرُدُّ إلَيه — تَحذيرٌ لا مَنعٌ كَبِطاقَةِ المُشتَري. *@
+        @if (owedByMe.Count > 0)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3>@L.Markup("account.delete.cash_refund_vendor_title")</h3>
+                    <p style="color:var(--ac-danger-ink);">@L.Markup("account.delete.cash_refund_vendor_lead")</p>
+                    <ul style="margin:0;padding-inline-start:20px;">
+                        @foreach (var d in owedByMe)
+                        {
+                            <li>@L.Format("account.delete.cash_refund_vendor_row", d.InitiatorName, d.ListingTitle, d.AmountSar, ACommerce.Templates.Customer.Marketplace.Services.Deals.DealNotices.CurrencyOf(d))</li>
+                        }
+                    </ul>
+                </ChildContent>
+            </AcCard>
+        }
         <AcCard>
             <ChildContent>
                 <form method="post" action="@($"/{Slug}/me/delete/confirm")" style="margin:0;">
@@ -139,12 +155,17 @@
     /// <summary>صَفَقاتُه المُلغاةُ الَّتي يَرُدُّ فيها البائِعُ ثَمَناً نَقدِيّاً — <c>AccountErasure.CashRefundsOwed</c> (G-7).</summary>
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal> owedCash = Array.Empty<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal>();
 
+    /// <summary>‏(‏2026-11-04، G1 · ٥ — B-2) صَفَقاتُه المُلغاةُ الَّتي عَلَيه هُوَ — البائِع — أَن يَرُدَّ فيها ثَمَناً نَقدِيّاً: الجِهَةُ الأُخرى مِن الاستِعلامِ نَفسِه.</summary>
+    IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal> owedByMe = Array.Empty<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal>();
+
     protected override async Task OnInitializedAsync()
     {
         if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
         if (!Auth.IsAuthenticated || Auth.UserId is null) return;
         openDeals = await Accounts.OpenDealsAsync(Slug, Auth.UserId.Value);
         openTrips = await Data.OpenTripsAsync(Slug, Auth.UserId.Value);
-        owedCash = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);
+        var owed = await Data.CashRefundsOwedAsync(Slug, Auth.UserId.Value);
+        owedCash = owed.Where(d => d.InitiatorId == Auth.UserId.Value).ToList();
+        owedByMe = owed.Where(d => d.InitiatorId != Auth.UserId.Value).ToList();
     }
 }

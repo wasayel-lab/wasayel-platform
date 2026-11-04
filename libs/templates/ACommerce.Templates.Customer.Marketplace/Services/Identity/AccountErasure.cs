@@ -93,9 +93,12 @@ public static class AccountErasure
     /// <para><b>ولِماذا تَحذيرٌ لا مَنع</b>: لا كاتِبَ لِـ«رُدَّ النَقد» (S3 OI1)، فَمَنعٌ بِه لا يُرفَعُ أَبَداً — يَحبِسُ صاحِبَ الحِسابِ في حِسابٍ لا يَستَطيعُ حَذفَه.
     /// فَتَرسُمُ صَفحَةُ الحَذفِ كُلَّ صَفقَةٍ مِنها (البائِع، السِلعَة، المَبلَغ) بِجُملَةِ أَنّ الحَذفَ يُزيلُ الوَسيلَةَ الَّتي يَرُدُّ بِها البائِع؛ وخُطوَةُ التَأكيدِ القائِمَةُ هِيَ الإقرار.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-04، الموجَة ١٢ G1 · ٥ — B-2؛ تَوصيفُه <c>495d7b0</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والطَرَفانِ لا المُشتَري وَحدَه</b>: <c>DealsService</c> يَكتُبُ
+    /// الرَدَّ عَلى البائِعِ — الطَرَفِ المُقابِل — فَبائِعٌ عَلَيه ثَمَنٌ يَرُدُّه كانَ يَحذِفُ حِسابَه بِلا كَلِمَة («البائِع: False»)، وبَعدَه يَرُدُّ <see cref="PartnerGone"/> المُشتَريَ
+    /// عَن كُلِّ بابِ مُحادَثَة. فَالدالَّةُ تَقبَلُ المُبادِرَ (يُرَدُّ إلَيه) والطَرَفَ المُقابِلَ (يَرُدُّ هُو)، وتَحذيرٌ لا مَنعٌ كَما كان (G-7).</remarks>
     public static bool CashRefundOwed(Deal deal, Guid userId)
     {
-        if (deal.InitiatorId != userId || deal.Status != DealStatus.Cancelled) return false;
+        if ((deal.InitiatorId != userId && deal.CounterpartyId != userId) || deal.Status != DealStatus.Cancelled) return false;
         for (var i = deal.Timeline.Count - 1; i >= 0; i--)
             if (MoneyLines.Contains(deal.Timeline[i].Action)) return deal.Timeline[i].Action == DealEvent.CashRefundDue;
         return false;
@@ -107,7 +110,7 @@ public static class AccountErasure
 
     /// <summary>الاستِعلامُ الواحِدُ لِما سَبَق — تَسأَلُه صَفحَةُ الحَذفِ بِجَلسَةِ قِراءَة (<c>UserDataQueries.CashRefundsOwedAsync</c>).</summary>
     public static async Task<IReadOnlyList<Deal>> CashRefundsOwedAsync(IQuerySession s, Guid userId, CancellationToken ct = default)
-        => CashRefundsOwed(await s.Query<Deal>().Where(d => d.InitiatorId == userId && d.Status == DealStatus.Cancelled).ToListAsync(ct), userId);
+        => CashRefundsOwed(await s.Query<Deal>().Where(d => (d.InitiatorId == userId || d.CounterpartyId == userId) && d.Status == DealStatus.Cancelled).ToListAsync(ct), userId);
 
     /// <summary>اسمٌ لا يَدُلُّ عَلى أَحَد — فارِغ، أَو الافتِراضِيُّ قَبلَ أَن يُكتَبَ اسم، أَو المَمحُوُّ نَفسُه — فَلا يُبحَثُ عَنه في نَصِّ إشعار.
     /// ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ١) والافتِراضِيّانِ كِلاهُما (<see cref="PlaceholderNames"/>) لا قيمَةُ <c>User</c> وَحدَها: «عُضو جَديد» هُوَ
