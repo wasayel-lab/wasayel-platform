@@ -429,6 +429,9 @@ public static class AccountErasure
         /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٨ — B-6) صُفوفُه الخامُّ المَنقولَةُ مِن قاعِدَةِ المَتجَرِ السابِقَة (<see cref="ErasesImported"/>) — تُحذَفُ في المُعامَلَةِ نَفسِها.</summary>
         public int ImportedRows { get; init; }
 
+        /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ١٠ — B-8) مَدخَلُه عِندَ الناقِل (<see cref="CarrierEntryId"/>) — يُحذَفُ في المُعامَلَةِ نَفسِها: ٠ أَو ١.</summary>
+        public int CarrierBindings { get; init; }
+
         /// <summary>مِفاتيحُ مِلَفّاتِه في المَخزَنِ (<see cref="FileKeys"/>) — تُحذَفُ بَعدَ الحِفظِ بِـ<see cref="DeleteFilesAsync"/> لا في المُعامَلَة: المَخزَنُ خارِجَ القاعِدَة.
         /// لا تُعَدُّ في <see cref="Total"/>: لَم تُكتَب هُنا.</summary>
         public ErasedFiles Files { get; init; } = ErasedFiles.None;
@@ -462,6 +465,11 @@ public static class AccountErasure
     public static bool ErasesImported(ACommerce.Platform.Shared.ImportedRecord row, Guid userId)
         => ImportedPersonTables.TryGetValue(row.Table, out var columns)
            && columns.Any(c => row.Data.TryGetValue(c, out var v) && Guid.TryParse(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture), out var id) && id == userId);
+
+    /// <summary>مُعَرِّفُ مَدخَلِه عِندَ الناقِلِ في المَتجَر — <c>TenantProviderBinding.VendorEntryId</c> بِالقُدرَةِ الَّتي يَختِمُ بِها <c>VendorShipping.ConnectAsync</c>
+    /// (<c>BindVendorAsync(…, ProviderCapabilities.Delivery, owner, …)</c>) لا نُسخَةٌ مِن صيغَتِه (‏2026-11-04، G1 · ١٠). وصَفٌّ يُحمِرُّ إن خَتَمَ بابٌ مَدخَلَ بائِعٍ بِقُدرَةٍ أُخرى.</summary>
+    public static string CarrierEntryId(Guid userId)
+        => ACommerce.Platform.Providers.TenantProviderBinding.VendorEntryId(ACommerce.Platform.Providers.ProviderCapabilities.Delivery, userId);
 
     // ─── مِلَفّاتُه في المَخزَن، وصُوَرُ إعلاناتِه ومَواقِعُها (‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1 + B-5؛ تَوصيفُه 7f2f776) ─────────────
 
@@ -602,6 +610,10 @@ public static class AccountErasure
         var imported = (await s.Query<ACommerce.Platform.Shared.ImportedRecord>().Where(r => personTables.Contains(r.Table)).ToListAsync(ct))
             .Where(r => ErasesImported(r, userId)).ToList();
         foreach (var r in imported) s.Delete(r);
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ١٠ — B-8؛ تَوصيفُه 519731b) ومَدخَلُه عِندَ OTO — رَمزُ تَحديثِ حِسابِه مَختوماً وتَسجيلُ وارِدِه — يُحذَفُ لا يُسحَبُ إلى «مُبطَل»: كانَ يَبقى
+        // فَعّالاً بِلا صاحِب (سابِقَتُه د56 في مَفاتيحِ الرَبط). ولا نِداءَ إلى OTO: الوارِدُ لِمَدخَلٍ غائِبٍ يُجيبُ 404 أَصلاً، وحِسابُه عِندَها يَبقى عِندَها (تَقولُه صَفحَةُ الحَذف).
+        var carrier = await s.LoadAsync<ACommerce.Platform.Providers.TenantProviderBinding>(CarrierEntryId(userId), ct);
+        if (carrier is not null) s.Delete(carrier);
 
         // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-2) والصَفقَةُ الَّتي فَعَلَ فيها ولَيسَ طَرَفَها (`others`) تَربِطُ إشعاراتِها كَصَفقَةِ الطَرَف — `RelatedUrls`.
         var urls = RelatedUrls(deals.Concat(others), convs, matches);
@@ -667,6 +679,7 @@ public static class AccountErasure
             SavedSearches = searches.Count,
             Favorites = favorites.Count,
             ImportedRows = imported.Count,
+            CarrierBindings = carrier is null ? 0 : 1,
         };
     }
 
