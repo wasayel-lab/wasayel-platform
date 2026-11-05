@@ -283,6 +283,16 @@ public static class OtoOrderStatusGate
            && !deal.Refs.ContainsKey(DealShipping.DeliveredAfterCancelRef);
 
     /// <summary>
+    /// <para><b>أَيُكتَبُ «سُلِّمَ» عَلى صَفقَةٍ في «نِزاع»؟ — دالَّةٌ نَقِيَّة</b> (‏2026-11-05، الموجَة ١٢ G3 · ٤ — D-1؛ قَرارُ المالِك د38 (٢)): نَعَم حينَ رَدَّ <see cref="Decide"/> بِـ
+    /// <see cref="DealNotActive"/> — فَالمُعَرِّفانِ لِطَلَبِها وOTO تَقولُ «سُلِّم» ولَم تَبلُغ «تَسليم» — والصَفقَةُ <c>Disputed</c> بِلا المَرجِعِ قَبلَه (<see cref="DealShipping.DeliveredWhileDisputedRef"/>)؛
+    /// فَإعادَةُ OTO لِلإشعارِ لا تَكتُبُ ثانِيَة. كانَ «والنِزاعُ خارِجُها» أَعلاه سِجِلَّ «ب» W8-1·٥ — وحَسَمَه د38.</para>
+    /// </summary>
+    public static bool DeliveredWhileDisputed(Deal deal, OtoNoticeViolation refusal)
+        => refusal.Code == DealNotActive
+           && deal.Status == DealStatus.Disputed
+           && !deal.Refs.ContainsKey(DealShipping.DeliveredWhileDisputedRef);
+
+    /// <summary>
     /// <para><b>أَيُدخِلُ هذا الجَوابُ الصَفقَةَ «شَحن» قَبلَ سُؤالِ التَسليم؟ — دالَّةٌ نَقِيَّة</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12؛
     /// ‏ADR-033 §٧‑ط). نَعَم حينَ يَصدُقُ كُلُّ ما يَصدُقُ عِندَ «أَكمِل الشَّحن» بِالجَوابِ نَفسِه: المُعَرِّفانِ لِطَلَبِ الصَفقَة، وهي فَعّالَة،
     /// وتاليها «شَحن» وطَلَبُها عِندَ OTO (<see cref="DealShipping.AwaitsCarrier"/>)، وOTO تُثبِتُ شُحنَتَها وبوليصَتَها

@@ -89,8 +89,12 @@ public static class DealsPolicy
     /// <see cref="DealEvent.CashOnDelivery"/> — «لَحظَةُ القَبضِ عِندَ البائِع» (‏ADR-033 §٦). نَظيرُ <see cref="GatewayPayments.CollectedByGateway"/> لِلبِطاقَة؛ يَسأَلُه
     /// الإلغاءُ لِيَكتُبَ <see cref="DealEvent.CashRefundDue"/> (‏2026-10-29، قَرارُ المالِك د38 (٢)؛ مُراجَعَةُ تَيّارِ S5 الأولى). دالَّةٌ نَقِيَّة، وهُنا لا في الخِدمَة:
     /// كاتِبُ السَطرِ واحِدٌ هُناك (`DealCashPolicyTests` يَعُدُّه).</summary>
+    /// <remarks>(‏2026-11-05، الموجَة ١٢ G3 · ٤ — D-1؛ تَوصيفُه <c>b3da2d7</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>أَو سَلَّمَتها OTO وهي في «نِزاع»</b>
+    /// (<see cref="DealShipping.DeliveredWhileDisputedRef"/>) — المَندوبُ حَصَّلَ النَقدَ ولَم يَكتُبه كاتِبُ الانتِقال، فَحَسمُ النِزاعِ إلغاءً يَكتُبُ <see cref="DealEvent.CashRefundDue"/>
+    /// (د38 (٢)) ويُسَمّيه <see cref="DealNotices.OwnerActionOf"/> لِصاحِبِ المَتجَر.</remarks>
     public static bool CollectedInCash(Deal deal)
-        => IsCashOnDelivery(deal) && deal.Timeline.Any(e => e.Action == DealEvent.CashOnDelivery);
+        => IsCashOnDelivery(deal)
+           && (deal.Timeline.Any(e => e.Action == DealEvent.CashOnDelivery) || deal.Refs.ContainsKey(DealShipping.DeliveredWhileDisputedRef));
 
     /// <summary><b>القاعِدَةُ الواحِدَة</b>: <c>Paid</c> تُسقَطُ عَن النَقد — ولا
     /// مَرحَلَةَ أُخرى ولا طَريقَةَ أُخرى.</summary>

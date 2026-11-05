@@ -258,6 +258,14 @@ public sealed class DealShipping
     public const string DeliveredAfterCancelRef = "oto_delivered_after_cancel";
 
     /// <summary>
+    /// <para><b>«سُلِّمَ» مِن OTO عَلى صَفقَةٍ في «نِزاع»</b> — كَلِمَةُ الحالِ كَما أَجابَت بِها «Order Tracking» (‏2026-11-05، الموجَة ١٢ G3 · ٤ — D-1؛ تَوصيفُه <c>b3da2d7</c>؛
+    /// قَرارُ المالِك د38 (٢)). الوارِدُ لا يُحَرِّكُ مُتَنازَعاً عَلَيها (<see cref="OtoOrderStatusGate.DealNotActive"/>) ويُجابُ ‏200 فَلا تُعيدُه OTO — فَكانَ التَسليمُ يَضيعُ، وحَسمُ
+    /// النِزاعِ إلغاءً لا يَكتُبُ رَدَّ ثَمَنِ النَقدِ مُستَحَقّاً (<see cref="DealsPolicy.CollectedInCash"/> كاذِب). يُلحَقُ مَرَّةً بِأُنبوبِ الإلحاقِ القائِمِ وشَرطِه عَلى المَخزون، فَيَقرَؤُه
+    /// <see cref="DealsPolicy.CollectedInCash"/>. داخِلِيٌّ: لا يُرسَمُ لِلطَرَفَين (يَراه المُشتَري سَطرَ «رَدُّ ثَمَنِه مُستَحَقّ» إن أُلغِيَت).</para>
+    /// </summary>
+    public const string DeliveredWhileDisputedRef = "oto_delivered_while_disputed";
+
+    /// <summary>
     /// <para><b>«يَحتاجُ تَدَخُّلاً»: أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت أَو أُتلِفَت</b> — كَلِمَةُ الحالِ كَما أَجابَت بِها «Order Tracking»
     /// (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»؛ تَوصيفُه <c>7acae84</c>). يُلحَقُ مَرَّةً بِأُنبوبِ الإلحاقِ القائِم — سَطرٌ في السِجِلِّ يَراه الطَرَفانِ
     /// تَسمِيَةً — ولا تَتَحَرَّكُ الصَفقَة؛ وتَقرَؤُه صَفحَتا الصَفقَةِ بِـ<see cref="NeedsIntervention"/>.</para>
@@ -1052,6 +1060,11 @@ public sealed class DealShipping
                         stored => owed = DealsService.RecordCashRefundDueOnDelivery(stored, state.Status), CancellationToken.None) ?? current;
                     if (owed) await TellStoreOwnerAsync(tenantSlug, current);
                 }
+                // (‏2026-11-05، الموجَة ١٢ G3 · ٤ — D-1؛ تَوصيفُه `b3da2d7` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **و«سُلِّمَ» عَلى صَفقَةٍ في «نِزاع» يُكتَبُ مَرَّةً** — لا تَتَحَرَّك
+                // (النِزاعُ يَحسِمُه صاحِبُ المَتجَر، د38)، والجَوابُ ‏200 كَما كان؛ فَإن حُسِمَ إلغاءً كُتِبَ رَدُّ النَقدِ مُستَحَقّاً وأُخبِرَ صاحِبُ المَتجَرِ بِالأُنبوبِ القائِم.
+                else if (OtoOrderStatusGate.DeliveredWhileDisputed(current, refusal))
+                    current = await _deals.AttachRefAsync(tenantSlug, current.Id, DeliveredWhileDisputedRef, state.Status,
+                        stored => OtoOrderStatusGate.DeliveredWhileDisputed(stored, refusal), CancellationToken.None) ?? current;
                 return new(shipped && refusal.Code == OtoOrderStatusGate.NotDelivered ? OtoOrderStatusGate.Shipped : refusal.Code, current);
             }
             if (attempt > NoticeAttempts) return new(DealsService.ChangedMeanwhile, current);
