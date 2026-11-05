@@ -143,6 +143,15 @@ public sealed class TenantPlan
     /// مُصادَرَةٌ لا سِياسَة.</para>
     /// </summary>
     public DateTime? RenewalCancelledAt { get; set; }
+
+    /// <summary>
+    /// <para><b>مَتى عَلَّقَت PayPal الاشتِراكَ المَحفوظ — ولِماذا تَوَقَّفَ التَجديدُ إن كانَ تَعليقاً لا إلغاءً</b> (‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2).
+    /// يَكتُبُه <c>BILLING.SUBSCRIPTION.SUSPENDED</c> مَعَ <see cref="RenewalCancelledAt"/> ما دامَ الاشتِراكُ قائِماً، ويَمحوهُ الإلغاءُ والتَمديد.</para>
+    ///
+    /// <para><b>ولِماذا حَقلٌ</b>: المُعَلَّقُ يُعيدُه التاجِرُ مِن لَوحَةِ PayPal فَيُخصَمُ المُتَأَخِّرُ بِسِعرِ خُطَّتِه (<c>auto_bill_outstanding</c>)، فَهُوَ
+    /// <b>قائِمٌ</b> يُمسِكُ التَرتيبَ (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) — وكانَ يُكتَبُ كَالإلغاءِ فَيَنفَكُّ الإمساك. و<c>null</c> لِما سِواه.</para>
+    /// </summary>
+    public DateTime? PayPalSuspendedAt { get; set; }
 }
 
 // ═══ مَرَّة-واحِدَة لِرِسائِل PayPal ═════════════════════════════════
@@ -260,11 +269,15 @@ public static class TenantPlanPolicy
     /// <para><b>ولِماذا يُمسِكُ</b>: الاشتِراكُ يَخصِمُ سِعرَ خُطَّتِه عِندَ PayPal ويُمَدِّدُ الباقَةَ بِطولِ مُدَّتِها المَحفوظَة، فَتَغييرُ الباقَةِ
     /// أَو السِعرِ أَو التاريخَينِ مِن هُنا لا يَبلُغُه — يَبقى يَخصِمُ القَديمَ ويُمَدِّدُ الجَديد، ورابِطٌ ثانٍ يُخصَمُ مَعَه. والتَصميمُ
     /// المَكتوبُ أَن يُلغِيَه المُشرِفُ مِن لَوحَةِ PayPal (لا نِداءَ إلغاءٍ لَم يُثبَت)، فَإن وَصَلَت رِسالَةُ إلغائِه انفَكَّ الإمساك.</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2؛ تَوصيفُه <c>7dce2aa</c>) والمُعَلَّقُ قائِمٌ</b>: تَعليقٌ (<see cref="TenantPlan.PayPalSuspendedAt"/>)
+    /// يَبقى يُمسِك، لِأَنّ إعادَةَ تَفعيلِه مِن لَوحَةِ PayPal تَخصِمُ المُتَأَخِّرَ بِسِعرِ خُطَّتِه وتُمَدِّدُ الباقَةَ بِطولِ مُدَّتِها — وكانَ يَفُكُّه كَالإلغاءِ فَيَعودُ
+    /// E-1 مِن طَريقِه. فَالإلغاءُ وَحدَه يَفُكّ.</para>
     /// </summary>
     public static bool HoldsLiveSubscription(TenantPlan? plan)
         => plan is not null
            && !string.IsNullOrWhiteSpace(plan.PayPalSubscriptionId)
-           && plan.RenewalCancelledAt is null;
+           && (plan.RenewalCancelledAt is null || plan.PayPalSuspendedAt is not null);
 
     /// <summary>
     /// <para><b>أَيُقبَلُ الانتِقالُ مِن المَحفوظِ إلى المُعَيَّن؟</b> القائِمَةُ الفارِغَةُ تَعني نَعَم، وخَرقُها الوَحيدُ

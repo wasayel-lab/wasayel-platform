@@ -422,6 +422,14 @@
                             @L.Markup("admin.tenant_plan.paypal_subscription_live")
                             <span class="ac-chip ac-chip-sm">@plan!.PayPalSubscriptionId</span>
                         </p>
+                        @*  (‏2026-11-05، G4R1-2) والمُعَلَّقُ قائِمٌ يُمسِك — السَطرُ يَقولُ لِماذا يُمسِكُ وقَد قالَت بِطاقَةُ PayPal «أُوقِفَ التَجديد». *@
+                        @if (plan.PayPalSuspendedAt is { } suspended)
+                        {
+                            <p style="margin:0 0 10px;font-size:13px;">
+                                @L.Markup("admin.tenant_plan.paypal_subscription_suspended")
+                                @Culture.FormatTime(suspended, "yyyy-MM-dd")
+                            </p>
+                        }
                     }
 
                     <AcField Label="@L["admin.tenant_plan.field_plan"]" Required="true">

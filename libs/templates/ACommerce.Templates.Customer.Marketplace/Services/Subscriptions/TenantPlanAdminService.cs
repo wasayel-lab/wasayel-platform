@@ -73,6 +73,8 @@ public static class TenantPlanAdminService
             PayPalApproveUrl     = keepsLink ? stored!.PayPalApproveUrl : null,
             PayPalApprovePlanId  = keepsLink ? stored!.PayPalApprovePlanId : null,
             RenewalCancelledAt   = stored?.RenewalCancelledAt,
+            // ‏(‏2026-11-05، G4R1-2) وعَلامَةُ التَعليقِ تُحمَلُ كَأُختِها — حِفظٌ يُسقِطُها يَفُكُّ إمساكَ اشتِراكٍ مُعَلَّقٍ يُعادُ تَفعيلُه.
+            PayPalSuspendedAt    = stored?.PayPalSuspendedAt,
         };
 
         // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1) **واشتِراكُ PayPal القائِمُ يُمسِكُ التَرتيبَ أَوَّلاً**: حالَةٌ مَخزونَةٌ تَرُدُّ قَبلَ حُقولِ الاستِمارَة،

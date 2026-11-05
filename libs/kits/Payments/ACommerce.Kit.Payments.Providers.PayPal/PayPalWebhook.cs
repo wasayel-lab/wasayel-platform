@@ -413,9 +413,17 @@ public static class PayPalBillingPolicy
             case PayPalBillingAction.Extend:
                 plan.ExpiresAt = decision.NewExpiresAt;
                 plan.RenewalCancelledAt = null;
+                plan.PayPalSuspendedAt = null;
                 break;
 
+            // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2؛ تَوصيفُه `7dce2aa`) **ويُسَجَّلُ لِماذا تَوَقَّفَ التَجديد**: التَعليقُ يُعادُ مِن لَوحَةِ PayPal
+            // فَيَبقى الاشتِراكُ قائِماً يُمسِكُ التَرتيب (`HoldsLiveSubscription`)، والإلغاءُ — ومِنه إلغاءُ Paddle المارُّ بِهذا الباعِث — يَمحو العَلامَة.
+            // **والتَعليقُ يُبقي إمساكاً قائِماً ولا يُنشِئُه**: رِسالَةُ تَعليقٍ تَصِلُ بَعدَ الإلغاءِ (الرَسائِلُ لا تَصِلُ بِتَرتيبِها) لا تُعيدُ قَفلَ تَرتيبِ مَتجَرٍ
+            // لا تَأتيه رِسالَةُ إلغاءٍ ثانِيَة.
             case PayPalBillingAction.StopRenewal:
+                plan.PayPalSuspendedAt = PayPalEventTypes.SubscriptionSuspended.Equals(e.EventType, StringComparison.Ordinal)
+                                         && TenantPlanPolicy.HoldsLiveSubscription(plan)
+                    ? at : null;
                 plan.RenewalCancelledAt = at;
                 break;
 
