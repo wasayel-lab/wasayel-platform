@@ -156,6 +156,8 @@ int renamed = 0, merged = 0, skipped = 0, groupsSkipped = 0;
 // بَعدَ العَرضِ يُتَخَطّى ولا يُعَدّ — فَيُطبَعُ ما تُخُطِّيَ، ولا يَتَغَيَّرُ رَمزُ الخُروج (التَخَطّي لَيسَ خَطَأ: الخُطَّةُ لَم تَعُد تَنطَبِق).
 // ‏(‏2026-11-05، الموجَة ١٢ Carry — G2R3-1) ومِثلُه `ApplyAsync`: يَسأَلُ أَعضاءَ المَجموعَةِ عَلى قِراءَتِه (`DuplicatePhones.StaleMember`) ويَرمي `merge_stale` قَبلَ
 // أَيِّ كِتابَة — فَالمَجموعَةُ تُتَخَطّى كَالَّتي صارَ فيها مانِع: «تَخَطٍّ» يُطبَع، ولا سَطرَ تَدقيق، ولا تُعَدُّ في «دُمِجَت»، ورَمزُ الخُروجِ كَما هُوَ.
+// ‏(‏2026-11-05، Carry-R1-1) ومِثلُه حِسابٌ صارَ إدارِيّاً بَعدَ إعادَةِ القِياس (`DuplicatePhones.AdminMember` عَلى القِراءَةِ نَفسِها) — `merge_stale: admin …`،
+// فَيُتَخَطّى هُنا، والتَشغيلُ التالي يَمنَعُه بِمانِعِ `admin_account`.
 foreach (var (slug, plan, ok) in work)
 {
     var renamedHere = await DuplicatePhones.RenameAsync<User>(store, slug, plan.Renames, (u, p) => { u.Phone = p; u.UpdatedAt = now; });
@@ -176,7 +178,7 @@ foreach (var (slug, plan, ok) in work)
         try { moved = await DuplicatePhones.ApplyAsync(store, slug, scan, now); }
         catch (InvalidOperationException e) when (DuplicatePhones.IsStale(e))
         {
-            Console.WriteLine($"  تَخَطٍّ: {slug} — حِسابٌ فيها مُحِيَ أَو غابَ أَو تَغَيَّرَ جَوّالُه بَعدَ العَرض ({e.Message})");
+            Console.WriteLine($"  تَخَطٍّ: {slug} — حِسابٌ فيها مُحِيَ أَو غابَ أَو تَغَيَّرَ جَوّالُه أَو صارَ إدارِيّاً بَعدَ العَرض ({e.Message})");
             groupsSkipped++;
             continue;
         }
@@ -192,5 +194,5 @@ renamed += studioRenamed;
 skipped += studioPlan.Renames.Count - studioRenamed;
 Console.WriteLine($"OK {StudioAuth.Tenant} (الاستوديو): أُعيدَ كَتبُ {studioRenamed} · تُخُطِّيَ {studioPlan.Renames.Count - studioRenamed}");
 Console.WriteLine($"تَمَّ: أُعيدَ كَتبُ {renamed} جَوّالاً، وتُخُطِّيَ {skipped} (مُحِيَ حِسابُه أَو تَغَيَّرَ جَوّالُه بَعدَ العَرض)، ودُمِجَت {merged} مَجموعَة، "
-    + $"وتُخُطِّيَت {groupsSkipped} (صارَ فيها مانِعٌ، أَو مُحِيَ حِسابٌ فيها أَو غابَ أَو تَغَيَّرَ جَوّالُه بَعدَ العَرض) — مِن {changes} تَغييراً.");
+    + $"وتُخُطِّيَت {groupsSkipped} (صارَ فيها مانِعٌ، أَو مُحِيَ حِسابٌ فيها أَو غابَ أَو تَغَيَّرَ جَوّالُه أَو صارَ إدارِيّاً بَعدَ العَرض) — مِن {changes} تَغييراً.");
 return 0;

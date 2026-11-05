@@ -330,7 +330,13 @@ public static class DuplicatePhones
     /// والآن بَعدَ قِراءَةِ الأَعضاءِ وقَبلَ أَيِّ كِتابَةٍ تَسأَلُ <see cref="StaleMember"/> (<see cref="StillApplies"/> لِكُلِّ عُضوٍ بِصيغَةِ المَجموعَة)، فَإن لَم تَنطَبِق
     /// رَمَت <see cref="MergeStale"/> ولا يُكتَبُ حَرف، والسكربتُ يَتَخَطّى المَجموعَة. ومِثلُها حَقيقَتانِ كانَتا تُؤخَذانِ مِن القِياس: سَلَّةُ الباقي تُقرَأُ في المُعامَلَة
     /// (كانَت <c>SurvivorCart</c> فَتُكتَبُ سَلَّةُ المُندَمِجِ فَوقَ سَلَّةٍ حَفِظَها الباقي بَعدَ القِياس)، ومَفاتيحُ المُندَمِجِ تُسأَلُ ما دامَ جَدوَلُها قائِماً
-    /// (<see cref="Scan.HasKeysTable"/>؛ كانَت حينَ عَدَّ القِياسُ مِفتاحاً، فَمِفتاحٌ صَدَرَ بَعدَه يَبقى لِمَمحُوٍّ ويُرَدُّ <c>ActorGone</c>).</para></remarks>
+    /// (<see cref="Scan.HasKeysTable"/>؛ كانَت حينَ عَدَّ القِياسُ مِفتاحاً، فَمِفتاحٌ صَدَرَ بَعدَه يَبقى لِمَمحُوٍّ ويُرَدُّ <c>ActorGone</c>).</para>
+    /// <para>‏(‏2026-11-05، الموجَة ١٢ Carry، الجَولَةُ ١ — Carry-R1-1؛ تَوصيفُه <c>ab38ffe</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ومانِعُ الإداريِّ مِن الخُطَّةِ يُسأَلُ
+    /// عَلى القِراءَةِ نَفسِها</b>: «لا حِسابَ إدارِيّاً في المَجموعَة» جُزءٌ مِن <see cref="Scan.Mergeable"/> كانَ يَحسِبُه <see cref="ScanAsync"/> وَحدَه، والإعادَةُ عَلى
+    /// <c>ConcurrencyException</c> تَقرَأُ الحِسابَ بَعدَ المَنحِ وتَكتُبُ عَلَيه — فَإداريٌّ مُنِحَ بَعدَ إعادَةِ القِياسِ يُمحى، وباقٍ مُنِحَ يُدمَجُ فيه مَن تَمنَعُه
+    /// السِياسَة، ودَورُ مَتجَرٍ رَمزُ كَتالوجِه <c>tenant_admin</c> يُوَرَّثُ بِ<see cref="Inherit"/>. والآن بَعدَ <see cref="StaleMember"/> تُحَمَّلُ أَدوارُ المَتجَرِ في
+    /// الجَلسَةِ نَفسِها وتُسأَلُ <see cref="AdminMember"/>، وإلّا <see cref="MergeStale"/> بِلا حَرف. والمَنحُ يَكتُبُ وَثيقَةَ <c>User</c> نَفسَها، فَمَنحٌ بَعدَ
+    /// هذه القِراءَةِ يَرُدُّ الحِفظَ بِالتَزامُنِ التَفاؤُلِيِّ والمُحاوَلَةُ المُعادَةُ تَسأَلُ فَتَقِف — لا يَحتاجُ قِياساً تَسَلسُليّاً.</para></remarks>
     public static async Task<long> ApplyAsync(IDocumentStore store, string tenant, Scan scan, DateTime now, CancellationToken ct = default)
     {
         if (!scan.Mergeable) throw new InvalidOperationException("merge_blocked: " + string.Join(" · ", scan.Blocks));
@@ -352,6 +358,9 @@ public static class DuplicatePhones
         if (StaleMember(g, found, read) is { } stale) throw new InvalidOperationException($"{MergeStale}: {stale}");
         User survivor = found!;
         var losers = read.ConvertAll(l => l!);
+        // ‏(‏2026-11-05، Carry-R1-1) ومانِعُ الإداريِّ مِن الخُطَّةِ يُسأَلُ عَلى هذه القِراءَةِ نَفسِها — بِأَدوارِ المَتجَرِ مِن وَثيقَتِه في الجَلسَةِ نَفسِها — قَبلَ أَيِّ كِتابَة.
+        var roles = (await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(tenant, ct))?.Roles ?? [];
+        if (AdminMember(survivor, losers, roles) is { } admin) throw new InvalidOperationException($"{MergeStale}: {admin}");
 
         long moved = 0;
         foreach (var rp in scan.Repoints)
@@ -491,6 +500,27 @@ public static class DuplicatePhones
             if (losers[i] is not { } loser || !StillApplies(loser, new Rename(loser.Id, group.Canonical))) return $"loser {i + 1}/{losers.Count}";
         return null;
     }
+
+    /// <summary>
+    /// <para><b>أَوَّلُ عُضوٍ إداريٍّ في المَجموعَةِ عَلى ما قُرِئَ الآن</b> — <c>admin survivor</c> أَو <c>admin loser i/n</c> — أَو <c>null</c>. نَقِيَّة (‏2026-11-05، الموجَة ١٢
+    /// Carry، الجَولَةُ ١ — Carry-R1-1؛ تَوصيفُه <c>ab38ffe</c>). السُؤالُ سُؤالُ <see cref="ScanAsync"/> بِعَينِه (مانِعُ <see cref="AdminBlock"/>): دَورُه النَشِطُ
+    /// <c>tenant_admin</c>، أَو دَورٌ في المَتجَرِ بِاسمِه هُوَ إداريٌّ (<see cref="Gates.SelfGrantPolicy.IsAdminRole"/> — رَمزُ كَتالوجِه <c>tenant_admin</c>)؛ وبِلا
+    /// وَثيقَةِ مَتجَرٍ تُسأَلُ الأُولى وَحدَها كَما يَسأَلُها القِياس. بِتَرتيبِ القِراءَة: الباقي ثُمَّ المُندَمِجونَ بِتَرتيبِ الخُطَّة.</para>
+    /// <para><b>لِماذا هُنا لا في <see cref="StaleMember"/></b>: ذاكَ شَرطُ إعادَةِ الكَتبِ بِعَينِه (يَسأَلُه طَريقا الكِتابَةِ في السكربت، ويُناديه مِلَفّا تَوصيفٍ
+    /// لا يُمَسّان — القاعِدَة ٣)، وهذا مانِعٌ مِن القِياسِ يَحتاجُ أَدوارَ المَتجَرِ لا الحِسابَ وَحدَه؛ ويُرمَيانِ بِرَمزٍ واحِد (<see cref="MergeStale"/>) لِأَنّ كِلَيهِما
+    /// «الخُطَّةُ لَم تَعُد تَنطَبِقُ عَلى ما قُرِئَ الآن»، فَيَتَخَطّى السكربتُ المَجموعَةَ ويُعادُ قِياسُها في التَشغيلِ التالي فَيَمنَعُها <c>admin_account</c>.</para>
+    /// </summary>
+    public static string? AdminMember(User survivor, IReadOnlyList<User> losers, IReadOnlyList<ACommerce.Kit.Roles.Role> roles)
+    {
+        if (IsAdmin(survivor, roles)) return "admin survivor";
+        for (var i = 0; i < losers.Count; i++)
+            if (IsAdmin(losers[i], roles)) return $"admin loser {i + 1}/{losers.Count}";
+        return null;
+    }
+
+    private static bool IsAdmin(User account, IReadOnlyList<ACommerce.Kit.Roles.Role> roles)
+        => Gates.SelfGrantPolicy.IsAdminSlug(account.ActiveRole)
+           || roles.Any(r => string.Equals(r.Slug, account.ActiveRole, StringComparison.Ordinal) && Gates.SelfGrantPolicy.IsAdminRole(r));
 
     private static async Task<long> CountAsync(NpgsqlConnection conn, string sql, CancellationToken ct, params (string, object)[] ps)
     {
