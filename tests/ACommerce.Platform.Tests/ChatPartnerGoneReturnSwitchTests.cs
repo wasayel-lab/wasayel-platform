@@ -80,7 +80,7 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
     /// <summary>إشعارُ صاحِبِ المَتجَر: لِمُعَرِّفِه، بِنَوعِ الطَلَبِ الجَديد، وإلى صَفحَةِ الصَفقَةِ في الاستوديو (فَيَقرَؤُه قارِئُ «العَمَلِيّات»)، بِعُنوانِ الإعلان — ولا اسمَ
     /// لِلمُشتَري ولا مَبلَغ. والمَعجَمُ المُغلَقُ خَمسَةُ أَفعال، والأُنبوبُ يَبني لِلخامِسِ بانِيَه.</summary>
     [Fact]
-    public void The_store_owner_notice_names_the_listing_and_points_at_the_studio_deal_page_and_the_lexicon_has_five_actions()
+    public void The_store_owner_notice_names_the_listing_and_points_at_the_studio_deal_page_and_the_lexicon_has_six_actions()
     {
         var l = new L(new HttpContextAccessor());
         var deal = WithTold(null);
@@ -90,7 +90,7 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         Assert.Contains("«سِلعَةٌ تُستَرجَع»", n.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(deal.InitiatorName, n.Body, StringComparison.Ordinal);
         Assert.Single(DealNotices.OwnerNoticesOf(new[] { n }, "zz"));
-        Assert.Equal(5, Enum.GetValues<DealNotices.OwnerAction>().Length);
+        Assert.Equal(6, Enum.GetValues<DealNotices.OwnerAction>().Length);   // ‏(‏2026-11-05، G1b-R1-2) 5 ← 6: `ReturnToOwner` — صاحِبُ المَتجَرِ طَرَفُ الصَفقَة
         var src = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
             "ACommerce.Templates.Customer.Marketplace", "Services", "Deals", "DealNotices.cs")));
         Assert.Contains("OwnerAction.ReturnVendorGone => ReturnVendorGoneFor(slug, deal, ownerId, l, DateTime.UtcNow),", src, StringComparison.Ordinal);
@@ -107,7 +107,7 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         pipe = pipe[..pipe.IndexOf("return true;\n    }", StringComparison.Ordinal)];
         int At(string s, string what) => s.IndexOf(what, StringComparison.Ordinal);
         // ‏(‏2026-11-05، G1b-R1-1) والسُؤالُ صارَ داخِلَ القَرارِ الواحِد `ReturnToldFor` (ومَعَه صاحِبُ المَتجَر)، والمَرجِعُ قيمَتُه مِن المَعجَمِ لا ثابِتُ «المَتجَر» وَحدَه.
-        var gone = At(pipe, "told = ReturnToldFor(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));");
+        var gone = At(pipe, "told = ReturnToldFor(vendorId, await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));");   // ‏(‏2026-11-05، G1b-R1-2) وبِمُعَرِّفِه
         var owner = At(pipe, "NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)");
         var told = At(pipe, "deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, value, ct)");
         var vendor = At(pipe, "ReturnRequestedFor(slug, deal, vendorId, l, DateTime.UtcNow)");
@@ -115,7 +115,8 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         Assert.True(gone > 0 && owner > gone && told > owner && vendor > told, "التَرتيب: السُؤالُ ثُمَّ صاحِبُ المَتجَرِ ثُمَّ المَرجِعُ، وإشعارُ البائِعِ بَعدَها كُلِّها.");
 
         var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(root, "Components", "Pages", "MyDealDetail.razor")));
-        Assert.Contains("&& Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, seller));", page, StringComparison.Ordinal);
+        // ‏(‏2026-11-05، G1b-R1-2) والسُؤالُ عَلى حِسابِ البائِعِ المَقروءِ مَرَّة — بَعدَ أَن يُنزَعَ صاحِبُ المَتجَرِ بِلا حِسابٍ فيه (صُفوفُه في `ChatPartnerGoneStoreOwnerSellerRowsTests`).
+        Assert.Contains("vendorGone = isInitiator && vendorId is not null && Services.Identity.AccountErasure.PartnerGone(vendorAccount);", page, StringComparison.Ordinal);
         var form = At(page, "<form method=\"post\" action=\"@($\"/{Slug}/users/{vid}/chat\")\"");
         Assert.True(form > 0 && page.LastIndexOf("@if (isInitiator && vendorId is { } vid && !vendorGone)", form, StringComparison.Ordinal) > 0, "الاستِمارَةُ خارِجَ شَرطِ الغِياب.");
         var gap = At(page, "else if (isInitiator && vendorId is not null)");

@@ -574,7 +574,7 @@
     string? buyerAddr, buyerPhone;
     /// <summary>البائِعُ الَّذي يُراسِلُه المُبادِر: مالِكُ الإعلانِ مِن
     /// <c>Refs[listing_owner]</c>، وإلّا الطَرَفُ المُقابِلُ بَعدَ القَبول؛
-    /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ.</summary>
+    /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ. (‏2026-11-05، G1b-R1-2: أَو كانَ صاحِبَ المَتجَرِ بِلا حِسابٍ فيه — طَرَفاً بِمُعَرِّفِ الاستوديو.)</summary>
     Guid? vendorId;
     /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) البائِعُ أَغلَقَ حِسابَه أَو لا وَثيقَةَ لَه — <see cref="Services.Identity.AccountErasure.PartnerGone"/> الَّتي يَسأَلُها
     /// بابُ المُحادَثَة: فَلا تُرسَمُ استِمارَتُه، ويَقولُ التَلميحُ إنّ إدارَةَ المَتجَرِ تُخبَرُ بِالاستِرجاع. (‏2026-11-05، G1b-R1-1: والتَلميحُ صارَ مِن
@@ -606,10 +606,15 @@
         if (!isInitiator && !isListingOwner) { deal = null; return; }
         vendorId = Guid.TryParse(ownerRef, out var ownerGuid) ? ownerGuid : deal.CounterpartyId;
         if (vendorId == uid) vendorId = null;
-        vendorGone = isInitiator && vendorId is { } seller
-            && Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, seller));
+        // ‏(‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-2؛ تَوصيفُه 5741f59) وصاحِبُ المَتجَرِ الَّذي قَبِلَ الصَفقَةَ مِن الاستوديو طَرَفُها بِمُعَرِّفِه هُناك،
+        // ولا وَثيقَةَ لَه في المَتجَر — فَكانَ يُقرَأُ «أَغلَقَ حِسابَه» ويُرسَمُ سَطرُ «لَم يَعُد لِهذا البائِعِ حِساب». فَلا بابَ مُحادَثَةٍ يَرُدُّه بِـ`partner_missing` (القاعِدَة ١٢)
+        // ولا سَطرَ غِياب؛ ومالِكُ الإعلانِ القائِمُ يَبقى بابَه.
+        var storeOwner = isInitiator ? DealNotices.StoreOwnerOf(await Tenants.FindAsync(Slug)) : null;
+        var vendorAccount = isInitiator && vendorId is { } seller ? await Accounts.ProfileAsync(Slug, seller) : null;
+        if (vendorId is { } chatVendor && chatVendor == storeOwner && Services.Identity.AccountErasure.PartnerGone(vendorAccount)) vendorId = null;
+        vendorGone = isInitiator && vendorId is not null && Services.Identity.AccountErasure.PartnerGone(vendorAccount);
         if (isInitiator && DealNotices.ReturnRecipient(deal) is { } returnVendor)
-            returnTold = DealNotices.ReturnToldFor(await Accounts.ProfileAsync(Slug, returnVendor), DealNotices.StoreOwnerOf(await Tenants.FindAsync(Slug)));
+            returnTold = DealNotices.ReturnToldFor(returnVendor, await Accounts.ProfileAsync(Slug, returnVendor), storeOwner);
 
         // بَياناتُ التَوصيلِ لِمَن يُسَلِّمُ وَحدَه — لا لِلمُشتَري (بَياناتُه هُوَ) ولا
         // لِثالِث (أُغلِقَت الصَفحَةُ عَلَيه أَعلاه). وبِثابِتَي `Deal` لا بِحَرفِيَّة،

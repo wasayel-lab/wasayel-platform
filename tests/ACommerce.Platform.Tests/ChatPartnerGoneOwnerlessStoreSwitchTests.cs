@@ -24,22 +24,25 @@ public class ChatPartnerGoneOwnerlessStoreRowsTests(ITestOutputHelper output)
     public void Nobody_is_told_only_when_the_vendor_is_gone_and_the_store_has_no_owner()
     {
         var owner = Guid.NewGuid();
-        Assert.Equal(DealNotices.ReturnTold.Nobody, DealNotices.ReturnToldFor(Erased(), null));
-        Assert.Equal(DealNotices.ReturnTold.Nobody, DealNotices.ReturnToldFor(null, null));
-        Assert.Equal(DealNotices.ReturnTold.Store, DealNotices.ReturnToldFor(Erased(), owner));
-        Assert.Equal(DealNotices.ReturnTold.Store, DealNotices.ReturnToldFor(null, owner));
-        Assert.Equal(DealNotices.ReturnTold.Vendor, DealNotices.ReturnToldFor(Live(), null));
-        Assert.Equal(DealNotices.ReturnTold.Vendor, DealNotices.ReturnToldFor(Live(), owner));
+        // ‏(‏2026-11-05، G1b-R1-2) والقَرارُ يَأخُذُ مُعَرِّفَ البائِعِ أَيضاً — صاحِبُ المَتجَرِ قَبلَ الغِياب (صُفوفُه في `ChatPartnerGoneStoreOwnerSellerRowsTests`).
+        DealNotices.ReturnTold For(User? vendor, Guid? storeOwner) => DealNotices.ReturnToldFor(vendor?.Id ?? Guid.NewGuid(), vendor, storeOwner);
+        Assert.Equal(DealNotices.ReturnTold.Nobody, For(Erased(), null));
+        Assert.Equal(DealNotices.ReturnTold.Nobody, For(null, null));
+        Assert.Equal(DealNotices.ReturnTold.Store, For(Erased(), owner));
+        Assert.Equal(DealNotices.ReturnTold.Store, For(null, owner));
+        Assert.Equal(DealNotices.ReturnTold.Vendor, For(Live(), null));
+        Assert.Equal(DealNotices.ReturnTold.Vendor, For(Live(), owner));
         // ومَتجَرٌ صاحِبُه مُعَرِّفٌ فارِغٌ لا صاحِبَ لَه — `StoreOwnerOf` نَفسُها الَّتي يَقرَؤُها الأُنبوب.
         Assert.Null(DealNotices.StoreOwnerOf(new Tenant { Id = "zz", OwnerUserId = Guid.Empty }));
         Assert.Null(DealNotices.StoreOwnerOf(null));
     }
 
-    /// <summary>المَعجَمُ المُغلَقُ ثَلاثَة، ولِكُلٍّ قيمَتُه ذَهاباً وإياباً؛ والبائِعُ بِلا مَرجِع، وقيمَةٌ خارِجَه تُقرَأُ «البائِع» (ما كُتِبَ قَبلَ المَرجِع).</summary>
+    /// <summary>المَعجَمُ المُغلَقُ ثَلاثَة، ولِكُلٍّ قيمَتُه ذَهاباً وإياباً؛ والبائِعُ بِلا مَرجِع، وقيمَةٌ خارِجَه تُقرَأُ «البائِع» (ما كُتِبَ قَبلَ المَرجِع).
+    /// (‏2026-11-05، G1b-R1-2: وأَربَعَةٌ — `Owner`.)</summary>
     [Fact]
-    public void The_return_told_lexicon_has_three_values_and_each_reads_back_from_its_ref()
+    public void The_return_told_lexicon_is_closed_and_each_value_reads_back_from_its_ref()
     {
-        Assert.Equal(3, Enum.GetValues<DealNotices.ReturnTold>().Length);
+        Assert.Equal(4, Enum.GetValues<DealNotices.ReturnTold>().Length);   // 3 ← 4 (‏2026-11-05، G1b-R1-2: `Owner`)
         foreach (var told in Enum.GetValues<DealNotices.ReturnTold>())
         {
             var deal = new Deal { Id = Guid.NewGuid() };
@@ -109,7 +112,7 @@ public class ChatPartnerGoneOwnerlessStoreRowsTests(ITestOutputHelper output)
         var pipe = src[src.IndexOf("public async Task<bool> NotifyReturnRequestedAsync(", StringComparison.Ordinal)..];
         pipe = pipe[..pipe.IndexOf("return true;\n    }", StringComparison.Ordinal)];
         int At(string s, string what) => s.IndexOf(what, StringComparison.Ordinal);
-        var decide = At(pipe, "told = ReturnToldFor(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));");
+        var decide = At(pipe, "told = ReturnToldFor(vendorId, await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));");   // ‏(‏2026-11-05، G1b-R1-2) وبِمُعَرِّفِه
         var fallback = At(pipe, "if (told == ReturnTold.Store && !await NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)) told = ReturnTold.Nobody;");
         var attach = At(pipe, "await deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, value, ct);");
         var vendor = At(pipe, "ReturnRequestedFor(slug, deal, vendorId, l, DateTime.UtcNow)");
@@ -119,7 +122,9 @@ public class ChatPartnerGoneOwnerlessStoreRowsTests(ITestOutputHelper output)
 
         var page = WriteEndpointGuardTests.StripMarkupComments(File.ReadAllText(Path.Combine(root, "Components", "Pages", "MyDealDetail.razor")));
         Assert.Contains("@inject Services.Queries.TenantDirectory Tenants", page, StringComparison.Ordinal);
-        Assert.Contains("DealNotices.ReturnToldFor(await Accounts.ProfileAsync(Slug, returnVendor), DealNotices.StoreOwnerOf(await Tenants.FindAsync(Slug)));", page, StringComparison.Ordinal);
+        // ‏(‏2026-11-05، G1b-R1-2) وصاحِبُ المَتجَرِ يُقرَأُ مَرَّةً لِبابِ المُحادَثَةِ ولِلقَرار، والقَرارُ بِمُعَرِّفِ البائِع.
+        Assert.Contains("var storeOwner = isInitiator ? DealNotices.StoreOwnerOf(await Tenants.FindAsync(Slug)) : null;", page, StringComparison.Ordinal);
+        Assert.Contains("returnTold = DealNotices.ReturnToldFor(returnVendor, await Accounts.ProfileAsync(Slug, returnVendor), storeOwner);", page, StringComparison.Ordinal);
         Assert.Contains("if (isInitiator && DealNotices.ReturnRecipient(deal) is { } returnVendor)", page, StringComparison.Ordinal);
         Assert.Contains("@L.Format(DealNotices.ReturnKey(\"deals.detail.return_hint\", returnTold),", page, StringComparison.Ordinal);
         Assert.DoesNotContain("ReturnKey(\"deals.detail.return_hint\", vendorGone)", page, StringComparison.Ordinal);

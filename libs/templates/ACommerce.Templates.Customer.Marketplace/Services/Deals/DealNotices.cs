@@ -305,7 +305,9 @@ public sealed class DealNotices
     /// <see cref="OwnerActionOf"/> مِن السِجِلّ — لا سَطرَ يُكتَبُ عَلى صَفقَةٍ لَم تُكتَب — بَل يُسَمّيه المُنادي، <see cref="NotifyStoreOwnerAsync(string, Deal, OwnerAction, L, CancellationToken)"/>.)</remarks>
     /// <remarks>(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2؛ ولا يُعادُ حَرفٌ فَوقَه: وخامِسُها طَلَبُ استِرجاعٍ بائِعُه أَغلَقَ حِسابَه — <see cref="ReturnVendorGoneFor"/>؛ يُسَمّيه
     /// <see cref="NotifyReturnRequestedAsync"/> كَما يُسَمّي المُنادي <see cref="OwnerAction.ExpiryFailed"/>.)</remarks>
-    public enum OwnerAction { RefundDue, InvoiceLeftOpen, CashRefundDue, ExpiryFailed, ReturnVendorGone }
+    /// <remarks>(‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-2؛ ولا يُعادُ حَرفٌ فَوقَه: وسادِسُها طَلَبُ استِرجاعٍ عَلى صَفقَةٍ صاحِبُ المَتجَرِ طَرَفُها — قَبِلَها مِن
+    /// الاستوديو — <see cref="ReturnToOwnerFor"/>؛ يُسَمّيه <see cref="NotifyReturnRequestedAsync"/>.)</remarks>
+    public enum OwnerAction { RefundDue, InvoiceLeftOpen, CashRefundDue, ExpiryFailed, ReturnVendorGone, ReturnToOwner }
 
     /// <summary>
     /// <para><b>ما عَلى صاحِبِ المَتجَرِ أَن يَفعَلَه في هذِه الصَفقَة الآن</b> — آخِرُ سَطرٍ مِن السَطرَينِ في سِجِلِّها: <see cref="DealEvent.GatewayRefundDue"/> لِصَفقَةٍ مُلغاة
@@ -514,6 +516,22 @@ public sealed class DealNotices
         At = at,
     };
 
+    /// <summary>
+    /// <para><b>إشعارُ صاحِبِ المَتجَرِ بِطَلَبِ استِرجاعٍ عَلى صَفقَةٍ هُوَ طَرَفُها</b> (‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-2؛ تَوصيفُه <c>5741f59</c>):
+    /// <c>/studio/apps/{slug}/deals/{id}/advance</c> يُعَيِّنُه الطَرَفَ المُقابِلَ بِمُعَرِّفِه في الاستوديو، ولا وَثيقَةَ لَه في المَتجَر — فَكانَ يُخبَرُ بِـ<see cref="ReturnVendorGoneFor"/>
+    /// «بائِعُه أَغلَقَ حِسابَه» عَن نَفسِه. نَصٌّ مُحايِدٌ بِلا غِياب، ونَوعُه ورابِطُه نَوعُ أَخيه ورابِطُه (صَفحَةُ الصَفقَةِ في الاستوديو، فَيَقرَؤُه <see cref="OwnerNoticesOf"/>)، ولا بَياناتِ مُشتَرٍ.</para>
+    /// </summary>
+    public static Notification ReturnToOwnerFor(string slug, Deal deal, Guid ownerId, L l, DateTime at) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = ownerId,
+        Type = NewDealType,
+        Title = l["notifications.deal_return_owner.title"],
+        Body = l.Format("notifications.deal_return_owner.body", deal.ListingTitle),
+        RelatedUrl = StudioDealUrl(slug, deal.Id),
+        At = at,
+    };
+
     /// <summary>مَرجِعُ «مَن أُخبِرَ بِطَلَبِ الاستِرجاع» — يُلحِقُه <see cref="NotifyReturnRequestedAsync"/> بِـ<see cref="DealsService.AttachRefAsync(string, Guid, string, string, CancellationToken)"/>
     /// حينَ لا يُخبَرُ البائِع، وقيمَتُه مِن مَعجَمٍ مُغلَقٍ واحِد (<see cref="ReturnToldValue"/>). وغِيابُه: أُخبِرَ البائِع.</summary>
     public const string ReturnToldRef = "return_told";
@@ -524,23 +542,32 @@ public sealed class DealNotices
     /// <summary>‏(‏2026-11-05، G1b-R1-1) لَم يُخبَر أَحَد — البائِعُ أَغلَقَ حِسابَه ولا صاحِبَ مُعَيَّناً لِلمَتجَر (<see cref="StoreOwnerOf"/> فارِغ).</summary>
     public const string ReturnToldNobody = "nobody";
 
+    /// <summary>‏(‏2026-11-05، G1b-R1-2) أُخبِرَت إدارَةُ المَتجَرِ وهي طَرَفُ الصَفقَة — صاحِبُ المَتجَرِ قَبِلَها مِن الاستوديو؛ لا غِيابَ لِأَحَد.</summary>
+    public const string ReturnToldOwner = "owner";
+
     /// <summary>
     /// <para><b>مَن يُخبَرُ بِطَلَبِ الاستِرجاع — مَعجَمٌ مُغلَق</b> (‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-1؛ تَوصيفُه <c>d3d728a</c>): البائِع،
     /// أَو إدارَةُ المَتجَرِ حينَ أَغلَقَ البائِعُ حِسابَه، أَو لا أَحَدَ حينَ لا صاحِبَ مُعَيَّناً لِلمَتجَرِ أَيضاً. كانَ «البائِعُ الغائِبُ ⇐ إدارَةُ المَتجَر» قيمَةً واحِدَةً تُكتَبُ
     /// بَعدَ أَن يَنجَحَ إشعارُ صاحِبِ المَتجَر — فَفي مَتجَرٍ بِلا صاحِبٍ لا يُكتَبُ شَيءٌ ويَقولُ السِجِلُّ «أُخبِرَ البائِع»، والتَلميحُ يَعِدُ بِإدارَةٍ لا تُخبَر.</para>
+    /// <para>‏(‏2026-11-05، G1b-R1-2؛ تَوصيفُه <c>5741f59</c>) <b>ورابِعُها <see cref="ReturnTold.Owner"/></b>: البائِعُ هُوَ صاحِبُ المَتجَرِ نَفسُه — طَرَفُها بِمُعَرِّفِه في الاستوديو،
+    /// ولا وَثيقَةَ لَه في المَتجَر — فَكانَ يُقرَأُ «أَغلَقَ حِسابَه» ويُخبَرُ بِذلك عَن نَفسِه.</para>
     /// </summary>
-    public enum ReturnTold { Vendor, Store, Nobody }
+    public enum ReturnTold { Vendor, Owner, Store, Nobody }
 
     /// <summary>القَرارُ الواحِد — يَسأَلُه الأُنبوبُ (<see cref="NotifyReturnRequestedAsync"/>) قَبلَ أَيِّ إشعار، وتَسأَلُه صَفحَةُ الصَفقَةِ لِلتَلميح، بِالمُدخَلَينِ أَنفُسِهِما:
     /// وَثيقَةُ البائِعِ الَّذي تُسَمّيه <see cref="ReturnRecipient"/>، وصاحِبُ المَتجَر (<see cref="StoreOwnerOf"/>). البائِعُ القائِمُ يُخبَر؛ والغائِبُ
-    /// (<see cref="Identity.AccountErasure.PartnerGone"/>) ⇐ إدارَةُ المَتجَرِ إن كانَ لَه صاحِبٌ مُعَيَّن، وإلّا لا أَحَد. نَقِيَّة.</summary>
-    public static ReturnTold ReturnToldFor(ACommerce.Kit.Auth.User? vendor, Guid? storeOwner)
-        => !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(vendor) ? ReturnTold.Vendor
+    /// (<see cref="Identity.AccountErasure.PartnerGone"/>) ⇐ إدارَةُ المَتجَرِ إن كانَ لَه صاحِبٌ مُعَيَّن، وإلّا لا أَحَد. نَقِيَّة.
+    /// <para>‏(‏2026-11-05، G1b-R1-2) <b>وصاحِبُ المَتجَرِ قَبلَ الغِياب</b>: بائِعٌ مُعَرِّفُه صاحِبُ المَتجَرِ ⇐ <see cref="ReturnTold.Owner"/> قَبلَ أَن يُسأَلَ <c>PartnerGone</c> —
+    /// مُعَرِّفُ الاستوديو لا وَثيقَةَ لَه في المَتجَر، فَالسُؤالُ عَنه «غائِب» دائِماً.</para></summary>
+    public static ReturnTold ReturnToldFor(Guid vendorId, ACommerce.Kit.Auth.User? vendor, Guid? storeOwner)
+        => vendorId == storeOwner ? ReturnTold.Owner
+            : !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(vendor) ? ReturnTold.Vendor
             : storeOwner is null ? ReturnTold.Nobody : ReturnTold.Store;
 
     /// <summary>قيمَةُ <see cref="ReturnToldRef"/> لِما يُقَرِّرُه <see cref="ReturnToldFor"/> — و<c>null</c> لِلبائِع (غِيابُ المَرجِعِ كَما كانَ قَبلَه). نَقِيَّة.</summary>
     public static string? ReturnToldValue(ReturnTold told) => told switch
     {
+        ReturnTold.Owner => ReturnToldOwner,
         ReturnTold.Store => ReturnToldStore,
         ReturnTold.Nobody => ReturnToldNobody,
         _ => null,
@@ -550,6 +577,7 @@ public sealed class DealNotices
     public static ReturnTold ReturnToldOf(Deal deal)
         => !deal.Refs.TryGetValue(ReturnToldRef, out var told) ? ReturnTold.Vendor : told switch
         {
+            ReturnToldOwner => ReturnTold.Owner,
             ReturnToldStore => ReturnTold.Store,
             ReturnToldNobody => ReturnTold.Nobody,
             _ => ReturnTold.Vendor,
@@ -561,8 +589,11 @@ public sealed class DealNotices
     /// <summary>‏(‏2026-11-05، G1b-R1-1) لاحِقَةُ بَديلِ «لَم يُخبَر أَحَد» — ونَصُّه يُسَمّي البابَ الَّذي تُسَمّيه سِياسَةُ خُصوصِيَّةِ المَنصَّة: «التَواصُل».</summary>
     public const string NobodyVariant = "_nobody";
 
+    /// <summary>‏(‏2026-11-05، G1b-R1-2) لاحِقَةُ بَديلِ «أُخبِرَت إدارَةُ المَتجَر» حينَ هي طَرَفُ الصَفقَة — بِلا «أَغلَقَ حِسابَه».</summary>
+    public const string OwnerVariant = "_owner";
+
     /// <summary>مَفاتيحُ النُصوصِ الَّتي تَقولُ مَن يُخبَرُ بِطَلَبِ الاستِرجاع — ولِكُلٍّ بَديلاهُ بِـ<see cref="StoreVariant"/> و<see cref="NobodyVariant"/> في القامُوس
-    /// (صَفٌّ يَعُدُّها ويَفشَلُ عَلى غائِب).</summary>
+    /// (صَفٌّ يَعُدُّها ويَفشَلُ عَلى غائِب)؛ وثالِثُها بِـ<see cref="OwnerVariant"/> (‏2026-11-05، G1b-R1-2).</summary>
     public static readonly IReadOnlyList<string> ReturnKeys = new[]
     {
         "deals.detail.event_return_requested", "studio.deal.event_return_requested", "deals.detail.return_hint", "deals.detail.err_return_already_requested",
@@ -570,6 +601,7 @@ public sealed class DealNotices
 
     private static string? VariantOf(ReturnTold told) => told switch
     {
+        ReturnTold.Owner => OwnerVariant,
         ReturnTold.Store => StoreVariant,
         ReturnTold.Nobody => NobodyVariant,
         _ => null,
@@ -903,13 +935,17 @@ public sealed class DealNotices
     /// <para>‏(‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-1؛ تَوصيفُه <c>d3d728a</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والقَرارُ دالَّةٌ واحِدَة</b>
     /// (<see cref="ReturnToldFor"/>) تَسأَلُها صَفحَةُ الصَفقَةِ أَيضاً: في مَتجَرٍ بِلا صاحِبٍ كانَ <see cref="NotifyStoreOwnerAsync(string, Deal, OwnerAction, L, CancellationToken)"/>
     /// يَرُدُّ false فَيَعودُ الأُنبوبُ بِلا كِتابَة («الإشعاراتُ كُلُّها 0 · return_told غائِب · السِجِلّ «أُخبِرَ البائِع» True»). فَيُلحَقُ <see cref="ReturnToldNobody"/>
-    /// — ومَعَه حينَ يَرُدُّ إشعارُ صاحِبِ المَتجَرِ بِلا كِتابَة — بِالكاتِبِ الواحِدِ نَفسِه.</para></summary>
+    /// — ومَعَه حينَ يَرُدُّ إشعارُ صاحِبِ المَتجَرِ بِلا كِتابَة — بِالكاتِبِ الواحِدِ نَفسِه.</para>
+    /// <para>‏(‏2026-11-05، G1b-R1-2؛ تَوصيفُه <c>5741f59</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصاحِبُ المَتجَرِ الَّذي قَبِلَ الصَفقَةَ لا يُقرَأُ «غائِباً»</b>: كانَ يُخبَرُ
+    /// «طَلَبُ استِرجاعٍ بائِعُه أَغلَقَ حِسابَه» عَن نَفسِه ويُلحَقُ <c>return_told=store</c>؛ فَيُخبَرُ بِـ<see cref="OwnerAction.ReturnToOwner"/> (نَصٌّ مُحايِدٌ إلى صَفحَةِ الاستوديو)
+    /// ويُلحَقُ <see cref="ReturnToldOwner"/>.</para></summary>
     public async Task<bool> NotifyReturnRequestedAsync(string slug, Deal deal, DealsService deals, L l, CancellationToken ct = default)
     {
         if (ReturnRecipient(deal) is not { } vendorId) return false;
         ReturnTold told;
         await using (var q = _store.QuerySession(slug))
-            told = ReturnToldFor(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));
+            told = ReturnToldFor(vendorId, await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));
+        if (told == ReturnTold.Owner && !await NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnToOwner, l, ct)) told = ReturnTold.Nobody;
         if (told == ReturnTold.Store && !await NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)) told = ReturnTold.Nobody;
         if (ReturnToldValue(told) is { } value)
         {
@@ -956,6 +992,7 @@ public sealed class DealNotices
                 OwnerAction.CashRefundDue => CashRefundDueFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-10-29، قَرارُ المالِك د38 (٢)
                 OwnerAction.ExpiryFailed => ExpiryFailedFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-10-30، تَدقيقُ الموجَة ١١ CO2
                 OwnerAction.ReturnVendorGone => ReturnVendorGoneFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-11-04، الموجَة ١٢ G1 · ٤
+                OwnerAction.ReturnToOwner => ReturnToOwnerFor(slug, deal, ownerId, l, DateTime.UtcNow),   // ‏2026-11-05، G1b-R1-2
                 _ => InvoiceLeftOpenFor(slug, deal, ownerId, l, DateTime.UtcNow),
             };
             s.Store(n);
