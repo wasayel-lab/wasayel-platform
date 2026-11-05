@@ -212,14 +212,17 @@
         }
     }
 
+    // ‏(‏2026-11-05، G2R1-1) كُلُّ مُعالِجٍ يَحجِزُ isWorking قَبلَ أَوَّلِ await ثُمَّ يَسأَلُ الجَلسَة، ويَفُكُّ الحَجزَ عَلى الرَفض — السُؤالُ قِراءَةُ Postgres، ونَقرَةٌ
+    // ثانِيَةٌ تَصِلُ أَثناءَها كانَت تَرى العَلَمَ فارِغاً فَتَعبُر (نِداءا نَموذَجٍ وتَشغيلا أَداة). والتَخويلُ قَبلَ فَحصِ الرِسالَةِ الفارِغَة (القاعِدَة ٦).
     async Task SendAsync()
     {
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)
-            || !await StillPlatformAdminAsync()) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
+        if (string.IsNullOrEmpty(msg)) { isWorking = false; return; }
         session.Turns.Add(new ACommerce.Templates.Customer.Marketplace.Services.AgentTurn
         {
             Role = "user", Text = msg
@@ -234,9 +237,10 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
         if (turn?.Tool is not null)
         {
@@ -253,9 +257,10 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null, _scopeId);
         session = await Agent.ContinueAfterToolAsync(_scopeId);
         isWorking = false;
@@ -265,10 +270,14 @@
 
     async Task ResetAsync()
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        isWorking = true;
+        StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         await Agent.ResetAsync(_scopeId);
         session = await Agent.LoadSessionAsync(_scopeId);
         newMessage = "";
+        isWorking = false;
         StateHasChanged();
     }
 

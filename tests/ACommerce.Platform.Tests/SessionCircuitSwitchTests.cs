@@ -13,6 +13,10 @@ namespace ACommerce.Platform.Tests;
 // «نِداءاتُ النَموذَج 3 · الأَداةُ المُطَبَّقَة error · المَرفوضَة rejected · مُحِيَ السِجِلّ True». والآن كُلُّ نَقرَةٍ تَسأَلُ
 // `SessionVersionGate.PlatformAdminStillOpenAsync` بِالرَمزِ الَّذي التُقِطَ عِندَ التَصييرِ الأَوَّل، والمُغلَقُ لا يُنادي النَموذَجَ ولا يُشَغِّلُ أَداةً ولا يَمحو،
 // ويَنتَقِلُ إلى `/studio/auth`.
+//
+// ‏(‏2026-11-05، G2R1-1 — مُراجَعَةُ `3d0b49a`؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والسُؤالُ بَعدَ الحَجزِ لا قَبلَه**: كانَ `!await StillPlatformAdminAsync()` في شَرطِ
+// الرُجوعِ قَبلَ `isWorking = true`، فَنَقرَةٌ ثانِيَةٌ أَثناءَ القِراءَةِ تَعبُر (تَوصيفُه `SessionCircuitDoubleClickTests.cs`، `389cf1f`). صارَ `HandlerBreach` يَشتَرِطُ
+// أَن يَقرَأَ المُعالِجُ العَلَمَ ثُمَّ يَحجِزَه قَبلَ أَوَّلِ `await`، ثُمَّ يَسأَلَ ويَفُكَّ الحَجزَ عَلى الرَفض — والصَفُّ الحَيُّ في `SessionCircuitDoubleClickSwitchTests.cs`.
 
 public class SessionCircuitSwitchTests(ITestOutputHelper output)
 {
@@ -71,12 +75,23 @@ public class SessionCircuitSwitchTests(ITestOutputHelper output)
 
     private static readonly Regex AgentCall = new(@"\b(?:Agent|Executor)\s*\.\s*\w+Async\s*\(", RegexOptions.Compiled);
 
-    /// <summary>خَرقُ مُعالِجٍ لِسُؤالِ الدائِرَة — <c>null</c> إن كانَ شَرطُ الرُجوعِ الأَوَّلُ يَسأَلُ <c>StillPlatformAdminAsync()</c> ويَعودُ عَلى الرَفض، قَبلَ أَيِّ
-    /// نِداءٍ لِلوَكيلِ أَو المُنَفِّذ. وإلّا سَبَبُ الخَرق.</summary>
+    private static readonly Regex AwaitWord = new(@"\bawait\b", RegexOptions.Compiled);
+
+    /// <summary>‏(‏2026-11-05، G2R1-1) السُؤالُ بِحَرفِه: يَسأَلُ، وعَلى الرَفضِ يَفُكُّ الحَجزَ ويَعود.</summary>
+    internal const string AskAfterClaim = "if (!await StillPlatformAdminAsync()) { isWorking = false; return; }";
+
+    /// <summary>خَرقُ مُعالِجٍ لِسُؤالِ الدائِرَة — <c>null</c> إن كانَ يَقرَأُ <c>isWorking</c> ثُمَّ يَحجِزُه (<c>isWorking = true;</c>) قَبلَ أَوَّلِ <c>await</c>، ثُمَّ
+    /// يَسأَلُ <c>StillPlatformAdminAsync()</c> بِـ<see cref="AskAfterClaim"/>، قَبلَ أَيِّ نِداءٍ لِلوَكيلِ أَو المُنَفِّذ. وإلّا سَبَبُ الخَرق.</summary>
+    /// <remarks>‏(‏2026-11-05، G2R1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ يَقبَلُ السُؤالَ في شَرطِ الرُجوعِ (<c>!await StillPlatformAdminAsync()) return;</c>) قَبلَ
+    /// الحَجز — وهُوَ شَكلُ <c>3d0b49a</c> الَّذي تَعبُرُه نَقرَةٌ ثانِيَةٌ أَثناءَ القِراءَة.</remarks>
     internal static string? HandlerBreach(string body)
     {
-        var ask = body.IndexOf("!await StillPlatformAdminAsync()) return;", StringComparison.Ordinal);
-        if (ask < 0) return "لا يَسأَلُ StillPlatformAdminAsync في شَرطِ الرُجوع";
+        var guard = body.IndexOf("if (isWorking", StringComparison.Ordinal);
+        var claim = body.IndexOf("isWorking = true;", StringComparison.Ordinal);
+        if (guard < 0 || claim < guard) return "لا يَقرَأُ isWorking ثُمَّ يَحجِزُه";
+        if (AwaitWord.Match(body) is { Success: true } wait && wait.Index < claim) return "يَنتَظِرُ قَبلَ أَن يَحجِزَ isWorking — نَقرَةٌ ثانِيَةٌ تَعبُرُ أَثناءَ الانتِظار";
+        var ask = body.IndexOf(AskAfterClaim, StringComparison.Ordinal);
+        if (ask < 0) return "لا يَسأَلُ StillPlatformAdminAsync ويَفُكُّ الحَجزَ ويَعودُ عَلى الرَفض";
         var call = AgentCall.Match(body);
         if (!call.Success) return "لا نِداءَ لِلوَكيلِ ولا لِلمُنَفِّذ — الأَداةُ عَمياء";
         return call.Index < ask ? $"يُنادي «{call.Value.TrimEnd('(')}» قَبلَ أَن يَسأَل" : null;
@@ -133,16 +148,22 @@ public class SessionCircuitSwitchTests(ITestOutputHelper output)
 
     /// <summary>حَقنُ عَيب (القاعِدَة ١٠): مُعالِجُ اليَومِ بِحَرفِه قَبلَ التَبديل، والسُؤالُ بَعدَ النِداء، والسُؤالُ بِلا رُجوع، ومُعالِجٌ لا يُنادي شَيئاً — كُلٌّ يُرَدّ؛
     /// والمُعالِجُ الحَقيقيُّ يَمُرّ.</summary>
+    /// <remarks>‏(‏2026-11-05، G2R1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) العَيِّناتُ بِشَكلِ الحَجزِ الجَديدِ لِيُرَدَّ كُلٌّ بِسَبَبِه هُوَ (<paramref name="because"/>)، ومَعَها
+    /// ثَلاثٌ: شَكلُ <c>3d0b49a</c> بِحَرفِه (السُؤالُ في شَرطِ الرُجوعِ قَبلَ الحَجز)، وحَجزٌ بِلا قِراءَة، وحَجزٌ لا يُفَكُّ عَلى الرَفض.</remarks>
     [Theory]
-    [InlineData("today", "async Task ApplyAsync(string toolId)\n{\n    if (isWorking) return;\n    isWorking = true;\n    var (ok, msg) = await Executor.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, AdminUserId ?? Guid.Empty);\n}")]
-    [InlineData("asks-after-the-call", "async Task SendAsync()\n{\n    session = await Agent.AskAsync(msg);\n    if (isWorking || !await StillPlatformAdminAsync()) return;\n}")]
-    [InlineData("asks-without-returning", "async Task ResetAsync()\n{\n    await StillPlatformAdminAsync();\n    await Agent.ResetAsync();\n}")]
-    [InlineData("calls-nothing", "async Task ResetAsync()\n{\n    if (isWorking || !await StillPlatformAdminAsync()) return;\n    newMessage = \"\";\n}")]
-    public void The_handler_check_refuses_a_handler_in_an_old_or_broken_shape(string shape, string body)
+    [InlineData("today", "async Task ApplyAsync(string toolId)\n{\n    if (isWorking) return;\n    isWorking = true;\n    var (ok, msg) = await Executor.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, AdminUserId ?? Guid.Empty);\n}", "لا يَسأَلُ")]
+    [InlineData("asks-after-the-call", "async Task SendAsync()\n{\n    if (isWorking) return;\n    isWorking = true;\n    session = await Agent.AskAsync(msg);\n    if (!await StillPlatformAdminAsync()) { isWorking = false; return; }\n}", "قَبلَ أَن يَسأَل")]
+    [InlineData("asks-without-returning", "async Task ResetAsync()\n{\n    if (isWorking) return;\n    isWorking = true;\n    await StillPlatformAdminAsync();\n    await Agent.ResetAsync();\n}", "لا يَسأَلُ")]
+    [InlineData("calls-nothing", "async Task ResetAsync()\n{\n    if (isWorking) return;\n    isWorking = true;\n    if (!await StillPlatformAdminAsync()) { isWorking = false; return; }\n    newMessage = \"\";\n}", "الأَداةُ عَمياء")]
+    [InlineData("asks-before-claiming", "async Task ApplyAsync(string toolId)\n{\n    if (isWorking || !await StillPlatformAdminAsync()) return;\n    isWorking = true;\n    StateHasChanged();\n    var (ok, msg) = await Executor.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, AdminUserId ?? Guid.Empty);\n}", "يَنتَظِرُ قَبلَ أَن يَحجِز")]
+    [InlineData("claims-without-reading", "async Task SendAsync()\n{\n    isWorking = true;\n    if (!await StillPlatformAdminAsync()) { isWorking = false; return; }\n    session = await Agent.AskAsync(msg);\n}", "لا يَقرَأُ isWorking")]
+    [InlineData("keeps-the-slot-on-refusal", "async Task RejectAsync(string toolId)\n{\n    if (isWorking) return;\n    isWorking = true;\n    if (!await StillPlatformAdminAsync()) return;\n    await Agent.UpdateToolStatusAsync(toolId, \"rejected\", null);\n}", "يَفُكُّ الحَجزَ")]
+    public void The_handler_check_refuses_a_handler_in_an_old_or_broken_shape(string shape, string body, string because)
     {
         var breach = HandlerBreach(body);
         output.WriteLine($"{shape}: {breach ?? "يَمُرّ"}");
         Assert.NotNull(breach);
+        Assert.Contains(because, breach, StringComparison.Ordinal);
         var real = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, WriteEndpointGuardTests.PinnedDisplayWriters[0].Where.Replace('/', Path.DirectorySeparatorChar)));
         Assert.Null(HandlerBreach(HandlerBody(real, "ApplyAsync")));
     }
