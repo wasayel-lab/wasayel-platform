@@ -678,14 +678,19 @@ public sealed class DealsService
         // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه `7076249` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وأُختٌ في «نِزاع» لَم تُدفَع مِن الطَلَبِ نَفسِه** — تُبقي الفاتورَةَ بِمَبلَغِها
         // وتُستَأنَف (د2 «الكل أو لا شيء»). صاحِبُ المَتجَرِ يَحسِمُها إلغاءً مَعَه (د38، بِبَوّابَةِ الحَسمِ وأَثَرِ الإلغاءِ الماليِّ القائِم) فَتَصدُقُ الشَريحَة؛ والطَرَفُ لا يُلغيها، فَلا
         // «طَلَبَ كُلَّه» لَه ما دامَت — يُرَدُّ بِرَمزِه قَبلَ أَيِّ كِتابَة. وإلغاءُ المُهلَةِ (`stillDue`) لا يَحسِمُ نِزاعاً: كَما كانَ بِحَرفِه.
-        var resolving = stillDue is null ? GatewayInvoiceShare.DisputedOnInvoice(deal!, siblings) : Array.Empty<Deal>();
+        IReadOnlyList<Deal> resolving = stillDue is null ? GatewayInvoiceShare.DisputedOnInvoice(deal!, siblings) : Array.Empty<Deal>();
         if (resolving.Count > 0 && !by.IsStoreAdmin)
             return new(DealCancelResult.Refused(new DealCancelViolation(GatewayInvoiceShare.Disputed,
                 "عَلى فاتورَةِ هذا الطَلَبِ صَفقَةٌ في «نِزاع» لَم تُدفَع — لا يُلغي الطَرَفُ الطَلَبَ كُلَّه حَتّى يُحسَمَ النِزاع."), deal), Array.Empty<Deal>());
         // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **والطَلَبُ كُلُّه يَشمَلُ أَخَواتِ شُحنَتِها السائِرَةِ عِندَ OTO** — الشُحنَةُ الواحِدَةُ
         // وَحدَةٌ واحِدَةٌ كَالفاتورَةِ الواحِدَة، فَإلغاءُ إحداها وَحدَها مَردودٌ بِـ`deal_in_shared_waybill` وهذا بابُها. وما تُسَمّيه الفاتورَةُ والشُحنَةُ مَعاً مَرَّةً.
-        var onWaybill = DealCancelAuthorization.LiveOnWaybill(deal!, await WaybillSiblingsAsync(tenantSlug, deal!, ct))
-            .Where(d => d.Status == DealStatus.Active).ToArray();
+        var liveOnWaybill = DealCancelAuthorization.LiveOnWaybill(deal!, await WaybillSiblingsAsync(tenantSlug, deal!, ct));
+        var onWaybill = liveOnWaybill.Where(d => d.Status == DealStatus.Active).ToArray();
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٥ — D-2؛ تَوصيفُه `5ad2083` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وأُختُ الشُحنَةِ في «نِزاع» تُحسَمُ إلغاءً مَعَه** — كانَت تُرَشَّحُ `Active`
+        // فَتُلغى الفَعّالَةُ وَحدَها (بِلا سُؤالِ الشُحنَة) والمَندوبُ يُحَصِّلُ مَبلَغَهُما والشَريحَةُ تَقولُ «كامِلاً». القاعِدَةُ الَّتي لِأُختِ الفاتورَةِ أَعلاه (د38): صاحِبُ المَتجَرِ وَحدَه، وبِلا
+        // شَرطِ المُهلَة؛ وسُلِّمَت أَثناءَ النِزاعِ ⇐ يُكتَبُ رَدُّ نَقدِها مُستَحَقّاً بِفَرعِ الإلغاءِ القائِم (dd93acb).
+        if (stillDue is null && by.IsStoreAdmin && liveOnWaybill.Any(d => d.Status == DealStatus.Disputed))
+            resolving = resolving.Concat(liveOnWaybill.Where(d => d.Status == DealStatus.Disputed)).DistinctBy(d => d.Id).ToArray();
         if (onWaybill.Length > 0)
             targets = (targets.Count == 0 ? new[] { deal! } : targets).Concat(onWaybill).DistinctBy(d => d.Id).ToArray();
         if (stillDue is not null) targets = targets.Where(stillDue).ToArray();
