@@ -320,5 +320,30 @@ public class CategoryKindsTests(ITestOutputHelper output)
         var injectedImporter = Kinds(legacyList, ejar.Replace("\"leisure\" };", "\"leisure\", \"park\" };"));
         Assert.Equal(importerKinds.Count + 1, injectedImporter.Count);
         Assert.False(CategoryKinds.IsKnown(injectedImporter[^1]));
+
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-5) **وحارِسُ التَجميعِ المَجهولِ يَسبِقُ الإفراغ**: `3fe191b` يَقولُ إنّ تَجميعاً خارِجَ `LegacyKinds` يوقِفُ
+        // الاستيرادَ «قَبلَ أَن يُمحى حَرف»، ولا شَيءَ كانَ يُمسِكُه — حَذفُ الحارِسِ أَو رَفعُ `ResetTenantAsync(` فَوقَه يُبقي الجَناحَ أَخضَرَ ويُعيدُ
+        // «أَفرِغ ثُمَّ افشَل». فَيُقرَأُ المَصدَرُ: الحارِسُ (`if (unknown.Count > 0)` يَليه `throw`) مَوجودٌ، ومَوضِعُه قَبلَ أَوَّلِ `ResetTenantAsync(`.
+        // وعَيِّنَتانِ مَحقونَتانِ تَحمَرّانِ (القاعِدَة ١٠): الإفراغُ مَرفوعٌ فَوقَ الحارِس، والحارِسُ مَحذوف.
+        static (int Guard, int Reset) GuardAndReset(string text)
+            => (Regex.Match(text, @"if \(unknown\.Count > 0\)\s*throw ") is { Success: true } g ? g.Index : -1,
+                text.IndexOf("ResetTenantAsync(", StringComparison.Ordinal));
+        static bool GuardsBeforeReset(string text)
+            => GuardAndReset(text) is var (guard, reset) && guard >= 0 && reset >= 0 && guard < reset;
+
+        var (guardAt, resetAt) = GuardAndReset(ejar);
+        output.WriteLine($"المُستَورِد: الحارِسُ عِندَ المِحرَف {guardAt} · الإفراغُ عِندَ {resetAt}");
+        Assert.True(guardAt >= 0, "حارِسُ التَجميعِ المَجهولِ (`if (unknown.Count > 0)` ثُمَّ `throw`) غائِبٌ عَن EjarImporter.cs.");
+        Assert.True(resetAt >= 0, "أَداةٌ عَمياء: لا `ResetTenantAsync(` في EjarImporter.cs.");
+        Assert.True(GuardsBeforeReset(ejar), $"الإفراغُ ({resetAt}) قَبلَ حارِسِ التَجميعِ المَجهول ({guardAt}) — يُمحى المَتجَرُ ثُمَّ يَفشَلُ الاستيراد.");
+
+        const string resetLine = "        if (reset) await _target.ResetTenantAsync(TenantSlug);\n";
+        var normalized = ejar.Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains(resetLine, normalized, StringComparison.Ordinal);
+        var guardLine = normalized.IndexOf("        if (unknown.Count > 0)", StringComparison.Ordinal);
+        var resetFirst = normalized.Replace(resetLine, "", StringComparison.Ordinal).Insert(guardLine, resetLine);
+        Assert.False(GuardsBeforeReset(resetFirst), "عَيِّنَةُ «الإفراغُ أَوَّلاً» مَرَّت خَضراء — الماسِحُ أَعمى عَن التَرتيب.");
+        var noGuard = Regex.Replace(normalized, @"if \(unknown\.Count > 0\)\s*throw ", "if (false) Console.WriteLine(); _ = ");
+        Assert.False(GuardsBeforeReset(noGuard), "عَيِّنَةُ «لا حارِس» مَرَّت خَضراء — الماسِحُ أَعمى عَن الغِياب.");
     }
 }
