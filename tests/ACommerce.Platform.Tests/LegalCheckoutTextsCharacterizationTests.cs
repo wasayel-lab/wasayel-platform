@@ -24,7 +24,7 @@ namespace ACommerce.Platform.Tests;
 // شاهِدُ الامتِثالِ لِلإفصاحِ لِأَطرافٍ ثالِثَة، ولا شاشَةَ تَجمَعُ بَياناتِ بِطاقَة، والبِطاقَةُ
 // تَقبِضُ بِمُزَوِّدِ النُسخَة، ولا شَرطَ مَنَصَّةٍ يَتَكَلَّمُ في الإيراد.
 
-public class LegalCheckoutTextsCharacterizationTests
+public class LegalCheckoutTextsCharacterizationTests(Xunit.Abstractions.ITestOutputHelper output)
 {
     internal const string NoSellingKey        = "legal.privacy.no_selling";
     internal const string SubscriptionOnlyKey = "legal.terms.item_subscription_only";
@@ -161,10 +161,32 @@ public class LegalCheckoutTextsCharacterizationTests
         Assert.Equal("دَفعٌ بِالبِطاقَة عَبر مُزَوِّد دَفعِ المَنصَّة", value);
         Assert.DoesNotContain("هذا المَتجَر", value!, StringComparison.Ordinal);
 
-        var page = Baseline("member-checkout-pay.html");
-        var cardOption = Count(page, "name=\"pay\" value=\"card\"");
-        Assert.True(cardOption <= 1, $"خِيارُ البِطاقَةِ {cardOption} مَرّات في اللَقطَة.");
-        Assert.Equal(cardOption, Count(page, $"<span>{value}</span>"));
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-7) **النِصفُ المَرسومُ كانَ يُقارِنُ صِفراً بِصِفرٍ ولا يَطبَعُ عَدَداً** (القاعِدَة ١٠): لا لَقطَةَ مُودَعَةً فيها خِيارُ بِطاقَة،
+        // والتَلميحُ يُكتَبُ بِـ`L[…]` نَصّاً يُرَمِّزُه Razor (‏`&#x…;`) فَالعَدُّ الخامُ صِفرٌ ولو رُسِمَ. فَيُفَكُّ التَرميزُ أَوَّلاً، ويَمسَحُ السالِبُ كُلَّ لَقطَةٍ
+        // مُودَعَة: لا تَلميحَ بِطاقَةٍ (مِن الثَلاثَة: المَنَصَّة، بَوّابَةُ المَتجَر، التَجرِبَة) بِلا خِيارِ بِطاقَة — ويَطبَعُ ما مَسَحَ ويَحمَرُّ عَلى الصِفر. والمُوجَبُ لِكُلِّ
+        // لَقطَةٍ فيها الخِيار: تَلميحٌ واحِدٌ بِجِوارِه. **ولا لَقطَةَ بِالخِيارِ اليَوم** — سَلَّةُ العَيِّنَةِ بِصِفرِ رِيالٍ (`CartSampleSeeder`، القاعِدَة ١٦) فَبَوّابَةُ المَتجَرِ
+        // تَرُدُّ `CardAmountUnbillable`، وسِعرُها سُؤالٌ لِلمالِك («ب» G4·E-2) — فَيُطبَعُ عَدَدُها صِفراً ولا يُدَّعى نِصفاً مُوجَباً لَم يُقَس؛ والمُوجَبُ مِن المَصدَرِ أَدناه.
+        var hints = new[] { CardHintKey, "checkout.payment.card_hint_gateway", "checkout.payment.simulation_hint" }
+            .Select(k => LocaleCatalog.Find(LocaleCatalog.Arabic, k) ?? throw new InvalidOperationException($"مِفتاحُ التَلميحِ «{k}» غائِب.")).ToArray();
+        var pages = Directory.GetFiles(Path.Combine(RepoRoot, "tests", "characterization", "appearance", "i18n-baseline"), "*.html")
+            .Select(f => (Name: Path.GetFileNameWithoutExtension(f), Html: System.Net.WebUtility.HtmlDecode(File.ReadAllText(f)))).ToList();
+        int HintSpans(string html) => hints.Sum(h => Count(html, $"<span>{h}</span>"));
+        int CardOptions(string html) => Count(html, "type=\"radio\" name=\"pay\" value=\"card\"");
+
+        var withoutCard = pages.Where(p => CardOptions(p.Html) == 0).ToList();
+        var withCard = pages.Where(p => CardOptions(p.Html) > 0).ToList();
+        output.WriteLine($"تَلميحُ البِطاقَةِ في اللَقَطات: مُسِحَت {pages.Count} · بِلا خِيارِ بِطاقَة {withoutCard.Count} (تَلميحٌ فيها: {withoutCard.Sum(p => HintSpans(p.Html))})"
+            + $" · بِالخِيار {withCard.Count} ({string.Join(", ", withCard.Select(p => $"{p.Name}={HintSpans(p.Html)}"))})");
+        Assert.True(withoutCard.Count > 0, $"أَداةٌ عَمياء: {pages.Count} لَقطَةً مُسِحَت ولا واحِدَةَ بِلا خِيارِ بِطاقَة.");
+        Assert.All(withoutCard, p => Assert.True(HintSpans(p.Html) == 0, $"«{p.Name}» تَرسُمُ تَلميحَ بِطاقَةٍ بِلا خِيارِها."));
+        Assert.All(withCard, p =>
+        {
+            Assert.True(CardOptions(p.Html) == 1, $"«{p.Name}»: خِيارُ البِطاقَةِ {CardOptions(p.Html)} مَرّات.");
+            Assert.True(HintSpans(p.Html) == 1, $"«{p.Name}»: {HintSpans(p.Html)} تَلميحاً بِجِوارِ خِيارِ البِطاقَة.");
+        });
+        // ‏وأَنَّ الماسِحَ يَرى التَلميحَ إن رُسِم: صَفحَةُ الدَفعِ نَفسُها وفيها التَلميحُ مَحقوناً بِلا خِيارٍ ⇐ يُعَدُّ واحِداً فَيُرَدّ.
+        var pay = pages.Single(p => p.Name == "member-checkout-pay");
+        Assert.Equal(1, HintSpans(pay.Html.Replace("</label></div>", $"<span>{value}</span></label></div>")));
 
         var razor = Template("Components", "Pages", "CheckoutPage.razor");
         var branch = razor.IndexOf("@if (CardOffered)", StringComparison.Ordinal);
