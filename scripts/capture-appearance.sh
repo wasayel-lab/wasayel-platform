@@ -15,15 +15,29 @@
 #  يَفعَلُه هذا المِلَفّ في كوميت مُستَقِلّ سابِق.
 #
 #  الاستِعمال:
-#     scripts/capture-appearance.sh [OUT_DIR] [BASE_URL]
+#     scripts/capture-appearance.sh [--allow-skip] [OUT_DIR] [BASE_URL]
 #  الافتِراضيّ:
 #     OUT_DIR  = tests/characterization/appearance/baseline
 #     BASE_URL = http://localhost:5050
+#  ‏--allow-skip: صَفحَةٌ مَحروسَةٌ مِلَفُّها غَيرُ مُهَيَّأ تُتَخَطّى ولا تُفشِلُ الخِتام (بِلا الوَسمِ يَخرُجُ 1) — يُمَرِّرُه
+#     ‏`compare-appearance.sh` لِأَنَّه يُحمِرُّ بِنَفسِه كُلَّ لَقطَةِ أَساسٍ بِلا نَظير.
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-OUT_DIR="${1:-tests/characterization/appearance/baseline}"
-BASE_URL="${2:-http://localhost:5050}"
+# ‏(‏2026-11-05، الموجَة ١٢ G4 · E-4) **تَخَطّي صَفحَةٍ مَحروسَةٍ يُفشِلُ الالتِقاطَ ما لَم يُطلَب**: كانَ مِلَفٌّ ناقِصٌ يَطبَعُ تَحذيراً ويَمضي، والخِتامُ
+# لا يَفشَلُ إلّا عَلى صِفرِ صَفحَة — فَإعادَةُ تَثبيتٍ في المُجَلَّدِ نَفسِه تُبقي لَقطَةَ الأَمسِ لِلمُتَخَطّاةِ بِجِوارِ لَقَطاتِ اليَوم: الأَساسُ المَخلوطُ
+# الَّذي أَصلَحَه `76980f5`. فَالمُتَخَطّاةُ **تُحذَفُ لا تَبقى عَتيقَة**، وأَسماؤُها تُطبَع، والمَخرَجُ 1 إلّا بِـ`--allow-skip`.
+ALLOW_SKIP=0
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --allow-skip) ALLOW_SKIP=1 ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+
+OUT_DIR="${POSITIONAL[0]:-tests/characterization/appearance/baseline}"
+BASE_URL="${POSITIONAL[1]:-http://localhost:5050}"
 
 # الصَفَحات المَرجِعِيَّة: بَوّابَة ashare (مِقياس التَّكافُؤ الصِفريّ
 # الحَيّ) ورَئيسِيّات أَدوارِه الثَّلاثَة واستِكشافُه، ثُمَّ بَوّابَة
@@ -735,6 +749,7 @@ declare -A PREP=(
 
 guarded_ok=0
 guarded_skipped=0
+skipped_names=""
 for entry in "${GUARDED_PAGES[@]}"; do
   name="${entry%%:*}"; rest="${entry#*:}"
   profile="${rest%%:*}"; path="${rest#*:}"
@@ -747,7 +762,10 @@ for entry in "${GUARDED_PAGES[@]}"; do
     # إلى `stderr` عَمداً: `compare-appearance.sh` يَبتَلِع `stdout`
     # الالتِقاط، فَتَحذيرٌ مَكتوب هُناك لا يَراه أَحَد.
     echo "⚠ $path — مِلَفّ '$profile' غَير مُهَيَّأ، تُخُطِّيَت (لا تُكتَب مَجهولَةً)." >&2
+    # لا تَبقى لَقطَةُ الأَمسِ بِاسمِها: غائِبَةٌ تُقالُ «لا نَظير»، وعَتيقَةٌ تُقرَأُ «التُقِطَت».
+    rm -f "$OUT_DIR/$name.html"
     guarded_skipped=$((guarded_skipped + 1))
+    skipped_names="$skipped_names $name"
     continue
   fi
 
@@ -815,10 +833,15 @@ echo "اِلتُقِطَت ${#PAGES[@]} صَفَحات عامَّة و$guarded_o
 [ -n "$PROFILES_READY" ] && echo "المِلَفّات المُهَيَّأَة:$PROFILES_READY"
 if [ "$guarded_skipped" -gt 0 ]; then
   echo "⚠ تُخُطِّيَت $guarded_skipped صَفحَة مَحروسَة — الناقِص:$PROFILES_MISSING" >&2
+  echo "   المُتَخَطّاة (حُذِفَت مِن $OUT_DIR):$skipped_names" >&2
 fi
 echo "الصَفَحاتُ المُلتَقَطَة: $captured"
 if [ "$captured" -eq 0 ]; then
   echo "✗ BLIND CAPTURE — صِفرُ صَفحَةٍ كُتِبَت في $OUT_DIR: لا لَقطَةَ أَساسٍ مِن لا شَيء." >&2
+  exit 1
+fi
+if [ "$guarded_skipped" -gt 0 ] && [ "$ALLOW_SKIP" -ne 1 ]; then
+  echo "✗ PARTIAL CAPTURE — $guarded_skipped صَفحَة مَحروسَة لَم تُلتَقَط:$skipped_names — هَيِّئ مِلَفّاتِها (WSL_CAPTURE_*) أَو مَرِّر --allow-skip." >&2
   exit 1
 fi
 exit 0
