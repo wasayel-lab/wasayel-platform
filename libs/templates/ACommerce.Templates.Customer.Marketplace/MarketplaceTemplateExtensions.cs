@@ -499,21 +499,27 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Logout ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/logout",
-            async (string slug, HttpContext http, IDocumentStore store) =>
+            async (string slug, HttpContext http, IDocumentStore store, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
             // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه الَّتي يُرسِلُها سكربتُ `App.razor` — لِحِسابِ الجَلسَةِ
             // وَحدَه وبِشَرطِها؛ وبِلا جَلسَةٍ يَمسَحُ الكوكيّاتِ كَما كانَ ولا يَكتُب.
+            // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٢ — مُراجَعَةُ F1 عَلى `bcd83f7`؛ تَوصيفُه `c368e9d`) **وبِأَفضَلِ جُهد**: عَطَبُ قاعِدَةٍ أَو تَعارُضٌ أَو استِمارَةٌ مَكسورَةٌ
+            // كانَ يُسقِطُ الخُروجَ ‏500 بِلا كوكيٍّ مَمحُوّ؛ صارَ سَطراً في السِجِلّ، ومَسحُ الكوكيّاتِ والتَحويلُ بَعدَه يَجريانِ دائِماً.
+            var log = logs.CreateLogger("ACommerce.Logout");
             var token = AuthSession.ResolveToken(http.Request, slug);
             if (http.Request.HasFormContentType && AuthHandlers.ParseToken(token) is { } session && session.TenantSlug == slug)
-                await Services.SessionVersionGate.ForgetDeviceAsync(store, slug, session.UserId, (await http.Request.ReadFormAsync())["push_endpoint"].ToArray(),
-                    admit: u => Services.SessionVersionGate.StillOpen(u, token));
+                try
+                {
+                    await Services.SessionVersionGate.ForgetDeviceAsync(store, slug, session.UserId, (await http.Request.ReadFormAsync())["push_endpoint"].ToArray(),
+                        admit: u => Services.SessionVersionGate.StillOpen(u, token));
+                }
+                catch (Exception ex) { Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, ex, "الخُروج: تَعَذَّرَ سَحبُ اشتِراكاتِ هذا المُتَصَفِّحِ في {Slug} ({Kind}) — تُمسَحُ الكوكيّاتُ كَما هي", slug, ex.GetType().Name); }
             // اِجلِب أَدوار المَتجَر لِنَمسَح cookies كُلّ الأَدوار المُمكِنَة
             // (المُستَخدِم قَد يَكون مَفتوحاً بِأَكثَر مِن دَور). كانَ يَمسَح
             // cookie واحِد فَيَتَسَرَّب /r/{role}/.
-            await using var qs = store.QuerySession();
-            var tenant = await qs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            var roles = tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>();
-            AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);
+            // ‏(‏2026-11-05، G2 · ٢) والأَدوارُ مِن كوكيّاتِ هذا المُتَصَفِّحِ نَفسِها (`AuthSession.RoleCookiesIn`) لا مِن وَثيقَةِ المَتجَر: تُمحى بِتَهجِئَتِها الَّتي يَحمِلُها
+            // (والمُتَصَفِّحُ يُفَرِّقُ بَينَ الحالات)، ودَورٌ حُذِفَ مِن المَتجَرِ لا يُبقي كوكيَّه، والقاعِدَةُ الغائِبَةُ لا تُبقي الجَلسَة. والكوكيّاتُ كُلُّها بِـ`Path=/` فَيَحمِلُها الطَلَب.
+            AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
             return Results.Redirect($"/{slug}");
         }).DisableAntiforgery();
 

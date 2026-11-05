@@ -444,7 +444,10 @@ public class EndpointBodyBleedTests
         // ‏2836 ← **2837** يَوم ‏2026-11-04 (الموجَة ١٢ G1 · ٣ — H-SEC-W12-1): سَطرُ `AccountErasure.DeleteFilesAsync` بَعدَ حِفظِ `/{slug}/me/delete/confirm` —
         // صورَتُه وصُوَرُ إعلاناتِه بِالمَفاتيحِ الَّتي أَعادَها المَحو؛ والحَقنُ في سَطرِ التَوقيعِ القائِم، وحامِلُ «ما مَحاه الحِفظ» بَدَّلَ حامِلَ الوارِداتِ بِلا زِيادَة،
         // والقَرارُ (أَيُّ مِفتاح) في `AccountErasure.FileKeys` النَقِيَّة. طَبَعَ العَدّادُ «‏2836 → 2837» و«‏3184 → 3185»، و**‏1**.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2837),
+        // ‏2837 ← **2838** يَوم ‏2026-11-05 (الموجَة ١٢ G2 · ٢ — مُراجَعَةُ F1 عَلى `bcd83f7`): بابُ `/{slug}/auth/logout` — خُطوَةُ الجِهازِ (`ReadFormAsync` و`ForgetDeviceAsync`)
+        // داخِلَ `try` وسَطرُ تَحذيرٍ في `catch` (أَربَعَةُ أَسطُرٍ وسَطرُ المُسَجِّل)، وقِراءَةُ أَدوارِ المَتجَرِ (ثَلاثَةُ أَسطُر) صارَت `AuthSession.RoleCookiesIn` النَقِيَّةَ في سَطرِ
+        // المَسحِ نَفسِه، وأَقواسُ الشَرطِ سَقَطَت. طَبَعَ العَدّادُ «‏3185 → 3186»، و**‏+5 − 4 = 1**.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2838),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1206,7 +1209,9 @@ public class EndpointBodyBleedTests
     /// وطَرَفُ بابِ الإعلانِ مالِكُه (<c>CheckoutCart.OwnerOf</c>) لا <c>Guid.NewGuid()</c>. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3183 ← 3184 يَوم ‏2026-10-30</b> (الموجَة ١٢ F2 · ٨): سَطرُ <c>CheckoutCart.OwnerGoneAsync</c> في بابِ «قَدِّم عَرضاً» عَلى الإعلان. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3184 ← 3185 يَوم ‏2026-11-04</b> (الموجَة ١٢ G1 · ٣ — H-SEC-W12-1): سَطرُ <c>AccountErasure.DeleteFilesAsync</c> بَعدَ حِفظِ نُقطَةِ الحَذف. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3185;
+    /// <remarks><b>‏3185 ← 3186 يَوم ‏2026-11-05</b> (الموجَة ١٢ G2 · ٢): بابُ الخُروجِ — خُطوَةُ الجِهازِ بِأَفضَلِ جُهدٍ وسَطرٌ في السِجِلّ، والأَدوارُ مِن كوكيّاتِ المُتَصَفِّح
+    /// (<c>AuthSession.RoleCookiesIn</c>) لا مِن قِراءَةِ المَتجَر. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3186;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

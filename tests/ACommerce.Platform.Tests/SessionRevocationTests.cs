@@ -302,7 +302,9 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.True(reads && writes && sends);
         Assert.Contains("if (http.Request.HasFormContentType && AuthHandlers.ParseToken(token) is { } session && session.TenantSlug == slug)", door, StringComparison.Ordinal);
         Assert.True(AsksTheSession(door), "بابُ الخُروجِ يَكتُبُ الحِسابَ بِلا شَرطِ الجَلسَة.");
-        Assert.True(door.IndexOf("ForgetDeviceAsync", StringComparison.Ordinal) < door.IndexOf("AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);", StringComparison.Ordinal));
+        // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) سَطرُ المَسحِ صارَ بِأَدوارِ كوكيّاتِ المُتَصَفِّحِ (`SessionLogoutSwitchTests.ClearLine`) — كانَ
+        // `…(http.Response, slug, roles);` بِأَدوارِ وَثيقَةِ المَتجَر؛ والتَرتيبُ (السَحبُ قَبلَ المَسح) كَما كان.
+        Assert.True(door.IndexOf("ForgetDeviceAsync", StringComparison.Ordinal) < door.IndexOf(SessionLogoutSwitchTests.ClearLine, StringComparison.Ordinal));
     }
 
     private const string PushA = "https://fcm.googleapis.com/fcm/send/device-a";

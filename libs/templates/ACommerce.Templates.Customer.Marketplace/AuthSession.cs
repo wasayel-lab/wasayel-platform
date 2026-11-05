@@ -232,6 +232,19 @@ public sealed class AuthSession
         foreach (var r in roleSlugs) ClearCookie(res, tenantSlug, r);
     }
 
+    /// <summary><b>أَدوارُ المَتجَرِ الَّتي يَحمِلُ هذا المُتَصَفِّحُ كوكيَّها</b> — نَقِيَّة (‏2026-11-05، الموجَة ١٢ G2 · ٢): كُلُّ اسمٍ بَعدَ <c>{CookieName(slug)}.</c>،
+    /// بِلا لاحِقَةِ كوكيِّ الاسمِ (<see cref="IsNameCookie"/>) وبِلا حالَةِ أَحرُفٍ كَما يَبحَثُ القارِئ. يَسأَلُها بابُ الخُروجِ حينَ لا تُقرَأُ أَدوارُ المَتجَرِ
+    /// مِن القاعِدَة، فَيُمحى ما يَحمِلُه المُتَصَفِّحُ فِعلاً بِـ<see cref="ClearAllCookiesForTenant"/>.</summary>
+    public static IReadOnlyList<string> RoleCookiesIn(IEnumerable<string> cookieNames, string tenantSlug)
+    {
+        var prefix = CookieName(tenantSlug) + ".";
+        return cookieNames
+            .Select(n => IsNameCookie(n) ? n[..^".name".Length] : n)
+            .Where(n => n.Length > prefix.Length && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(n => n[prefix.Length..])
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>يَبني URL مُنبَثِق مِن tenant slug + role اختياريّ.</summary>
     public static string LinkFor(string tenantSlug, string? role, string path)
     {
