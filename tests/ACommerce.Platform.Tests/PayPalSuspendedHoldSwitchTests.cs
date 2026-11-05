@@ -11,6 +11,9 @@ namespace ACommerce.Platform.Tests;
 // **ما صارَ**: `TenantPlan.PayPalSuspendedAt` يَكتُبُه `BILLING.SUBSCRIPTION.SUSPENDED` مَعَ «لَن يُجَدَّد» ما دامَ الاشتِراكُ قائِماً، ويَمحوهُ الإلغاءُ
 // (ومِنه إلغاءُ Paddle المارُّ بِالباعِثِ نَفسِه) والتَمديد؛ و`HoldsLiveSubscription` صادِقٌ ما دامَ المَحفوظُ مُعَلَّقاً؛ و`SetAsync` يَحمِلُ العَلامَة؛ والصَفحَةُ
 // تَقولُ لِماذا يُمسِك. **ولِكُلِّ نَوعِ رِسالَةٍ مُوجَبٌ وسالِب** (القاعِدَة ٤).
+//
+// **‏2026-11-05 — مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1**: «ومِنه إلغاءُ Paddle» أَعلاه مَقلوبٌ بِاسمِه في صَفِّه — إيقافٌ لا يُسَمّي اشتِراكاً لا يَمَسُّ القائِم،
+// ويُمحى التَعليقُ بِتَمديدِ المَحفوظِ القائِمِ أَو اشتِراكٍ جَديدٍ لا بِأَيِّ تَمديد (`PayPalBillingPolicy.RenewsSubscription`).
 
 public class PayPalSuspendedHoldSwitchTests(ITestOutputHelper output)
 {
@@ -107,7 +110,9 @@ public class PayPalSuspendedHoldSwitchTests(ITestOutputHelper output)
 
     // ─── (٢) CANCELLED ────────────────────────────────────────────────────────────────────────────────────
 
-    /// <summary><b>المُوجَبُ لِلإلغاء</b>: الإلغاءُ — بَعدَ تَعليقٍ أَو بِدونِه — يَمحو عَلامَةَ التَعليقِ ويَفُكُّ الإمساك؛ وإلغاءُ Paddle المارُّ بِالباعِثِ نَفسِه يَمحوها أَيضاً.</summary>
+    /// <summary><b>المُوجَبُ لِلإلغاء</b>: الإلغاءُ — بَعدَ تَعليقٍ أَو بِدونِه — يَمحو عَلامَةَ التَعليقِ ويَفُكُّ الإمساك. و<b>إلغاءُ Paddle مَقلوبٌ بِاسمِه</b>
+    /// (‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ كانَ «وإلغاءُ Paddle المارُّ بِالباعِثِ نَفسِه يَمحوها أَيضاً»): لا يُسَمّي اشتِراكاً، فَلا يَمَسُّ تَعليقَ
+    /// اشتِراكِ PayPal القائِمِ ولا يَفُكُّ إمساكَه — PayPal ما زالَت تُجَدِّدُ بِسِعرِها.</summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -126,8 +131,8 @@ public class PayPalSuspendedHoldSwitchTests(ITestOutputHelper output)
         Apply(paddle, Suspended(), At);
         PayPalBillingPolicy.Apply(paddle, new PayPalWebhookEvent("PD-1", "subscription.canceled", Slug, null, null, "paddle"),
             new PayPalBillingDecision(PayPalBillingAction.StopRenewal, paddle.ExpiresAt, "paddle"), At);
-        Assert.Null(paddle.PayPalSuspendedAt);
-        Assert.False(TenantPlanPolicy.HoldsLiveSubscription(paddle));
+        Assert.Equal(At, paddle.PayPalSuspendedAt);
+        Assert.True(TenantPlanPolicy.HoldsLiveSubscription(paddle));
     }
 
     // ─── (٣) الحُكمُ النَقِيّ والصَفحَة ─────────────────────────────────────────────────────────────────────

@@ -150,6 +150,8 @@ public static class PayPalBillingService
 
             // ‏`SubscriptionId` و`NextBillingTime` غائِبانِ عَمداً: هذا
             // طَلَبٌ لا اشتِراك، فَلا يُكتَب حَقلٌ لا مَعنى لَه هُنا.
+            // ‏(‏2026-11-05، G4R2-1) **ولِذلك لا يَمحو «لَن يُجَدَّد» ولا التَعليق** (`PayPalBillingPolicy.RenewsSubscription`): دَفعٌ مَرَّةً لا يُعيدُ
+            // تَجديداً، وكانَ يُعيدُ إمساكَ اشتِراكٍ أَلغَته PayPal فَلا يَفُكُّه شَيء.
             wrote = Apply(session, plan,
                 new PayPalWebhookEvent(e.EventId, e.EventType, order.TenantSlug, null, null),
                 billing, at);

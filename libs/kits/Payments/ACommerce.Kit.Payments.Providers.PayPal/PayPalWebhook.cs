@@ -404,23 +404,38 @@ public static class PayPalBillingPolicy
     /// <para><b>والتَمديدُ يَمسَح <c>RenewalCancelledAt</c></b>: مَن
     /// أَلغى ثُمَّ عادَ فَدَفَع، عادَ تَجديدُه. وتَركُها يَجعَل
     /// الشاشَةَ تَقول «التَجديدُ مُوقَف» لِمَن يَدفَع.</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1) و«عادَ فَدَفَع» اشتِراكٌ يُجَدِّدُ لا أَيُّ مال</b> (<see cref="RenewsSubscription"/>):
+    /// الإلغاءُ عِندَ PayPal نِهائِيٌّ لا يُعادُ تَفعيلُه، فَمَن عادَ عادَ بِاشتِراكٍ جَديدٍ بِمُعَرِّفٍ جَديد. وطَلَبُ الدَفعِ مَرَّةً ومُعامَلَةُ Paddle لا
+    /// تُعيدانِ تَجديداً تِلقائِيّاً، ودَفعَةٌ لِلمُلغى نَفسِه وَصَلَت مُتَأَخِّرَة — فَتُمَدِّدُ ولا تَمحو.</para>
     /// </summary>
     public static void Apply(
         TenantPlan plan, PayPalWebhookEvent e, PayPalBillingDecision decision, DateTime at)
     {
         switch (decision.Action)
         {
+            // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ تَوصيفُه `d356a3f`) **والعَلامَتانِ لا يَمحوهُما إلّا اشتِراكٌ يُجَدِّد** (`RenewsSubscription`):
+            // كانَ كُلُّ تَمديدٍ يَمحوهُما — طَلَبُ الدَفعِ مَرَّةً ومُعامَلَةُ Paddle ودَفعَةُ المُلغى المُتَأَخِّرَة — فَيَعودُ «قائِماً» اشتِراكٌ أَلغَته PayPal
+            // ولا تَعودُ رِسالَةُ إلغائِه تَفُكُّه. والتاريخُ يَتَحَرَّكُ في كُلِّ تَمديدٍ كَما كان: المالُ وَصَل.
             case PayPalBillingAction.Extend:
                 plan.ExpiresAt = decision.NewExpiresAt;
-                plan.RenewalCancelledAt = null;
-                plan.PayPalSuspendedAt = null;
+                if (RenewsSubscription(plan, e))
+                {
+                    plan.RenewalCancelledAt = null;
+                    plan.PayPalSuspendedAt = null;
+                }
                 break;
 
             // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2؛ تَوصيفُه `7dce2aa`) **ويُسَجَّلُ لِماذا تَوَقَّفَ التَجديد**: التَعليقُ يُعادُ مِن لَوحَةِ PayPal
             // فَيَبقى الاشتِراكُ قائِماً يُمسِكُ التَرتيب (`HoldsLiveSubscription`)، والإلغاءُ — ومِنه إلغاءُ Paddle المارُّ بِهذا الباعِث — يَمحو العَلامَة.
             // **والتَعليقُ يُبقي إمساكاً قائِماً ولا يُنشِئُه**: رِسالَةُ تَعليقٍ تَصِلُ بَعدَ الإلغاءِ (الرَسائِلُ لا تَصِلُ بِتَرتيبِها) لا تُعيدُ قَفلَ تَرتيبِ مَتجَرٍ
             // لا تَأتيه رِسالَةُ إلغاءٍ ثانِيَة.
+            // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ تَوصيفُه `d356a3f`) **وإيقافٌ لا يُسَمّي اشتِراكاً لا يَمَسُّ اشتِراكَ PayPal القائِم**: إلغاءُ Paddle
+            // (مُعَرِّفُه `null`) كانَ يَفُكُّ الإمساكَ ويَكتُبُ «لَن يُجَدَّد» وPayPal تُجَدِّدُ بِسِعرِها — والإمساكُ لا يَفُكُّه إلّا إيقافُ المَحفوظِ نَفسِه.
+            // وبِلا اشتِراكٍ قائِمٍ (مَتجَرُ Paddle وَحدَه) يُكتَبُ كَما كان.
             case PayPalBillingAction.StopRenewal:
+                if (e.SubscriptionId is not { Length: > 0 } && TenantPlanPolicy.HoldsLiveSubscription(plan))
+                    break;
                 plan.PayPalSuspendedAt = PayPalEventTypes.SubscriptionSuspended.Equals(e.EventType, StringComparison.Ordinal)
                                          && TenantPlanPolicy.HoldsLiveSubscription(plan)
                     ? at : null;
@@ -447,6 +462,21 @@ public static class PayPalBillingPolicy
         plan.SetBy = $"{e.Provider} · {e.EventType}";
         plan.SetAt = at;
     }
+
+    /// <summary>
+    /// <para><b>أَيُعيدُ هذا التَمديدُ التَجديدَ التِلقائيّ؟</b> (‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ تَوصيفُه <c>d356a3f</c>) — يُقرَأُ قَبلَ أَن
+    /// يُكتَبَ مُعَرِّفُ الرِسالَة، وجَوابُه وَحدَه يَمحو <c>RenewalCancelledAt</c> و<c>PayPalSuspendedAt</c> في <see cref="Apply"/>. نَعَم لِرِسالَةِ اشتِراكٍ
+    /// (مُعَرِّفُها مَملوء) <b>غَيرِ المَحفوظ</b> — اشتِراكٌ جَديدٌ يَتَسَلَّمُ المَرجِع، ولا تَبلُغُ <see cref="Apply"/> والمَحفوظُ قائِمٌ (<see cref="PayPalBillingAction.ForeignSubscription"/>)
+    /// — أَو <b>لِلمَحفوظِ ما دامَ قائِماً</b> (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>، والمُعَلَّقُ مِنه: دَفعَةُ إعادَةِ تَفعيلِه).</para>
+    ///
+    /// <para><b>ولا لِما سِواها</b>: طَلَبُ دَفعٍ مَرَّةً ومُعامَلَةُ Paddle (مُعَرِّفُ الاشتِراكِ <c>null</c>) لا تُعيدانِ تَجديداً، ودَفعَةٌ لِمَحفوظٍ أَلغَته PayPal
+    /// مُتَأَخِّرَةٌ لا تَجديد — الإلغاءُ عِندَ PayPal نِهائِيّ. وكانَ كُلُّ تَمديدٍ يَمحو العَلامَتَين، فَيَعودُ «قائِماً» يُمسِكُ الحِفظَ والرابِطَ اشتِراكٌ مُلغىً
+    /// لا تَعودُ رِسالَةُ إلغائِه (إعادَتُها <c>Replay</c>). <b>فَالإمساكُ لا يَبدَأُ إلّا بِرِسالَةِ اشتِراكٍ غَيرِ المَحفوظ</b> — ويَفُكُّه إلغاؤه.</para>
+    /// </summary>
+    public static bool RenewsSubscription(TenantPlan plan, PayPalWebhookEvent e)
+        => e.SubscriptionId is { Length: > 0 } sub
+           && (!string.Equals(sub, plan.PayPalSubscriptionId, StringComparison.Ordinal)
+               || TenantPlanPolicy.HoldsLiveSubscription(plan));
 
     /// <summary>
     /// <para><b>وَثيقَةُ مَرَّة-واحِدَة لِحَدَثٍ طُبِّق</b> — دالَّةٌ
