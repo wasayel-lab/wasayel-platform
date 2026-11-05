@@ -24,6 +24,13 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <see cref="CacheFor"/> (دَقيقَةٌ واحِدَة — رَقمُ القَرار) لِكُلِّ حِساب، ويُمحى مِنها فَورَ الرَفعِ (<see cref="Forget"/>). وحِسابٌ لا وَثيقَةَ
 /// لَه لا يُسقِطُ رَمزَه هُنا — ذاكَ سُلوكُ اليَومِ لِكُلِّ قارِئ، ولا يَتَغَيَّر. <b>وحَدُّه</b>: دائِرَةُ Blazor التَفاعُلِيَّةُ المَفتوحَةُ تَبقى حَتّى
 /// تُعادَ الصَفحَة (الصَفَحاتُ المَحروسَةُ كُلُّها SSR ثابِت).</para>
+///
+/// <para><b>(‏2026-11-05، الموجَة ١٢ G2 · ١ — A-SESS-W12-2؛ تَوصيفُه <c>0f5a3c4</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «كُلُّها SSR ثابِت» لَم يَصدُق</b>:
+/// <c>/studio/agent</c> (<c>StudioAgent.razor</c>) وجَزيرَةُ <c>/admin/agent</c> (<c>AgentChatPanel.razor</c>) صَفحَتا <c>InteractiveServer</c>، تَلتَقِطانِ صاحِبَهُما
+/// مَرَّةً ثُمَّ تُنادي مُعالِجاتُ نَقرِهِما النَموذَجَ والأَدَواتِ بِسُلطَةِ مُشرِفِ المَنَصَّةِ عَبرَ الدائِرَة — فَبَعدَ «اخرج من كل الأجهزة» أَو نَزعِ الإشرافِ كانَتا تُرسِلانِ
+/// وتُطَبِّقانِ وتَرفُضانِ وتَمحُوانِ (مَقيس: «نِداءاتُ النَموذَج 3 · الأَداةُ المُطَبَّقَة error» في الحالَينِ والصَفحَتَين). <b>وصارَ</b>: كُلٌّ مِنهُما تَحفَظُ رَمزَ الاستوديو
+/// عِندَ تَصييرِها الأَوَّلِ (في ذاكِرَةِ الخادِمِ وَحدَها) وتَسأَلُ <see cref="PlatformAdminStillOpenAsync"/> قَبلَ كُلِّ إرسالٍ وتَطبيقٍ ورَفضٍ ومَسح، والمُغلَقُ
+/// لا يُنادي نَموذَجاً ولا يُشَغِّلُ أَداةً ويَنتَقِلُ إلى <c>/studio/auth</c>. فَالحَدُّ أَعلاه صادِقٌ لِلصَفَحاتِ الثابِتَة، والدائِرَتانِ تَسأَلانِ عِندَ كُلِّ فِعل.</para>
 /// </summary>
 public static class SessionVersionGate
 {
@@ -115,6 +122,29 @@ public static class SessionVersionGate
     public static bool StillOpen(User account, string? token)
         => AuthHandlers.ParseToken(token) is { } parsed && parsed.UserId == account.Id
            && AuthHandlers.SessionVersionOf(token) is int version && !IsRevoked(version, GateVersion(account));
+
+    /// <summary>
+    /// <para><b>أَما زالَت جَلسَةُ هذا الرَمزِ مَفتوحَةً، وصاحِبُها مُشرِفَ مَنَصَّة؟</b> — نَقِيَّة (‏2026-11-05، الموجَة ١٢ G2 · ١، A-SESS-W12-2): الرَمزُ رَمزُ
+    /// استوديو يُقبَلُ ولِهذا الحِساب، وإصدارُه لَيسَ أَصغَرَ مِن إصدارِ الوَثيقَة (<see cref="IsRevoked"/>)، وقَرارُ <see cref="PlatformAdminGuard.Decide"/>
+    /// عَلَيها «مُشرِف». نَظيرُ <see cref="StillOpen"/> لِحِسابِ المَتجَر: يُسأَلُ عَلى قِراءَةٍ جَديدَةٍ لا عَلى ما التُقِطَ عِندَ التَصييرِ الأَوَّل.</para>
+    /// <para>والحِسابُ الغائِب (<c>null</c>) مُغلَق — لا مُشرِفَ بِلا وَثيقَة.</para>
+    /// </summary>
+    public static bool PlatformAdminStillOpen(StudioUser? account, string? token)
+        => account is not null && AuthHandlers.ParseToken(token) is { } parsed && parsed.TenantSlug == StudioAuth.Tenant && parsed.UserId == account.Id
+           && AuthHandlers.SessionVersionOf(token) is int version && !IsRevoked(version, account.SessionVersion)
+           && PlatformAdminGuard.Decide(account) == PlatformAdminOutcome.Allowed;
+
+    /// <summary>
+    /// <para><b>سُؤالُ الدائِرَتَينِ قَبلَ كُلِّ فِعل</b> (‏2026-11-05، G2 · ١): <c>StudioAgent.razor</c> و<c>AgentChatPanel.razor</c> تَلتَقِطانِ رَمزَ الاستوديو عِندَ
+    /// تَصييرِهِما الأَوَّل، وتَسأَلانِ هُنا قَبلَ كُلِّ إرسالٍ وتَطبيقٍ ورَفضٍ ومَسح — فَتُقرَأُ وَثيقَةُ <paramref name="userId"/> مِن جَديدٍ (لا مِن الذاكِرَة) ويُجيبُ
+    /// <see cref="PlatformAdminStillOpen"/>. والبَوّابَةُ أَوَّلَ كُلِّ طَلَبٍ لا تَبلُغُ نَقرَةً عَبرَ SignalR.</para>
+    /// </summary>
+    public static async Task<bool> PlatformAdminStillOpenAsync(IDocumentStore store, string? token, Guid userId, CancellationToken ct = default)
+    {
+        if (AuthHandlers.ParseToken(token) is not { } parsed || parsed.UserId != userId) return false;
+        await using var q = store.QuerySession(StudioAuth.Tenant);
+        return PlatformAdminStillOpen(await q.LoadAsync<StudioUser>(userId, ct), token);
+    }
 
     /// <summary>إصدارُ الحِسابِ المُخَزَّن — مِن الذاكِرَةِ إن حُفِظَ خِلالَ <see cref="CacheFor"/>، وإلّا مِن وَثيقَتِه: <c>StudioUser</c> لِلاستوديو
     /// و<c>User</c> في جَلسَةِ مُستَأجِرِه بِـ<see cref="GateVersion"/>. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>

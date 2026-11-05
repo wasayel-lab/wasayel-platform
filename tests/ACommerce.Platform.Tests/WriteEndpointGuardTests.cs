@@ -873,7 +873,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     /// مُعالِجاتٍ مُسَمّاةٍ في صَفحَةٍ تَفاعُلِيَّة: لا يُعفى إلّا جِسمُها، وكُلُّ كاتِبٍ خارِجَها — ورُموزُ Marten المُباشِرَةُ في الصَفحَةِ كُلِّها — يُسأَلُ
     /// كَما يُسأَلُ في غَيرِها؛ و<see cref="Every_pinned_display_handler_is_an_event_binding_that_writes"/> يَشتَرِطُ أَنّ كُلَّ مُعالِجٍ مَربوطٌ بِحَدَثٍ
     /// ويَكتُبُ ولا يُنادى مِن غَيرِه.</summary>
-    private sealed record DisplayWriter(string Where, string WhyAr, string[]? InHandlers = null);
+    internal sealed record DisplayWriter(string Where, string WhyAr, string[]? InHandlers = null);
 
     /// <summary>
     /// <para><b>فارِغَةٌ عَمداً، وهذا هُوَ الخَبَر.</b> كانَت ثَلاثَةً
@@ -889,7 +889,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
     /// لَيستا تَصييراً يَكتُب، بَل صَفحَتا الوَكيلِ التَفاعُلِيَّتانِ تَكتُبانِ في مُعالِجاتِ نَقرٍ عَبرَ دارَةِ SignalR — كَشَفَهُما أَوَّلُ تَشغيلٍ لِلفاحِصِ عَلى
     /// صَفَحاتِ razor كُلِّها (‏167 صَفحَة، خَرقانِ اثنانِ لا غَير)، فَثُبِّتَتا بِمُعالِجاتِهِما المُسَمّاةِ لا بِالصَفحَة.</para>
     /// </summary>
-    private static readonly DisplayWriter[] PinnedDisplayWriters =
+    internal static readonly DisplayWriter[] PinnedDisplayWriters =
     {
         new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor",
             "صَفحَةٌ تَفاعُلِيَّةٌ (`@rendermode RenderMode.InteractiveServer`): كاتِباتُها الخَمسُ (`AgentService.AskAsync`/`UpdateToolStatusAsync`/" +

@@ -61,6 +61,8 @@ public sealed class PlatformAdminGuard
     // الصَفحَة قَد تَسأَل مَرَّتَين (تَصيير + مَنع تَحميل البَيانات).
     // المِفتاح هُوَ الـ HttpContext نَفسُه: لَو غابَ (circuit تَفاعُليّ)
     // نَرفُض بَدَل تَسليم قَرار قَديم. الصَفَحات المَحروسَة كُلُّها SSR ثابِت.
+    // ‏(‏2026-11-05، الموجَة ١٢ G2 · ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إلّا سَطحَينِ تَفاعُلِيَّين: `StudioAgent.razor` و`AgentChatPanel.razor` — يَسأَلانِ
+    // `SessionVersionGate.PlatformAdminStillOpenAsync` (القَرارُ نَفسُه `Decide` عَلى وَثيقَةٍ جَديدَة) قَبلَ كُلِّ فِعلٍ في الدائِرَة.
     private HttpContext? _cachedContext;
     private PlatformAdminDecision? _cached;
 

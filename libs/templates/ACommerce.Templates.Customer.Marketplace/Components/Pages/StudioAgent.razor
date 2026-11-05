@@ -9,6 +9,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
 @inject IHttpContextAccessor HttpCtx
 @inject IJSRuntime JS
+@inject NavigationManager Nav
 @inject L L
 
 @*
@@ -34,6 +35,11 @@
     ‏2026-10-25 (W8-3 — lens-dead-doors-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والبابُ يَسأَلُ مِفتاحَ وَكيلِ Studio أَيضاً — كانَ يُفتَحُ بِلاه عَلى مُحَرِّرٍ
     مُعَطَّلٍ ونَصِّ مُشَغِّلٍ («أَضِف Agent:ApiKey في الإعدادات» واسمِ المُزَوِّد)؛ صارَ نَصُّ القامُوسِ المُغلَقُ نَفسُه، وسَطرُ التَنبيهِ وشَرطا
     التَعطيلِ زالَت لِأَنّ الفَرعَ المَفتوحَ لا يُبلَغُ بِلا مِفتاح.
+
+    ‏2026-11-05 (الموجَة ١٢ G2 · ١ — A-SESS-W12-2؛ تَوصيفُه 0f5a3c4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): «نَلتَقِط _userId مَرَّة» كانَ يَعني أَنّ
+    الدائِرَةَ المَفتوحَةَ تُرسِلُ وتُطَبِّقُ بِسُلطَةِ مُشرِفِ المَنَصَّةِ بَعدَ «اخرج من كل الأجهزة» وبَعدَ نَزعِ الإشراف (بَوّابَةُ الإصدارِ لِكُلِّ طَلَبِ HTTP ولا
+    تَبلُغُ نَقرَةً عَبرَ SignalR). صارَ رَمزُ الاستوديو يُلتَقَطُ مَعَه (ذاكِرَةُ الخادِمِ وَحدَها، لا يُرسَمُ في الصَفحَة)، والمُعالِجاتُ الأَربَعَةُ تَسأَلُ
+    StillPlatformAdminAsync قَبلَ أَيِّ نِداء — وَثيقَةٌ جَديدَة، والمُغلَقُ إلى /studio/auth بِلا نَموذَجٍ ولا أَداة.
 *@
 
 <StudioShell Title="@L["studio.agent.title"]" Active="home">
@@ -165,6 +171,8 @@
     bool _authChecked;
     // قَرارُ PlatformAdminGuard لِصاحِبِ الجَلسَة — مُدخَلُ StudioAgentDoor.Opens، يُقرَأُ حَيثُ يُقرَأُ _userId وبِالشَرطِ نَفسِه.
     bool _platformAdmin;
+    // ‏(‏2026-11-05، G2 · ١) رَمزُ الجَلسَةِ الَّتي فُتِحَت بِها الدائِرَة — يُسأَلُ بِه قَبلَ كُلِّ فِعل؛ في ذاكِرَةِ الخادِمِ وَحدَها.
+    string? _studioToken;
     string _scopeId = "";
     ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
     string newMessage = "";
@@ -184,6 +192,7 @@
                 if (StudioAuth.IsAuthenticated)
                 {
                     _userId = StudioAuth.UserId!.Value;
+                    _studioToken = HttpCtx.HttpContext.Request.Cookies[Services.Incubator.StudioAuth.CookieName];
                     _scopeId = "studio-" + _userId.ToString("N");
                     _platformAdmin = (await Services.PlatformAdminGuard.EvaluateAsync(Store, StudioAuth)).Allowed;
                 }
@@ -206,7 +215,8 @@
     async Task SendAsync()
     {
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (string.IsNullOrEmpty(msg) || isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)
+            || !await StillPlatformAdminAsync()) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
@@ -224,7 +234,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
         isWorking = true;
         StateHasChanged();
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
@@ -243,7 +253,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
         isWorking = true;
         StateHasChanged();
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null, _scopeId);
@@ -255,11 +265,20 @@
 
     async Task ResetAsync()
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !await StillPlatformAdminAsync()) return;
         await Agent.ResetAsync(_scopeId);
         session = await Agent.LoadSessionAsync(_scopeId);
         newMessage = "";
         StateHasChanged();
+    }
+
+    /// <summary>‏(‏2026-11-05، G2 · ١) الجَلسَةُ الَّتي فُتِحَت بِها الدائِرَةُ ما زالَت مَفتوحَةً وصاحِبُها مُشرِفَ مَنَصَّة؟ — وَثيقَةٌ جَديدَةٌ
+    /// (<c>SessionVersionGate.PlatformAdminStillOpenAsync</c>). وإلّا: لا نَموذَجَ ولا أَداة، والانتِقالُ إلى الدُخول (البَوّابَةُ تَنزِعُ الرَمزَ المُسقَط هُناك).</summary>
+    async Task<bool> StillPlatformAdminAsync()
+    {
+        if (await Services.SessionVersionGate.PlatformAdminStillOpenAsync(Store, _studioToken, _userId)) return true;
+        Nav.NavigateTo("/studio/auth", forceLoad: true);
+        return false;
     }
 
     async Task ScrollToBottom()

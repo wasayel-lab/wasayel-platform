@@ -2,6 +2,9 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
+@inject Marten.IDocumentStore Store
+@inject IHttpContextAccessor HttpCtx
+@inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject L L
 
@@ -30,6 +33,10 @@
     الـ AgentService وَ AgentToolExecutor لا يَزالا كَما هُما — نَفس
     التَخزين في Marten، نَفس الـ tool execution. التَّفاعُل فَقَط هو
     الَّذي تَحَوَّل مِن forms إلى @onclick.
+
+    ‏2026-11-05 (الموجَة ١٢ G2 · ١ — A-SESS-W12-2؛ تَوصيفُه 0f5a3c4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «الحُكم يَقَع في المُضيف الثابِت» حُكمٌ مَرَّةً عِندَ
+    فَتحِ الدائِرَة — فَكانَت تُرسِلُ وتُطَبِّقُ (ExecuteAsPlatformAdminAsync: لا فَحصَ مِلكِيَّةٍ ولا حِصَّة) بَعدَ «اخرج من كل الأجهزة» وبَعدَ نَزعِ الإشراف.
+    صارَت تَلتَقِطُ رَمزَ الاستوديو عِندَ تَصييرِها الأَوَّل (ذاكِرَةُ الخادِمِ وَحدَها) وتَسأَلُ StillPlatformAdminAsync قَبلَ كُلِّ فِعل — نَظيرُ StudioAgent.razor.
 *@
 
 <div class="acs-page acm-admin">
@@ -150,6 +157,9 @@
     /// <summary>مُشرِفُ المَنَصَّةِ الَّذي فَتَحَ الصَفحَة — يُمَرِّرُه المُضيفُ الثابِت (<c>AgentChat.razor</c>) بَعدَ <c>RequirePlatformAdmin</c>.</summary>
     [Parameter] public Guid? AdminUserId { get; set; }
 
+    // ‏(‏2026-11-05، G2 · ١) رَمزُ الجَلسَةِ الَّتي فُتِحَت بِها الدائِرَة — يُسأَلُ بِه قَبلَ كُلِّ فِعل؛ في ذاكِرَةِ الخادِمِ وَحدَها.
+    string? _studioToken;
+
     ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
     string newMessage = "";
     bool isWorking;
@@ -157,6 +167,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _studioToken = HttpCtx.HttpContext?.Request.Cookies[Services.Incubator.StudioAuth.CookieName];
         session = await Agent.LoadSessionAsync();
     }
 
@@ -172,7 +183,7 @@
     async Task SendAsync()
     {
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking) return;
+        if (string.IsNullOrEmpty(msg) || isWorking || !await StillPlatformAdminAsync()) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
@@ -193,7 +204,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !await StillPlatformAdminAsync()) return;
         isWorking = true;
         StateHasChanged();
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
@@ -211,7 +222,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !await StillPlatformAdminAsync()) return;
         isWorking = true;
         StateHasChanged();
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null);
@@ -223,11 +234,20 @@
 
     async Task ResetAsync()
     {
-        if (isWorking) return;
+        if (isWorking || !await StillPlatformAdminAsync()) return;
         await Agent.ResetAsync();
         session = await Agent.LoadSessionAsync();
         newMessage = "";
         StateHasChanged();
+    }
+
+    /// <summary>‏(‏2026-11-05، G2 · ١) الجَلسَةُ الَّتي فُتِحَت بِها الدائِرَةُ ما زالَت مَفتوحَةً لِلمُشرِفِ الَّذي حَمَلَه المُضيفُ وما زالَ مُشرِفاً؟ — وَثيقَةٌ جَديدَة
+    /// (<c>SessionVersionGate.PlatformAdminStillOpenAsync</c>). وإلّا: لا نَموذَجَ ولا أَداة، والانتِقالُ إلى الدُخول.</summary>
+    async Task<bool> StillPlatformAdminAsync()
+    {
+        if (await Services.SessionVersionGate.PlatformAdminStillOpenAsync(Store, _studioToken, AdminUserId ?? Guid.Empty)) return true;
+        Nav.NavigateTo("/studio/auth", forceLoad: true);
+        return false;
     }
 
     async Task ScrollToBottom()
