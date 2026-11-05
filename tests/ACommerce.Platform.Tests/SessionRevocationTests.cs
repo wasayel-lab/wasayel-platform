@@ -507,6 +507,12 @@ public class SessionRevocationTests(ITestOutputHelper output)
     /// العَمى نَفسُه الَّذي تُسَمّيه القاعِدَة ١٠ («قَواعِدُ احتِواءٍ تَفحَصُ أَزواجاً مُسَمّاة»). والآن: كُلُّ جِسمِ نُقطَةٍ يَقرَأُ جَلسَةً (<see cref="ReadsTheSession"/>)
     /// ويَكتُبُ الحِسابَ (<see cref="WritesTheAccount"/>: نِداءٌ مُباشِرٌ أَو دالَّةٌ كاتِبَةٌ يَجِدُها <see cref="AccountWriterMethods"/> في المَصدَر) يُسأَلُ
     /// <see cref="AsksTheSession"/>، إلّا ما في <see cref="SessionlessWriters"/> بِسَبَبِه؛ وكُلُّ دالَّةٍ كاتِبَةٍ تَأخُذُ <c>admit</c> تُسأَلُ أَن تُمَرِّرَه.</para>
+    /// <para><b>(‏2026-11-05، الموجَة ١٢ G2 · ٤ — مُراجَعَةُ F1 عَلى <c>da3e610</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) وكانَ أَعمى عَن شَكلَين</b>: قيسَ بِثَلاثَةِ أَبوابٍ
+    /// مَحقونَةٍ أُزيلَت بِبَصمَتِها (<c>MarketplaceTemplateExtensions.cs</c> ‏<c>f3f846fc</c> قَبلُ وبَعدُ) — بابٌ يَقرَأُ الجَلسَةَ ويَحفَظُ <c>User</c> بِـ<c>s.Store(user)</c>،
+    /// وبابٌ يُنادي مُساعِداً لا اسمَ لَه يَحفَظُه كَذلِك — فَبَقِيَ «أَبوابٌ … 10 · 9/9» أَخضَر. والآن <see cref="StoresAUser"/> (تَخزينُ قيمَةٍ مِن نَوعِ <c>User</c> بِاليَد)
+    /// كِتابَةٌ في الجِسمِ وفي كُلِّ دالَّةٍ يَجِدُها <see cref="AccountWriterMethods"/>، و<see cref="AsksOnTheReadItStores"/> شَكلٌ ثالِثٌ لِلسُؤال؛ فَالبابانِ ⇒ «10/12» أَحمَر.
+    /// وأَوَّلُ تَشغيلٍ عَلى المَصدَرِ وَجَدَ بابَ الحَذفِ (<c>/{slug}/me/delete/confirm</c>) كاتِباً لَم يَكُن يُرى — ويَسأَلُ <c>StillOpen</c> عَلى قِراءَتِه (F2) فَلا إصلاح:
+    /// الأَبوابُ ‏10 ← ‏11، تَسأَلُ ‏10/10، والدَوالُّ ‏9 ← ‏11 (<c>DuplicatePhones.ApplyOnceAsync</c> و<c>TestDataSeeder.RunAsync</c>، ولا بابَ يُناديهِما).</para>
     /// </summary>
     [Fact]
     public void Every_session_writer_asks_the_session_on_the_fresh_read()
@@ -559,7 +565,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
         {
             if (!file.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
             var code = WriteEndpointGuardTests.StripComments(text);
-            if (!AccountWrite.IsMatch(code)) continue;
+            if (!AccountWrite.IsMatch(code) && !UserValue.IsMatch(code)) continue;
             var methods = MethodDecl.Matches(code).Cast<Match>().Select(m => (Match: m, Span: MethodSpan(code, m))).Where(x => x.Span.Start >= 0).ToList();
             var types = TypeDecl.Matches(code).Cast<Match>().Select(t =>
             {
@@ -569,9 +575,13 @@ public class SessionRevocationTests(ITestOutputHelper output)
                     ? (Name: t.Groups["name"].Value, Start: -1, End: -1)
                     : (Name: t.Groups["name"].Value, Start: open, End: Closing(code, open, '{', '}'));
             }).Where(t => t.Start >= 0).ToList();
-            foreach (Match call in AccountWrite.Matches(code))
+            // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٤) ومَعَ نِداءِ الكِتابَةِ الواحِدَةِ: كُلُّ دالَّةٍ تُخَزِّنُ قيمَةً مِن نَوعِ User بِيَدِها (<see cref="StoresAUser"/>) — المُساعِدُ
+            // الَّذي لا يَمُرُّ بِـ`AccountWrites` كانَ لا يُرى.
+            var writes = AccountWrite.Matches(code).Select(c => c.Index)
+                .Concat(methods.Where(x => StoresAUser(code[x.Match.Index..x.Span.End])).Select(x => x.Span.Start));
+            foreach (var at in writes)
             {
-                var owner = methods.LastOrDefault(x => x.Match.Index < call.Index && x.Span.End > call.Index);
+                var owner = methods.LastOrDefault(x => x.Match.Index < at && x.Span.End > at);
                 if (owner.Match is null) continue;
                 var name = owner.Match.Groups["name"].Value;
                 var body = code[owner.Span.Start..owner.Span.End];
@@ -583,6 +593,34 @@ public class SessionRevocationTests(ITestOutputHelper output)
             }
         }
         return found;
+    }
+
+    /// <summary>قِراءَةُ <c>User</c> أَو إنشاؤُه أَو وَسيطٌ مِن نَوعِه — ما يَسبِقُ تَخزينَه بِاليَد. (‏2026-11-05، G2 · ٤)</summary>
+    private static readonly Regex UserValue = new(
+        @"LoadAsync\s*<\s*(?:[\w.]+\.)?User\s*>|Query\s*<\s*(?:[\w.]+\.)?User\s*>|new\s+(?:ACommerce\.Kit\.Auth\.)?User\b|[(,]\s*(?:ACommerce\.Kit\.Auth\.)?User\??\s+\w+\s*(?=[,)])",
+        RegexOptions.Compiled);
+
+    /// <summary>مُتَغَيِّراتُ نَوعِ <c>User</c> في نَصّ: مِن قِراءَتِه أَو إنشائِه (<c>var u = await s.LoadAsync&lt;User&gt;(…)</c>، <c>= new User</c>، <c>User u =</c>)،
+    /// ومِن حَلقَةٍ عَلى استِعلامِه، ومِن وَسيطٍ مِن نَوعِه.</summary>
+    private static readonly Regex[] UserLocals =
+    {
+        new(@"(?:\bvar|\b(?:ACommerce\.Kit\.Auth\.)?User\??)\s+(?<v>\w+)\s*=\s*(?:\(\s*)?(?:await\s+)?(?:[\w.]+\s*\.\s*)?(?:LoadAsync\s*<\s*(?:[\w.]+\.)?User\s*>|new\s+(?:ACommerce\.Kit\.Auth\.)?User\b|Query\s*<\s*(?:[\w.]+\.)?User\s*>)", RegexOptions.Compiled),
+        new(@"foreach\s*\(\s*var\s+(?<v>\w+)\s+in\s+[^)]*Query\s*<\s*(?:[\w.]+\.)?User\s*>", RegexOptions.Compiled),
+        new(@"[(,]\s*(?:ACommerce\.Kit\.Auth\.)?User\??\s+(?<v>\w+)\s*(?=[,)])", RegexOptions.Compiled),
+    };
+
+    internal static IReadOnlyCollection<string> UserVariables(string code)
+        => UserLocals.SelectMany(r => r.Matches(code)).Select(m => m.Groups["v"].Value).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// <para><b>يُخَزِّنُ قيمَةً مِن نَوعِ <c>User</c> بِيَدِه</b> — نَقِيَّة (‏2026-11-05، الموجَة ١٢ G2 · ٤، مُراجَعَةُ F1 عَلى <c>da3e610</c>): <c>Store</c>/<c>Update</c>/<c>Insert</c>
+    /// عَلى مُتَغَيِّرٍ مِن <see cref="UserVariables"/>، أَو عَلى ما يُعيدُه <c>AccountDeletion.Erase</c>. كانَ الفاحِصُ يَرى الكِتابَةَ الواحِدَةَ و<c>AccountContacts.Verify*Async</c>
+    /// وَحدَهُما، فَبابٌ يَقرَأُ الجَلسَةَ ويَحفَظُ <c>User</c> بِـ<c>s.Store(user)</c> — أَو بِمُساعِدٍ لا اسمَ لَه — يَبقى أَخضَر (مَقيسٌ بِبابَينِ مَحقونَينِ أُزيلا بِبَصمَتِهِما).</para>
+    /// </summary>
+    internal static bool StoresAUser(string code)
+    {
+        if (Regex.IsMatch(code, @"\.\s*(?:Store|Update|Insert)\s*\(\s*(?:ACommerce\.Kit\.Auth\.)?AccountDeletion\.Erase\s*\(")) return true;
+        return UserVariables(code).Any(v => Regex.IsMatch(code, $@"\.\s*(?:Store|Update|Insert)\s*\(\s*{Regex.Escape(v)}\s*!?\s*[,)]"));
     }
 
     /// <summary>مَدى جِسمِ الدالَّةِ الَّتي يَبدَأُ تَصريحُها عِندَ <paramref name="decl"/>: مِن بَعدِ قَوسِ وُسَطائِها إلى قَوسِها المُغلِق (أَو فاصِلَةِ السَهمِ المُنهِيَة).</summary>
@@ -621,6 +659,7 @@ public class SessionRevocationTests(ITestOutputHelper output)
     internal static bool WritesTheAccount(string body, IReadOnlyList<AccountWriter> writers)
     {
         if (AccountWrite.IsMatch(body) || Regex.IsMatch(body, @"AccountContacts\s*\.\s*Verify\w*Async\s*\(")) return true;
+        if (StoresAUser(body)) return true;   // ‏(‏2026-11-05، G2 · ٤) وتَخزينُ User بِاليَدِ في الجِسمِ نَفسِه
         var receivers = WriteEndpointGuardTests.HandlerParameters(body);
         foreach (var w in writers)
         {
@@ -659,7 +698,18 @@ public class SessionRevocationTests(ITestOutputHelper output)
 
     internal static bool AsksTheSession(string body)
         => body.Contains("admit: u => Services.SessionVersionGate.StillOpen(u, ", StringComparison.Ordinal)
-           || Regex.IsMatch(body, @"AccountWrites\.UpdateAsync<User>\([\s\S]*\},\s*ct,\s*admit\);");
+           || Regex.IsMatch(body, @"AccountWrites\.UpdateAsync<User>\([\s\S]*\},\s*ct,\s*admit\);")
+           || AsksOnTheReadItStores(body);
+
+    /// <summary>‏(‏2026-11-05، G2 · ٤) الشَكلُ الثالِث: جِسمٌ يُخَزِّنُ <c>User</c> بِيَدِه ويَسأَلُ <c>SessionVersionGate.StillOpen</c> عَلى المُتَغَيِّرِ الَّذي قَرَأَه قَبلَ أَوَّلِ
+    /// تَخزينٍ لَه — نَسَقُ بابِ الحَذفِ (<c>/{slug}/me/delete/confirm</c>، الموجَة ١٢ F2).</summary>
+    internal static bool AsksOnTheReadItStores(string body)
+        => UserVariables(body).Any(v =>
+        {
+            var ask = Regex.Match(body, $@"SessionVersionGate\s*\.\s*StillOpen\s*\(\s*{Regex.Escape(v)}\s*!?\s*,");
+            var store = Regex.Match(body, $@"\.\s*(?:Store|Update|Insert)\s*\(\s*{Regex.Escape(v)}\s*!?\s*[,)]");
+            return ask.Success && store.Success && ask.Index < store.Index;
+        });
 
     /// <summary>حَقنُ عَيب (القاعِدَة ١٠): نِداءُ اليَومِ بِلا <c>admit</c> — في البابِ وفي الخِدمَة — يُحمِرُّ الفاحِص.</summary>
     [Theory]
@@ -681,6 +731,82 @@ public class SessionRevocationTests(ITestOutputHelper output)
         Assert.Matches(ReadsTheSession, body);
         Assert.True(WritesTheAccount(body, writers), "الفاحِصُ لا يَرى الكاتِب.");
         Assert.False(AsksTheSession(body));
+    }
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠، ‏2026-11-05، الموجَة ١٢ G2 · ٤): الشَكلانِ اللَّذانِ بَقِيا أَخضَرَينِ بِالبابَينِ المَحقونَينِ — بابٌ يَقرَأُ الجَلسَةَ ويَحفَظُ
+    /// <c>User</c> بِـ<c>s.Store(user)</c> بِلا شَرط، وبابٌ يُنادي مُساعِداً لا اسمَ لَه يَحفَظُه كَذلِك — يَجِدُهُما الفاحِصُ كاتِبَينِ ويَرُدُّهُما؛ والسُؤالُ عَلى القِراءَةِ نَفسِها
+    /// قَبلَ التَخزينِ يَمُرّ، وبَعدَه لا.</summary>
+    [Theory]
+    [InlineData("direct-store", "var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));\nawait using var s = store.LightweightSession(slug);\nvar user = await s.LoadAsync<User>(parsed.Value.UserId);\nuser!.FullName = \"x\";\ns.Store(user);\nawait s.SaveChangesAsync();", false)]
+    [InlineData("helper", "var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));\nawait Services.ZzProbeHelper.RenameAsync(store, slug, parsed.Value.UserId);", false)]
+    [InlineData("asks-after-the-store", "var token = AuthSession.ResolveToken(req, slug);\nvar user = await s.LoadAsync<User>(id);\ns.Store(user!);\nif (!Services.SessionVersionGate.StillOpen(user!, token)) return Results.Redirect(\"/\");", false)]
+    [InlineData("asks-on-the-read", "var token = AuthSession.ResolveToken(req, slug);\nvar user = await s.LoadAsync<User>(id);\nif (user is null || !Services.SessionVersionGate.StillOpen(user, token)) return Results.Redirect(\"/\");\ns.Store(user);", true)]
+    public void The_session_writer_finder_sees_a_hand_written_user_store_and_an_unnamed_helper(string shape, string body, bool asks)
+    {
+        const string helper = "public static class ZzProbeHelper\n{\n    public static async Task RenameAsync(IDocumentStore store, string slug, Guid userId)\n    {\n"
+            + "        await using var s = store.LightweightSession(slug);\n        var user = await s.LoadAsync<User>(userId);\n        if (user is null) return;\n        s.Store(user);\n        await s.SaveChangesAsync();\n    }\n}";
+        var writers = AccountWriterMethods().Append(new AccountWriter("ZzProbeHelper", "RenameAsync", helper, false)).ToList();
+        var writes = WritesTheAccount(body, writers);
+        output.WriteLine($"{shape} ⇒ يَقرَأُ الجَلسَة {ReadsTheSession.IsMatch(body)} · يَكتُبُ الحِساب {writes} · يَسأَلُ الجَلسَة {AsksTheSession(body)} · المُساعِدُ كاتِبٌ {StoresAUser(helper)}");
+        Assert.Matches(ReadsTheSession, body);
+        Assert.True(writes, "الفاحِصُ لا يَرى الكاتِب.");
+        Assert.True(StoresAUser(helper), "الفاحِصُ لا يَرى المُساعِدَ كاتِباً.");
+        Assert.Equal(asks, AsksTheSession(body));
+    }
+
+    // ─── أَبوابُ الدُخول (الموجَة ١٢ G2 · ٤ — مُراجَعَةُ F1 عَلى `022f18a`): تُوجَدُ ولا تُسَمّى ─────────────────────────────────────────────────────
+    //
+    // `LoginChannelsTests.Every_sign_in_door_asks_the_store_channel_before_it_reads_a_field` يَسأَلُ قائِمَةً مُسَمّاةً مِن سِتَّة (`SignInDoors`)، فَبابٌ سابِعٌ يُصدِرُ جَلسَةً
+    // (`AuthSession.WriteCookie` بَعدَ `AuthHandlers.VerifyPhoneOtpHandler`) لا يُسأَلُ عَن قَناةِ المَتجَرِ أَبَداً — مَقيسٌ بِبابٍ مَحقونٍ أُزيلَ بِبَصمَتِه: بَقِيَ الصَفُّ
+    // «6 · 6» أَخضَر. والآن يُوجَدُ كُلُّ بابٍ يُرسِلُ رَمزَ دُخولٍ أَو يُصدِرُ جَلسَةَ مَتجَر، ويُسأَلُ بِـ`SignInDoorBreach` عَن النَوعِ الَّذي يُناديه، والقائِمَةُ المُسَمّاةُ تُقابَلُ بِه.
+
+    /// <summary>بابُ دُخولِ مَتجَر: يُرسِلُ رَمزاً (<c>AuthHandlers.Request…Handler</c>) أَو يُصدِرُ جَلسَةً (<c>AuthHandlers.Verify…</c>، أَو <c>AuthSession.WriteCookie</c>).</summary>
+    private static readonly Regex SignInCall = new(@"AuthHandlers\s*\.\s*(?:Request|Verify)(?<kind>Phone|Email|Nafath)\w*\s*\(|AuthSession\s*\.\s*WriteCookie\s*\(", RegexOptions.Compiled);
+
+    /// <summary>أَنواعُ الدُخولِ الَّتي يُناديها جِسمُ بابٍ — مِن الدالَّةِ الَّتي يُرسِلُ بِها الرَمزَ أَو يُصدِرُ الجَلسَة. والبابُ الَّذي يَكتُبُ الكوكيَّ بِلا نِداءٍ يُسَمّي
+    /// نَوعَه يُعادُ بِنَوعٍ فارِغ — فَيُرَدّ.</summary>
+    internal static IReadOnlyList<string> SignInKinds(string body)
+    {
+        var calls = SignInCall.Matches(body).ToList();
+        var kinds = calls.Select(m => m.Groups["kind"].Value).Where(k => k != "").Distinct(StringComparer.Ordinal).ToList();
+        return calls.Count > 0 && kinds.Count == 0 ? [""] : kinds;
+    }
+
+    /// <summary>
+    /// <para><b>كُلُّ بابِ دُخولٍ في المَصدَرِ يَسأَلُ قَناةَ المَتجَرِ عَن نَوعِه قَبلَ أَوَّلِ حَقل</b> — يُوجَدُ بِـ<see cref="SignInCall"/> في أَجسامِ النِقاطِ كُلِّها، ويُسأَلُ
+    /// <c>LoginChannelsTests.SignInDoorBreach</c> بِالنَوعِ الَّذي يُناديه (نَوعانِ في بابٍ واحِدٍ، أَو كوكيٌّ بِلا نَوع = خَرق). والقائِمَةُ المُسَمّاةُ (<c>SignInDoors</c>) تُقابَلُ
+    /// بِالمَوجودِ في الاتِّجاهَين: بابٌ يوجَدُ ولا يُسَمّى، أَو يُسَمّى ولا يوجَد، يَحمَرّ. يَطبَعُ العَدَدَ ويَفشَلُ عَلى الصِفر.</para>
+    /// </summary>
+    [Fact]
+    public void Every_sign_in_door_in_the_source_is_found_and_asks_the_store_channel_for_its_own_kind()
+    {
+        var doors = WriteEndpointGuardTests.AllMinimalApiEndpoints().Select(e => (e.Route, e.Body, Kinds: SignInKinds(e.Body))).Where(d => d.Kinds.Count > 0).ToList();
+        var breaches = doors.Select(d => (d.Route, Why: d.Kinds.Count != 1 ? $"أَنواعُه {string.Join("+", d.Kinds.Select(k => k == "" ? "؟" : k))}" : LoginChannelsTests.SignInDoorBreach(d.Body, d.Kinds[0])))
+            .Where(b => b.Why is not null).ToList();
+        var named = LoginChannelsTests.SignInDoors.Select(d => $"{d.Route}|{d.Kind}").ToHashSet(StringComparer.Ordinal);
+        var seen = doors.Where(d => d.Kinds.Count == 1).Select(d => $"{d.Route}|{d.Kinds[0]}").ToHashSet(StringComparer.Ordinal);
+        output.WriteLine($"أَبوابُ دُخولٍ في المَصدَر: {doors.Count} ({string.Join(" · ", doors.Select(d => $"{d.Route} [{string.Join("+", d.Kinds)}]"))}) · تَسأَلُ قَناةَ المَتجَرِ عَن نَوعِها أَوَّلاً {doors.Count - breaches.Count} · "
+            + $"مُسَمّاةٌ {named.Count} · تُطابِقُ {named.Intersect(seen).Count()}");
+        Assert.True(doors.Count > 0, "صِفرُ بابِ دُخول — الأَداةُ عَمياء.");
+        Assert.True(breaches.Count == 0, "بابُ دُخولٍ لا يَسأَلُ قَناةَ المَتجَر: " + string.Join(" · ", breaches.Select(b => $"{b.Route}: {b.Why}")));
+        Assert.True(seen.SetEquals(named), "القائِمَةُ المُسَمّاةُ والمَوجودُ يَختَلِفان — يوجَدُ ولا يُسَمّى: " + string.Join(" · ", seen.Except(named))
+            + " · يُسَمّى ولا يوجَد: " + string.Join(" · ", named.Except(seen)));
+    }
+
+    /// <summary>حَقنُ عَيب (القاعِدَة ١٠): البابُ السابِعُ المَحقونُ بِحَرفِه (يُصدِرُ جَلسَةً ولا يَسأَلُ القَناة) يوجَدُ بِنَوعِه ويُرَدّ؛ وكوكيٌّ بِلا نِداءٍ يُسَمّي نَوعَه،
+    /// ونَوعانِ في بابٍ واحِد، يُرَدّان؛ وما لا يُرسِلُ رَمزاً ولا يُصدِرُ جَلسَةً لا يُعَدُّ بابَ دُخول.</summary>
+    [Theory]
+    [InlineData("seventh-door", "var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(req.Form[\"phone\"].ToString(), req.Form[\"code\"].ToString()), tenant, store);\nAuthSession.WriteCookie(res, slug, result);", "Phone", true)]
+    [InlineData("cookie-without-kind", "var result = Mint(req);\nAuthSession.WriteCookie(res, slug, result);", "", true)]
+    [InlineData("two-kinds", "await AuthHandlers.RequestPhoneOtpHandler(a, tenant, c, default);\nawait AuthHandlers.RequestEmailOtpHandler(b, tenant, e, default);", "Phone+Email", true)]
+    [InlineData("not-a-sign-in-door", "var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));\nreturn Results.Redirect(\"/\");", "", false)]
+    public void The_sign_in_door_finder_finds_and_refuses_an_unnamed_door(string shape, string body, string kinds, bool isDoor)
+    {
+        var found = SignInKinds(body);
+        var breach = found.Count == 1 && found[0] != "" ? LoginChannelsTests.SignInDoorBreach(body, found[0]) : found.Count > 0 ? "نَوعٌ غائِبٌ أَو نَوعان" : null;
+        output.WriteLine($"{shape} ⇒ بابُ دُخول {found.Count > 0} [{string.Join("+", found)}] · {breach ?? "لا خَرق"}");
+        Assert.Equal(isDoor, found.Count > 0);
+        if (isDoor) { Assert.Equal(kinds, string.Join("+", found)); Assert.NotNull(breach); }
     }
 
     // ─── I-SEC-1 (تَدقيقُ الموجَة ١١، ‏2026-10-29): كوكيُّ «الاسم» يَحمِلُ رَمزاً عَلى مَسارِ دَورٍ اسمُه name ─────────────────────
