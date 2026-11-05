@@ -170,13 +170,17 @@ public class DealShipTests(ITestOutputHelper output)
     /// <summary><b>قُلِبَ بِاسمِه</b> — كانَ <c>The_lexicon_is_ten_closed_codes_and_three_are_the_accept_codes_by_value</c>: صارَ المَعجَمُ أَحَدَ عَشَرَ
     /// بِـ<c>oto_order_closed</c> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8، ‏2026-10-12)، ولا ثانِيَ عَشَر.
     /// <para><b>وقُلِبَ ثانِيَةً بِاسمِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د13 «ب»؛ كانَ
-    /// <c>The_lexicon_is_eleven_closed_codes_and_three_are_the_accept_codes_by_value</c>): اثنا عَشَرَ بِـ<c>siblings_not_ready</c> بَعدَ الأَحَدَ عَشَر.</para></summary>
+    /// <c>The_lexicon_is_eleven_closed_codes_and_three_are_the_accept_codes_by_value</c>): اثنا عَشَرَ بِـ<c>siblings_not_ready</c> بَعدَ الأَحَدَ عَشَر.</para>
+    /// <para><b>وقُلِبَ ثالِثَةً بِاسمِه</b> (‏2026-11-05، الموجَة ١٢ G3 · ٧ — D-5؛ كانَ <c>The_lexicon_is_twelve_closed_codes_and_three_are_the_accept_codes_by_value</c>): ثَلاثَةَ عَشَرَ
+    /// بِـ<c>needs_intervention</c> بَعدَ الاثنَي عَشَر — بِحَرفِ رَمزِ الوارِد.</para></summary>
     [Fact]
-    public void The_lexicon_is_twelve_closed_codes_and_three_are_the_accept_codes_by_value()
+    public void The_lexicon_is_thirteen_closed_codes_and_three_are_the_accept_codes_by_value()
     {
-        Assert.Equal(12, DealShipAuthorization.All.Count);
-        Assert.Equal(12, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
-        Assert.Equal(DealShipAuthorization.SiblingsNotReady, DealShipAuthorization.All[^1]);
+        Assert.Equal(13, DealShipAuthorization.All.Count);
+        Assert.Equal(13, DealShipAuthorization.All.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(DealShipAuthorization.SiblingsNotReady, DealShipAuthorization.All[^2]);
+        Assert.Equal(DealShipAuthorization.ShipmentNeedsIntervention, DealShipAuthorization.All[^1]);
+        Assert.Equal(OtoOrderStatusGate.Intervention, DealShipAuthorization.ShipmentNeedsIntervention);
         Assert.Equal(DealAcceptAuthorization.DealNotFound, DealShipAuthorization.DealNotFound);
         Assert.Equal(DealAcceptAuthorization.ListingOwnerMissing, DealShipAuthorization.ListingOwnerMissing);
         Assert.Equal(DealAcceptAuthorization.DealNotActive, DealShipAuthorization.DealNotActive);

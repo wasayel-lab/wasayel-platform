@@ -93,15 +93,27 @@ public static class DealShipAuthorization
     /// </summary>
     public const string SiblingsNotReady = "siblings_not_ready";
 
+    // ─── وثالِثَ عَشَرَ ‏2026-11-05 (الموجَة ١٢ G3 · ٧ — D-5؛ ولا يُعادُ حَرفٌ فَوقَ الاثنَي عَشَر) ───────────
+
+    /// <summary>
+    /// <para><b>شُحنَةُ الطَلَبِ عِندَ OTO فُقِدَت أَو تَلِفَت أَو أُتلِفَت</b> (<see cref="DealShipping.NeedsIntervention"/>، قَرارُ المالِك د9 (١) «أ») — فَلا «أَكمِل الشَّحن»:
+    /// كانَت البَوّابَةُ تُجيزُها فَيُرسَمُ الزِرُّ وكُلُّ نَقرَةٍ تَسأَلُ OTO ثُمَّ تُجابُ بِهذا الرَمزِ نَفسِه بِلا كِتابَة (تَوصيفُه <c>5a0ff2f</c>) — زِرٌّ جَوابُه واحِدٌ أَبَداً
+    /// (القاعِدَة ١٢). <b>بِحَرفِ رَمزِ الوارِدِ</b> <see cref="OtoOrderStatusGate.Intervention"/> فَنَصُّه عَلى صَفحَةِ الصَفقَةِ نَصُّه (<c>deals.detail.err_needs_intervention</c>)،
+    /// والصَفحَةُ تَقولُه بِـ<see cref="HeldRefusal"/> بِلا تَعديل. ومَخرَجُ العَلامَة: الوارِدُ حينَ تُغَيِّرُ OTO حالَ الطَلَب (يُخرِجُها إلى «شَحن» أَو يُغلِقُها)، وإلغاءُ صاحِبِ المَتجَر.</para>
+    /// </summary>
+    public const string ShipmentNeedsIntervention = OtoOrderStatusGate.Intervention;
+
     /// <summary>المَعجَمُ المُغلَق — عَشَرَةٌ لا حادِيَ عَشَر. <b>صارَت أَحَدَ عَشَر ‏2026-10-12</b> (مُراجَعَةُ المَوجَة 3a، تَيّارُ S8):
     /// <see cref="OrderClosedAtOto"/> بَعدَ <see cref="ActorCannotShip"/> وقَبلَ <see cref="CarrierUnavailable"/> — ولا ثانِيَ عَشَر.
-    /// <b>وصارَت اثنَي عَشَرَ ‏2026-10-29</b> (مُراجَعَةُ تَيّارِ S4 الأولى): <see cref="SiblingsNotReady"/> بَعدَ الأَحَدَ عَشَر.</summary>
+    /// <b>وصارَت اثنَي عَشَرَ ‏2026-10-29</b> (مُراجَعَةُ تَيّارِ S4 الأولى): <see cref="SiblingsNotReady"/> بَعدَ الأَحَدَ عَشَر.
+    /// <b>وصارَت ثَلاثَةَ عَشَرَ ‏2026-11-05</b> (الموجَة ١٢ G3 · ٧ — D-5): <see cref="ShipmentNeedsIntervention"/> بَعدَ الاثنَي عَشَر.</summary>
     public static readonly IReadOnlyList<string> All = new[]
     {
         DealNotFound, ListingOwnerMissing, ActorNotShipper, DealNotActive, DealNotCash,
         DealNotReadyToShip, ActorCannotShip, OrderClosedAtOto, CarrierUnavailable,
         DeliveryDataMissing, DeliveryCityMissing,
         SiblingsNotReady,
+        ShipmentNeedsIntervention,
     };
 
     /// <summary><c>null</c> يَعني يُشحَن. والمَدينَةُ خارِجَها (<see cref="ValidateCity"/>).</summary>
@@ -131,6 +143,11 @@ public static class DealShipAuthorization
 
         if (DealShipping.ClosedAtOto(deal))
             return new(OrderClosedAtOto, $"طَلَبُ الصَفقَةِ عِندَ OTO في حالٍ لا يَعودُ مِنه («{deal.Refs[DealShipping.ClosedRef]}»).");
+
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٧ — D-5؛ تَوصيفُه `5a0ff2f` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): وشُحنَةٌ فُقِدَت أَو تَلِفَت عِندَ OTO — حالُ الطَلَبِ هُناك
+        // كَسابِقِه، فَقَبلَ سُؤالِ الناقِل؛ ولا نِداءَ «Order Tracking» لِنَقرَةٍ جَوابُها مَعروف.
+        if (DealShipping.NeedsIntervention(deal))
+            return new(ShipmentNeedsIntervention, $"أَبلَغَت OTO أَنّ شُحنَةَ الطَلَبِ «{deal.Refs[DealShipping.InterventionRef]}» — يَحتاجُ تَدَخُّلاً، فَلا يُكمَلُ شَحنُه.");
 
         if (!carrierReady)
             return new(CarrierUnavailable, "لا رَمزَ ناقِلٍ يُحَلُّ لِهذا المَتجَر.");

@@ -90,7 +90,8 @@ public class DealRefusalTextsTests
         // (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى): +`siblings_not_ready` — 33 ← 34.
         // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1): +`deal_in_shared_waybill` — خامِسُ بَوّابَةِ الإلغاء: 34 ← 35.
         // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): +`deal_invoice_disputed` — ثانِيَ مَعجَمِ الفاتورَةِ المُشتَرَكَة: 36 ← 37.
-        Assert.Equal(37, checked_);   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4): +`needs_intervention` — 35 ← 36.   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32؛ (‏2026-10-24): +`deal_past_cancel_stage` — 32 ← 33.
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٧ — D-5): `needs_intervention` صارَ ثالِثَ عَشَرَ بَوّابَةِ الشَحنِ أَيضاً — يُفحَصُ مَرَّتَينِ ويَصِلُ مِفتاحاً واحِداً: 37 ← 38.
+        Assert.Equal(38, checked_);   // (‏2026-10-30، تَدقيقُ الموجَة ١١ F4): +`needs_intervention` — 35 ← 36.   // (‏2026-10-13، G5 M4): +`deal_invoice_shared` — 30 ← 31؛ (G5 (xv-g)): +`deal_payment_missing` — 31 ← 32؛ (‏2026-10-24): +`deal_past_cancel_stage` — 32 ← 33.
     }
 
     /// <summary><b>نَصُّ «بِلا مالِكِ إعلان» يُسَمّي مَن يُحَرِّكُها حَقّاً</b> (‏2026-10-11، مُراجَعَةُ الموجَةِ الثانِيَةِ
