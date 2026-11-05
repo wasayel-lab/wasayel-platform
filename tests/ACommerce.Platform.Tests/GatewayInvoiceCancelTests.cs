@@ -138,8 +138,12 @@ public class GatewayInvoiceCancelTests(ITestOutputHelper output)
 
     /// <summary><b>فاتورَةٌ دَفَعَها المُشتَري ولَم يَضغَط «تَحَقَّق»</b>: الإلغاءُ يَجلِبُها فَيَجِدُها <c>paid</c> فَلا يُلغيها
     /// (<c>gateway_invoice_not_open</c>) — ودَفعُها يُسَجَّلُ بِبابِ التَحَقُّقِ ومَعَه سَطرُ استِرجاعِه (§٨‑هـ)، لا هُنا.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ تَوصيفُه <c>6409b4a</c>) — كانَ <c>An_invoice_already_paid_at_the_gateway_is_not_cancelled</c>:
+    /// جَلبانِ و«لَيسَت مَفتوحَة» في كُلٍّ ولا قَبض — «لا هُنا» لَم يَعُد: دَفعٌ لا يَبلُغُه «تَحَقَّق» (مِفتاحٌ بُدِّلَ فَرُدَّ الإشعار) لا يُسَجَّلُ أَبَداً، والمالُ عِندَ المَتجَر.
+    /// والآن الجَلبُ الأَوَّلُ يَجِدُها مَدفوعَةً فَيُثبِتُ دَفعَها بِالبُرهانِ ويَكتُبُه عَلى صَفقَتَيها (<c>gateway_invoice_paid</c>)، والمُلغاةُ بِسَطرِ استِرجاعِها؛ والثانِيَةُ مَقبوضَةٌ
+    /// فَتُلغى بِفَرعِ «استِرجاعُه مُستَحَقّ» بِلا جَلب. ولا إلغاءَ عِندَ البَوّابَةِ في الحالَين.</remarks>
     [Fact]
-    public async Task An_invoice_already_paid_at_the_gateway_is_not_cancelled()
+    public async Task An_invoice_already_paid_at_the_gateway_is_not_cancelled_and_its_payment_is_recorded_with_each_refund_due()
     {
         var (w, deals, log) = await ClosingCart();
         w.Moyasar.Then(HttpStatusCode.OK, Invoice(w, "paid")).Then(HttpStatusCode.OK, Invoice(w, "paid"));
@@ -147,9 +151,15 @@ public class GatewayInvoiceCancelTests(ITestOutputHelper output)
         foreach (var id in w.Ids)
             Assert.True((await deals.CancelAsync(Slug, id, Vendor, VendorReason)).Ok);
 
-        Assert.Equal(new[] { Get(), Get() }, Sent(w.Moyasar));
-        Assert.All(log.Lines, l => Assert.Contains(GatewayInvoiceClosing.NotOpen, l, StringComparison.Ordinal));
-        Assert.All(w.Ids, id => Assert.False(DealsService.IsCaptured(Load(w, id))));
+        Assert.Equal(new[] { Get() }, Sent(w.Moyasar));
+        Assert.Contains(GatewayInvoiceCloser.Paid, Assert.Single(log.Lines), StringComparison.Ordinal);
+        Assert.All(w.Ids, id =>
+        {
+            var d = Load(w, id);
+            Assert.True(DealsService.IsCaptured(d));
+            Assert.Single(d.Timeline, e => e.Action == DealEvent.GatewayPaid);
+            Assert.Single(d.Timeline, e => e.Action == DealEvent.GatewayRefundDue);
+        });
     }
 
     /// <summary><b>بِلا مِفتاحٍ يُفَكُّ أَو بِلا عَميل — لا نِداء</b>: لا رَبط، أَو رَبطٌ مَسحوب، أَو خِزانَةٌ بِلا مِفتاحٍ رَئيس، أَو ظَرفٌ لا يُفتَحُ بِخِزانَةٍ

@@ -873,11 +873,24 @@ public sealed class DealsService
         // (‏2026-10-29، قَرارُ المالِك د3 «د» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **وما يَعودُ لا يَبقى في اللوغِ وَحدَه**. رَمزٌ يُبقي الفاتورَةَ قابِلَةً لِلدَّفعِ
         // (`GatewayInvoiceCloser.LeavesPayable`) يُكتَبُ سَطراً في سِجِلِّ الصَفقَةِ بِحَلقَةِ التَسجيلِ نَفسِها — يَراه المُشتَري «لا تَدفَع» وصاحِبُ المَتجَرِ «ألغِها» —
         // ويُخبَرُ بِه صاحِبُ المَتجَرِ مِن `DealNotices` مَعَ إشعارِ الإلغاء. تَوصيفُه `b55fead`.)
-        else if (GatewayPayments.HasInvoice(deal) && _invoices is not null
-                 && await _invoices.CloseIfLastAsync(tenantSlug, deal, id => LoadAsync(tenantSlug, id)) is { } left
-                 && GatewayInvoiceCloser.LeavesPayable(left))
-            deal = await RecordAsync(tenantSlug, dealId, stored => stored.Timeline.Add(new(stored.Stage, stored.Stage,
-                DealEvent.GatewayInvoiceLeftOpen, actorId, actorName, left, DateTime.UtcNow)), CancellationToken.None) ?? deal;
+        // (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ تَوصيفُه `6409b4a` — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **وفاتورَةٌ دُفِعَت عِندَ البَوّابَةِ ولَم يُكتَب دَفعُها يُكتَبُ
+        // دَفعُها الآن** بِالكاتِبِ القائِمِ وبِبُرهانِ البَوّابَةِ نَفسِه (`GatewayInvoiceCloser.Paid` — `Gate` ثُمَّ `ConfirmGatewayPaymentAsync`)، فَيُكتَبُ عَلى هذِه المُلغاةِ
+        // `gateway_refund_due` ويُخبَرُ صاحِبُ المَتجَرِ بِالأُنبوبِ القائِم (`OwnerActionOf` ⇐ `RefundDue`)، وما بَقِيَ قائِماً مِن صَفَقاتِها يُقبَضُ ويَدخُلُ «دَفع» بِاسمِ
+        // المَنصَّة (د4) — كَما يَكتُبُه التَحَقُّقُ والإشعار. كانَ «paid» رَمزَ «لَيسَت مَفتوحَة» فَلا سَطرَ ولا إشعار، والمالُ عِندَ المَتجَر (د3 «د»).
+        else if (GatewayPayments.HasInvoice(deal) && _invoices is not null)
+        {
+            var (left, paid) = await _invoices.CloseOrProveAsync(tenantSlug, deal, id => LoadAsync(tenantSlug, id));
+            if (paid is not null)
+            {
+                var confirmed = await ConfirmGatewayPaymentAsync(tenantSlug, paid, CancellationToken.None);
+                foreach (var paidId in paid.DealIds.Where(id => id != dealId))
+                    await EnterPaidOnRecordAsync(tenantSlug, paidId, CancellationToken.None);
+                deal = confirmed.FirstOrDefault(d => d.Id == dealId) ?? await LoadAsync(tenantSlug, dealId, CancellationToken.None) ?? deal;
+            }
+            else if (GatewayInvoiceCloser.LeavesPayable(left))
+                deal = await RecordAsync(tenantSlug, dealId, stored => stored.Timeline.Add(new(stored.Stage, stored.Stage,
+                    DealEvent.GatewayInvoiceLeftOpen, actorId, actorName, left, DateTime.UtcNow)), CancellationToken.None) ?? deal;
+        }
         return DealCancelResult.Cancelled(deal);
     }
 

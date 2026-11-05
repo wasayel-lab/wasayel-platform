@@ -136,11 +136,14 @@ public class GatewayInvoiceCloserOutcomeTests(ITestOutputHelper output)
     }
 
     /// <summary><b>قُلِبَ</b> (‏2026-10-13) — كانَ <c>Today_an_outcome_that_leaves_a_payable_invoice_is_logged_at_information</c>: كُلُّ نَتيجَةٍ تَتَرُكُ فاتورَةً قَد
-    /// تُدفَعُ ثَمَناً لِما أُلغِيَ تَحذير — رَدُّ البَوّابَة، وانقِطاعُها، ولا مِفتاح، وفاتورَةٌ لَيسَت «initiated» — و«أُختٌ قائِمَة» مَعلومَةٌ كَما كانَت.</summary>
+    /// تُدفَعُ ثَمَناً لِما أُلغِيَ تَحذير — رَدُّ البَوّابَة، وانقِطاعُها، ولا مِفتاح، وفاتورَةٌ لَيسَت «initiated» — و«أُختٌ قائِمَة» مَعلومَةٌ كَما كانَت.
+    /// (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ ولا يُعادُ حَرفٌ فَوقَه: صَفُّ <c>not_open</c> كانَ بِفاتورَةٍ <c>paid</c> فَصارَ بِـ<c>expired</c> — المَدفوعَةُ لَم تَعُد
+    /// «لَيسَت مَفتوحَة» بَل <c>gateway_invoice_paid</c> تَحذيراً، صَفُّها <c>paid</c>.)</summary>
     [Theory]
     [InlineData("refused", "gateway_refused", LogLevel.Warning)]
     [InlineData("unreachable", "gateway_unreachable", LogLevel.Warning)]
     [InlineData("not_open", GatewayInvoiceClosing.NotOpen, LogLevel.Warning)]
+    [InlineData("paid", GatewayInvoiceCloser.Paid, LogLevel.Warning)]
     [InlineData("still_owed", GatewayInvoiceClosing.StillOwed, LogLevel.Information)]
     public async Task Every_outcome_that_leaves_a_payable_invoice_is_a_warning_and_a_sibling_still_owed_is_not(string how, string code, LogLevel expected)
     {
@@ -154,7 +157,9 @@ public class GatewayInvoiceCloserOutcomeTests(ITestOutputHelper output)
         {
             "refused"     => w.Moyasar.Then(HttpStatusCode.NotFound, """{"type":"record_not_found","message":"The <object type> record you were looking for was not found.","errors":null}"""),
             "unreachable" => w.Moyasar.Then(HttpStatusCode.ServiceUnavailable, ""),
-            "not_open"    => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "paid")),
+            // (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1): «لَيسَت مَفتوحَة» بِحالٍ مُنتَهِيَةٍ — والمَدفوعَةُ صارَت صَفَّها `paid` (يُثبَتُ دَفعُها ويُكتَب).
+            "not_open"    => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "expired")),
+            "paid"        => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "paid")),
             _             => w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")),
         };
 

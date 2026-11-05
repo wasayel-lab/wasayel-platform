@@ -52,7 +52,11 @@ public static class GatewayInvoiceExpiryHandler
         // (‏2026-10-30، جَولَةُ الإصلاحِ الثانِيَةُ لِلمَسار F3؛ تَوصيفُه `0c2cd09` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وما لا يُطالَبُ عَلى فاتورَتِه بِشَيءٍ لا يُفشِلُها** — الرِسالَةُ
         // تَحينُ لِكُلِّ فاتورَةٍ ولو دُفِعَت أَو أُلغِيَت قَبلَها، فَجَلبٌ فَشِلَ عَلَيها كانَ يُميتُها ويَقولُ لِصاحِبِ المَتجَرِ «أَلغِه» عَن طَلَبٍ مَدفوع. الشَرطُ شَرطُ إلغائِها نَفسُه
         // (`GatewayInvoiceClosing.Owed` عَبرَ `OwedOnInvoiceAsync`)، يُسأَلُ الآنَ بَعدَ الجَلبِ الفاشِل — فَدَفعٌ كُتِبَ بَينَ الإعاداتِ يُنهيها.
-        if (GatewayInvoiceExpiry.FailsTheMessage(res.Code) && (await gateway.OwedOnInvoiceAsync(due.TenantSlug, due.DealId, ct)).Count > 0)
+        // (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ تَوصيفُه `6409b4a` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ومُلغاةٌ تُرِكَت فاتورَتُها مَفتوحَةً يُطالَبُ عَلَيها أَيضاً** — دَفعٌ
+        // يَقَعُ عَلَيها بَعدَ الإلغاءِ ثُمَّ يَفشَلُ جَلبُه كانَ يَفرُغُ بِلا إعادَة، فَلا يُكتَبُ ولا استِرجاعُه (`LeftOpenOnInvoiceAsync`).
+        if (GatewayInvoiceExpiry.FailsTheMessage(res.Code)
+            && ((await gateway.OwedOnInvoiceAsync(due.TenantSlug, due.DealId, ct)).Count > 0
+                || (await gateway.LeftOpenOnInvoiceAsync(due.TenantSlug, due.DealId, ct)).Count > 0))
             throw new GatewayInvoiceExpiryFetchFailed(due.TenantSlug, due.DealId, res.Code!);
     }
 }
@@ -139,6 +143,22 @@ public static class GatewayInvoiceExpiry
         catch (Exception read) { unread = read; }
         if (owed is { Count: 0 })
         {
+            // (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ومُلغاةٌ تُرِكَت فاتورَتُها مَفتوحَةً سَطرُها يَقولُ ذلك — أُخبِرَ صاحِبُ المَتجَرِ يَومَ أُلغِيَت،
+            // ودَفعٌ وَقَعَ عَلَيها لَم يُكتَب: يُقرَأُ في لَوحَةِ ميسر.
+            IReadOnlyList<Deal> leftOpen;
+            try { leftOpen = await scope.ServiceProvider.GetRequiredService<GatewayPayments>().LeftOpenOnInvoiceAsync(due.TenantSlug, due.DealId); }
+            catch (Exception read)
+            {
+                log.LogError("[gateway] expiry {Slug}/{Deal}: whether a cancelled order left its invoice open was not read ← {Error}",
+                    due.TenantSlug, due.DealId.ToString("N"), read.GetType().Name);
+                leftOpen = Array.Empty<Deal>();
+            }
+            if (leftOpen.Count > 0)
+            {
+                log.LogError(error, "[gateway] expiry {Slug}/{Deal} gave up after {Attempts} attempt(s) ← {Error} — moved to wolverine_dead_letters; the order was cancelled and its invoice left open at the gateway, so a payment on it is not recorded — the store owner was told at the cancel; read the invoice in the Moyasar dashboard",
+                    due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1, cause);
+                return;
+            }
             log.LogError(error, "[gateway] expiry {Slug}/{Deal} gave up after {Attempts} attempt(s) ← {Error} — moved to wolverine_dead_letters; nothing on its invoice is still owed (paid or cancelled), so the store owner is not told",
                 due.TenantSlug, due.DealId.ToString("N"), RetryCooldowns.Length + 1, cause);
             return;

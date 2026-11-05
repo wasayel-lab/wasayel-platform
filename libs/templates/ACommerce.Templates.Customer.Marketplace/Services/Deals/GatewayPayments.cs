@@ -550,6 +550,26 @@ public sealed class GatewayPayments
             : Array.Empty<Deal>();
 
     /// <summary>
+    /// <para><b>أُلغِيَت وفاتورَتُها تُرِكَت مَفتوحَةً عِندَ البَوّابَة</b> (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ تَوصيفُه <c>6409b4a</c>) — دالَّةٌ نَقِيَّة: مُلغاةٌ لَم يُكتَب
+    /// دَفعُها، في سِجِلِّها <see cref="DealEvent.GatewayInvoiceLeftOpen"/>، ولَم يَرَ تَحَقُّقٌ فاتورَتَها مُغلَقَة (<see cref="GatewayReturn.IsClosed"/>). فاتورَتُها قَد تُدفَعُ بَعدَ
+    /// الإلغاء، وما يُدفَعُ عَلَيها يُكتَبُ ومَعَه استِرجاعُه — فَلا تَفرُغُ رِسالَةُ المُهلَةِ عَلَيها حينَ يَفشَلُ الجَلب.</para>
+    /// </summary>
+    public static bool LeftOpenUnpaid(Deal deal)
+        => deal.Status == DealStatus.Cancelled && !DealsService.IsCaptured(deal) && !GatewayReturn.IsClosed(deal)
+           && deal.Timeline.Any(e => e.Action == DealEvent.GatewayInvoiceLeftOpen);
+
+    /// <summary>
+    /// <para><b>ما أُلغِيَ عَلى فاتورَةِ الصَفقَةِ وتُرِكَت فاتورَتُه مَفتوحَة</b> (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1): الصَفقَةُ وأَخَواتُها كَما سَمّاها مَرجِعُها
+    /// (<see cref="DealsService.InvoiceSiblingsAsync"/>) مُحَمَّلَةً الآن، وما تَصدُقُ عَلَيه <see cref="LeftOpenUnpaid"/>. يَسأَلُه مُعالِجُ المُهلَةِ مَعَ <see cref="OwedOnInvoiceAsync"/>
+    /// حينَ يَفشَلُ الجَلب — فَدَفعٌ وَقَعَ عَلى فاتورَةٍ تُرِكَت مَفتوحَةً تَبلُغُه الإعادَة — و<see cref="GatewayInvoiceExpiry.GaveUpAsync"/> لِسَطرِ يَأسِه. ولا يُخبَرُ صاحِبُ المَتجَرِ
+    /// بِه ثانِيَةً: أُخبِرَ يَومَ أُلغِيَت («فاتورَةٌ لَم تُلغَ عِندَ ميسر»).</para>
+    /// </summary>
+    public async Task<IReadOnlyList<Deal>> LeftOpenOnInvoiceAsync(string tenantSlug, Guid dealId, CancellationToken ct = default)
+        => await _deals.LoadAsync(tenantSlug, dealId, ct) is { } deal
+            ? (await _deals.InvoiceSiblingsAsync(tenantSlug, deal, ct)).Prepend(deal).Where(LeftOpenUnpaid).ToArray()
+            : Array.Empty<Deal>();
+
+    /// <summary>
     /// <para><b>التَسوِيَةُ بَعدَ الجَلب — مَوضِعٌ واحِدٌ لِلتَحَقُّقِ ولِلمُهلَة</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — نُقِلَ مِن جِسمِ <see cref="VerifyAsync"/> بِحَرفِه
     /// وتَعليقاتِه، فَصُفوفُ التَحَقُّقِ كَما هي): البَوّابَةُ النَقِيَّةُ أَوَّلاً، ثُمَّ إمّا الكاتِبانِ (الدَفعُ و«دَفع» بِاسمِ المَنصَّة)، وإمّا الإغلاقُ والمُهلَة، وإمّا رَمزُها.</para>
     /// </summary>
@@ -1120,15 +1140,27 @@ public sealed class GatewayInvoiceCloser
     public const string NotCancelled = "gateway_invoice_not_cancelled";
 
     /// <summary>
+    /// <para><b>الفاتورَةُ دُفِعَت عِندَ البَوّابَةِ ولَم يُسَجَّل دَفعُها</b> (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ تَوصيفُه <c>6409b4a</c>): الجَلبُ وَجَدَها
+    /// <see cref="MoyasarClient.PaidStatus"/> وهي فاتورَةُ هذِه الصَفقَة، وعَبَرَت <see cref="GatewayPaymentProof.Gate"/> بِالصَفَقاتِ الَّتي تُسَمّيها — فَيُرجِعُ المُلغي
+    /// البُرهانَ مَعَ هذا الرَمز (<see cref="CloseOrProveAsync"/>)، ويَكتُبُه الإلغاءُ بِالكاتِبِ القائِم (<see cref="DealsService.ConfirmGatewayPaymentAsync"/>) فَيُكتَبُ
+    /// عَلى المُلغاةِ <see cref="DealEvent.GatewayRefundDue"/> ويُخبَرُ صاحِبُ المَتجَر. كانَ يُرجِعُ <see cref="GatewayInvoiceClosing.NotOpen"/> فَلا سَطرَ ولا إشعار — والمالُ
+    /// عِندَ المَتجَر (قَرارُ المالِك د3 «د»). ولا يُلغى ما دُفِع.</para>
+    /// </summary>
+    public const string Paid = "gateway_invoice_paid";
+
+    /// <summary>
     /// <para><b>أَتُبقي هذِه النَتيجَةُ فاتورَةً قَد تُدفَعُ ثَمَناً لِما أُلغِيَ؟</b> (‏2026-10-29، قَرارُ المالِك د3 «د» — «وبكل فاتورة تعذّر إلغاؤها») — دالَّةٌ نَقِيَّةٌ عَلى
     /// رَمزِ <see cref="CloseIfLastAsync"/>: <c>null</c> (أُلغِيَت)، و<see cref="GatewayInvoiceClosing.StillOwed"/> (تَدفَعُ لِأُختٍ قائِمَةٍ بِقَصد)، و<see cref="GatewayInvoiceClosing.NotOpen"/>
     /// (لَيسَت مَفتوحَةً عِندَ البَوّابَة — دُفِعَت فَيُكتَبُ استِرجاعُها بِالتَأكيد، أَو أُلغِيَت أَو انتَهَت)، و<see cref="DealPayAuthorization.InvoiceMissing"/> (لا فاتورَة)
     /// <b>لا تُبقي</b>؛ وكُلُّ رَمزٍ سِواها — لا مِفتاحَ يُفَكّ، وفَشَلُ الجَلبِ أَو الإلغاء، و<see cref="NotCancelled"/>، و<see cref="Faulted"/>، وفاتورَةٌ لا تُسَمّيها —
     /// <b>يُبقيها</b>، فَيُكتَبُ سَطرُ <see cref="DealEvent.GatewayInvoiceLeftOpen"/> ويُخبَرُ صاحِبُ المَتجَر. وكانَت كُلُّها سَطرَ لوغٍ لا يَقرَؤُه أَحَد.</para>
     /// </summary>
+    /// <remarks>(‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>و<see cref="Paid"/> لا يُبقيها</b> — دُفِعَت فَلا تُدفَعُ ثانِيَة، ودَفعُها يُكتَبُ
+    /// ومَعَه استِرجاعُه بَدَلَ سَطرِ «تُرِكَت مَفتوحَة». وفاتورَةٌ مَدفوعَةٌ لا يُثبِتُها البُرهانُ (مَبلَغٌ أَو عُملَةٌ أَو صَفَقاتٌ غَيرُ ما عَلَيها) يَعودُ رَمزُ خَرقِه فَيُبقيها —
+    /// فَيُخبَرُ صاحِبُ المَتجَرِ أَن يَنظُرَ في لَوحَةِ ميسر، لا صَمت.</remarks>
     public static bool LeavesPayable(string? code)
         => code is not null
-           && code is not (GatewayInvoiceClosing.StillOwed or GatewayInvoiceClosing.NotOpen or DealPayAuthorization.InvoiceMissing);
+           && code is not (GatewayInvoiceClosing.StillOwed or GatewayInvoiceClosing.NotOpen or DealPayAuthorization.InvoiceMissing or Paid);
 
     private readonly TenantProviderService _providers;
     private readonly ProviderVault _vault;
@@ -1151,6 +1183,14 @@ public sealed class GatewayInvoiceCloser
     /// النَقِيَّة؛ (٦) الإلغاءُ عِندَ البَوّابَة. و<paramref name="cancelled"/> الصَفقَةُ كَما حُفِظَ إلغاؤها.</para>
     /// </summary>
     public async Task<string?> CloseIfLastAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
+        => (await CloseOrProveAsync(tenantSlug, cancelled, load)).Code;
+
+    /// <summary>
+    /// <para><b>المُلغي نَفسُه بِبُرهانِ ما دُفِع</b> (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1): الخُطُواتُ السِتُّ بِحَرفِها، والرَمزُ كَما يُرجِعُه <see cref="CloseIfLastAsync"/>،
+    /// ومَعَه <see cref="ProvenGatewayPayment"/> حينَ يَكونُ <see cref="Paid"/> — يَبنيه <see cref="GatewayPaymentProof.Gate"/> وَحدَه عَلى الفاتورَةِ كَما جُلِبَت والصَفَقاتِ الَّتي
+    /// تُسَمّيها (القاعِدَة ٦: لا «مَدفوع» بِلا بُرهان)، فَيَكتُبُه مُناديه <see cref="DealsService"/> بِكاتِبِه. مُستَهلِكُه وَقتَ التَشغيلِ واحِدٌ مُسَمّى — الإلغاء.</para>
+    /// </summary>
+    public async Task<(string? Code, ProvenGatewayPayment? Paid)> CloseOrProveAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
     {
         // (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b — ولا يُعادُ حَرفٌ فَوقَه: ومَلفوفٌ كَفَرعِ الاستِرجاع — عُطلٌ في داخِلِه رَمزُه `Faulted` تَحذيراً.)
         try { return await CloseCoreAsync(tenantSlug, cancelled, load); }
@@ -1158,21 +1198,21 @@ public sealed class GatewayInvoiceCloser
         {
             _log.LogWarning(ex, "[gateway] close invoice {Slug} deal {Deal} ← {Outcome} — the cancel stands; the invoice may still be payable",
                 tenantSlug, cancelled.Id.ToString("D"), Faulted);
-            return Faulted;
+            return (Faulted, null);
         }
     }
 
-    private async Task<string?> CloseCoreAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
+    private async Task<(string? Code, ProvenGatewayPayment? Paid)> CloseCoreAsync(string tenantSlug, Deal cancelled, Func<Guid, Task<Deal?>> load)
     {
         if (!GatewayPayments.HasInvoice(cancelled))
-            return Logged(tenantSlug, cancelled, DealPayAuthorization.InvoiceMissing);
+            return (Logged(tenantSlug, cancelled, DealPayAuthorization.InvoiceMissing), null);
 
         if (_client is null
             || await GatewayPayments.SecretKeyAsync(_providers, _vault, _log, tenantSlug, CancellationToken.None) is not { } key)
-            return Logged(tenantSlug, cancelled, MoyasarFailures.NotConfigured);
+            return (Logged(tenantSlug, cancelled, MoyasarFailures.NotConfigured), null);
 
         var fetched = await _client.FetchInvoiceAsync(key, cancelled.Refs[GatewayPaymentProof.InvoiceRef]);
-        if (!fetched.Ok) return Logged(tenantSlug, cancelled, fetched.Failure!.Code);
+        if (!fetched.Ok) return (Logged(tenantSlug, cancelled, fetched.Failure!.Code), null);
         var invoice = fetched.Value!;
 
         var named = new List<Deal>();
@@ -1181,14 +1221,25 @@ public sealed class GatewayInvoiceCloser
                 if (await load(id) is { } d) named.Add(d);
 
         if (GatewayInvoiceClosing.Validate(invoice, cancelled, named) is { Count: > 0 } kept)
-            return Logged(tenantSlug, cancelled, kept[0].Code);
+        {
+            // (‏2026-11-05، الموجَة ١٢ G3 · ١ — C-PAY-EXP-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وفاتورَتُها دُفِعَت ولَم يُكتَب دَفعُها** — `NotOpen` أَوَّلُ الرُموزِ بَعدَ
+            // `NotListed`، فَهي فاتورَتُها؛ والبُرهانُ بِالصَفَقاتِ الَّتي تُسَمّيها، وما لا يَعبُرُه رَمزُ خَرقِه (يُبقيها: `LeavesPayable`).
+            if (kept[0].Code == GatewayInvoiceClosing.NotOpen && invoice.IsPaid)
+            {
+                var admitted = GatewayPaymentProof.Gate(invoice, named);
+                return admitted.Payment is { } proven
+                    ? (Logged(tenantSlug, cancelled, Paid, invoice.Status), proven)
+                    : (Logged(tenantSlug, cancelled, admitted.Violation!.Code, invoice.Status), null);
+            }
+            return (Logged(tenantSlug, cancelled, kept[0].Code), null);
+        }
 
         var closed = await _client.CancelInvoiceAsync(key, invoice.Id);
-        if (!closed.Ok) return Logged(tenantSlug, cancelled, closed.Failure!.Code);
+        if (!closed.Ok) return (Logged(tenantSlug, cancelled, closed.Failure!.Code), null);
         // و‏200 بِحالٍ غَيرِ «canceled» نَتيجَةٌ بِرَمزِها لا «أُلغِيَت» (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b).
         return string.Equals(closed.Value!.Status, MoyasarClient.CanceledStatus, StringComparison.Ordinal)
-            ? Logged(tenantSlug, cancelled, null, closed.Value.Status)
-            : Logged(tenantSlug, cancelled, NotCancelled, closed.Value.Status);
+            ? (Logged(tenantSlug, cancelled, null, closed.Value.Status), null)
+            : (Logged(tenantSlug, cancelled, NotCancelled, closed.Value.Status), null);
     }
 
     /// <summary>سَطرُ اللوغ: المَتجَرُ والصَفقَةُ والنَتيجَة — لا مِفتاحٌ ولا رابِطُ فاتورَة. <b>وتَحذيرٌ لِكُلِّ نَتيجَةٍ تَتَرُكُ فاتورَةً قَد تُدفَعُ ثَمَناً
