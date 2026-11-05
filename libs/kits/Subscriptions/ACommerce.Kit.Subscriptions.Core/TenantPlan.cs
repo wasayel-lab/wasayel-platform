@@ -270,6 +270,10 @@ public static class TenantPlanPolicy
     /// <para><b>أَيُقبَلُ الانتِقالُ مِن المَحفوظِ إلى المُعَيَّن؟</b> القائِمَةُ الفارِغَةُ تَعني نَعَم، وخَرقُها الوَحيدُ
     /// <see cref="PayPalSubscriptionLive"/>: اشتِراكٌ قائِمٌ (<see cref="HoldsLiveSubscription"/>) والباقَةُ أَو السِعرُ أَو أَحَدُ التاريخَينِ
     /// يَتَغَيَّر. وما سِواها (أَيّامُ السَماح، وإعادَةُ مَوقوفَةٍ إلى السَرَيان) لا يَمَسُّ ما يَخصِمُه PayPal فَيُقبَل. (‏2026-11-05، E-1)</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-1؛ تَوصيفُه <c>3a9a358</c>) والتاريخانِ يُقارَنانِ يَوماً بِيَوم</b> (<see cref="FormDay"/>) — بِالدِقَّةِ
+    /// الَّتي تَحمِلُها الاستِمارَة: كانا يُقارَنانِ لَحظَةً بِلَحظَة، وتَمديدُ PayPal يَكتُبُ <c>next_billing_time</c> بِساعَتِه (10:00Z) والاستِمارَةُ تُعيدُه آخِرَ
+    /// اليَومِ بِتَوقيتِ المَنَصَّة، فَكانَ حِفظُ أَيّامِ السَماحِ وَحدَها يُرَدُّ ما دامَ الاشتِراك.</para>
     /// </summary>
     public static IReadOnlyList<TenantPlanViolation> ValidateChange(TenantPlan? stored, TenantPlan next)
     {
@@ -277,8 +281,8 @@ public static class TenantPlanPolicy
 
         var changes = !string.Equals(stored!.PlanId, next.PlanId, StringComparison.Ordinal)
                       || stored.Price != next.Price
-                      || stored.StartsAt != next.StartsAt
-                      || stored.ExpiresAt != next.ExpiresAt;
+                      || FormDay(stored.StartsAt) != FormDay(next.StartsAt)
+                      || FormDay(stored.ExpiresAt) != FormDay(next.ExpiresAt);
 
         return changes
             ? new[] { new TenantPlanViolation(PayPalSubscriptionLive,
@@ -286,6 +290,22 @@ public static class TenantPlanPolicy
                 "حَتّى يُلغى مِن لَوحَةِ PayPal وتَصِلَ رِسالَةُ إلغائِه.") }
             : Array.Empty<TenantPlanViolation>();
     }
+
+    /// <summary><b>اليَومُ الَّذي تَحمِلُه استِمارَةُ المُشرِفِ لِلَحظَةٍ مَحفوظَة</b> (‏2026-11-05، G4R1-1) — ما تَرسُمُه <c>TenantPlanAdmin.razor</c>
+    /// بِـ<c>ToString("yyyy-MM-dd")</c> حَرفاً، وما يُعيدُه <see cref="ReadSetting"/> آخِرَ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة (وتاريخُه UTC هُوَ اليَومُ نَفسُه).
+    /// قارِئاه <see cref="ValidateChange"/> و<see cref="KeepStoredInstant"/>.</summary>
+    public static DateOnly FormDay(DateTime at) => DateOnly.FromDateTime(at);
+
+    /// <summary>
+    /// <para><b>لَحظَةٌ تُرسِلُها الاستِمارَةُ عَلى يَومِ المَحفوظِ هِيَ المَحفوظَة</b> (‏2026-11-05، G4R1-1): اليَومُ نَفسُه (<see cref="FormDay"/>) ⇐
+    /// <paramref name="stored"/> بِساعَتِه، وما سِواه ⇐ <paramref name="posted"/>. فَحِفظٌ لا يَمَسُّ التاريخَ لا يَنقُلُ مَوعِدَ PayPal إلى آخِرِ اليَوم.</para>
+    ///
+    /// <para><b>وقارِئُها <c>TenantPlanAdminService.SetAsync</c> وَحدَه، وما دامَ اشتِراكٌ قائِماً فَقَط</b> (<see cref="HoldsLiveSubscription"/>): الاشتِراكُ
+    /// هُوَ مالِكُ اللَحظَةِ يَومَئِذٍ. وبِلا اشتِراكٍ قائِمٍ يَبقى الحِفظُ كَما كانَ يَكتُبُ قِراءَةَ الاستِمارَةِ (آخِرَ اليَوم، د51) — فَلا يَتَغَيَّرُ حَرفٌ لِباقَةٍ
+    /// يَضبُطُها المُشرِفُ وَحدَه.</para>
+    /// </summary>
+    public static DateTime KeepStoredInstant(DateTime stored, DateTime posted)
+        => FormDay(stored) == FormDay(posted) ? stored : posted;
 
     // ─── الاشتِقاق ───────────────────────────────────────────────────
 

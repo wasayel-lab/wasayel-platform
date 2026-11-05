@@ -55,13 +55,16 @@ public static class TenantPlanAdminService
             ? PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(planId), await session.LoadAsync<PlatformPlanPayPal>(planId))
             : null;
         var keepsLink = KeepsPayLink(stored, planId, resolved);
+        // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-1؛ تَوصيفُه `3a9a358`) **واشتِراكٌ قائِمٌ يَملِكُ لَحظَتَيه**: الاستِمارَةُ تَحمِلُ يَوماً، فَيَومُ المَحفوظِ
+        // يُكتَبُ بِساعَتِه (مَوعِدُ PayPal 10:00Z لا آخِرُ اليَوم) — وكانَ حِفظُ أَيّامِ السَماحِ وَحدَها يُرَدُّ بِرَمزِ الاشتِراكِ القائِم.
+        var holds = TenantPlanPolicy.HoldsLiveSubscription(stored);
         var plan = new TenantPlan
         {
             Id        = tenantSlug,
             PlanId    = planId,
             Status    = PlatformPlanStatuses.Active,
-            StartsAt  = startsAt,
-            ExpiresAt = expiresAt,
+            StartsAt  = holds ? TenantPlanPolicy.KeepStoredInstant(stored!.StartsAt, startsAt) : startsAt,
+            ExpiresAt = holds ? TenantPlanPolicy.KeepStoredInstant(stored!.ExpiresAt, expiresAt) : expiresAt,
             GraceDays = graceDays,
             Price     = price,
             SetBy     = setBy,
