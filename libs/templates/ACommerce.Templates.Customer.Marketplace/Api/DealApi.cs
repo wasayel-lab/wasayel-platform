@@ -150,6 +150,9 @@ public static class DealApi
                 ApiErrorCatalog.DealChangedMeanwhile,
                 new { status = result.Deal?.Status.ToString() }),
             GatewayInvoiceShare.Shared => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
+            // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): وأُختٌ في «نِزاع» عَلى الفاتورَةِ نَفسِها — صَفقَةٌ عَلى فاتورَةٍ مُشتَرَكَةٍ مَفتوحَةٍ لا تُلغى وَحدَها، بِالرَمزِ العامِّ نَفسِه
+            // (‏409)؛ لا رَمزَ سادِسَ عَشَرَ في المَعجَم، وكانَ المَجهولُ سَيَخرُجُ ‏422 عَن طَلَبٍ صالِح.
+            GatewayInvoiceShare.Disputed => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
             // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4): مَرحَلَةٌ لا يُلغيها طَرَف — ‏409 بِرَمزِ الحالَةِ القائِم («لَيسَت في حالَةٍ تَقبَل
             // هذا الإجراء»)، ومَعَه المَرحَلَة؛ لا رَمزَ سابِعَ عَشَرَ في المَعجَم، وكانَ الرَمزُ المَجهولُ سَيَخرُجُ ‏422 عَن طَلَبٍ صالِح.
             DealCancelAuthorization.DealPastCancelStage => ApiOutcome.Error(

@@ -436,6 +436,12 @@
                 <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.cancel_order_action"]" />
             </form>
             }
+            @* (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): وعَلى فاتورَتِها أُختٌ في «نِزاع» لَم تُدفَع — لا وَحدَها ولا الطَلَبُ كُلُّه لِلطَرَف (`GatewayInvoiceShare.Disputed`، الرَمزُ الَّذي
+               يَرُدُّ بِه الكاتِبان): سَطرٌ يَقولُ لِماذا ومَتى، لا استِمارَةٌ تُرَدّ. *@
+            else if (cancelDisputed)
+            {
+            <p style="color:var(--ac-text-muted);font-size:12px;margin:8px 0 0;">@L.Markup("deals.detail.cancel_disputed_hint")</p>
+            }
             else if (cancelShared)
             {
             <p style="color:var(--ac-text-muted);font-size:12px;margin:8px 0 0;">@L.Markup("deals.detail.cancel_shared_hint")</p>
@@ -540,6 +546,8 @@
     /// و<c>canCancelOrder</c>: الناظِرُ يُلغي صَفَقاتِ الفاتورَةِ كُلَّها — <see cref="DealCancelAuthorization.IsAllowed"/> لِكُلٍّ مِنها، كَما يَسأَلُها
     /// <c>CancelWholeInvoiceAsync</c> قَبلَ أَيِّ كِتابَة (‏2026-10-13، G5 M4).</summary>
     bool cancelShared, canCancelOrder;
+    /// <summary>عَلى الفاتورَةِ أُختٌ في «نِزاع» لَم تُدفَع (<see cref="GatewayInvoiceShare.Disputed"/>) — فَلا «الطَلَبُ كُلُّه» لِلطَرَفِ أَيضاً (‏2026-11-05، الموجَة ١٢ G3 · ٢).</summary>
+    bool cancelDisputed;
     /// <summary>الناظِرُ يُنشِئُ بوليصَةَ هذِه الصَفقَة — <see cref="DealShipAuthorization.IsAllowed"/> نَفسُها الَّتي تُطَبِّقُها
     /// <c>/ship</c>، بِرَمزِ ناقِلٍ يُحَلُّ لِهذا المَتجَر (<see cref="DealShipping.CarrierReadyForViewerAsync"/> — وكانَ المَرجِعُ <c>CarrierReady</c> المَحذوفَة، صُحِّحَ ‏2026-10-25) — وبِلا رَمزٍ لا تُرسَم (القاعِدَة ١٢).
     /// و<c>shipResumes</c>: لِلصَفقَةِ طَلَبٌ عِندَ OTO مِن مُحاوَلَةٍ سابِقَة، فَالاستِمارَةُ بِلا مَدينَة.</summary>
@@ -654,7 +662,8 @@
         // ولا إلغاءَ وَحدَها لِصَفقَةٍ عَلى فاتورَةٍ مُشتَرَكَةٍ مَفتوحَة — الدالَّةُ الَّتي يَرُدُّ بِها الإلغاء (‏2026-10-13، G5 M4).
         var siblings = await Deals.InvoiceSiblingsAsync(Slug, deal);
         cancelShared = canCancel && !GatewayInvoiceShare.IsValid(deal, siblings);
-        canCancelOrder = cancelShared && GatewayInvoiceShare.OwedOnInvoice(deal, siblings)
+        cancelDisputed = cancelShared && GatewayInvoiceShare.Validate(deal, siblings).FirstOrDefault()?.Code == GatewayInvoiceShare.Disputed;
+        canCancelOrder = cancelShared && !cancelDisputed && GatewayInvoiceShare.OwedOnInvoice(deal, siblings)
             .All(d => DealCancelAuthorization.IsAllowed(d, new DealCanceller(uid, Auth.UserName ?? "", IsStoreAdmin: false)));
         canCancel = canCancel && !cancelShared;
         canReturn = DealReturnRequest.IsAllowed(deal, new DealReturnRequester(uid, Auth.UserName ?? ""), DateTime.UtcNow);

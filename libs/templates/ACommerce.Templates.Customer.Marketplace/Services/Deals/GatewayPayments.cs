@@ -984,8 +984,16 @@ public static class GatewayInvoiceShare
     /// <summary>عَلى فاتورَةِ الصَفقَةِ المَفتوحَةِ — الَّتي لَم يُكتَب دَفعُها — صَفقَةٌ قائِمَةٌ أُخرى لَم يُكتَب دَفعُها.</summary>
     public const string Shared = "deal_invoice_shared";
 
-    /// <summary>المَعجَمُ المُغلَق — واحِدٌ لا ثانِيَ لَه.</summary>
-    public static readonly IReadOnlyList<string> All = new[] { Shared };
+    /// <summary>
+    /// <para><b>عَلى فاتورَةِ الصَفقَةِ المَفتوحَةِ أُختٌ في «نِزاع» لَم يُكتَب دَفعُها</b> (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه <c>7076249</c>؛ قَرارُ المالِك د2:
+    /// «مختلطة بفاتورة واحدة يُلغى فيها قبل الدفع الكل أو لا شيء»): المُتَنازَعُ عَلَيها تُبقي الفاتورَةَ مَفتوحَةً بِمَبلَغِها (<see cref="GatewayInvoiceClosing.KeepsOpen"/>) وتُستَأنَفُ
+    /// فَتَدفَعُ بِها — فَإلغاءُ أُختِها وَحدَها يَترُكُ ثَمَنَ المُلغاةِ في «أَكمِل الدَّفع». ولا يُلغيها الطَرَفُ (<see cref="DealCancelAuthorization.DealNotActive"/>)، فَلا «الطَلَبُ كُلُّه» لَه
+    /// أَيضاً: يُلغى بَعدَ أَن يَحسِمَ صاحِبُ المَتجَرِ النِزاع، أَو بَعدَ الدَفع. وصاحِبُ المَتجَرِ يُلغي الطَلَبَ كُلَّه فَتُحسَمُ المُتَنازَعُ عَلَيها إلغاءً (د38) مَعَه.</para>
+    /// </summary>
+    public const string Disputed = "deal_invoice_disputed";
+
+    /// <summary>المَعجَمُ المُغلَق — واحِدٌ لا ثانِيَ لَه. (‏2026-11-05، الموجَة ١٢ G3 · ٢ — ولا يُعادُ حَرفٌ فَوقَه: وثانيهِما <see cref="Disputed"/>.)</summary>
+    public static readonly IReadOnlyList<string> All = new[] { Shared, Disputed };
 
     /// <summary>قيمَةُ <see cref="GatewayPayments.InvoiceDealsRef"/> — المُعَرِّفاتُ بِصيغَةِ <c>D</c> مَفصولَةً بِفاصِلَة.</summary>
     public static string ValueFor(IReadOnlyList<Guid> dealIds) => string.Join(',', dealIds.Select(id => id.ToString("D")));
@@ -1019,11 +1027,32 @@ public static class GatewayInvoiceShare
         return owed;
     }
 
+    /// <summary>
+    /// <para><b>أَخَواتُ الفاتورَةِ في «نِزاع» لَم يُكتَب دَفعُها</b> (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): كُلُّ أُختٍ سَمّاها مَرجِعُ الصَفقَةِ وعَلَيها الفاتورَةُ نَفسُها،
+    /// في «نِزاع» وغَيرُ مَقبوضَة — ما يُبقي الفاتورَةَ مَفتوحَةً (<see cref="GatewayInvoiceClosing.KeepsOpen"/>) ولا يَعُدُّه <see cref="OwedOnInvoice"/>. بِلا الصَفقَةِ نَفسِها. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<Deal> DisputedOnInvoice(Deal deal, IReadOnlyList<Deal> siblings)
+    {
+        if (!GatewayPayments.HasInvoice(deal) || DealsOn(deal) is not { } listed) return Array.Empty<Deal>();
+        var invoice = deal.Refs[GatewayPaymentProof.InvoiceRef];
+        return siblings.Where(s => s.Id != deal.Id && listed.Contains(s.Id)
+                && s.Refs.TryGetValue(GatewayPaymentProof.InvoiceRef, out var other)
+                && string.Equals(other, invoice, StringComparison.OrdinalIgnoreCase)
+                && s.Status == DealStatus.Disputed && !DealsService.IsCaptured(s))
+            .ToArray();
+    }
+
     /// <summary>فارِغَةٌ = تُلغى وَحدَها. والسَبَبُ حينَ الصَفقَةُ تَدفَعُ لِفاتورَتِها وأُختٌ أُخرى تَدفَعُ لَها.</summary>
+    /// <remarks>(‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه <c>7076249</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>وأُختٌ في «نِزاع» تَمنَعُ أَوَّلاً</b> بِـ<see cref="Disputed"/> —
+    /// كانَت لا تُعَدُّ فَتُلغى الصَفقَةُ وَحدَها والفاتورَةُ تُطالِبُ بِثَمَنِها عِندَ الاستِئناف؛ ولِغَيرِ صاحِبِ المَتجَرِ لا «طَلَبَ كُلَّه» مَعَها، فَرَمزُها قَبلَ <see cref="Shared"/>.</remarks>
     public static IReadOnlyList<DealInvoiceShareViolation> Validate(Deal deal, IReadOnlyList<Deal> siblings)
     {
         var owed = OwedOnInvoice(deal, siblings);
-        return owed.Any(d => d.Id == deal.Id) && owed.Any(d => d.Id != deal.Id)
+        if (!owed.Any(d => d.Id == deal.Id)) return Array.Empty<DealInvoiceShareViolation>();
+        if (DisputedOnInvoice(deal, siblings).Count > 0)
+            return new[] { new DealInvoiceShareViolation(Disputed,
+                "عَلى فاتورَةِ هذِه الصَفقَةِ المَفتوحَةِ صَفقَةٌ أُخرى في «نِزاع» لَم تُدفَع — لا تُلغى وَحدَها ولا يُلغي الطَرَفُ الطَلَبَ كُلَّه: بَعدَ حَسمِ النِزاع، أَو بَعدَ الدَفع.") };
+        return owed.Any(d => d.Id != deal.Id)
             ? new[] { new DealInvoiceShareViolation(Shared,
                 "عَلى فاتورَةِ هذِه الصَفقَةِ المَفتوحَةِ صَفَقاتٌ قائِمَةٌ أُخرى — لا تُلغى وَحدَها: يُلغى الطَلَبُ كُلُّه، أَو تُلغى بَعدَ الدَفع.") }
             : Array.Empty<DealInvoiceShareViolation>();
@@ -1039,9 +1068,11 @@ public static class GatewayInvoiceShare
     /// والصَفحَةِ قَبلَ رَسمِ بَديلِ الإلغاء — بِالرَمزِ نَفسِه، فَلا رَمزَ جَديدَ في المَعجَمِ ولا في نُصوصِ الاستوديو.</para>
     /// <para>ولا يُوَسَّعُ <see cref="GatewayInvoiceClosing.Owed"/> نَفسُه: يَقرَؤُه رابِطُ الدَفعِ وإشعارُه وفَتحُ الفاتورَةِ بِحَرفِ «القائِمَة» (سِجِلُّ المالِك «أ»).</para>
     /// </summary>
+    /// <remarks>(‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه <c>7076249</c> — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>وأُختٌ في «نِزاع» أَيضاً</b> (<see cref="DisputedOnInvoice"/>) —
+    /// كانَ حَسمُ إحدى مُتَنازَعَتَينِ بِالإلغاءِ يَمُرُّ والفاتورَةُ مَفتوحَةٌ بِمَبلَغِها كُلِّه لِلأُخرى إن استُؤنِفَت. بِالرَمزِ نَفسِه ونَصِّه: تُستَأنَفُ ثُمَّ يُلغى الطَلَبُ كُلُّه.</remarks>
     public static IReadOnlyList<DealInvoiceShareViolation> ValidateDisputed(Deal disputed, IReadOnlyList<Deal> siblings)
         => disputed.Status == DealStatus.Disputed && GatewayPayments.HasInvoice(disputed) && !DealsService.IsCaptured(disputed)
-           && OwedOnInvoice(disputed, siblings).Any(d => d.Id != disputed.Id)
+           && (OwedOnInvoice(disputed, siblings).Any(d => d.Id != disputed.Id) || DisputedOnInvoice(disputed, siblings).Count > 0)
             ? new[] { new DealInvoiceShareViolation(Shared,
                 "عَلى فاتورَةِ هذِه الصَفقَةِ المُتَنازَعِ عَلَيها المَفتوحَةِ صَفَقاتٌ قائِمَةٌ أُخرى — لا تُلغى وَحدَها: تُستَأنَفُ ثُمَّ يُلغى الطَلَبُ كُلُّه، أَو تُلغى بَعدَ الدَفع.") }
             : Array.Empty<DealInvoiceShareViolation>();

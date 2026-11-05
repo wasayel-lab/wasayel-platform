@@ -1,4 +1,5 @@
 using Marten;
+using Microsoft.Extensions.Logging;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 
@@ -21,11 +22,22 @@ public sealed class DealsService
     /// </summary>
     private readonly GatewayInvoiceCloser? _invoices;
 
-    public DealsService(IDocumentStore store, ACommerce.Kit.Payments.IPaymentProvider payments, GatewayInvoiceCloser? invoices = null)
+    /// <summary>
+    /// <para><b>حافِلَةُ رَسائِلِ Wolverine — لِمُنتِجٍ ثانٍ لِرِسالَةِ المُهلَة</b> (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ ‏ADR-046 §٧‑٩): استِئنافُ نِزاعٍ بَعدَ انقِضاءِ مُهلَةِ
+    /// فاتورَةٍ لَم تُدفَع يُرسِلُ <see cref="GatewayInvoiceExpiryDue"/> الآن، فَيَسلُكُ مُعالِجُها القائِمُ ما يَسلُكُه عِندَ المُهلَة (القاعِدَة ٨: لا أُنبوبَ رابِع). و<c>null</c> حينَ لا
+    /// يُسَجِّلُها المُضيف (عالَمُ الاختِبار) — فَيُقالُ في اللوغ، و«تَحَقَّق» يُلغي كَما كان. نَسَقُ <see cref="GatewayPayments"/>.</para>
+    /// </summary>
+    private readonly Wolverine.IMessageBus? _bus;
+    private readonly ILogger<DealsService> _log;
+
+    public DealsService(IDocumentStore store, ACommerce.Kit.Payments.IPaymentProvider payments, GatewayInvoiceCloser? invoices = null,
+        Wolverine.IMessageBus? bus = null, ILogger<DealsService>? log = null)
     {
         _store = store;
         _payments = payments;
         _invoices = invoices;
+        _bus = bus;
+        _log = log ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DealsService>.Instance;
     }
 
     /// <summary>مِفتاحُ مَرجِعِ مالِكِ الإعلان في <see cref="Deal.Refs"/> —
@@ -661,7 +673,15 @@ public sealed class DealsService
         if (stillDue is not null && !stillDue(deal!))
             return new(DealCancelResult.Refused(new DealCancelViolation(NoLongerDue, NoLongerDueAr), deal), Array.Empty<Deal>());
 
-        var targets = GatewayInvoiceShare.OwedOnInvoice(deal!, await InvoiceSiblingsAsync(tenantSlug, deal!, ct));
+        var siblings = await InvoiceSiblingsAsync(tenantSlug, deal!, ct);
+        var targets = GatewayInvoiceShare.OwedOnInvoice(deal!, siblings);
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه `7076249` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وأُختٌ في «نِزاع» لَم تُدفَع مِن الطَلَبِ نَفسِه** — تُبقي الفاتورَةَ بِمَبلَغِها
+        // وتُستَأنَف (د2 «الكل أو لا شيء»). صاحِبُ المَتجَرِ يَحسِمُها إلغاءً مَعَه (د38، بِبَوّابَةِ الحَسمِ وأَثَرِ الإلغاءِ الماليِّ القائِم) فَتَصدُقُ الشَريحَة؛ والطَرَفُ لا يُلغيها، فَلا
+        // «طَلَبَ كُلَّه» لَه ما دامَت — يُرَدُّ بِرَمزِه قَبلَ أَيِّ كِتابَة. وإلغاءُ المُهلَةِ (`stillDue`) لا يَحسِمُ نِزاعاً: كَما كانَ بِحَرفِه.
+        var resolving = stillDue is null ? GatewayInvoiceShare.DisputedOnInvoice(deal!, siblings) : Array.Empty<Deal>();
+        if (resolving.Count > 0 && !by.IsStoreAdmin)
+            return new(DealCancelResult.Refused(new DealCancelViolation(GatewayInvoiceShare.Disputed,
+                "عَلى فاتورَةِ هذا الطَلَبِ صَفقَةٌ في «نِزاع» لَم تُدفَع — لا يُلغي الطَرَفُ الطَلَبَ كُلَّه حَتّى يُحسَمَ النِزاع."), deal), Array.Empty<Deal>());
         // (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **والطَلَبُ كُلُّه يَشمَلُ أَخَواتِ شُحنَتِها السائِرَةِ عِندَ OTO** — الشُحنَةُ الواحِدَةُ
         // وَحدَةٌ واحِدَةٌ كَالفاتورَةِ الواحِدَة، فَإلغاءُ إحداها وَحدَها مَردودٌ بِـ`deal_in_shared_waybill` وهذا بابُها. وما تُسَمّيه الفاتورَةُ والشُحنَةُ مَعاً مَرَّةً.
         var onWaybill = DealCancelAuthorization.LiveOnWaybill(deal!, await WaybillSiblingsAsync(tenantSlug, deal!, ct))
@@ -670,17 +690,21 @@ public sealed class DealsService
             targets = (targets.Count == 0 ? new[] { deal! } : targets).Concat(onWaybill).DistinctBy(d => d.Id).ToArray();
         if (stillDue is not null) targets = targets.Where(stillDue).ToArray();
         else if (targets.Count == 0) targets = new[] { deal! };
+        if (resolving.Count > 0) targets = targets.Concat(resolving).DistinctBy(d => d.Id).ToArray();
+        bool Resolves(Deal t) => t.Status == DealStatus.Disputed && resolving.Any(r => r.Id == t.Id);
         foreach (var t in targets)
-            if (DealCancelAuthorization.Validate(t, by) is { } notTheirs)
+            if ((Resolves(t)
+                    ? DealDisputeResolution.Validate(t, by, DealDisputeResolution.Cancel) is { } unresolvable ? new DealCancelViolation(unresolvable.Code, unresolvable.MessageAr) : null
+                    : DealCancelAuthorization.Validate(t, by)) is { } notTheirs)
                 return new(DealCancelResult.Refused(notTheirs, deal), Array.Empty<Deal>());
 
         var cancelled = new List<Deal>();
         DealCancelResult? requested = null;
         foreach (var t in targets.OrderBy(t => t.Id == dealId))
         {
-            var r = await CancelCoreAsync(tenantSlug, t.Id, by, reason, wholeInvoice: true, ct, stillDue: stillDue);
+            var r = await CancelCoreAsync(tenantSlug, t.Id, by, reason, wholeInvoice: true, ct, resolvingDispute: Resolves(t), stillDue: stillDue);
             if (stillDue is not null && !r.Ok && r.Violation?.Code == ChangedMeanwhile)
-                r = await CancelCoreAsync(tenantSlug, t.Id, by, reason, wholeInvoice: true, ct, stillDue: stillDue);
+                r = await CancelCoreAsync(tenantSlug, t.Id, by, reason, wholeInvoice: true, ct, resolvingDispute: Resolves(t), stillDue: stillDue);
             if (stillDue is not null && !r.Ok && r.Violation?.Code == NoLongerDue)
             {
                 if (t.Id == dealId) requested = r;
@@ -962,7 +986,30 @@ public sealed class DealsService
         // والإشعار) فَصَفقَةٌ قُبِضَت وهي في «نِزاع» تُستَأنَفُ عِندَ «تأكيد» تَنتَظِرُ نَقرَةَ المُشتَري. بَعدَ الحِفظ، ورَدُّه لا يَرُدُّ الاستِئناف.
         if (GatewayPayments.EntersPaidOnRecord(deal) && await EnterPaidOnRecordAsync(tenantSlug, dealId, ct) is { Ok: true, Deal: { } entered })
             deal = entered;
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه `7076249` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **واستِئنافٌ بَعدَ انقِضاءِ مُهلَةِ فاتورَةٍ لَم تُدفَع يُعيدُ
+        // رِسالَةَ المُهلَةِ الآن** — حانَت أَثناءَ النِزاعِ فَتَجاوَزَتها (`Active` وَحدَها)، فَكانَت الصَفقَةُ تَعودُ قائِمَةً عَلى فاتورَةٍ أَغلَقَتها البَوّابَةُ ولا شَيءَ يُلغيها. مُعالِجُها
+        // القائِمُ يَجلِبُ الفاتورَة: مَدفوعَةٌ لَم تُسَجَّل ⇐ تُكتَب، وإلّا ⇐ يُلغى الطَلَبُ كُلُّه بِاسمِ المَنصَّةِ بِسَطرِ المُهلَةِ وإشعاراتِها (د5 «ب»). بَعدَ الحِفظ، ورَدُّه لا يَرُدُّ الاستِئناف.
+        else if (deal.Status == DealStatus.Active && !IsCaptured(deal) && GatewayReturn.WindowClosed(deal, DateTimeOffset.UtcNow))
+            await ExpireAfterResumeAsync(tenantSlug, dealId);
         return DealResolveResult.Resolved(deal, DealDisputeResolution.Resume);
+    }
+
+    /// <summary>رِسالَةُ المُهلَةِ لِصَفقَةٍ استُؤنِفَت بَعدَ انقِضائِها — مَرَّةً، الآن. وتَعَذُّرُها (أَو لا حافِلَة) سَطرٌ يُسَمّي الصَفقَةَ و«تَحَقَّق» يُلغيها، نَسَقُ
+    /// <c>GatewayPayments.ScheduleExpiryAsync</c>.</summary>
+    private async Task ExpireAfterResumeAsync(string tenantSlug, Guid dealId)
+    {
+        if (_bus is null)
+        {
+            _log.LogWarning(
+                "[gateway] {Slug} deal {Deal}: resumed after its payment window — no message bus, expiry not re-run; verify cancels it", tenantSlug, dealId);
+            return;
+        }
+        try { await _bus.SendAsync(new GatewayInvoiceExpiryDue(tenantSlug, dealId)); }
+        catch (Exception e)
+        {
+            _log.LogError(e,
+                "[gateway] {Slug} deal {Deal}: resumed after its payment window — expiry not re-run; verify cancels it", tenantSlug, dealId);
+        }
     }
 
     /// <summary>

@@ -200,7 +200,8 @@ public class GatewayInvoiceShareTests(ITestOutputHelper output)
         var (deal, sibling) = Pair();
         var v = Assert.Single(GatewayInvoiceShare.Validate(deal, new[] { sibling }));
         Assert.Equal(GatewayInvoiceShare.Shared, v.Code);
-        Assert.Equal(new[] { GatewayInvoiceShare.Shared }, GatewayInvoiceShare.All);
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): وثانيهِما `deal_invoice_disputed` — صُفوفُه في `DealDisputedSiblingOrderSwitchTests`.
+        Assert.Equal(new[] { GatewayInvoiceShare.Shared, GatewayInvoiceShare.Disputed }, GatewayInvoiceShare.All);
         Assert.Equal(new[] { deal.Id, sibling.Id }, GatewayInvoiceShare.OwedOnInvoice(deal, new[] { sibling }).Select(d => d.Id));
     }
 

@@ -123,13 +123,24 @@ public class DealDisputeSharedInvoiceTests(ITestOutputHelper output)
         Assert.True(GatewayInvoiceShare.IsValid(deal, new[] { sibling }));
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه</b> (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه <c>7076249</c>) — كانَ صَفَّ <c>sibling_disputed</c> في السالِبِ أَدناه: أُختٌ في «نِزاع» لَم تُدفَع
+    /// كانَت لا تُمسِكُ حَسمَ الأولى بِالإلغاء، فَتَبقى الفاتورَةُ بِمَبلَغِها كُلِّه لِلأُخرى إن استُؤنِفَت. والآن تُمسِكُه بِالرَمزِ نَفسِه — تُستَأنَفُ ثُمَّ يُلغى الطَلَبُ كُلُّه.</summary>
+    [Fact]
+    public void ValidateDisputed_fires_for_an_unpaid_disputed_deal_whose_open_invoice_also_names_another_unpaid_disputed_sibling()
+    {
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var (deal, sibling) = (OnInvoice(a, DealStatus.Disputed, new[] { a, b }), OnInvoice(b, DealStatus.Disputed, new[] { a, b }));
+        Assert.Equal(GatewayInvoiceShare.Shared, Assert.Single(GatewayInvoiceShare.ValidateDisputed(deal, new[] { sibling })).Code);
+        sibling.Refs["payment_status"] = nameof(PaymentStatus.Captured);
+        Assert.Empty(GatewayInvoiceShare.ValidateDisputed(deal, new[] { sibling }));
+    }
+
     /// <summary><b>السالِب</b>: كُلُّ شَرطٍ مَنقوصاً وَحدَه — لا يُرَدُّ الحَسم. ومِنه صَفقَةٌ قائِمَةٌ لا مُتَنازَعٌ عَلَيها: فاحِصُها <c>Validate</c> لا هذا.</summary>
     [Theory]
     [InlineData("deal_active")]
     [InlineData("deal_captured")]
     [InlineData("deal_without_invoice")]
     [InlineData("sibling_cancelled")]
-    [InlineData("sibling_disputed")]
     [InlineData("sibling_captured")]
     [InlineData("sibling_on_another_invoice")]
     [InlineData("sibling_not_listed")]
@@ -146,7 +157,6 @@ public class DealDisputeSharedInvoiceTests(ITestOutputHelper output)
             case "deal_captured": deal.Refs["payment_status"] = nameof(PaymentStatus.Captured); break;
             case "deal_without_invoice": deal.Refs.Remove(GatewayPaymentProof.InvoiceRef); break;
             case "sibling_cancelled": sibling.Status = DealStatus.Cancelled; break;
-            case "sibling_disputed": sibling.Status = DealStatus.Disputed; break;
             case "sibling_captured": sibling.Refs["payment_status"] = nameof(PaymentStatus.Captured); break;
             case "sibling_on_another_invoice": sibling.Refs[GatewayPaymentProof.InvoiceRef] = Guid.NewGuid().ToString(); break;
             case "sibling_not_listed": deal.Refs[GatewayPayments.InvoiceDealsRef] = GatewayInvoiceShare.ValueFor(new[] { a, Guid.NewGuid() }); break;

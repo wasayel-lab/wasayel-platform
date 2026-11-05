@@ -49,20 +49,24 @@ public class GatewayInvoiceDisputedSiblingTests(ITestOutputHelper output)
     /// <summary><b>قُلِبَ بِاسمِه</b> (تَوصيفُه <c>1a5d31c</c> — كانَ <c>Today_cancelling_the_active_deal_closes_the_invoice_its_disputed_sibling_may_still_pay_with</c>): إلغاءُ
     /// صاحِبِ المَتجَرِ الأولى وَحدَها يُقبَلُ كَما كان (الأُختُ في «نِزاع» لا تُمسِكُ الإلغاء)، <b>والفاتورَةُ لا تُلغى عِندَ البَوّابَة</b> — يُجلَبُ حالُها ولا <c>PUT …/cancel</c>،
     /// ويُكتَبُ سَطرُ «تُرِكَت الفاتورَةُ مَفتوحَة»؟ لا — الإبقاءُ عَمداً (<c>still_owed</c>) لَيسَ مِن رُموزِ <c>LeavesPayable</c>.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه ثانِيَةً</b> (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2؛ تَوصيفُه <c>7076249</c>) — كانَ <c>Cancelling_the_active_deal_keeps_the_invoice_its_disputed_sibling_may_still_pay_with</c>:
+    /// إلغاءُ الأولى وَحدَها يُقبَلُ والفاتورَةُ تُبقيها الأُختُ مَفتوحَةً بِمَبلَغِها كُلِّه — فَإن استُؤنِفَت دُفِعَ ثَمَنُ المُلغاةِ مَعَها (د2 «الكل أو لا شيء» قَبلَ الدَفع). والآن إلغاؤها
+    /// وَحدَها يُرَدُّ بِـ<c>deal_invoice_disputed</c> قَبلَ أَيِّ كِتابَةٍ ولا نِداءَ لِلبَوّابَة، والصَفحَةُ تَرسُمُ لِصاحِبِ المَتجَرِ «إلغاء الطَّلَب كامِلاً» الَّذي يَحسِمُ الأُختَ إلغاءً.</remarks>
     [Fact]
-    public async Task Cancelling_the_active_deal_keeps_the_invoice_its_disputed_sibling_may_still_pay_with()
+    public async Task Cancelling_the_active_deal_alone_while_its_sibling_is_disputed_is_refused_before_any_write()
     {
         var (w, _, ids) = await GatewayExpiryRaceTests.ExpiredCart();
         Assert.True((await w.Deals.DisputeAsync(Slug, ids[1], Guid.NewGuid(), "مالِك التَّطبيق", "شَكوى")).Ok);
-        w.Moyasar.Then(HttpStatusCode.OK, GatewayExpiryRaceTests.Invoice(ids, "initiated")).Then(HttpStatusCode.OK, GatewayExpiryRaceTests.Invoice(ids, "canceled"));
+        w.Moyasar.Requests.Clear();
+        var saves = w.Docs.SaveCalls;
 
         var res = await w.Deals.CancelAsync(Slug, ids[0], DealWaybillCancelTests.StoreOwner, "طَلَبَه المُشتَري");
 
-        var sent = w.Moyasar.Requests.Select(r => $"{r.Method} {r.RequestUri!.AbsolutePath}").ToArray();
-        output.WriteLine($"الإلغاء: ok={res.Ok} · البَوّابَة: [{string.Join(", ", sent)}]");
-        Assert.True(res.Ok, res.Violation?.Code);
-        Assert.Equal($"GET /v1/invoices/{InvoiceId}", sent[^1]);
-        Assert.DoesNotContain($"PUT /v1/invoices/{InvoiceId}{MoyasarClient.CancelSuffix}", sent);
-        Assert.DoesNotContain(w.Docs.Read<Deal>(ids[0].ToString())!.Timeline, e => e.Action == DealEvent.GatewayInvoiceLeftOpen);
+        output.WriteLine($"الإلغاء: {(res.Ok ? "ok" : res.Violation!.Code)} · البَوّابَة: {w.Moyasar.Requests.Count} · حِفظات: {w.Docs.SaveCalls - saves}");
+        Assert.False(res.Ok);
+        Assert.Equal(GatewayInvoiceShare.Disputed, res.Violation!.Code);
+        Assert.Empty(w.Moyasar.Requests);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal((DealStatus.Active, DealStatus.Disputed), (w.Docs.Read<Deal>(ids[0].ToString())!.Status, w.Docs.Read<Deal>(ids[1].ToString())!.Status));
     }
 }
