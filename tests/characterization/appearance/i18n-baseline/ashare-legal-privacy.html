@@ -40,7 +40,7 @@
                     <li>عَناوين التَّوصيل (لِخِدمَة الطَّلَب).</li>
                     <li>تاريخ المُعامَلات (لِإصدار الفَواتير).</li></ul>
                 <p>لا نَبيع بَياناتك لِأَيّ طَرَف ثالِث. ولا تُخَزِّن المَنصَّة بَيانات بِطاقات الدَّفع.</p><p>لِلاطِّلاع عَلى بَياناتك وتَنزيل نُسخَة مِنها: صَفحَة «حِسابي» ثُمَّ «بَياناتي»، بِلا مُراسَلَة.</p>
-                <p>لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ولا يُقبَل ما دامَت لَك صَفقَة جارِيَة. ويَصير اسمك «حِساب مَحذوف» في صَفَقاتك ومُحادَثاتك وتَقييماتك وعُروضك وتَذاكِر دَعمك وفي الإشعارات المَحفوظَة عِند غَيرك، ويُمحى عُنوان التَّوصيل والهاتِف اللَّذان كَتَبتَهُما في طَلَباتك، وتُحذَف إعلاناتك مِن المَتجَر وتُرفَض العُروض المُعَلَّقَة عَلَيها ويُلغى كُلّ طَلَب عَلَيها لَم تَقبَلْه بَعد ويُخبَر صاحِبُه. ويَبقى سِجِلّ الصَّفَقات والفَواتير بِلا اسمك لِالتِزام نِظاميّ ومُحاسَبيّ، ويَبقى اسمك في سِجِلّ الأَحداث الدّاخِليّ الَّذي لا يُعَدَّل ولا تَعرِضُه شاشَة، وفي سِجِلّ تَدقيق المَتجَر إن عَمِلت فيه ويُخفى عِند عَرضِه. وما وَصَل قَبل الحَذف إلى شَرِكَة الشَّحن أَو إلى أَجهِزَة غَيرك في إشعارات المُتَصَفِّح لا يُستَرجَع.</p></div></div></div>
+                <p>لِحَذف حِسابك بِالكامِل: صَفحَة «حِسابي» ثُمَّ «حَذفُ الحِساب». يَقَع الحَذف فَور تَأكيدك، ولا يُقبَل ما دامَت لَك صَفقَة جارِيَة أَو رِحلَة جارِيَة. ويَصير اسمك «حِساب مَحذوف» في صَفَقاتك ومُحادَثاتك وتَقييماتك وعُروضك وتَذاكِر دَعمك وفي الإشعارات المَحفوظَة عِند غَيرك، ويُمحى عُنوان التَّوصيل والهاتِف اللَّذان كَتَبتَهُما في طَلَباتك، وتُحذَف إعلاناتك مِن المَتجَر وتُرفَض العُروض المُعَلَّقَة عَلَيها ويُلغى كُلّ طَلَب عَلَيها لَم تَقبَلْه بَعد ويُخبَر صاحِبُه. ويَبقى سِجِلّ الصَّفَقات والفَواتير بِلا اسمك لِالتِزام نِظاميّ ومُحاسَبيّ، ويَبقى اسمك في سِجِلّ الأَحداث الدّاخِليّ الَّذي لا يُعَدَّل ولا تَعرِضُه شاشَة، وفي سِجِلّ تَدقيق المَتجَر إن عَمِلت فيه ويُخفى عِند عَرضِه. وما وَصَل قَبل الحَذف إلى شَرِكَة الشَّحن أَو إلى أَجهِزَة غَيرك في إشعارات المُتَصَفِّح لا يُستَرجَع.</p></div></div></div>
 
             <footer class="wsl-foot"><nav class="wsl-foot-links" aria-label="&#x631;&#x648;&#x627;&#x628;&#x650;&#x637;&#x64F; &#x627;&#x644;&#x645;&#x64E;&#x646;&#x64E;&#x635;&#x64E;&#x651;&#x629;"><a class="wsl-foot-link" href="/terms">الشُروطُ والأَحكام</a>
         <a class="wsl-foot-link" href="/privacy">سِياسَةُ الخُصوصِيَّة</a>
@@ -149,6 +149,59 @@
             if (seg.length >= 3 && seg[1] === 'r') {
                 scope = '/' + slug + '/r/' + seg[2] + '/';
             }
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var logoutPath = new RegExp('^/' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf('/' + slug + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);

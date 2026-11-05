@@ -51,7 +51,7 @@
         <div class="landing-feature"><div class="landing-feature-icon"><svg class="ac-icon " width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></div>
             <h3>صَريح وموضوعيّ</h3>
             <p>يُبرِز المَخاطِر بِقَدر الفُرَص — لا تَملُّق، قَرار استثماريّ واعٍ.</p></div></section><section style="max-width:1000px;margin:0 auto 32px;padding:0 24px;"><div class="studio-stats" style="grid-template-columns:repeat(4,1fr);"><div class="studio-stat"><div class="studio-stat-label">مَتاجِر مُطلَقَة</div><div class="studio-stat-value">5</div></div>
-                <div class="studio-stat"><div class="studio-stat-label">إجمالي الإعلانات</div><div class="studio-stat-value">41</div></div>
+                <div class="studio-stat"><div class="studio-stat-label">إجمالي الإعلانات</div><div class="studio-stat-value">42</div></div>
                 <div class="studio-stat"><div class="studio-stat-label">أَدوار/تَطبيقات</div><div class="studio-stat-value">13</div></div>
                 <div class="studio-stat"><div class="studio-stat-label">مُدُن مُغَطّاة</div><div class="studio-stat-value">3</div></div></div></section><section style="max-width:1000px;margin:0 auto 56px;padding:0 24px;"><div class="st-section-title">مَتاجِر مُطلَقَة على المَنصَّة</div>
             <div class="studio-list"><a class="studio-list-row" href="/theme-demo"><span class="studio-list-icon" style="background:#1D4ED81a;color:#1D4ED8;">&#x645;</span>
@@ -66,7 +66,7 @@
                         <span class="st-chip">11 إعلان</span><span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">3 دَور</span><span style="color:var(--st-faint);">←</span></a><a class="studio-list-row" href="/ejar"><span class="studio-list-icon" style="background:#1d4ed81a;color:#1d4ed8;">&#x625;</span>
                         <div class="studio-list-body"><strong>&#x625;&#x64A;&#x62C;&#x627;&#x631;</strong>
                             <span>&#x643;&#x644;&#x651; &#x645;&#x627; &#x64A;&#x64F;&#x624;&#x64E;&#x62C;&#x64E;&#x651;&#x631; &#x641;&#x64A; &#x645;&#x64E;&#x62F;&#x64A;&#x646;&#x64E;&#x62A;&#x643; · &#x625;&#x628;</span></div>
-                        <span class="st-chip">15 إعلان</span><span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">3 دَور</span><span style="color:var(--st-faint);">←</span></a><a class="studio-list-row" href="/order"><span class="studio-list-icon" style="background:#7c3aed1a;color:#7c3aed;">&#x623;</span>
+                        <span class="st-chip">16 إعلان</span><span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">3 دَور</span><span style="color:var(--st-faint);">←</span></a><a class="studio-list-row" href="/order"><span class="studio-list-icon" style="background:#7c3aed1a;color:#7c3aed;">&#x623;</span>
                         <div class="studio-list-body"><strong>&#x623;&#x648;&#x631;&#x62F;&#x631;</strong>
                             <span>&#x639;&#x64F;&#x631;&#x648;&#x636; &#x645;&#x64E;&#x642;&#x627;&#x647;&#x64A;&#x643; &#x627;&#x644;&#x645;&#x64F;&#x641;&#x64E;&#x636;&#x64E;&#x651;&#x644;&#x64E;&#x629; &#x641;&#x64A; &#x645;&#x64E;&#x643;&#x627;&#x646; &#x648;&#x627;&#x62D;&#x650;&#x62F; · &#x627;&#x644;&#x631;&#x650;&#x64A;&#x627;&#x636;</span></div>
                         <span class="st-chip">13 إعلان</span><span class="st-chip" style="background:var(--st-line-soft);color:var(--st-ink-700);">3 دَور</span><span style="color:var(--st-faint);">←</span></a></div></section></div>
@@ -179,6 +179,59 @@
             if (seg.length >= 3 && seg[1] === 'r') {
                 scope = '/' + slug + '/r/' + seg[2] + '/';
             }
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var logoutPath = new RegExp('^/' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf('/' + slug + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);

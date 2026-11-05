@@ -140,7 +140,11 @@ PAGES=(
   # بِسَطرٍ واحِد. وقَد وَقَعَ ‏2026-08-16 (‏0 ← 4). العِلاجُ إعادَةُ
   # تَثبيتٍ مُعلَنَة بَعدَ حَصر الفَرق، لا تَطبيعُ العَدّاد — فَتَطبيعُه
   # يُخفي انحِداراً حَقيقِيّاً في عَدّادٍ لَه أَربَعَةُ مُستَهلِكين.
-  "ejar-listing:/ejar/listings/45b17b1e-1997-4fcc-b3ce-051ef484fb16"
+  # ‏(‏2026-11-05، الموجَة ١٢ G4 · E-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُعَرِّفاتُ Neon صارَت مُعَرِّفاتِ بَذرٍ ثابِتَة**: `45b17b1e…` و`e7862bae…`
+  # و`17497544…` و`8c34e5ee…` و`90e91b8c…` كانَت مِن بَياناتِ Neon، فَتَرسُمُ صَفَحاتُها فَرعَ الغِيابِ عَلى كُلِّ قاعِدَةٍ مَحَلِّيَّة. يَبذُرُها الآنَ
+  # `AppearanceBaselineSeeder` في ejar بِمُعَرِّفاتِ `5a3e1d00-…-0000000e000N` (الإعلانُ نُسخَةُ إعلانِ `PlatformSeed` المُوَثَّق، والصَفقَتانِ والمُحادَثَةُ
+  # بِشَكلِ `TestDataSeeder` بَينَ عُضوَي اللَقطَة)، والعَناوينُ أَدناه بِها.
+  "ejar-listing:/ejar/listings/5a3e1d00-0000-4000-8000-0000000e0002"
   "theme-demo-listing-offers:/theme-demo/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
 
   # ‏2026-08-16 (‏#22–#32) — المَوجَة التاسِعَة: **فُروعُ «المَجهول» في
@@ -155,7 +159,7 @@ PAGES=(
   # والقِياسُ قَبلَ الإضافَة: هذِه الفُروعُ وَحدَها تَحرُس ‏‎2–3 سَلاسِل
   # لِكُلّ مِلَفّ، وهي السَلاسِلُ الَّتي لا يُصَيِّرُها أَيُّ مِلَفّ
   # جَلسَة مَهما بَلَغ.
-  "ejar-deal-anon:/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "ejar-deal-anon:/ejar/deals/5a3e1d00-0000-4000-8000-0000000e0003"
   "ejar-deals-anon:/ejar/deals"
   "ejar-create-listing-anon:/ejar/create-listing"
   "ejar-checkout-anon:/ejar/checkout"
@@ -206,7 +210,7 @@ PAGES=(
 
   # ‏`VendorProfile` (‏10) — صَفحَةٌ عامَّة بِمُعَرِّف بائِع، والبائِعُ
   # هُنا مُستَخدِمُ `ejar/vendor` الَّذي بَذَرَه `TestDataSeeder`.
-  "ejar-vendor:/ejar/vendor/e7862bae-5f0a-42b7-b071-c973d5a3305b"
+  "ejar-vendor:/ejar/vendor/5a3e1d00-0000-4000-8000-0000000e0001"
   "ejar-vendor-missing:/ejar/vendor/00000000-0000-0000-0000-000000000001"
 
   # فَرعا «المَجهول» في صَفحَتَي الدَور والمَنطِقَة.
@@ -363,7 +367,10 @@ GUARDED_PAGES=(
   # فَرعُ «التَذكِرَة غَير مَوجودَة» — ‏`owner-test` بِلا تَذكِرَة
   # قابِلَة لِلقِراءَة، فَالمُعَرَّفُ ثابِتٌ لا يُطابِق شَيئاً. وهو
   # فَرعٌ **يُصَيَّر فِعلاً** ولا يَبلُغُه غَيرُ المالِك، فَمَكانُه هُنا.
-  "studio-app-ticket-missing:admin:/studio/apps/owner-test/tickets/00000000-0000-0000-0000-000000000001"
+  # ‏(‏2026-11-05، E-2) مُنذُ `c901bde` تَقرَأُ الصَفحَةُ اللَقطَةَ فَكانَت «المَفقودَةُ» تَرسُمُ تَذكِرَةَ `owner-test` المَبذورَة: صارَت عَلى مُعَرِّفٍ لا يُبذَرُ
+  # أَبَداً (`AppearanceBaselineSeeder.AbsentTicketId`) فَتَرسُمُ «غَير مَوجودَة» حَقّاً، والتَذكِرَةُ المَبذورَةُ لَقطَتُها `studio-app-ticket`.
+  "studio-app-ticket-missing:admin:/studio/apps/owner-test/tickets/5a3e1d00-0000-4000-8000-00000000dead"
+  "studio-app-ticket:admin:/studio/apps/owner-test/tickets/00000000-0000-0000-0000-000000000001"
 
   # ‏`TenantListingDetail` بِجَلسَة — فَرعانِ لا يَقَعانِ لِزائِر:
   #   · `user-listing-own`    — الإعلانُ مِلكُ صاحِبِ الجَلسَة
@@ -394,7 +401,7 @@ GUARDED_PAGES=(
   # (فارِغ/مَملوء) يَحرُس الفَرعَين مَعاً بَدَل واحِد.
   "owner-app-listings:owner:/studio/apps/ejar/listings"
   "owner-app-deals:owner:/studio/apps/ejar/deals"
-  "owner-app-deal-detail:owner:/studio/apps/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "owner-app-deal-detail:owner:/studio/apps/ejar/deals/5a3e1d00-0000-4000-8000-0000000e0003"
   "owner-app-console:owner:/studio/apps/ejar/console"
   "owner-app-attributes:owner:/studio/apps/ejar/attributes"
   "owner-app-pwa:owner:/studio/apps/ejar/pwa"
@@ -412,18 +419,20 @@ GUARDED_PAGES=(
   #   · مُكتَمِلَة       → «اكتَمَلَت» + نَموذَج التَقييم بِنُجومِه الخَمس
   #   · مُعَرَّفٌ لا يُطابِق → «الصَّفقَة غَير مَوجودَة»
   #   · بِلا جَلسَة      → في `PAGES` أَعلاه
-  "member-deal-active:member:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
-  "member-deal-waiting:member2:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
-  "member-deal-done:member:/{member}/deals/8c34e5ee-1760-4eba-b276-caf3e721f996"
+  "member-deal-active:member:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0003"
+  "member-deal-waiting:member2:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0003"
+  "member-deal-done:member:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0004"
   "member-deal-missing:member:/{member}/deals/00000000-0000-0000-0000-000000000001"
 
   # ‏**`CreateListing` (‏40)** — أَربَعَةُ فُروع. و`ejar` بِتِسع فِئات
   # على **خَمسَة `Kind`** فَيُصَيَّر فَرعُ الشَجَرَة (`groups.Count > 1`)
   # بِتَسمِياتِه («سَكَنيّ»، «تِجاريّ»…) — وهي فَرعٌ لا يَقَع في
   # `theme-demo` ذي الـ`Kind` الواحِد (مَقيس).
-  "member-create-listing:member:/{member}/create-listing"
-  "member-create-listing-cat:member:/{member}/create-listing?category=apartment"
-  "member-create-listing-invalid:member:/{member}/create-listing?err=invalid"
+  # ‏(‏2026-11-05، E-2) بِمِلَفِّ `member2` (دَورُ المُضيفِ يَنشُر) لا `member` (المُشتَري): مُنذُ `9ca4e06` كانَت الثَلاثُ صَفحَةَ الرَفضِ نَفسَها،
+  # فَلا يُحرَسُ النَموذَجُ ولا فِئَتُه ولا خَطَأُ حَقلِه. ورَفضُ المُشتَري مَحروسٌ بِصُفوفِ اختِبارِه.
+  "member-create-listing:member2:/{member}/create-listing"
+  "member-create-listing-cat:member2:/{member}/create-listing?category=apartment"
+  "member-create-listing-invalid:member2:/{member}/create-listing?err=invalid"
   # ‏(‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ هُنا "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden" —
   # فَرعٌ لا كاتِبَ لَه حُذِفَ مِن الصَفحَة، فَاللَقطَةُ صارَت نُسخَةً مِن "member-create-listing" بِاسمٍ يَدَّعي غَيرَه. ورَفضُ الصَلاحِيَّةِ
   # يُرسَمُ اليَومَ مِن `GatedPage` لِعُضوٍ بِلا `listing.create` لا بِمُعامِل — ولا مِلَفَّ لَقطَةٍ بِهذا الدَورِ بَعد.
@@ -496,7 +505,7 @@ GUARDED_PAGES=(
 
   # ‏`ChatRoom` (‏10): مُحادَثَةُ `ejar` الوَحيدَة، بَذَرَها
   # `TestDataSeeder` بَين أَوَّلِ مُستَخدِمَين — و`member` أَحَدُهُما.
-  "member-chat:member:/{member}/chats/90e91b8c-330d-483a-8908-869196182fd5"
+  "member-chat:member:/{member}/chats/5a3e1d00-0000-4000-8000-0000000e0005"
 
   # ‏`RoleOnboarding` (‏9) و`DriverArea` (‏11) بِجَلسَة — الطَرَفُ
   # المُقابِل لِفَرعَي «المَجهول» في `PAGES`.
