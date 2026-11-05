@@ -151,10 +151,14 @@ if (confirm != changes)
 
 var audit = new AuditWriter(store);
 var now = DateTime.UtcNow;
-int renamed = 0, merged = 0;
+int renamed = 0, merged = 0, skipped = 0;
+// ‏(‏2026-11-05، الموجَة ١٢ G2، الجَولَةُ ٢ — G2R2-1) `RenameAsync` يَسأَلُ الخُطَّةَ عَلى كُلِّ قِراءَة (`DuplicatePhones.StillApplies`): حِسابٌ مُحِيَ أَو تَغَيَّرَ جَوّالُه
+// بَعدَ العَرضِ يُتَخَطّى ولا يُعَدّ — فَيُطبَعُ ما تُخُطِّيَ، ولا يَتَغَيَّرُ رَمزُ الخُروج (التَخَطّي لَيسَ خَطَأ: الخُطَّةُ لَم تَعُد تَنطَبِق).
 foreach (var (slug, plan, ok) in work)
 {
-    renamed += await DuplicatePhones.RenameAsync<User>(store, slug, plan.Renames, (u, p) => { u.Phone = p; u.UpdatedAt = now; });
+    var renamedHere = await DuplicatePhones.RenameAsync<User>(store, slug, plan.Renames, (u, p) => { u.Phone = p; u.UpdatedAt = now; });
+    renamed += renamedHere;
+    skipped += plan.Renames.Count - renamedHere;
     foreach (var before in ok)
     {
         // ‏يُقاسُ مِن جَديدٍ قَبلَ الكِتابَة — ما تَغَيَّرَ بَينَ العَرضِ والتَنفيذِ لا يُكتَبُ عَلى قِياسٍ قَديم.
@@ -169,8 +173,11 @@ foreach (var (slug, plan, ok) in work)
             note: $"losers={string.Join(",", scan.Group.Losers)} listings={scan.Listings.Count} keys={scan.Keys} moved={moved}");
         merged++;
     }
-    Console.WriteLine($"OK {slug}: أُعيدَ كَتبُ {plan.Renames.Count} · دُمِجَت {ok.Count}");
+    Console.WriteLine($"OK {slug}: أُعيدَ كَتبُ {renamedHere} · تُخُطِّيَ {plan.Renames.Count - renamedHere} · دُمِجَت {ok.Count}");
 }
-renamed += await DuplicatePhones.RenameAsync<StudioUser>(store, StudioAuth.Tenant, studioPlan.Renames, (u, p) => u.Phone = p);
-Console.WriteLine($"تَمَّ: أُعيدَ كَتبُ {renamed} جَوّالاً، ودُمِجَت {merged} مَجموعَة — مِن {changes} تَغييراً.");
+var studioRenamed = await DuplicatePhones.RenameAsync<StudioUser>(store, StudioAuth.Tenant, studioPlan.Renames, (u, p) => u.Phone = p);
+renamed += studioRenamed;
+skipped += studioPlan.Renames.Count - studioRenamed;
+Console.WriteLine($"OK {StudioAuth.Tenant} (الاستوديو): أُعيدَ كَتبُ {studioRenamed} · تُخُطِّيَ {studioPlan.Renames.Count - studioRenamed}");
+Console.WriteLine($"تَمَّ: أُعيدَ كَتبُ {renamed} جَوّالاً، وتُخُطِّيَ {skipped} (مُحِيَ حِسابُه أَو تَغَيَّرَ جَوّالُه بَعدَ العَرض)، ودُمِجَت {merged} مَجموعَة — مِن {changes} تَغييراً.");
 return 0;

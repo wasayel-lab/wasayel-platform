@@ -4,6 +4,7 @@ using ACommerce.Kit.Cart;
 using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Templates.Customer.Marketplace.Services.Api;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Npgsql;
 
@@ -405,7 +406,11 @@ public static class DuplicatePhones
     /// <remarks>‏(‏2026-11-05، الموجَة ١٢ G2 · ٣ — A-SESS-W12-1؛ تَوصيفُه <c>33745f3</c>) <b>ويُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة</b> — نَسَقُ <see cref="ApplyAsync"/>
     /// و<c>AccountWrites.UpdateAsync</c>: مُعامَلَتُه مُستَقِلَّةٌ لِكُلِّ مُستَأجِرٍ (لا داخِلَ مُعامَلَةِ الدَمج)، وكاتِبٌ آخَرُ حَفِظَ حِساباً بَعدَ قِراءَتِه هُنا كانَ
     /// يُرَدُّ بِـ<c>ConcurrencyException</c> لِـ<c>User</c> فَيَتَوَقَّفُ السكربتُ في مُنتَصَفِه، ويُكتَبُ فَوقَه لِـ<c>StudioUser</c> (مَخزَنُ السكربتِ لَم يُسَجِّلْه).
-    /// والآن المَخزَنُ يُسَجِّلُ النَوعَينِ كَالمُضيف، والتَعارُضُ الأَوَّلُ يُعيدُ القِراءَةَ والكَتبَ ويُبقي ما كَتَبَه الآخَر، والثاني يَرمي ولا يُكتَبُ حَرف.</remarks>
+    /// والآن المَخزَنُ يُسَجِّلُ النَوعَينِ كَالمُضيف، والتَعارُضُ الأَوَّلُ يُعيدُ القِراءَةَ والكَتبَ ويُبقي ما كَتَبَه الآخَر، والثاني يَرمي ولا يُكتَبُ حَرف.
+    /// <para>‏(‏2026-11-05، الموجَة ١٢ G2، الجَولَةُ ٢ — G2R2-1؛ تَوصيفُه <c>050f739</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«ويُبقي ما كَتَبَه الآخَر» لَم يَصدُق
+    /// إلّا لِكاتِبٍ لا يَمَسُّ الجَوّال</b>: الإعادَةُ كانَت تَكتُبُ <c>To</c> عَلى القِراءَةِ الجَديدَةِ بِلا سُؤال، فَحِسابٌ مُحِيَ (<see cref="AccountDeletion.Erase"/> يُفرِغُ
+    /// الجَوّالَ ويُبقي الوَثيقَة) يَستَعيدُ جَوّالَه، وجَوّالٌ جَديدٌ يَرجِعُ قَديماً. والآن كُلُّ قِراءَةٍ — الأُولى والمُعادَة — تَسأَلُ <see cref="StillApplies"/> قَبلَ
+    /// <paramref name="setPhone"/>، وما لا تَنطَبِقُ عَلَيه الخُطَّةُ يُتَخَطّى ولا يُعَدّ (فَالمُعادُ أَقَلُّ مِن <c>renames.Count</c> بِعَدَدِ ما تُخُطِّي).</para></remarks>
     public static async Task<int> RenameAsync<T>(IDocumentStore store, string tenant, IReadOnlyList<Rename> renames, Action<T, string> setPhone,
         CancellationToken ct = default) where T : class
     {
@@ -424,7 +429,7 @@ public static class DuplicatePhones
         var done = 0;
         foreach (var r in renames)
         {
-            if (await s.LoadAsync<T>(r.Id, ct) is not { } doc) continue;
+            if (await s.LoadAsync<T>(r.Id, ct) is not { } doc || !StillApplies(doc, r)) continue;
             setPhone(doc, r.To);
             s.Store(doc);
             done++;
@@ -432,6 +437,25 @@ public static class DuplicatePhones
         await s.SaveChangesAsync(ct);
         return done;
     }
+
+    /// <summary>
+    /// <para><b>أَما زالَت الخُطَّةُ تَنطَبِقُ عَلى ما قُرِئَ الآن؟</b> (‏2026-11-05، الموجَة ١٢ G2، الجَولَةُ ٢ — G2R2-1؛ تَوصيفُه <c>050f739</c>) <see cref="Rename.To"/>
+    /// صيغَةُ جَوّالٍ قُرِئَ حينَ بُنِيَت الخُطَّة (<see cref="Build"/>)، فَهِيَ تَنطَبِقُ ما دامَ الجَوّالُ المُخَزَّنُ الآنَ في الخُطَّة (<see cref="Eligible"/>) وصيغَتُه
+    /// المُوَحَّدَةُ <c>To</c> نَفسُها — <b>ولِـ<see cref="User"/> ما دامَ غَيرَ مَحذوف</b> (<c>DeletedAt</c>؛ <see cref="Build"/> يُخرِجُ المَحذوفَ مِن الخُطَّة).
+    /// و<see cref="StudioUser"/> بِلا حَذفٍ اليَومَ، فَيُسأَلُ الجَوّالُ وَحدَه. ونَوعٌ ثالِثٌ يَرمي قَبلَ أَيِّ كِتابَة — لا يُكتَبُ جَوّالٌ في وَثيقَةٍ لا تُعرَفُ حالُها.</para>
+    /// <para><b>لِماذا هُنا لا مُفَوَّضاً يُمَرِّرُه المُنادي</b>: الشَرطُ شَرطُ الخُطَّةِ نَفسِها لا اختِيارُ المُنادي، ويَتَغَيَّرُ بِالنَوعِ وَحدَه (مُنادِيانِ في السكربت، واحِدٌ
+    /// لِكُلِّ نَوع — القاعِدَة ١)، ويَحتاجُ <c>To</c> كُلِّ سَطرٍ لا الوَثيقَةَ وَحدَها؛ ووَسيطٌ اختِيارِيٌّ يَترُكُ طَريقاً لا يَسأَل، ووَسيطٌ لازِمٌ يُغَيِّرُ تَوقيعاً
+    /// يُناديه مِلَفّا تَوصيفٍ لا يُمَسّان (<c>33745f3</c> و<c>050f739</c> — القاعِدَة ٣).</para>
+    /// </summary>
+    public static bool StillApplies(object account, Rename rename) => account switch
+    {
+        User u => u.DeletedAt is null && Planned(u.Phone, rename),
+        StudioUser su => Planned(su.Phone, rename),
+        _ => throw new NotSupportedException("rename_unknown_account: " + account.GetType().Name),
+    };
+
+    private static bool Planned(string? phone, Rename rename)
+        => Eligible(phone) && string.Equals(PhoneNumber.Canonical(phone), rename.To, StringComparison.Ordinal);
 
     private static async Task<long> CountAsync(NpgsqlConnection conn, string sql, CancellationToken ct, params (string, object)[] ps)
     {
