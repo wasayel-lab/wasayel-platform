@@ -27,7 +27,10 @@ public class LivePayPalStaleLinkProofTests(ITestOutputHelper output)
         {
             o.Connection(ConnectionString!);
             o.DatabaseSchemaName = "platform";
-            o.AutoCreateSchemaObjects = JasperFx.AutoCreate.None;
+            // ‏(‏2026-11-05، الموجَة ١٢ G5 · G-DOCS-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ `AutoCreate.None`، فَعَلى قاعِدَةِ CI الفارِغَةِ يَرمي أَوَّلُ حِفظٍ
+            // ‏`42P01: relation "platform.mt_doc_tenantplan" does not exist` قَبلَ أَن يُنشِئَه صِنفٌ لاحِق — أَخضَرُ عَلى المَبذورَةِ وأَحمَرُ في `ci.yml`.
+            // ‏`CreateOnly` يُنشِئُ الجَدوَلَ إن غابَ بِتَركيبِ المُضيفِ نَفسِه (`SingleTenanted` بِمُعَرِّفِه) ولا يُغَيِّرُ جَدوَلاً قائِماً.
+            o.AutoCreateSchemaObjects = JasperFx.AutoCreate.CreateOnly;
             o.Policies.AllDocumentsAreMultiTenanted();
             o.Schema.For<TenantPlan>().SingleTenanted().Identity(x => x.Id);
         });

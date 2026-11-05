@@ -313,6 +313,11 @@ public class LiveUserDataExportProofTests(ITestOutputHelper output)
         if (!Enabled) return;
 
         await using var store = BuildStore();
+        // ‏(‏2026-11-05، الموجَة ١٢ G5 · G-DOCS-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) عَلى قاعِدَةِ CI الفارِغَةِ كانَ أَوَّلُ حِفظٍ يَرمي
+        // ‏`42P01: relation "platform.mt_streams" does not exist`: `AutoCreate.All` يُنشِئُ جَدوَلَ الوَثيقَةِ عِندَ أَوَّلِ استِعمال، لا جَداوِلَ الأَحداثِ
+        // الَّتي يَطلُبُها حِفظُ لَقطَةِ المَجرى — فَكانَ الصَفُّ يَخضَرُّ عَلى القاعِدَةِ المَبذورَةِ وَحدَها ويَحمَرُّ في الخُطوَةِ الحَيَّةِ مِن `ci.yml`.
+        // ‏`CreateOnly` يُنشِئُ الغائِبَ مِن هذا التَركيبِ ولا يَمَسُّ قائِماً، فَلا يَتَغَيَّرُ عَلى القاعِدَةِ المَبذورَةِ شَيء.
+        await store.Storage.ApplyAllConfiguredChangesToDatabaseAsync(JasperFx.AutoCreate.CreateOnly);
         var slug = "zz-data-" + Guid.NewGuid().ToString("N")[..8];
         var neighbour = slug + "-n";
         var me = new User { Id = Guid.NewGuid(), TenantSlug = slug, FullName = "صاحِبُ الطَلَب", Phone = "966500000531" };
