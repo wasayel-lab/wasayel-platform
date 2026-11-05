@@ -460,16 +460,23 @@ public sealed class GatewayPayments
         if (DealPayAuthorization.Validate(deal, by) is { } refusal)
             return Logged(tenantSlug, new(deal?.Id, null, refusal.Code));
 
-        if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
-            return Logged(tenantSlug, new(deal!.Id, null, MoyasarFailures.NotConfigured));
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٩ — مُراجِعُ F3 عَلى 21557d1؛ تَوصيفُه `21fe53d` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **وما أَلغَته المُهلَةُ ولَم يُخبَر بِه يُضَمُّ هُنا أَيضاً**
+        // — نَسَقُ `ExpireAsync` بِحَرفِه، بَعدَ السُلطَةِ لا قَبلَها (القاعِدَة ٦). كانَ إشعارٌ رَمى بَعدَ إلغاءٍ مِن «تَحَقَّق» لا يُعيدُه «تَحَقَّق» تالٍ فَلا يُخبَرُ البائِعُ (د8)
+        // إلّا أَن تَحينَ رِسالَةُ المُهلَة. وما أُخبِرَ بِه لا يُعاد: العَلامَةُ بَعدَ الإشعار.
+        var recovered = await ExpiredUntoldAsync(tenantSlug, (GatewayInvoiceShare.DealsOn(deal!) ?? Array.Empty<Guid>()).Prepend(deal!.Id), ct);
+        GatewayVerifyResult With(GatewayVerifyResult r)
+            => recovered.Count == 0 ? r : r with { Expired = recovered.Concat(r.Expired).Distinct().ToArray() };
 
-        var fetched = await _client.FetchInvoiceAsync(key, deal!.Refs[GatewayPaymentProof.InvoiceRef], ct);
+        if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
+            return With(Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured)));
+
+        var fetched = await _client.FetchInvoiceAsync(key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
         if (!fetched.Ok)
-            return Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code));
+            return With(Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code)));
 
         var invoice = fetched.Value!;
         var invoiceDeals = await InvoiceDealsAsync(tenantSlug, deal, invoice, by.ActorId, ct);
-        return await SettleAsync(tenantSlug, deal, invoice, invoiceDeals, l, ct);
+        return With(await SettleAsync(tenantSlug, deal, invoice, invoiceDeals, l, ct));
     }
 
     /// <summary>
