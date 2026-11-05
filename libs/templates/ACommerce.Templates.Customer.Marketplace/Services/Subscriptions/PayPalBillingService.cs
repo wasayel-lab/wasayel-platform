@@ -200,6 +200,11 @@ public static class PayPalBillingService
     /// <para><b>ولا تُمَسُّ التَواريخُ ولا الحالَة</b>: إنشاءُ رابِطٍ
     /// لَيسَ دَفعاً. التَمديدُ يَقَع حينَ تَصِل رِسالَةٌ مُوَثَّقَةٌ
     /// تَقول إنّ المالَ وَصَل — لا حينَ يُنشَأُ الرابِط.</para>
+    ///
+    /// <para><b>ولا يُمَسُّ مُعَرِّفُ الاشتِراكِ</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه <c>c7b49a7</c>): كانَ الرابِطُ يَكتُبُ فَوقَه
+    /// اشتِراكاً لَم يُوافَق عَلَيه بَعد، فَيَضيعُ المَرجِعُ الوَحيدُ لِاشتِراكٍ يَخصِم، ويَصيرُ اشتِراكٌ مُعَلَّقٌ «قائِماً» يُمسِكُ الحِفظَ ولا
+    /// تَصِلُ لَه رِسالَةُ إلغاءٍ تَفُكُّه. فَتَكتُبُه الرِسالَةُ المُوَثَّقَةُ وَحدَها (<c>PayPalBillingPolicy.Apply</c>)، ومُعَرِّفُ الاشتِراكِ
+    /// المُعَلَّقِ في سَطرِ التَدقيقِ الَّذي تَكتُبُه النُقطَة.</para>
     /// </summary>
     public static bool SaveApproveLink(
         IDocumentSession session, TenantPlan? plan,
@@ -207,7 +212,6 @@ public static class PayPalBillingService
     {
         if (plan is null || string.IsNullOrWhiteSpace(result.ApproveUrl)) return false;
 
-        plan.PayPalSubscriptionId = result.SubscriptionId;
         plan.PayPalApproveUrl     = result.ApproveUrl;
         plan.SetBy                = by;
         plan.SetAt                = at;

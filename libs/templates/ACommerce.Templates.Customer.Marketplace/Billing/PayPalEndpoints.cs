@@ -129,8 +129,10 @@ public static class PayPalEndpoints
                 : await session.LoadAsync<PlatformPlanPayPal>(plan!.PlanId, http.RequestAborted);
             var payPalPlanId = PlatformPlanPayPalBinding.Resolve(
                 PlatformPlanCatalog.Find(plan?.PlanId), bound);
-            if (plan is null || !paypal.IsConfigured || string.IsNullOrWhiteSpace(payPalPlanId))
-                return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkUnavailable);
+            // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه `c7b49a7`) **واشتِراكٌ قائِمٌ يَرُدُّ رابِطاً جَديداً قَبلَ نِداءِ PayPal** — في
+            // `PayPalSurface.LinkRefusal` مَعَ «غَيرُ مُتاح»، فَلا يَزيدُ مَنطِقُ الجِسم (`EndpointBodyBleedTests`).
+            if (PayPalSurface.LinkRefusal(plan, paypal.IsConfigured, payPalPlanId) is { } refusal)
+                return PayPalSurface.LinkFailed(slug, refusal);
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
             var result = await paypal.CreateSubscriptionAsync(

@@ -111,7 +111,10 @@ public sealed class TenantPlan
 
     /// <summary>مُعَرِّفُ الاشتِراكِ في PayPal — يُملَأُ مِن أَوَّلِ
     /// رِسالَةٍ مُوَثَّقَة، ولِلتَدقيقِ ولِإلغاءٍ يَدَوِيٍّ مِن
-    /// اللَوحَة.</summary>
+    /// اللَوحَة.
+    /// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-1) والرِسالَةُ المُوَثَّقَةُ وَحدَها تَكتُبُه</b>: كانَ إنشاءُ رابِطِ مُوافَقَةٍ يَكتُبُ فَوقَه
+    /// اشتِراكاً لَم يُوافَق عَلَيه بَعد، فَيَضيعُ المَرجِعُ الوَحيدُ لِاشتِراكٍ يَخصِم. ومَعَ <see cref="RenewalCancelledAt"/> الفارِغِ هُوَ
+    /// «اشتِراكٌ قائِم» (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) يُمسِكُ تَغييرَ التَرتيبِ ويَرُدُّ رَسائِلَ غَيرِه.</para></summary>
     public string? PayPalSubscriptionId { get; set; }
 
     /// <summary>رابِطُ المُوافَقَةِ كَما أَعادَتهُ PayPal عِندَ
@@ -198,6 +201,10 @@ public static class TenantPlanPolicy
     public const string GraceNegative = "tenant_plan_grace_negative";
     public const string PriceNegative = "tenant_plan_price_negative";
 
+    /// <summary><b>اشتِراكُ PayPal قائِمٌ والحِفظُ يُغَيِّرُ التَرتيب</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1) — يَرُدُّه
+    /// <see cref="ValidateChange"/>، ونُقطَةُ رابِطِ المُوافَقَةِ تَرُدُّ بِه طَلَبَ رابِطٍ جَديد.</summary>
+    public const string PayPalSubscriptionLive = "tenant_plan_paypal_subscription_live";
+
     /// <summary>سَقفٌ مُعلَنٌ لِمُهلَة السَماح — ثَلاثَةُ أَشهُر. ما
     /// فَوقَه خَطَأُ إدخالٍ لا سِياسَة.</summary>
     public const int MaxGraceDays = 90;
@@ -235,6 +242,42 @@ public static class TenantPlanPolicy
     }
 
     public static bool IsValid(TenantPlan plan) => Validate(plan).Count == 0;
+
+    // ─── اشتِراكُ PayPal القائِم يُمسِكُ التَرتيب ───────────────────────
+
+    /// <summary>
+    /// <para><b>أَعَلى الباقَةِ اشتِراكُ PayPal قائِم؟</b> مُعَرِّفٌ مَحفوظٌ — ولا تَكتُبُه إلّا رِسالَةٌ مُوَثَّقَة — ولا رِسالَةَ إلغاءٍ
+    /// أَو تَعليقٍ بَعدَه (<see cref="TenantPlan.RenewalCancelledAt"/> فارِغ). (‏2026-11-05، الموجَة ١٢ G4 · E-1)</para>
+    ///
+    /// <para><b>ولِماذا يُمسِكُ</b>: الاشتِراكُ يَخصِمُ سِعرَ خُطَّتِه عِندَ PayPal ويُمَدِّدُ الباقَةَ بِطولِ مُدَّتِها المَحفوظَة، فَتَغييرُ الباقَةِ
+    /// أَو السِعرِ أَو التاريخَينِ مِن هُنا لا يَبلُغُه — يَبقى يَخصِمُ القَديمَ ويُمَدِّدُ الجَديد، ورابِطٌ ثانٍ يُخصَمُ مَعَه. والتَصميمُ
+    /// المَكتوبُ أَن يُلغِيَه المُشرِفُ مِن لَوحَةِ PayPal (لا نِداءَ إلغاءٍ لَم يُثبَت)، فَإن وَصَلَت رِسالَةُ إلغائِه انفَكَّ الإمساك.</para>
+    /// </summary>
+    public static bool HoldsLiveSubscription(TenantPlan? plan)
+        => plan is not null
+           && !string.IsNullOrWhiteSpace(plan.PayPalSubscriptionId)
+           && plan.RenewalCancelledAt is null;
+
+    /// <summary>
+    /// <para><b>أَيُقبَلُ الانتِقالُ مِن المَحفوظِ إلى المُعَيَّن؟</b> القائِمَةُ الفارِغَةُ تَعني نَعَم، وخَرقُها الوَحيدُ
+    /// <see cref="PayPalSubscriptionLive"/>: اشتِراكٌ قائِمٌ (<see cref="HoldsLiveSubscription"/>) والباقَةُ أَو السِعرُ أَو أَحَدُ التاريخَينِ
+    /// يَتَغَيَّر. وما سِواها (أَيّامُ السَماح، وإعادَةُ مَوقوفَةٍ إلى السَرَيان) لا يَمَسُّ ما يَخصِمُه PayPal فَيُقبَل. (‏2026-11-05، E-1)</para>
+    /// </summary>
+    public static IReadOnlyList<TenantPlanViolation> ValidateChange(TenantPlan? stored, TenantPlan next)
+    {
+        if (!HoldsLiveSubscription(stored)) return Array.Empty<TenantPlanViolation>();
+
+        var changes = !string.Equals(stored!.PlanId, next.PlanId, StringComparison.Ordinal)
+                      || stored.Price != next.Price
+                      || stored.StartsAt != next.StartsAt
+                      || stored.ExpiresAt != next.ExpiresAt;
+
+        return changes
+            ? new[] { new TenantPlanViolation(PayPalSubscriptionLive,
+                $"اشتِراكُ PayPal «{stored.PayPalSubscriptionId}» قائِمٌ عَلى هذِه الباقَة — لا تَتَغَيَّرُ الباقَةُ ولا السِعرُ ولا التاريخانِ " +
+                "حَتّى يُلغى مِن لَوحَةِ PayPal وتَصِلَ رِسالَةُ إلغائِه.") }
+            : Array.Empty<TenantPlanViolation>();
+    }
 
     // ─── الاشتِقاق ───────────────────────────────────────────────────
 

@@ -175,10 +175,15 @@
                         </p>
                     }
 
-                    <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-link")">
-                        <AcButton Type="submit" Variant="ghost" Size="sm"
-                                  Text="@L["admin.tenant_plan.paypal_create"]" />
-                    </form>
+                    @*  (‏2026-11-05، E-1) واشتِراكٌ قائِمٌ لا يُرسَمُ لَه زِرُّ رابِطٍ ثانٍ — النُقطَةُ تَرُدُّه بِـ`PayPalSubscriptionLive`،
+                        وزِرٌّ يُرسَمُ ثُمَّ يُرَدُّ مَدخَلٌ لا يَفتَح (القاعِدَة ١٢). والسَطرُ فَوقَ نَموذَجِ التَعيينِ يَقولُ لِماذا. *@
+                    @if (!TenantPlanPolicy.HoldsLiveSubscription(plan))
+                    {
+                        <form method="post" action="@($"/admin/tenants/{Slug}/plan/paypal-link")">
+                            <AcButton Type="submit" Variant="ghost" Size="sm"
+                                      Text="@L["admin.tenant_plan.paypal_create"]" />
+                        </form>
+                    }
                 </ChildContent>
             </AcCard>
         }
@@ -409,6 +414,16 @@
                 <ChildContent>
                     <h3 style="margin-top:0;">@L.Markup("admin.tenant_plan.set_title")</h3>
 
+                    @*  (‏2026-11-05، الموجَة ١٢ G4 · E-1) **الشاشَةُ تَقولُ ما يُجيبُه البابُ قَبلَ النَقر** (القاعِدَة ١٢): اشتِراكُ PayPal
+                        قائِمٌ ⇐ الحِفظُ يَرُدُّ تَغييرَ الباقَةِ والسِعرِ والتاريخَين (`TenantPlanPolicy.ValidateChange`)، والشَرطُ نَفسُه هُنا. *@
+                    @if (TenantPlanPolicy.HoldsLiveSubscription(plan))
+                    {
+                        <p style="margin:0 0 10px;font-size:13px;">
+                            @L.Markup("admin.tenant_plan.paypal_subscription_live")
+                            <span class="ac-chip ac-chip-sm">@plan!.PayPalSubscriptionId</span>
+                        </p>
+                    }
+
                     <AcField Label="@L["admin.tenant_plan.field_plan"]" Required="true">
                         <select name="plan" class="ac-input" required>
                             @foreach (var d in PlatformPlanCatalog.All)
@@ -537,6 +552,7 @@
         TenantPlanPolicy.PeriodInvalid => L["admin.tenant_plan.err_period"],
         TenantPlanPolicy.GraceNegative => L["admin.tenant_plan.err_grace"],
         TenantPlanPolicy.PriceNegative => L["admin.tenant_plan.err_price"],
+        TenantPlanPolicy.PayPalSubscriptionLive => L["admin.tenant_plan.err_paypal_subscription_live"],
         "tenant_plan_missing"          => L["admin.tenant_plan.err_missing"],
         // بِالمِساحَةِ كامِلَةً: `Billing` هُنا اسمُ الخِدمَةِ المَحقونَة
         // أَعلاه، فَاختِصارُ المِساحَةِ يُحيلُ إلَيها لا إلى المُهايِئ.

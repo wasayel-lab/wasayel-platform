@@ -180,7 +180,14 @@ public enum PayPalBillingAction
     /// الطَلَباتِ يُمَرِّرُ قَرارَه إلَيه بَدَلَ أَن يَفتَحَ باعِثَ
     /// تَمديدٍ ثانِياً — «لا أُنبوبَ رابِع» (القاعِدَة ٨).</para>
     /// </summary>
-    Withdraw
+    Withdraw,
+
+    /// <summary>
+    /// <para><b>رِسالَةٌ مِن اشتِراكٍ غَيرِ الاشتِراكِ القائِمِ عَلى الباقَة — لا كِتابَةَ وسَطرُ لوغٍ بِخَطَإ</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1).
+    /// كانَت تُمَدِّدُ وتَكتُبُ مُعَرِّفَها فَوقَ المَحفوظ، وإلغاؤها يُعَلِّمُ «لَن يُجَدَّد» والقائِمُ حَيّ. وتَعني أَنّ اشتِراكَينِ يَخصِمانِ مَتجَراً
+    /// واحِداً: يُلغي المُشرِفُ الزائِدَ مِن لَوحَةِ PayPal ويُرجِعُ ما خُصِم.</para>
+    /// </summary>
+    ForeignSubscription
 }
 
 /// <summary>القَرارُ كامِلاً. <c>NewExpiresAt</c> ذاتُ مَعنىً عِندَ
@@ -354,6 +361,16 @@ public static class PayPalBillingPolicy
             return new(PayPalBillingAction.UnknownTenant, default,
                 $"‏custom_id «{e.TenantSlug ?? "—"}» بِلا وَثيقَةِ باقَة — " +
                 "لا كِتابَة. يَضبُطُها المُشرِفُ مَرَّةً مِن /admin ثُمَّ يُمَدِّدُها PayPal.");
+
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه `c7b49a7`) **ورِسالَةُ اشتِراكٍ آخَرَ والمَحفوظُ قائِمٌ لا تَمَسُّ الباقَة**: لا تُمَدِّدُ
+        // بِطولِ مُدَّةٍ لَم تُدفَع لَها، ولا تَكتُبُ مُعَرِّفَها فَوقَ المَرجِعِ الوَحيد، ولا يُعَلِّمُ إلغاؤها «لَن يُجَدَّد» والقائِمُ يَخصِم.
+        // ورِسالَةٌ بِلا مُعَرِّفِ اشتِراكٍ لا تُقارَنُ فَتَمضي كَما كانَت.
+        if (TenantPlanPolicy.HoldsLiveSubscription(plan)
+            && e.SubscriptionId is { Length: > 0 } sub
+            && !string.Equals(sub, plan.PayPalSubscriptionId, StringComparison.Ordinal))
+            return new(PayPalBillingAction.ForeignSubscription, default,
+                $"‏{e.EventType} لِلاشتِراك «{sub}» والقائِمُ عَلى الباقَة «{plan.PayPalSubscriptionId}» — لا كِتابَة. اشتِراكانِ يَخصِمانِ " +
+                "مَتجَراً واحِداً: أَلغِ الزائِدَ مِن لَوحَةِ PayPal وأَرجِع ما خُصِم.");
 
         if (PayPalEventTypes.StopsRenewal(e.EventType))
             return new(PayPalBillingAction.StopRenewal, plan.ExpiresAt,

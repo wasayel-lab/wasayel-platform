@@ -1,4 +1,5 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
+using ACommerce.Kit.Subscriptions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +22,17 @@ public static class PayPalSurface
     public const string UnreadableCode = "paypal_event_unreadable";
     public const string LinkUnavailable = "paypal_unavailable";
     public const string LinkRefused     = "paypal_link_failed";
+
+    /// <summary>
+    /// <para><b>لِماذا لا يُنشَأُ رابِطُ اشتِراك — بِتَرتيبِ الغِيابِ ثُمَّ الحالَة، و<c>null</c> يَعني «يُنشَأ»</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1).
+    /// لا باقَة، أَو PayPal غَيرُ مُهَيَّأ، أَو لا خُطَّةَ لِلباقَة ⇐ <see cref="LinkUnavailable"/> كَما كان؛ واشتِراكٌ قائِمٌ
+    /// (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) ⇐ <see cref="TenantPlanPolicy.PayPalSubscriptionLive"/> — رابِطٌ ثانٍ يُوافَقُ
+    /// عَلَيه فَيَخصِمُ الاثنانِ مَتجَراً واحِداً، والقائِمُ يُلغى مِن لَوحَةِ PayPal ورِسالَةُ إلغائِه تَفُكُّ الإمساك.</para>
+    /// </summary>
+    public static string? LinkRefusal(TenantPlan? plan, bool configured, string? payPalPlanId)
+        => plan is null || !configured || string.IsNullOrWhiteSpace(payPalPlanId) ? LinkUnavailable
+         : TenantPlanPolicy.HoldsLiveSubscription(plan) ? TenantPlanPolicy.PayPalSubscriptionLive
+         : null;
 
     /// <summary>الرُؤوسُ الخَمسَة مِن الطَلَب — الغائِبُ سِلسِلَةٌ
     /// فارِغَة، و<see cref="PayPalWebhookHeaders.IsComplete"/> هي
@@ -73,7 +85,8 @@ public static class PayPalSurface
     /// </summary>
     public static IResult NoWrite(ILogger log, PayPalWebhookEvent e, PayPalBillingDecision d)
     {
-        if (d.Action == PayPalBillingAction.UnknownTenant)
+        // ‏(‏2026-11-05، E-1) واشتِراكٌ ثانٍ يَخصِمُ المَتجَرَ مالٌ يَصِلُ ولا يُمَدِّد — يُقالُ بِصَوتٍ كَالمُستَأجِرِ المَجهول.
+        if (d.Action is PayPalBillingAction.UnknownTenant or PayPalBillingAction.ForeignSubscription)
             log.LogError("[PayPal] {Action} — الحَدَث {EventId} ({Type}): {Reason}",
                 d.Action, e.EventId, e.EventType, d.ReasonAr);
         else

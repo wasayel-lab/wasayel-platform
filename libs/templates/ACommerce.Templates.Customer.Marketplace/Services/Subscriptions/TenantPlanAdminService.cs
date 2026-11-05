@@ -39,6 +39,10 @@ public static class TenantPlanAdminService
     /// يُعيدُها بِتَعيينٍ واحِد» (<see cref="Stop"/>). والتَحميلُ هُنا لا في النُقطَة: نُقطَةٌ تَنسى التَحميلَ تُعيدُ العَطَبَ صامِتَة.</para>
     ///
     /// <para><b>ورابِطُ الدَفعِ يُحمَلُ ما دامَت الباقَةُ نَفسَها</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١) — <see cref="KeepsPayLink"/>.</para>
+    ///
+    /// <para><b>واشتِراكُ PayPal القائِمُ يَرُدُّ تَغييرَ الباقَةِ والسِعرِ والتاريخَين</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه
+    /// <c>PayPalArrangementChangeCharacterizationTests</c> عِندَ <c>c7b49a7</c>) — <see cref="TenantPlanPolicy.ValidateChange"/> بِرَمزِ
+    /// <see cref="TenantPlanPolicy.PayPalSubscriptionLive"/>، ولا يُخَزَّنُ شَيء.</para>
     /// </summary>
     public static async Task<IReadOnlyList<TenantPlanViolation>> SetAsync(
         IDocumentSession session, string tenantSlug, string planId,
@@ -62,7 +66,9 @@ public static class TenantPlanAdminService
             RenewalCancelledAt   = stored?.RenewalCancelledAt,
         };
 
-        var violations = TenantPlanPolicy.Validate(plan);
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1) **واشتِراكُ PayPal القائِمُ يُمسِكُ التَرتيبَ أَوَّلاً**: حالَةٌ مَخزونَةٌ تَرُدُّ قَبلَ حُقولِ الاستِمارَة،
+        // فَلا يُصلِحُ المُشرِفُ حَقلاً ثُمَّ يُقالُ لَه إنّ الحِفظَ كُلَّه مُمسَك.
+        var violations = TenantPlanPolicy.ValidateChange(stored, plan).Concat(TenantPlanPolicy.Validate(plan)).ToList();
         if (violations.Count > 0) return violations;
 
         session.Store(plan);
@@ -80,7 +86,8 @@ public static class TenantPlanAdminService
     /// <para><b>ومُعَرِّفُ الاشتِراكِ وعَلامَةُ إلغاءِ التَجديدِ يُحمَلانِ عَلى كُلِّ حال</b>: يَصِفانِ اشتِراكاً قائِماً عِندَ PayPal لا عَرضاً. يَبقى
     /// الاشتِراكُ بَعدَ تَغييرِ الباقَةِ ويُمَدِّدُ بِـ<c>custom_id</c> لا بِالمُعَرِّفِ المَحفوظ (النُقطَةُ تُحَمِّلُ الباقَةَ بِـ<c>e.TenantSlug</c> قَبلَ
     /// <c>PayPalBillingPolicy.Decide</c>)، ولا تَقرَأُ المُعَرِّفَ شاشَة — فَمَحوُه لا يُوقِفُ دَفعاً ولا يُخفي زِرّاً، ويَمحو المَرجِعَ الوَحيدَ
-    /// عِندَنا لِاشتِراكٍ قَد يُلغيه المُشرِفُ مِن لَوحَةِ PayPal. ورابِطٌ جَديدٌ يَكتُبُ فَوقَه (<c>SaveApproveLink</c>)، وكَذلِكَ أَوَّلُ رِسالَة.</para>
+    /// عِندَنا لِاشتِراكٍ قَد يُلغيه المُشرِفُ مِن لَوحَةِ PayPal. ورابِطٌ جَديدٌ يَكتُبُ فَوقَه (<c>SaveApproveLink</c>)، وكَذلِكَ أَوَّلُ رِسالَة.
+    /// <b>‏(‏2026-11-05، E-1) والرابِطُ لا يَكتُبُه بَعدَ اليَوم</b> — تَكتُبُه الرِسالَةُ المُوَثَّقَةُ وَحدَها، ورابِطٌ جَديدٌ يُرَدُّ ما دامَ اشتِراكٌ قائِماً.</para>
     /// </summary>
     public static bool KeepsPayLink(TenantPlan? stored, string planId)
         => stored is not null && string.Equals(stored.PlanId, planId, StringComparison.Ordinal);
