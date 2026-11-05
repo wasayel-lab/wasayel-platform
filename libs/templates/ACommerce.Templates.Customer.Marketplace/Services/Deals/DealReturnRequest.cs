@@ -1,4 +1,6 @@
 using ACommerce.Kit.Culture;
+using ACommerce.Kit.Tenants;
+using ACommerce.Templates.Customer.Marketplace.Services.Patterns;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 
@@ -57,6 +59,48 @@ public static class DealReturnRequest
     public static bool CartBorn(Deal deal)
         => deal.Attributes.TryGetValue(CheckoutPayMethods.AttributeKey, out var method) && !string.IsNullOrWhiteSpace(method);
 
+    // ─── تَجميعُ فِئَةِ الإعلانِ عِندَ الوِلادَة (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6؛ تَوصيفُه `1ae136e` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) ───────────
+    //
+    // النَمَطُ مِن المَتجَرِ كُلِّه، والسَلَّةُ تُفتَحُ في مَتجَرِ «بَيع» وإن كانَت فيه فِئَةُ «خِدمات» أَو «فَعّالِيّات» (`PatternOf` يَقرَؤُهُما بَيعاً) — فَكانَ «طَلَب استِرجاع»
+    // يُرسَمُ عَلى صَفقَةِ تَنظيفٍ أَو حَفلَةٍ سُلِّمَت. يُناقِضُ د30 «في متاجر بيع السلع». فَتُكتَبُ عَلى الصَفقَةِ عِندَ وِلادَتِها مِن السَلَّةِ تَجميعُ فِئَةِ إعلانِها، وتَقرَؤُه البَوّابَة.
+
+    /// <summary>خاصِّيَّةُ الصَفقَةِ الَّتي يَكتُبُ فيها <c>/checkout/submit</c> تَجميعَ فِئَةِ الإعلان (<see cref="CategoryKinds"/>) — حينَ يَكونُ لَها تَجميع.</summary>
+    public const string CategoryKindAttribute = "category_kind";
+
+    /// <summary>التَجميعانِ اللَّذانِ لَيسا بَيعَ سِلعَة — «خِدمات» و«فَعّالِيّات». وما سِواهُما (ومِنه الفارِغ) سِلعَةٌ كَما كان: لا يُختَرَعُ تَصنيفٌ لِتَجميعٍ لَم يُسأَل عَنه.</summary>
+    public static readonly IReadOnlyList<string> NotGoodsKinds = new[] { CategoryKinds.Services, CategoryKinds.Events };
+
+    /// <summary>
+    /// <para><b>تَجميعُ فِئَةِ الإعلان — دالَّةٌ نَقِيَّة</b>: فِئَةُ المَتجَرِ بِسلاجِ الإعلانِ فَتَجميعُها، فَإن كانَ فارِغاً فَتَجميعُ أَقرَبِ أَبٍ لَه تَجميع (فِئَةٌ فَرعِيَّةٌ تَحتَ «خِدمات»
+    /// خِدمَة)؛ و<c>null</c> لِفِئَةٍ لا وُجودَ لَها أَو بِلا تَجميعٍ في سِلسِلَتِها. ولا تَدورُ عَلى شَجَرَةٍ فيها حَلقَة: كُلُّ سلاجٍ يُزارُ مَرَّة.</para>
+    /// </summary>
+    public static string? CategoryKindOf(IEnumerable<Category>? categories, string? categorySlug)
+    {
+        if (categories is null || string.IsNullOrWhiteSpace(categorySlug)) return null;
+        var bySlug = new Dictionary<string, Category>(StringComparer.Ordinal);
+        foreach (var c in categories) bySlug.TryAdd(c.Slug, c);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var slug = categorySlug;
+        while (slug is not null && seen.Add(slug) && bySlug.TryGetValue(slug, out var category))
+        {
+            if (!string.IsNullOrEmpty(category.Kind)) return category.Kind;
+            slug = category.ParentSlug;
+        }
+        return null;
+    }
+
+    /// <summary>سِماتُ الوِلادَةِ كَما بَناها المُنادي، ومَعَها <see cref="CategoryKindAttribute"/> حينَ لِلإعلانِ تَجميع — والقاموسُ نَفسُه يُعادُ (نَسَقُ
+    /// <see cref="GatewayPayments.MarkedAtBirth"/>). وبِلا تَجميعٍ لا مِفتاحَ يُضاف.</summary>
+    public static Dictionary<string, string> KindAtBirth(Dictionary<string, string> attributes, string? kind)
+    {
+        if (!string.IsNullOrWhiteSpace(kind)) attributes[CategoryKindAttribute] = kind;
+        return attributes;
+    }
+
+    /// <summary>وُلِدَت عَلى إعلانٍ في فِئَةِ خِدمَةٍ أَو فَعّالِيَّة (<see cref="NotGoodsKinds"/>) — دالَّةٌ نَقِيَّة. وصَفقَةٌ بِلا الخاصِّيَّةِ (وُلِدَت قَبلَها، أَو فِئَتُها بِلا تَجميع) لا.</summary>
+    public static bool BornOnNonGoods(Deal deal)
+        => deal.Attributes.TryGetValue(CategoryKindAttribute, out var kind) && NotGoodsKinds.Contains(kind, StringComparer.Ordinal);
+
     /// <summary>لَحظَةُ التَسليم: أَوَّلُ انتِقالٍ إلى <see cref="DealStage.Delivered"/> في سِجِلِّ الصَفقَة (يَكتُبُه البائِعُ أَو وارِدُ OTO)، و<c>null</c> حينَ لا
     /// تَسليم. دالَّةٌ نَقِيَّة.</summary>
     public static DateTime? DeliveredAt(Deal deal)
@@ -84,6 +128,11 @@ public static class DealReturnRequest
         // وَحدَه لا يُمَيِّز: `marketplace` احتِياطُ المُحَلِّلِ لِكُلِّ مَتجَرٍ بِلا سائِقٍ ولا مُضيف، فَصَفقَةُ عَرضٍ عَلى «شقة» كانَت تَطلُبُ «استِرجاعَ السِّلعَة».
         if (!string.Equals(deal.Pattern, GoodsPattern, StringComparison.Ordinal) || !CartBorn(deal))
             return new(PatternNotGoods, $"صَفقَةُ «{deal.Pattern}» {(CartBorn(deal) ? "" : "بِلا سَلَّةِ شِراءٍ ")}لَيسَت بَيعَ سِلعَة — زِرُّ الاستِرجاعِ لِبَيعِ السِلَعِ وَحدَه.");
+
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6؛ تَوصيفُه `1ae136e` — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **وإعلانُها في فِئَةِ سِلعَة** — صَفقَةُ خِدمَةٍ أَو فَعّالِيَّةٍ وَلَدَتها السَلَّةُ
+        // في مَتجَرِ «بَيع» لَيسَت بَيعَ سِلعَة (د30)؛ والرَمزُ نَفسُه — المَعجَمُ لا يَكبُر.
+        if (BornOnNonGoods(deal))
+            return new(PatternNotGoods, $"صَفقَةٌ عَلى إعلانٍ في فِئَةِ «{deal.Attributes[CategoryKindAttribute]}» لَيسَت بَيعَ سِلعَة — زِرُّ الاستِرجاعِ لِبَيعِ السِلَعِ وَحدَه.");
 
         if (deal.Status is not (DealStatus.Active or DealStatus.Completed) || DeliveredAt(deal) is null)
             return new(DealNotDelivered, $"الصَفقَةُ في حالَة {deal.Status} عِندَ «{deal.Stage}» — لَم تُسَلَّم السِلعَة.");

@@ -378,9 +378,11 @@ public class DealShipGroupTests(ITestOutputHelper output)
     public void The_checkout_births_each_item_with_its_four_attributes_then_links_each_vendors_deals_before_the_cart_is_dropped()
     {
         var body = CheckoutPerItemDisclosureTests.SubmitBody();
-        var at = body.IndexOf("attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()", StringComparison.Ordinal);
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6): المِرساتانِ بِلا ما حَولَ `MarkedAtBirth` — صارَ يَلُفُّها `DealReturnRequest.KindAtBirth` (تَجميعُ فِئَةِ الإعلان، صَفُّه
+        // في `DealReturnServiceKindSwitchTests`)؛ والخَصائِصُ الأَربَعُ داخِلَها بِحَرفِها.
+        var at = body.IndexOf("Services.Deals.GatewayPayments.MarkedAtBirth(new()", StringComparison.Ordinal);
         Assert.True(at > 0, "لا خَصائِصَ وِلادَة — الأَداةُ عَمياء.");
-        var block = body[at..body.IndexOf("}, viaGateway));", at, StringComparison.Ordinal)];
+        var block = body[at..body.IndexOf("}, viaGateway)", at, StringComparison.Ordinal)];
         var keys = Regex.Matches(block, @"\[(?<k>[^\]]+)\]\s*=").Select(m => m.Groups["k"].Value).ToArray();
         output.WriteLine($"خَصائِصُ الوِلادَة: {keys.Length} — {string.Join(" · ", keys)}");
         Assert.Equal(new[]

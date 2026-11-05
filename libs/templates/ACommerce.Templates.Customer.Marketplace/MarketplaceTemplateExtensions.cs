@@ -3353,7 +3353,9 @@ public static class MarketplaceTemplateExtensions
                         id: Services.Deals.CheckoutClaim.DealIdFor(slug, userId, cart.UpdatedAt, line++, item.ListingId),
                         // وطَريقُ بَوّابَةِ المَتجَرِ يُعَلَّمُ في الوِلادَةِ نَفسِها — فَلا تَعلَقُ صَفقَتُه بِلا فاتورَةٍ وتَدخُلُ «دَفع» بِلا مال
                         // (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.MarkedAtBirth` و`AwaitsPayment`). وما سِواه بِحَرفِه.
-                        attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()
+                        // (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6): وتَجميعُ فِئَةِ الإعلانِ مِن فِئاتِ المَتجَرِ (`DealReturnRequest.CategoryKindOf`) — يَقرَؤُه «طَلَب استِرجاع»
+                        // فَلا يُرسَمُ عَلى خِدمَةٍ أَو فَعّالِيَّة (د30)؛ وبِلا تَجميعٍ لا مِفتاح.
+                        attributes: Services.Deals.DealReturnRequest.KindAtBirth(Services.Deals.GatewayPayments.MarkedAtBirth(new()
                         {
                             ["qty"] = item.Quantity.ToString(),
                             // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
@@ -3364,7 +3366,7 @@ public static class MarketplaceTemplateExtensions
                             // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
                             // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
                             [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
-                        }, viaGateway));
+                        }, viaGateway), Services.Deals.DealReturnRequest.CategoryKindOf(tenant?.Categories, listing.CategorySlug)));
                 }
                 catch (JasperFx.ConcurrencyException) when (created.Count == 0)
                 {

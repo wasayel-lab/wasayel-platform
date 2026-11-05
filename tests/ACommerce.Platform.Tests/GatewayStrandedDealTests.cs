@@ -237,8 +237,9 @@ public class GatewayStrandedDealTests(ITestOutputHelper output)
             Path.Combine(new[] { ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace" }.Concat(parts).ToArray()))));
 
         var host = Code("MarketplaceTemplateExtensions.cs");
-        var birth = host.IndexOf("attributes: Services.Deals.GatewayPayments.MarkedAtBirth(new()", StringComparison.Ordinal);
-        var close = host.IndexOf("}, viaGateway));", birth, StringComparison.Ordinal);
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6): المِرساتانِ بِلا ما حَولَ `MarkedAtBirth` — صارَ يَلُفُّها `DealReturnRequest.KindAtBirth`.
+        var birth = host.IndexOf("Services.Deals.GatewayPayments.MarkedAtBirth(new()", StringComparison.Ordinal);
+        var close = host.IndexOf("}, viaGateway)", birth, StringComparison.Ordinal);
         Assert.True(birth > 0 && close > birth, $"birth={birth} close={close}");
         Assert.True(host.IndexOf("var viaGateway =", StringComparison.Ordinal) is var decl && decl > 0 && decl < birth);
 
