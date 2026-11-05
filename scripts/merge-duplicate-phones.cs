@@ -78,6 +78,9 @@ using var store = DocumentStore.For(o =>
     o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
     o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);   // ← عامٌّ كَما يُسَجِّلُه القالِب: مَفاتيحُ الرَبطِ تُنقَلُ بِحَقلِها
     o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);   // ← كَما يُسَجِّلُه المُضيف (‏G-1): حِفظٌ قَرَأَ قَبلَ كاتِبٍ آخَرَ يُرَدُّ ويُعادُ الدَمج
+    // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٣ — A-SESS-W12-1) وحِسابُ الاستوديو كَما يُسَجِّلُه القالِب: كانَ إعادَةُ كَتبِ جَوّالِه تَكتُبُ فَوقَ كاتِبٍ مُوازٍ
+    // (`SessionVersion`، `IsPlatformAdmin`، `AnalysesUsed`) بِلا رَدّ؛ والآن يُرَدُّ الحِفظُ و`RenameAsync` يُعيدُ مَرَّةً مِن قِراءَةٍ جَديدَة.
+    o.Schema.For<StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);
     o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
 });
 await using var conn = new NpgsqlConnection(cs);

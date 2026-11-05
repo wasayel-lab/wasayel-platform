@@ -402,10 +402,24 @@ public static class DuplicatePhones
     }
 
     /// <summary>يُعيدُ كَتبَ جَوّالِ المُفرَدينَ مُوَحَّداً — وَثيقَةٌ وَثيقَة، في مُعامَلَةٍ واحِدَةٍ لِلمُستَأجِر.</summary>
+    /// <remarks>‏(‏2026-11-05، الموجَة ١٢ G2 · ٣ — A-SESS-W12-1؛ تَوصيفُه <c>33745f3</c>) <b>ويُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة</b> — نَسَقُ <see cref="ApplyAsync"/>
+    /// و<c>AccountWrites.UpdateAsync</c>: مُعامَلَتُه مُستَقِلَّةٌ لِكُلِّ مُستَأجِرٍ (لا داخِلَ مُعامَلَةِ الدَمج)، وكاتِبٌ آخَرُ حَفِظَ حِساباً بَعدَ قِراءَتِه هُنا كانَ
+    /// يُرَدُّ بِـ<c>ConcurrencyException</c> لِـ<c>User</c> فَيَتَوَقَّفُ السكربتُ في مُنتَصَفِه، ويُكتَبُ فَوقَه لِـ<c>StudioUser</c> (مَخزَنُ السكربتِ لَم يُسَجِّلْه).
+    /// والآن المَخزَنُ يُسَجِّلُ النَوعَينِ كَالمُضيف، والتَعارُضُ الأَوَّلُ يُعيدُ القِراءَةَ والكَتبَ ويُبقي ما كَتَبَه الآخَر، والثاني يَرمي ولا يُكتَبُ حَرف.</remarks>
     public static async Task<int> RenameAsync<T>(IDocumentStore store, string tenant, IReadOnlyList<Rename> renames, Action<T, string> setPhone,
         CancellationToken ct = default) where T : class
     {
         if (renames.Count == 0) return 0;
+        for (var attempt = 1; ; attempt++)
+        {
+            try { return await RenameOnceAsync(store, tenant, renames, setPhone, ct); }
+            catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
+        }
+    }
+
+    private static async Task<int> RenameOnceAsync<T>(IDocumentStore store, string tenant, IReadOnlyList<Rename> renames, Action<T, string> setPhone,
+        CancellationToken ct) where T : class
+    {
         await using var s = store.LightweightSession(tenant);
         var done = 0;
         foreach (var r in renames)

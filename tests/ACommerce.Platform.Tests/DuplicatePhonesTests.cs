@@ -9,6 +9,7 @@ using ACommerce.Kit.Tenants;
 using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Identity;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using JasperFx.Events.Projections;
 using Marten;
 using Npgsql;
@@ -418,6 +419,8 @@ public class DuplicatePhonesTests(ITestOutputHelper output)
         "o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);",
         "o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);",
         "o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);",
+        // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٣ — A-SESS-W12-1) حِسابُ الاستوديو كَما يُسَجِّلُه القالِب — كانَ غائِباً فَتَكتُبُ إعادَةُ كَتبِ جَوّالِه فَوقَ كاتِبٍ مُوازٍ.
+        LiveDuplicatePhonesRenameProofTests.StudioConcurrencyLine,
         "o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);",
     };
 }
@@ -439,6 +442,7 @@ public class LiveDuplicatePhonesProofTests(ITestOutputHelper output)
         o.Schema.For<Tenant>().SingleTenanted().Identity(x => x.Id);
         o.Schema.For<ApiKeyDocument>().SingleTenanted().Identity(x => x.Id);
         o.Schema.For<User>().Identity(x => x.Id).UseOptimisticConcurrency(true);
+        o.Schema.For<StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);
         o.Projections.Snapshot<Listing>(SnapshotLifecycle.Inline);
         o.AutoCreateSchemaObjects = JasperFx.AutoCreate.All;
     });
