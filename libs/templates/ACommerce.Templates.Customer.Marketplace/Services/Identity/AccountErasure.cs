@@ -542,6 +542,28 @@ public static class AccountErasure
     }
 
     /// <summary>
+    /// <para><b>مِفاتيحُ مِلَفّاتِه بِتاريخِ إعلاناتِه</b> (‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-3؛ تَوصيفُه <c>81a8e8e</c>): <see cref="FileKeys"/> بِكُلِّ رابِطٍ
+    /// حَمَلَه إعلانٌ لَه — القائِمُ والمَحذوفُ قَبلُ — في مَجراه (كُلُّ <c>ListingMediaSet</c>، <see cref="MediaHistory"/>) مَعَ <c>MediaUrls</c> القائِمَة. تَنفيذٌ سابِقٌ لِسكربتِ
+    /// «ما حُذِفَ قَبلَ السَحب» بِلا مَخزَنٍ مَحا الروابِطَ (<see cref="ScrubEvents"/>) والمِلَفّاتُ باقِيَةٌ عامَّة، فَكانَ تَشغيلٌ لاحِقٌ يَقرَأُ صورَتَه وَحدَها («مَفاتيح 3 (صُوَرُ إعلانات 0)»)
+    /// ولا يَحذِفُ ما بَقِيَ؛ والأَحداثُ لا تُعَدَّل، فَالتاريخُ يَحمِلُها. يَسأَلُها السكربت؛ والبابُ يَقرَأُ <c>MediaUrls</c> قَبلَ أَن يَمحُوَها في مُعامَلَتِه.</para>
+    /// </summary>
+    public static async Task<ErasedFiles> FileKeysEverAsync(IQuerySession s, string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        var ever = new List<Listing>();
+        foreach (var l in (await s.Query<Listing>().ToListAsync(ct))
+                     .Where(l => ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditService.IsOwnedBy(l, userId)))
+        {
+            var history = MediaHistory((await s.Events.FetchStreamAsync(l.Id, token: ct)).Select(e => e.Data));
+            ever.Add(new Listing { Id = l.Id, MediaUrls = l.MediaUrls.Concat(history).Distinct(StringComparer.Ordinal).ToList() });
+        }
+        return FileKeys(tenantSlug, userId, ever);
+    }
+
+    /// <summary>كُلُّ رابِطِ صورَةٍ في أَحداثِ مَجرى إعلانٍ — <c>ListingMediaSet</c> يَستَبدِلُ القائِمَةَ كُلَّها، فَما سَبَقَ آخِرَها باقٍ في تاريخِه وَحدَه. نَقِيَّة.</summary>
+    public static IReadOnlyList<string> MediaHistory(IEnumerable<object> events)
+        => events.OfType<ListingMediaSet>().SelectMany(m => m.MediaUrls).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
     /// <para><b>حَذفُ مِلَفّاتِه بَعدَ حِفظِ الحَذف — بِأَفضَلِ جُهد</b>: لِكُلِّ مِفتاحٍ <c>IFileStorage.DeleteAsync</c>، وما يَرمي يُكتَبُ في السِجِلِّ بِمِفتاحِه ويُعَدّ ولا يُسقِطُ
     /// الحَذف — الحِسابُ مَمحُوٌّ في القاعِدَةِ قَبلَه، ومَخزَنٌ لا يُبلَغُ لا يُعيدُه. يُعيدُ عَدَدَ ما حُذِفَ وما تَعَذَّر.</para>
     /// </summary>
