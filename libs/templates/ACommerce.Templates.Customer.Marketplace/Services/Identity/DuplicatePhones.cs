@@ -158,6 +158,10 @@ public static class DuplicatePhones
         int Favorites, int Keys, IReadOnlyList<string> Blocks)
     {
         public bool Mergeable => Blocks.Count == 0;
+
+        /// <summary>جَدوَلُ <see cref="DuplicatePhones.KeysTable"/> قائِمٌ حينَ قيس (‏2026-11-05، الموجَة ١٢ Carry — G2R3-1): <see cref="ApplyAsync"/> يَسأَلُ مَفاتيحَ المُندَمِجِ في
+        /// مُعامَلَتِه ما دامَ الجَدوَلُ قائِماً — لا ما دامَ <see cref="Keys"/> عَدَّ مِفتاحاً، فَمِفتاحٌ صَدَرَ بَعدَ القِياسِ يُنقَلُ ولا يَبقى لِمَمحُوّ.</summary>
+        public bool HasKeysTable { get; init; }
     }
 
     /// <summary>جَدوَلُ <see cref="ApiKeyDocument"/> كَما يُسَمّيه Marten — عامٌّ بِلا <c>tenant_id</c>، فَلا يَبلُغُه <see cref="TenantTablesAsync"/>.
@@ -305,7 +309,7 @@ public static class DuplicatePhones
         if (admins > 0) blocks.Add($"{AdminBlock}: {admins} حِساباً إدارِيّاً في المَجموعَة");
         var survivorCart = await CountAsync(conn, "select count(*) from platform.mt_doc_cart where tenant_id = @t and id = @i", ct,
             ("t", tenant), ("i", group.Survivor)) > 0;
-        return new(group, repoints, listings, loserCarts, survivorCart, favorites, keys, blocks);
+        return new(group, repoints, listings, loserCarts, survivorCart, favorites, keys, blocks) { HasKeysTable = keysTable };
     }
 
     // ─── الكِتابَة ─────────────────────────────────────────────────────────────────────────
@@ -319,7 +323,14 @@ public static class DuplicatePhones
     /// </summary>
     /// <remarks>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1) <b>ويُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة</b> إن حَفِظَ كاتِبٌ آخَرُ أَحَدَ الحِساباتِ بَعدَ قِراءَتِها هُنا
     /// (<c>User</c> بِتَزامُنٍ تَفاؤُلِيٍّ، فَيَرمي الحِفظُ <c>ConcurrencyException</c> والمُعامَلَةُ كُلُّها تُرَدّ) — نَسَقُ <c>AccountWrites.UpdateAsync</c>:
-    /// مُحاوَلَتانِ، والثانِيَةُ إن رُدَّت تَرمي ولا يُكتَبُ حَرف.</remarks>
+    /// مُحاوَلَتانِ، والثانِيَةُ إن رُدَّت تَرمي ولا يُكتَبُ حَرف.
+    /// <para>‏(‏2026-11-05، الموجَة ١٢ Carry — G2R3-1؛ تَوصيفُه <c>c291fed</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والخُطَّةُ تُسأَلُ عَلى قِراءَةِ كُلِّ مُحاوَلَة</b> —
+    /// صِنفُ العَطَبِ الَّذي أَغلَقَه <c>e8a2c09</c> في <see cref="RenameAsync"/>: كانَت المُحاوَلَةُ تُحَمِّلُ الباقي وكُلَّ مُندَمِجٍ وتَكتُبُ بِلا سُؤال، فَحِسابٌ غَيَّرَ
+    /// رَقَمَه بَعدَ العَرضِ يُمحى وتُنقَلُ بَياناتُه، وباقٍ مُحِيَ يَعودُ إلَيه الجَوّال، ورَقَمُ باقٍ جَديدٌ يَرجِعُ قَديماً، وما بَقِيَ لِمُندَمِجٍ مَمحُوٍّ يُنقَلُ إلى حَيّ.
+    /// والآن بَعدَ قِراءَةِ الأَعضاءِ وقَبلَ أَيِّ كِتابَةٍ تَسأَلُ <see cref="StaleMember"/> (<see cref="StillApplies"/> لِكُلِّ عُضوٍ بِصيغَةِ المَجموعَة)، فَإن لَم تَنطَبِق
+    /// رَمَت <see cref="MergeStale"/> ولا يُكتَبُ حَرف، والسكربتُ يَتَخَطّى المَجموعَة. ومِثلُها حَقيقَتانِ كانَتا تُؤخَذانِ مِن القِياس: سَلَّةُ الباقي تُقرَأُ في المُعامَلَة
+    /// (كانَت <c>SurvivorCart</c> فَتُكتَبُ سَلَّةُ المُندَمِجِ فَوقَ سَلَّةٍ حَفِظَها الباقي بَعدَ القِياس)، ومَفاتيحُ المُندَمِجِ تُسأَلُ ما دامَ جَدوَلُها قائِماً
+    /// (<see cref="Scan.HasKeysTable"/>؛ كانَت حينَ عَدَّ القِياسُ مِفتاحاً، فَمِفتاحٌ صَدَرَ بَعدَه يَبقى لِمَمحُوٍّ ويُرَدُّ <c>ActorGone</c>).</para></remarks>
     public static async Task<long> ApplyAsync(IDocumentStore store, string tenant, Scan scan, DateTime now, CancellationToken ct = default)
     {
         if (!scan.Mergeable) throw new InvalidOperationException("merge_blocked: " + string.Join(" · ", scan.Blocks));
@@ -334,10 +345,13 @@ public static class DuplicatePhones
     {
         var g = scan.Group;
         await using var s = store.LightweightSession(tenant);
-        var survivor = await s.LoadAsync<User>(g.Survivor, ct) ?? throw new InvalidOperationException("survivor_gone");
-        var losers = new List<User>();
-        foreach (var id in g.Losers)
-            losers.Add(await s.LoadAsync<User>(id, ct) ?? throw new InvalidOperationException("loser_gone"));
+        var found = await s.LoadAsync<User>(g.Survivor, ct);
+        var read = new List<User?>();
+        foreach (var id in g.Losers) read.Add(await s.LoadAsync<User>(id, ct));
+        // ‏(‏2026-11-05، G2R3-1) الخُطَّةُ تُسأَلُ عَلى هذه القِراءَةِ — في كُلِّ مُحاوَلَة — قَبلَ أَيِّ كِتابَة.
+        if (StaleMember(g, found, read) is { } stale) throw new InvalidOperationException($"{MergeStale}: {stale}");
+        User survivor = found!;
+        var losers = read.ConvertAll(l => l!);
 
         long moved = 0;
         foreach (var rp in scan.Repoints)
@@ -357,7 +371,7 @@ public static class DuplicatePhones
             moved++;
         }
 
-        var survivorHasCart = scan.SurvivorCart;
+        var survivorHasCart = await s.LoadAsync<Cart>(g.Survivor, ct) is not null;
         var staged = new HashSet<string>(StringComparer.Ordinal);
         foreach (var loser in losers)
         {
@@ -381,7 +395,7 @@ public static class DuplicatePhones
                 }
                 s.Delete<Cart>(loser.Id);
             }
-            if (scan.Keys > 0)
+            if (scan.HasKeysTable)
             {
                 // ‏الوَثيقَةُ عامَّة: تُسأَلُ بِحَقلِ مُستَأجِرِها لا بِجَلسَتِه. والاسمُ في خَطِّ الصَفقَةِ (<c>ActorName</c>) لا يُمَسّ.
                 foreach (var key in await s.Query<ApiKeyDocument>().Where(k => k.TenantSlug == tenant && k.ActorUserId == loser.Id).ToListAsync(ct))
@@ -456,6 +470,27 @@ public static class DuplicatePhones
 
     private static bool Planned(string? phone, Rename rename)
         => Eligible(phone) && string.Equals(PhoneNumber.Canonical(phone), rename.To, StringComparison.Ordinal);
+
+    /// <summary>رَمزُ مَجموعَةٍ لَم تَعُد خُطَّتُها تَنطَبِقُ عَلى ما قُرِئَ الآن — يُرمى مِن <see cref="ApplyAsync"/> قَبلَ أَيِّ كِتابَة، ويَتَخَطّى السكربتُ مَجموعَتَه.</summary>
+    public const string MergeStale = "merge_stale";
+
+    /// <summary>أَهذا رَفضُ <see cref="MergeStale"/>؟ — بِه يُفَرِّقُ السكربتُ التَخَطّي عَن الخَطَأ.</summary>
+    public static bool IsStale(Exception e)
+        => e is InvalidOperationException && e.Message.StartsWith(MergeStale + ":", StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>أَوَّلُ عُضوٍ في المَجموعَةِ لا تَنطَبِقُ عَلَيه الخُطَّةُ عَلى ما قُرِئَ الآن</b> — أَو <c>null</c> إن انطَبَقَت عَلى الكُلّ. نَقِيَّة (‏2026-11-05، الموجَة ١٢
+    /// Carry — G2R3-1؛ تَوصيفُه <c>c291fed</c>). الشَرطُ شَرطُ إعادَةِ الكَتبِ بِعَينِه (<see cref="StillApplies"/> بِصيغَةِ المَجموعَة <see cref="Group.Canonical"/>): الوَثيقَةُ
+    /// قائِمَة، و<c>DeletedAt</c> فارِغ، والجَوّالُ المُخَزَّنُ في الخُطَّةِ وصيغَتُه صيغَةُ المَجموعَة. فَطَريقا الكِتابَةِ في السكربتِ يَسأَلانِ سُؤالاً واحِداً، والغائِبُ
+    /// (كانَ <c>survivor_gone</c>/<c>loser_gone</c> يوقِفُ السكربت) عُضوٌ لا تَنطَبِقُ عَلَيه الخُطَّة كَالمَمحُوّ. بِتَرتيبِ القِراءَة: الباقي ثُمَّ المُندَمِجونَ بِتَرتيبِ الخُطَّة.</para>
+    /// </summary>
+    public static string? StaleMember(Group group, User? survivor, IReadOnlyList<User?> losers)
+    {
+        if (survivor is null || !StillApplies(survivor, new Rename(survivor.Id, group.Canonical))) return "survivor";
+        for (var i = 0; i < losers.Count; i++)
+            if (losers[i] is not { } loser || !StillApplies(loser, new Rename(loser.Id, group.Canonical))) return $"loser {i + 1}/{losers.Count}";
+        return null;
+    }
 
     private static async Task<long> CountAsync(NpgsqlConnection conn, string sql, CancellationToken ct, params (string, object)[] ps)
     {
