@@ -34,6 +34,23 @@ public static class PayPalSurface
          : TenantPlanPolicy.HoldsLiveSubscription(plan) ? TenantPlanPolicy.PayPalSubscriptionLive
          : null;
 
+    /// <summary>
+    /// <para><b>سُطورُ تَدقيقِ إنشاءِ خُطَّةِ PayPal</b>: سَطرُ الخُطَّةِ كَما كانَ، ثُمَّ سَطرٌ لِكُلِّ مَتجَرٍ أُسقِطَ رابِطُه (‏2026-11-05، الموجَة ١٢ G4 · E-6) —
+    /// بِسلاجِه نِطاقاً وبِالخُطَّةِ الجَديدَةِ مُلاحَظَةً، فَيُقرَأُ في سِجِلِّ كُلِّ مَتجَرٍ لِماذا اختَفى زِرُّ الدَفعِ مِن استوديو صاحِبِه.</para>
+    /// </summary>
+    public static async Task AuditCatalogPlanAsync(
+        Services.Audit.AuditWriter audit, string slug, Guid? adminId, string by,
+        string platformPlanSlug, string payPalPlanId, IReadOnlyList<string> droppedLinks)
+    {
+        await audit.WriteAsync(slug, adminId, by,
+            Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
+            "PlatformPlan", platformPlanSlug, note: payPalPlanId);
+        foreach (var store in droppedLinks)
+            await audit.WriteAsync(store, adminId, by,
+                Services.Subscriptions.PayPalBillingService.LinkDroppedAuditAction,
+                "Tenant", store, note: payPalPlanId);
+    }
+
     /// <summary>الرُؤوسُ الخَمسَة مِن الطَلَب — الغائِبُ سِلسِلَةٌ
     /// فارِغَة، و<see cref="PayPalWebhookHeaders.IsComplete"/> هي
     /// الَّتي تَحكُم. فَلا <c>null</c> يَتَسَلَّل إلى دالَّةِ

@@ -155,7 +155,7 @@ public static class PayPalEndpoints
                 return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(result.FailureReason));
 
             if (!Services.Subscriptions.PayPalBillingService.SaveApproveLink(
-                    session, plan, result, by, DateTime.UtcNow))
+                    session, plan, result, by, DateTime.UtcNow, payPalPlanId))
                 return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkRefused);
 
             await session.SaveChangesAsync(http.RequestAborted);
@@ -208,10 +208,11 @@ public static class PayPalEndpoints
                     session, PayPalCatalogPolicy.BindingFor(draft, created, by, DateTime.UtcNow)))
                 return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkRefused);
 
+            // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه `98c312f`) **وروابِطُ الخُطَّةِ الَّتي حَلَّ مَحَلَّها تُسقَطُ لِكُلِّ مَتجَرٍ عَلى الباقَة**
+            // في الجَلسَةِ نَفسِها، وسَطرُ تَدقيقٍ لِكُلٍّ مِنها بَعدَ الإيداع (`PayPalSurface.AuditCatalogPlanAsync`).
+            var dropped = await Services.Subscriptions.PayPalBillingService.DropStaleLinksAsync(session, draft.PlanSlug, created.PlanId, ct);
             await session.SaveChangesAsync(ct);
-            await audit.WriteAsync(slug, admin.User?.Id, by,
-                Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
-                "PlatformPlan", draft.PlanSlug, note: created.PlanId);
+            await PayPalSurface.AuditCatalogPlanAsync(audit, slug, admin.User?.Id, by, draft.PlanSlug, created.PlanId, dropped);
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
         }).RequireFormBody().DisableAntiforgery();
 

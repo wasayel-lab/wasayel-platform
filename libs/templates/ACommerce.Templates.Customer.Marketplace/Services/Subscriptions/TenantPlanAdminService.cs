@@ -50,6 +50,11 @@ public static class TenantPlanAdminService
         string setBy, DateTime at)
     {
         var stored = await session.LoadAsync<TenantPlan>(tenantSlug);
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه `98c312f`) خُطَّةُ PayPal الَّتي تُحَلُّ لِلباقَةِ اليَوم — تُسأَلُ حينَ يوجَدُ رابِطٌ يُحمَلُ فَقَط.
+        var resolved = stored is { PayPalApproveUrl.Length: > 0 } && string.Equals(stored.PlanId, planId, StringComparison.Ordinal)
+            ? PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(planId), await session.LoadAsync<PlatformPlanPayPal>(planId))
+            : null;
+        var keepsLink = KeepsPayLink(stored, planId, resolved);
         var plan = new TenantPlan
         {
             Id        = tenantSlug,
@@ -62,7 +67,8 @@ public static class TenantPlanAdminService
             SetBy     = setBy,
             SetAt     = at,
             PayPalSubscriptionId = stored?.PayPalSubscriptionId,
-            PayPalApproveUrl     = KeepsPayLink(stored, planId) ? stored!.PayPalApproveUrl : null,
+            PayPalApproveUrl     = keepsLink ? stored!.PayPalApproveUrl : null,
+            PayPalApprovePlanId  = keepsLink ? stored!.PayPalApprovePlanId : null,
             RenewalCancelledAt   = stored?.RenewalCancelledAt,
         };
 
@@ -89,8 +95,15 @@ public static class TenantPlanAdminService
     /// عِندَنا لِاشتِراكٍ قَد يُلغيه المُشرِفُ مِن لَوحَةِ PayPal. ورابِطٌ جَديدٌ يَكتُبُ فَوقَه (<c>SaveApproveLink</c>)، وكَذلِكَ أَوَّلُ رِسالَة.
     /// <b>‏(‏2026-11-05، E-1) والرابِطُ لا يَكتُبُه بَعدَ اليَوم</b> — تَكتُبُه الرِسالَةُ المُوَثَّقَةُ وَحدَها، ورابِطٌ جَديدٌ يُرَدُّ ما دامَ اشتِراكٌ قائِماً.</para>
     /// </summary>
-    public static bool KeepsPayLink(TenantPlan? stored, string planId)
-        => stored is not null && string.Equals(stored.PlanId, planId, StringComparison.Ordinal);
+    ///
+    /// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه <c>98c312f</c>) وما دامَت خُطَّةُ PayPal نَفسَها</b>: الرِباطُ مِفتاحُه سلاجُ الباقَة،
+    /// فَخُطَّةٌ أُعيدَ إنشاؤُها (‏$10 ← $25) مِن صَفحَةِ أَيِّ مَتجَرٍ تَترُكُ رابِطَ الأَمسِ يَعرِضُ السِعرَ القَديم. فَيُقارَنُ ما سَجَّلَه الرابِطُ
+    /// (<see cref="TenantPlan.PayPalApprovePlanId"/>) بِما يُحَلُّ اليَوم (<paramref name="payPalPlanId"/>) <c>Ordinal</c>؛ و<c>null</c> مَعَ <c>null</c>
+    /// سَواءٌ — رابِطٌ كُتِبَ قَبلَ الحَقلِ ولا خُطَّةَ تُحَلُّ اليَوم يَبقى كَما كان.</para>
+    public static bool KeepsPayLink(TenantPlan? stored, string planId, string? payPalPlanId = null)
+        => stored is not null
+           && string.Equals(stored.PlanId, planId, StringComparison.Ordinal)
+           && string.Equals(stored.PayPalApprovePlanId, payPalPlanId, StringComparison.Ordinal);
 
     /// <summary>
     /// <para><b>إيقافٌ يَدَوِيّ</b> — يُخفي المَتجَرَ مِن لَحظَتِه ولا

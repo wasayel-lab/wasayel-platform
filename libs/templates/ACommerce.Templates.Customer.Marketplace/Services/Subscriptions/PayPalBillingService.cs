@@ -206,16 +206,66 @@ public static class PayPalBillingService
     /// تَصِلُ لَه رِسالَةُ إلغاءٍ تَفُكُّه. فَتَكتُبُه الرِسالَةُ المُوَثَّقَةُ وَحدَها (<c>PayPalBillingPolicy.Apply</c>)، ومُعَرِّفُ الاشتِراكِ
     /// المُعَلَّقِ في سَطرِ التَدقيقِ الَّذي تَكتُبُه النُقطَة.</para>
     /// </summary>
+    ///
+    /// <para><b>ويُسَجِّلُ خُطَّةَ PayPal الَّتي صُنِعَ مِنها</b> (‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه <c>98c312f</c>): <paramref name="payPalPlanId"/>
+    /// هُوَ ما حَلَّه <c>PlatformPlanPayPalBinding.Resolve</c> لِلنُقطَة، فَيُعرَفُ بَعدَها أَيُّ سِعرٍ يَفتَحُه الرابِط (<c>KeepsPayLink</c>،
+    /// <see cref="DropStaleLinksAsync"/>).</para>
     public static bool SaveApproveLink(
         IDocumentSession session, TenantPlan? plan,
-        SubscriptionResult result, string by, DateTime at)
+        SubscriptionResult result, string by, DateTime at, string? payPalPlanId = null)
     {
         if (plan is null || string.IsNullOrWhiteSpace(result.ApproveUrl)) return false;
 
         plan.PayPalApproveUrl     = result.ApproveUrl;
+        plan.PayPalApprovePlanId  = string.IsNullOrWhiteSpace(payPalPlanId) ? null : payPalPlanId.Trim();
         plan.SetBy                = by;
         plan.SetAt                = at;
         session.Store(plan);
         return true;
+    }
+    /// <summary>إسقاطُ رابِطِ دَفعٍ صُنِعَ مِن خُطَّةٍ أُعيدَ إنشاؤُها — سَطرُ تَدقيقٍ لِكُلِّ مَتجَر.</summary>
+    public const string LinkDroppedAuditAction = "platform.tenant_plan_paypal_link_dropped";
+
+    /// <summary>
+    /// <para><b>أَيَحمِلُ هذا المَتجَرُ رابِطاً صُنِعَ مِن خُطَّةٍ غَيرِ <paramref name="payPalPlanId"/>؟</b> (‏2026-11-05، الموجَة ١٢ G4 · E-6)
+    /// باقَتُه <paramref name="platformPlanSlug"/>، ورابِطُه مَحفوظ، وما سَجَّلَه الرابِطُ غَيرُ الخُطَّةِ الجَديدَة (و<c>null</c> — رابِطٌ كُتِبَ
+    /// قَبلَ الحَقلِ — غَيرُها: لا يُعرَفُ مِن أَيِّ خُطَّةٍ صُنِع). دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static bool HoldsStaleLink(TenantPlan plan, string platformPlanSlug, string payPalPlanId)
+        => string.Equals(plan.PlanId, platformPlanSlug, StringComparison.Ordinal)
+           && !string.IsNullOrWhiteSpace(plan.PayPalApproveUrl)
+           && !string.Equals(plan.PayPalApprovePlanId, payPalPlanId?.Trim(), StringComparison.Ordinal);
+
+    /// <summary>
+    /// <para><b>يُسقِطُ الروابِطَ العَتيقَةَ مِن الباقاتِ المُعطاة، ويُرجِعُ سلاجاتِ ما أُسقِط</b> — في الجَلسَةِ ولا يُودِع، كَجاراتِه. يُمحى الرابِطُ
+    /// وخُطَّتُه وَحدَهُما: لا الاشتِراكُ ولا العَلامَةُ ولا التَواريخُ ولا مَن ضَبَطَ ومَتى (سَطرُ التَدقيقِ هُوَ الأَثَر). فَلا يَبقى في الاستوديو زِرٌّ
+    /// يَفتَحُ سِعراً لَم يَعُد سِعرَ الباقَة، ويُنشِئُ المُشرِفُ رابِطَ الخُطَّةِ الجَديدَة.</para>
+    /// </summary>
+    public static IReadOnlyList<string> DropStaleLinks(
+        IDocumentSession session, IEnumerable<TenantPlan> holders, string platformPlanSlug, string payPalPlanId)
+    {
+        var dropped = new List<string>();
+        foreach (var plan in holders.Where(h => HoldsStaleLink(h, platformPlanSlug, payPalPlanId)))
+        {
+            plan.PayPalApproveUrl    = null;
+            plan.PayPalApprovePlanId = null;
+            session.Store(plan);
+            dropped.Add(plan.Id);
+        }
+        return dropped;
+    }
+
+    /// <summary>
+    /// <para><b>بابُ إنشاءِ الخُطَّةِ يُسقِطُ روابِطَ الخُطَّةِ الَّتي حَلَّ مَحَلَّها، لِكُلِّ مَتجَرٍ يَحمِلُ واحِداً</b> (‏2026-11-05، الموجَة ١٢ G4 · E-6؛
+    /// تَوصيفُه <c>98c312f</c>) — الرِباطُ لِلباقَةِ لا لِلمَتجَر، فَخُطَّةٌ تُنشَأُ مِن صَفحَةِ B تُغَيِّرُ ما يَفتَحُه رابِطُ A التالي. الاستِعلامُ عَلى
+    /// الباقَةِ والرابِطِ المَحفوظ، والحُكمُ <see cref="HoldsStaleLink"/>.</para>
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> DropStaleLinksAsync(
+        IDocumentSession session, string platformPlanSlug, string payPalPlanId, CancellationToken ct = default)
+    {
+        var holders = await session.Query<TenantPlan>()
+            .Where(p => p.PlanId == platformPlanSlug && p.PayPalApproveUrl != null)
+            .ToListAsync(ct);
+        return DropStaleLinks(session, holders, platformPlanSlug, payPalPlanId);
     }
 }

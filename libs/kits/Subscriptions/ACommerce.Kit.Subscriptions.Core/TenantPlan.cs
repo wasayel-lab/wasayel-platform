@@ -125,6 +125,14 @@ public sealed class TenantPlan
     public string? PayPalApproveUrl { get; set; }
 
     /// <summary>
+    /// <para><b>خُطَّةُ PayPal الَّتي صُنِعَ مِنها <see cref="PayPalApproveUrl"/></b> (‏2026-11-05، الموجَة ١٢ G4 · E-6) — يَكتُبُه
+    /// <c>SaveApproveLink</c> بِما حَلَّه <see cref="PlatformPlanPayPalBinding.Resolve"/> لَحظَتَها. والرِباطُ مِفتاحُه سلاجُ الباقَة، فَخُطَّةٌ
+    /// تُنشَأُ مِن صَفحَةِ أَيِّ مَتجَرٍ تُعيدُ تَسعيرَ كُلِّ مَتجَرٍ عَلى الباقَة: الرابِطُ يُحمَلُ ما دامَ هذا المُعَرِّفُ هُوَ ما يُحَلُّ اليَوم، ويُسقَطُ
+    /// عِندَ إنشاءِ خُطَّةٍ غَيرِه. و<c>null</c> لِرابِطٍ كُتِبَ قَبلَه.</para>
+    /// </summary>
+    public string? PayPalApprovePlanId { get; set; }
+
+    /// <summary>
     /// <para>مَتى وَصَلَت رِسالَةُ إلغاءٍ أَو تَعليقٍ مِن PayPal.</para>
     ///
     /// <para><b>ولا تُطفِئ مَتجَراً</b>: الحالَةُ تَبقى مُشتَقَّةً مِن
