@@ -84,14 +84,21 @@
             @* (‏2026-10-29، قَرارُ المالِك د38 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وعَلى صَفقَةٍ في «نِزاع» — بَديلُ «إلغاء» في بابِ الحَسمِ أَدناه إلغاءٌ مِن هُنا. *@
             @* (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وطَلَبٌ يَحمِلُ مَعَها أَخَواتٍ لَم تُسَلَّم يُقالُ بِأَسمائِها ومَبلَغِ تَحصيلِه — فَلا تُلغى
                وَحدَها، وبابُها «إلغاء الطَّلَب كامِلاً» أَو الإلغاءُ بَعدَ التَسليم. الدالَّةُ نَفسُها الَّتي يَرُدُّ بِها الكاتِب (`DealCancelAuthorization.LiveOnWaybill`). *@
-            @if (DealShipping.HoldsLiveOrder(deal) && deal.Status is DealStatus.Active or DealStatus.Cancelled or DealStatus.Disputed)
+            @* (‏2026-11-05، الموجَة ١٢ G3 · ٦ — D-4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والشَريحَةُ مِن دالَّةٍ نَقِيَّة — «قائِمٌ» ما دامَت تَسيرُ في شُحنَة (`OnLiveWaybill`) لا ما دامَ الطَلَبُ
+               عِندَ OTO، ونَقدٌ قُبِضَ يَقولُ إنّ الإلغاءَ يَكتُبُ رَدَّه مُستَحَقّاً عَلى البائِع (`DealCancelAuthorization.StudioOtoChipOf`). *@
+            var otoChip = DealCancelAuthorization.StudioOtoChipOf(deal, waybillLive.Count);
+            @if (otoChip == StudioOtoChip.Live)
             {
-                @if (waybillLive.Count == 0) { <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div> }
-                else
-                {
-                    <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Format("studio.deal.oto_order_live_group",
-                        DealCancelAuthorization.TitlesOf(waybillLive), deal.AmountSar + waybill.Sum(d => d.AmountSar))</div>
-                }
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div>
+            }
+            else if (otoChip == StudioOtoChip.LiveGroup)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Format("studio.deal.oto_order_live_group",
+                    DealCancelAuthorization.TitlesOf(waybillLive), deal.AmountSar + waybill.Sum(d => d.AmountSar))</div>
+            }
+            else if (otoChip == StudioOtoChip.DeliveredCash)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live_delivered")</div>
             }
 
             @* «يَحتاجُ تَدَخُّلاً» عِندَ صاحِبِ المَتجَر (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت، ولَم تُغلَقِ

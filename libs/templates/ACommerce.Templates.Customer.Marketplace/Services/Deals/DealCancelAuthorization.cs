@@ -190,7 +190,27 @@ public static class DealCancelAuthorization
 
     /// <summary>عَناوينُ الصَفَقاتِ كَما تُسَمّيها شَريحَةُ الشُحنَةِ في الاستوديو — «…»، «…» — مَحفوظَةً بِحَرفِها مِن السَلَّة.</summary>
     public static string TitlesOf(IEnumerable<Deal> deals) => string.Join("، ", deals.Select(d => $"«{d.ListingTitle}»"));
+
+    /// <summary>
+    /// <para><b>أَيُّ شَريحَةِ OTO تُرسَمُ فَوقَ بابِ الإلغاءِ في صَفحَةِ صَفقَةِ الاستوديو — دالَّةٌ نَقِيَّة</b> (‏2026-11-05، الموجَة ١٢ G3 · ٦ — D-4؛ تَوصيفُه <c>2be2464</c>): الشَريحَةُ
+    /// العامَّةُ كانَت بِشَرطِ <see cref="DealShipping.HoldsLiveOrder"/> — و«delivered» لَيسَ نِهائِيّاً عِندَ OTO فَيَبقى صادِقاً بَعدَ التَسليم — فَتَقولُ «طَلَبُ شَحنٍ قائِمٌ … يُلغي البائِعُ
+    /// الشُّحنَة» عَن شُحنَةٍ انتَهَت. والآن: نَقدٌ قُبِضَ عَلى طَلَبٍ عِندَ OTO (<see cref="DealsPolicy.CollectedInCash"/>، ومِنه ما سُلِّمَ أَثناءَ النِزاع) وهي قائِمَةٌ أَو في «نِزاع» ⇐
+    /// <see cref="StudioOtoChip.DeliveredCash"/> (إلغاؤها يَكتُبُ رَدَّ ثَمَنِها مُستَحَقّاً عَلى البائِع)؛ وإلّا ما دامَت تَسيرُ في شُحنَة (<see cref="OnLiveWaybill"/>) — وبَعدَ إلغائِها
+    /// أَيضاً (الشُحنَةُ عَلى حِسابِ البائِع) — <see cref="StudioOtoChip.Live"/> أَو <see cref="StudioOtoChip.LiveGroup"/> بِأَخَواتِها السائِرَة؛ وإلّا لا شَيء.</para>
+    /// </summary>
+    public static StudioOtoChip StudioOtoChipOf(Deal deal, int liveSiblings)
+    {
+        if (DealShipping.IsPlaced(deal) && DealsPolicy.CollectedInCash(deal) && deal.Status is DealStatus.Active or DealStatus.Disputed)
+            return StudioOtoChip.DeliveredCash;
+        if (!OnLiveWaybill(deal) || deal.Status is not (DealStatus.Active or DealStatus.Cancelled or DealStatus.Disputed))
+            return StudioOtoChip.None;
+        return liveSiblings == 0 ? StudioOtoChip.Live : StudioOtoChip.LiveGroup;
+    }
 }
+
+/// <summary>شَريحَةُ OTO في صَفحَةِ صَفقَةِ الاستوديو — مَعجَمٌ مُغلَقٌ يُجيبُ بِه <see cref="DealCancelAuthorization.StudioOtoChipOf"/>، ولِكُلٍّ نَصُّه في القامُوس
+/// (<c>studio.deal.oto_order_live</c>، <c>…_group</c>، <c>…_delivered</c>) يَرسُمُه فَرعُه في الصَفحَة.</summary>
+public enum StudioOtoChip { None, Live, LiveGroup, DeliveredCash }
 
 /// <summary>
 /// <para>ناتِجُ الإلغاء. <b>ولِماذا لا <c>Deal?</c> كَما كانَ</b>:

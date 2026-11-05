@@ -248,8 +248,10 @@ public class DealCancelStageTests(ITestOutputHelper output)
         var page = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
             "libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppDealDetail.razor"));
         Assert.True(page.Length > 1000, "أَداةٌ عَمياء: صَفحَةُ صَفقَةِ الاستوديو لَم تُقرَأ.");
-        var chip = page.IndexOf("@if (DealShipping.HoldsLiveOrder(deal)", StringComparison.Ordinal);
-        Assert.True(chip > 0, "صَفحَةُ الاستوديو لا تَسأَلُ HoldsLiveOrder.");
+        // (‏2026-11-05، الموجَة ١٢ G3 · ٦ — D-4): الشَريحَةُ مِن `DealCancelAuthorization.StudioOtoChipOf` — «قائِمٌ» ما دامَت تَسيرُ في شُحنَة (`OnLiveWaybill`)، لا `HoldsLiveOrder`
+        // الصادِقُ بَعدَ التَسليم؛ صُفوفُها في `StudioOtoChipSwitchTests`.
+        var chip = page.IndexOf("var otoChip = DealCancelAuthorization.StudioOtoChipOf(deal, waybillLive.Count);", StringComparison.Ordinal);
+        Assert.True(chip > 0, "صَفحَةُ الاستوديو لا تَسأَلُ StudioOtoChipOf.");
         Assert.True(chip < page.IndexOf("/cancel\")", StringComparison.Ordinal), "نَصُّ الطَلَبِ القائِمِ لا يَسبِقُ زِرَّ الإلغاء.");
         Assert.Contains("studio.deal.oto_order_live", page[chip..(chip + 300)], StringComparison.Ordinal);
         Assert.Equal("لِهذِه الصَّفقَةِ طَلَبُ شَحنٍ قائِمٌ عِندَ OTO عَلى حِسابِ البائِع — إلغاؤها مِن هُنا لا يُلغيه؛ يُلغي البائِعُ الشُّحنَةَ مِن حِسابِه في OTO.",
