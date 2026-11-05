@@ -56,11 +56,15 @@ namespace ACommerce.Platform.Tests;
 // تَجريدٌ جَديد. والبَديلُ كانَ نَسخَ ‏128 سَطراً مِن أَداةِ قِياسٍ
 // تَنجَرِفُ نُسخَتاها (القاعِدَة ٢).
 
+// **ومُعالِجُ PayPal والمُضيفُ و`Signed`/`SignIn`/`Admin` صارَت `internal` لا `file`** (‏2026-11-05، الموجَة ١٢ G4 · E-1): وَصَلَ
+// مُستَهلِكانِ بِالحاجَةِ نَفسِها (`PayPalArrangementChangeCharacterizationTests` ومِلَفُّ تَبديلِه) — نَقلُ نِطاقٍ بِصِفرِ تَغييرٍ في السُلوك،
+// كَما خَرَجَ `DocWorld` إلى `EndpointDocWorld.cs`؛ والبَديلُ نُسخَةٌ ثانِيَةٌ مِن المُضيفِ تَنجَرِف (القاعِدَة ٢).
+
 // ─── مُعالِجُ PayPal الوَهمِيّ — ويَعُدُّ ما لَم يُرسَل ───────────────
 
 /// <summary><b>يُسَجِّلُ كُلَّ طَلَبٍ خارِج</b>، فَ«رُدَّت بِلا نِداءِ
 /// PayPal» تَصيرُ عَدَداً لا دَعوى.</summary>
-file sealed class PayPalCalls : HttpMessageHandler
+internal sealed class PayPalCalls : HttpMessageHandler
 {
     private readonly Queue<(HttpStatusCode Status, string Body)> _replies = new();
 
@@ -91,7 +95,7 @@ file sealed class PayPalCalls : HttpMessageHandler
 
 // ─── المُضيفُ المُصَغَّر — نَفسُ النِقاطِ ونَفسُ المُوَجِّه ────────────
 
-file sealed class PayPalHost : IAsyncDisposable
+internal sealed class PayPalHost : IAsyncDisposable
 {
     private readonly WebApplication _app;
 
@@ -187,7 +191,7 @@ public class PayPalEndpointBehaviourTests
     };
 
     /// <summary>الرُؤوسُ الخَمسَةُ كامِلَةً — <c>IsComplete</c> تَقبَل.</summary>
-    private static HttpRequestMessage Signed(string body)
+    internal static HttpRequestMessage Signed(string body)
     {
         var req = new HttpRequestMessage(HttpMethod.Post, PayPalEndpoints.WebhookPath)
         {
@@ -335,9 +339,9 @@ public class PayPalEndpointBehaviourTests
         ["days"] = "30", ["description"] = "اشتِراكُ شَهر",
     });
 
-    private static StudioUser Admin(Guid id) => new() { Id = id, IsPlatformAdmin = true };
+    internal static StudioUser Admin(Guid id) => new() { Id = id, IsPlatformAdmin = true };
 
-    private static void SignIn(HttpClient client, Guid userId)
+    internal static void SignIn(HttpClient client, Guid userId)
         => client.DefaultRequestHeaders.Add(
             "Cookie", $"{StudioAuth.CookieName}={AuthHandlers.MakeToken(userId, StudioAuth.Tenant)}");
 
