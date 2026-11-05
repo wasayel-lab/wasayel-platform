@@ -27,13 +27,15 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         return d;
     }
 
+    /// <summary>‏(‏2026-11-05، G1b-R1-1) `ReturnToldStoreOf` صارَت `ReturnToldOf` بِمَعجَمٍ مُغلَقٍ ثُلاثِيّ — والصَفُّ نَفسُه عَلى بَديلِ المَتجَر؛ وبَديلُ «لا أَحَد» صُفوفُه
+    /// في `ChatPartnerGoneOwnerlessStoreRowsTests`.</summary>
     [Fact]
     public void The_store_was_told_only_when_the_deal_carries_return_told_store()
     {
-        Assert.True(DealNotices.ReturnToldStoreOf(WithTold(DealNotices.ReturnToldStore)));
-        Assert.False(DealNotices.ReturnToldStoreOf(WithTold(null)));
-        Assert.False(DealNotices.ReturnToldStoreOf(WithTold("vendor")));
-        Assert.False(DealNotices.ReturnToldStoreOf(WithTold("Store")));
+        Assert.Equal(DealNotices.ReturnTold.Store, DealNotices.ReturnToldOf(WithTold(DealNotices.ReturnToldStore)));
+        Assert.Equal(DealNotices.ReturnTold.Vendor, DealNotices.ReturnToldOf(WithTold(null)));
+        Assert.Equal(DealNotices.ReturnTold.Vendor, DealNotices.ReturnToldOf(WithTold("vendor")));
+        Assert.Equal(DealNotices.ReturnTold.Vendor, DealNotices.ReturnToldOf(WithTold("Store")));
     }
 
     /// <summary><b>المُوجَب</b>: كُلُّ مِفتاحٍ في العائِلَةِ بِبَديلِه حينَ المُخبَرُ إدارَةُ المَتجَر. <b>والسالِب</b>: بِلا بَديلٍ حينَ البائِع، ومِفتاحٌ مِن خارِجِها كَما هُوَ.</summary>
@@ -43,10 +45,10 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         Assert.Equal(4, DealNotices.ReturnKeys.Count);
         foreach (var key in DealNotices.ReturnKeys)
         {
-            Assert.Equal(key + DealNotices.StoreVariant, DealNotices.ReturnKey(key, toStore: true));
-            Assert.Equal(key, DealNotices.ReturnKey(key, toStore: false));
+            Assert.Equal(key + DealNotices.StoreVariant, DealNotices.ReturnKey(key, DealNotices.ReturnTold.Store));   // ‏(‏2026-11-05، G1b-R1-1) بِمَن أُخبِرَ لا بِـbool
+            Assert.Equal(key, DealNotices.ReturnKey(key, DealNotices.ReturnTold.Vendor));
         }
-        Assert.Equal("deals.detail.err_deal_not_found", DealNotices.ReturnKey("deals.detail.err_deal_not_found", toStore: true));
+        Assert.Equal("deals.detail.err_deal_not_found", DealNotices.ReturnKey("deals.detail.err_deal_not_found", DealNotices.ReturnTold.Store));
         Assert.Equal("deals.detail.event_return_requested_store", DealNotices.ReturnEventKey(WithTold(DealNotices.ReturnToldStore), studio: false));
         Assert.Equal("studio.deal.event_return_requested_store", DealNotices.ReturnEventKey(WithTold(DealNotices.ReturnToldStore), studio: true));
         Assert.Equal("deals.detail.event_return_requested", DealNotices.ReturnEventKey(WithTold(null), studio: false));
@@ -104,9 +106,10 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         var pipe = src[src.IndexOf("public async Task<bool> NotifyReturnRequestedAsync(", StringComparison.Ordinal)..];
         pipe = pipe[..pipe.IndexOf("return true;\n    }", StringComparison.Ordinal)];
         int At(string s, string what) => s.IndexOf(what, StringComparison.Ordinal);
-        var gone = At(pipe, "AccountErasure.PartnerGone(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct))");
+        // ‏(‏2026-11-05، G1b-R1-1) والسُؤالُ صارَ داخِلَ القَرارِ الواحِد `ReturnToldFor` (ومَعَه صاحِبُ المَتجَر)، والمَرجِعُ قيمَتُه مِن المَعجَمِ لا ثابِتُ «المَتجَر» وَحدَه.
+        var gone = At(pipe, "told = ReturnToldFor(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));");
         var owner = At(pipe, "NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)");
-        var told = At(pipe, "deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, ReturnToldStore, ct)");
+        var told = At(pipe, "deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, value, ct)");
         var vendor = At(pipe, "ReturnRequestedFor(slug, deal, vendorId, l, DateTime.UtcNow)");
         output.WriteLine($"السُؤال {gone} · صاحِبُ المَتجَر {owner} · المَرجِع {told} · إشعارُ البائِع {vendor}");
         Assert.True(gone > 0 && owner > gone && told > owner && vendor > told, "التَرتيب: السُؤالُ ثُمَّ صاحِبُ المَتجَرِ ثُمَّ المَرجِعُ، وإشعارُ البائِعِ بَعدَها كُلِّها.");
@@ -117,7 +120,7 @@ public class ChatPartnerGoneReturnRowsTests(ITestOutputHelper output)
         Assert.True(form > 0 && page.LastIndexOf("@if (isInitiator && vendorId is { } vid && !vendorGone)", form, StringComparison.Ordinal) > 0, "الاستِمارَةُ خارِجَ شَرطِ الغِياب.");
         var gap = At(page, "else if (isInitiator && vendorId is not null)");
         Assert.True(gap > form && At(page, "@L.Markup(\"vendors.profile.contact_gone\")") > gap, "لا سَطرَ غِيابٍ في البَديل.");
-        Assert.Contains("@L.Format(DealNotices.ReturnKey(\"deals.detail.return_hint\", vendorGone),", page, StringComparison.Ordinal);
+        Assert.Contains("@L.Format(DealNotices.ReturnKey(\"deals.detail.return_hint\", returnTold),", page, StringComparison.Ordinal);   // ‏(‏2026-11-05، G1b-R1-1) قَرارُ الأُنبوب
         Assert.Contains("Message=\"@L[DealNotices.RefusalKeyFor(errKey, deal)]\"", page, StringComparison.Ordinal);
     }
 }

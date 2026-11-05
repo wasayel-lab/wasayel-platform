@@ -515,37 +515,78 @@ public sealed class DealNotices
     };
 
     /// <summary>مَرجِعُ «مَن أُخبِرَ بِطَلَبِ الاستِرجاع» — يُلحِقُه <see cref="NotifyReturnRequestedAsync"/> بِـ<see cref="DealsService.AttachRefAsync(string, Guid, string, string, CancellationToken)"/>
-    /// حينَ تُخبَرُ إدارَةُ المَتجَر، وقيمَتُه مِن مَعجَمٍ مُغلَقٍ واحِد: <see cref="ReturnToldStore"/>. وغِيابُه: أُخبِرَ البائِع.</summary>
+    /// حينَ لا يُخبَرُ البائِع، وقيمَتُه مِن مَعجَمٍ مُغلَقٍ واحِد (<see cref="ReturnToldValue"/>). وغِيابُه: أُخبِرَ البائِع.</summary>
     public const string ReturnToldRef = "return_told";
 
     /// <summary>أُخبِرَت إدارَةُ المَتجَر — البائِعُ أَغلَقَ حِسابَه.</summary>
     public const string ReturnToldStore = "store";
 
+    /// <summary>‏(‏2026-11-05، G1b-R1-1) لَم يُخبَر أَحَد — البائِعُ أَغلَقَ حِسابَه ولا صاحِبَ مُعَيَّناً لِلمَتجَر (<see cref="StoreOwnerOf"/> فارِغ).</summary>
+    public const string ReturnToldNobody = "nobody";
+
+    /// <summary>
+    /// <para><b>مَن يُخبَرُ بِطَلَبِ الاستِرجاع — مَعجَمٌ مُغلَق</b> (‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-1؛ تَوصيفُه <c>d3d728a</c>): البائِع،
+    /// أَو إدارَةُ المَتجَرِ حينَ أَغلَقَ البائِعُ حِسابَه، أَو لا أَحَدَ حينَ لا صاحِبَ مُعَيَّناً لِلمَتجَرِ أَيضاً. كانَ «البائِعُ الغائِبُ ⇐ إدارَةُ المَتجَر» قيمَةً واحِدَةً تُكتَبُ
+    /// بَعدَ أَن يَنجَحَ إشعارُ صاحِبِ المَتجَر — فَفي مَتجَرٍ بِلا صاحِبٍ لا يُكتَبُ شَيءٌ ويَقولُ السِجِلُّ «أُخبِرَ البائِع»، والتَلميحُ يَعِدُ بِإدارَةٍ لا تُخبَر.</para>
+    /// </summary>
+    public enum ReturnTold { Vendor, Store, Nobody }
+
+    /// <summary>القَرارُ الواحِد — يَسأَلُه الأُنبوبُ (<see cref="NotifyReturnRequestedAsync"/>) قَبلَ أَيِّ إشعار، وتَسأَلُه صَفحَةُ الصَفقَةِ لِلتَلميح، بِالمُدخَلَينِ أَنفُسِهِما:
+    /// وَثيقَةُ البائِعِ الَّذي تُسَمّيه <see cref="ReturnRecipient"/>، وصاحِبُ المَتجَر (<see cref="StoreOwnerOf"/>). البائِعُ القائِمُ يُخبَر؛ والغائِبُ
+    /// (<see cref="Identity.AccountErasure.PartnerGone"/>) ⇐ إدارَةُ المَتجَرِ إن كانَ لَه صاحِبٌ مُعَيَّن، وإلّا لا أَحَد. نَقِيَّة.</summary>
+    public static ReturnTold ReturnToldFor(ACommerce.Kit.Auth.User? vendor, Guid? storeOwner)
+        => !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(vendor) ? ReturnTold.Vendor
+            : storeOwner is null ? ReturnTold.Nobody : ReturnTold.Store;
+
+    /// <summary>قيمَةُ <see cref="ReturnToldRef"/> لِما يُقَرِّرُه <see cref="ReturnToldFor"/> — و<c>null</c> لِلبائِع (غِيابُ المَرجِعِ كَما كانَ قَبلَه). نَقِيَّة.</summary>
+    public static string? ReturnToldValue(ReturnTold told) => told switch
+    {
+        ReturnTold.Store => ReturnToldStore,
+        ReturnTold.Nobody => ReturnToldNobody,
+        _ => null,
+    };
+
+    /// <summary>مَن أُخبِرَ بِطَلَبِ استِرجاعِ هذِه الصَفقَة — مِن مَرجِعِها؛ وغِيابُه أَو قيمَةٌ خارِجَ المَعجَمِ: البائِع (ما كُتِبَ قَبلَ المَرجِع). نَقِيَّة.</summary>
+    public static ReturnTold ReturnToldOf(Deal deal)
+        => !deal.Refs.TryGetValue(ReturnToldRef, out var told) ? ReturnTold.Vendor : told switch
+        {
+            ReturnToldStore => ReturnTold.Store,
+            ReturnToldNobody => ReturnTold.Nobody,
+            _ => ReturnTold.Vendor,
+        };
+
     /// <summary>لاحِقَةُ بَديلِ «إدارَةُ المَتجَر» في مَفاتيحِ عائِلَةِ الاستِرجاع (<see cref="ReturnKeys"/>).</summary>
     public const string StoreVariant = "_store";
 
-    /// <summary>مَفاتيحُ النُصوصِ الَّتي تَقولُ مَن يُخبَرُ بِطَلَبِ الاستِرجاع — ولِكُلٍّ بَديلُه بِـ<see cref="StoreVariant"/> في القامُوس (صَفٌّ يَعُدُّها ويَفشَلُ عَلى غائِب).</summary>
+    /// <summary>‏(‏2026-11-05، G1b-R1-1) لاحِقَةُ بَديلِ «لَم يُخبَر أَحَد» — ونَصُّه يُسَمّي البابَ الَّذي تُسَمّيه سِياسَةُ خُصوصِيَّةِ المَنصَّة: «التَواصُل».</summary>
+    public const string NobodyVariant = "_nobody";
+
+    /// <summary>مَفاتيحُ النُصوصِ الَّتي تَقولُ مَن يُخبَرُ بِطَلَبِ الاستِرجاع — ولِكُلٍّ بَديلاهُ بِـ<see cref="StoreVariant"/> و<see cref="NobodyVariant"/> في القامُوس
+    /// (صَفٌّ يَعُدُّها ويَفشَلُ عَلى غائِب).</summary>
     public static readonly IReadOnlyList<string> ReturnKeys = new[]
     {
         "deals.detail.event_return_requested", "studio.deal.event_return_requested", "deals.detail.return_hint", "deals.detail.err_return_already_requested",
     };
 
-    /// <summary>أُخبِرَت إدارَةُ المَتجَرِ بِطَلَبِ استِرجاعِ هذِه الصَفقَة. نَقِيَّة.</summary>
-    public static bool ReturnToldStoreOf(Deal deal)
-        => deal.Refs.TryGetValue(ReturnToldRef, out var told) && string.Equals(told, ReturnToldStore, StringComparison.Ordinal);
+    private static string? VariantOf(ReturnTold told) => told switch
+    {
+        ReturnTold.Store => StoreVariant,
+        ReturnTold.Nobody => NobodyVariant,
+        _ => null,
+    };
 
-    /// <summary>مِفتاحٌ مِن عائِلَةِ الاستِرجاعِ بِبَديلِه حينَ يَكونُ المُخبَرُ إدارَةَ المَتجَر — ومِفتاحٌ مِن خارِجِها كَما هُوَ. نَقِيَّة.</summary>
-    public static string ReturnKey(string key, bool toStore)
-        => toStore && ReturnKeys.Contains(key, StringComparer.Ordinal) ? key + StoreVariant : key;
+    /// <summary>مِفتاحٌ مِن عائِلَةِ الاستِرجاعِ بِبَديلِ مَن أُخبِر — ولِلبائِعِ ومِفتاحٍ مِن خارِجِها كَما هُوَ. نَقِيَّة.</summary>
+    public static string ReturnKey(string key, ReturnTold told)
+        => VariantOf(told) is { } variant && ReturnKeys.Contains(key, StringComparer.Ordinal) ? key + variant : key;
 
     /// <summary>تَسمِيَةُ سَطرِ «طَلَبَ المُشتَري الاستِرجاع» في سِجِلِّ الصَفقَةِ — لِلطَرَفِ (<paramref name="studio"/> = <c>false</c>) ولِلاستوديو — بِمَن أُخبِرَ فِعلاً
-    /// (<see cref="ReturnToldStoreOf"/>). دالَّةُ التَسمِيَةِ لا عَلامَةُ الصَفحَة: تَقرَؤُها الصَفحَتانِ بِحَرفِها. نَقِيَّة.</summary>
+    /// (<see cref="ReturnToldOf"/>). دالَّةُ التَسمِيَةِ لا عَلامَةُ الصَفحَة: تَقرَؤُها الصَفحَتانِ بِحَرفِها. نَقِيَّة.</summary>
     public static string ReturnEventKey(Deal deal, bool studio)
-        => ReturnKey(studio ? "studio.deal.event_return_requested" : "deals.detail.event_return_requested", ReturnToldStoreOf(deal));
+        => ReturnKey(studio ? "studio.deal.event_return_requested" : "deals.detail.event_return_requested", ReturnToldOf(deal));
 
-    /// <summary>مِفتاحُ رَدِّ النُقطَةِ عَلى صَفحَةِ الصَفقَة (<c>?err=</c>) — ورَدُّ التَكرارِ بِبَديلِه حينَ أُخبِرَت إدارَةُ المَتجَر. نَقِيَّة.</summary>
+    /// <summary>مِفتاحُ رَدِّ النُقطَةِ عَلى صَفحَةِ الصَفقَة (<c>?err=</c>) — ورَدُّ التَكرارِ بِبَديلِ مَن أُخبِر. نَقِيَّة.</summary>
     public static string RefusalKeyFor(string key, Deal deal)
-        => string.Equals(key, "deals.detail.err_return_already_requested", StringComparison.Ordinal) ? ReturnKey(key, ReturnToldStoreOf(deal)) : key;
+        => string.Equals(key, "deals.detail.err_return_already_requested", StringComparison.Ordinal) ? ReturnKey(key, ReturnToldOf(deal)) : key;
 
     /// <summary>عُملَةُ الصَفقَة: عُملَةُ الفاتورَةِ كَما ثَبَتَت، وإلّا عُملَةُ إنشائِها (‏2026-11-04، G1 · ٥: صارَت تَقرَؤُها صَفحَةُ الحَذفِ لِبِطاقَةِ البائِع).</summary>
     public static string CurrencyOf(Deal deal)
@@ -858,17 +899,23 @@ public sealed class DealNotices
     /// <para>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2؛ تَوصيفُه <c>77b8471</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والبائِعُ الغائِبُ لا يُكتَبُ في صُندوقِه</b>: يُسأَلُ
     /// <see cref="Identity.AccountErasure.PartnerGone"/> عَلى وَثيقَتِه — كانَ الإشعارُ يُكتَبُ لِلمَمحُوِّ وصاحِبُ المَتجَرِ لا يُخبَر («لِلمَمحُوّ 1 · لِصاحِبِ المَتجَر 0»)،
     /// وصَفقَةٌ مُكتَمِلَةٌ لا تَمنَعُ الحَذفَ (<c>IsOpen</c>) والنافِذَةُ سَبعَةُ أَيّام. فَيُخبَرُ صاحِبُ المَتجَرِ بِإشعارٍ وبَريدٍ (<see cref="OwnerAction.ReturnVendorGone"/>
-    /// بِالأُنبوبِ القائِم)، ويُلحَقُ بِالصَفقَةِ <see cref="ReturnToldRef"/> = <see cref="ReturnToldStore"/> بِكاتِبِ المَراجِعِ الواحِد — فَيَقولُ السِجِلُّ والتَكرارُ مَن أُخبِر.</para></summary>
+    /// بِالأُنبوبِ القائِم)، ويُلحَقُ بِالصَفقَةِ <see cref="ReturnToldRef"/> = <see cref="ReturnToldStore"/> بِكاتِبِ المَراجِعِ الواحِد — فَيَقولُ السِجِلُّ والتَكرارُ مَن أُخبِر.</para>
+    /// <para>‏(‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-1؛ تَوصيفُه <c>d3d728a</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والقَرارُ دالَّةٌ واحِدَة</b>
+    /// (<see cref="ReturnToldFor"/>) تَسأَلُها صَفحَةُ الصَفقَةِ أَيضاً: في مَتجَرٍ بِلا صاحِبٍ كانَ <see cref="NotifyStoreOwnerAsync(string, Deal, OwnerAction, L, CancellationToken)"/>
+    /// يَرُدُّ false فَيَعودُ الأُنبوبُ بِلا كِتابَة («الإشعاراتُ كُلُّها 0 · return_told غائِب · السِجِلّ «أُخبِرَ البائِع» True»). فَيُلحَقُ <see cref="ReturnToldNobody"/>
+    /// — ومَعَه حينَ يَرُدُّ إشعارُ صاحِبِ المَتجَرِ بِلا كِتابَة — بِالكاتِبِ الواحِدِ نَفسِه.</para></summary>
     public async Task<bool> NotifyReturnRequestedAsync(string slug, Deal deal, DealsService deals, L l, CancellationToken ct = default)
     {
         if (ReturnRecipient(deal) is not { } vendorId) return false;
+        ReturnTold told;
         await using (var q = _store.QuerySession(slug))
-            if (ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct)))
-            {
-                if (!await NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)) return false;
-                await deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, ReturnToldStore, ct);
-                return true;
-            }
+            told = ReturnToldFor(await q.LoadAsync<ACommerce.Kit.Auth.User>(vendorId, ct), StoreOwnerOf(await q.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug, ct)));
+        if (told == ReturnTold.Store && !await NotifyStoreOwnerAsync(slug, deal, OwnerAction.ReturnVendorGone, l, ct)) told = ReturnTold.Nobody;
+        if (ReturnToldValue(told) is { } value)
+        {
+            await deals.AttachRefAsync(slug, deal.Id, ReturnToldRef, value, ct);
+            return told != ReturnTold.Nobody;
+        }
         var n = ReturnRequestedFor(slug, deal, vendorId, l, DateTime.UtcNow);
         await using (var s = _store.LightweightSession(slug))
         {

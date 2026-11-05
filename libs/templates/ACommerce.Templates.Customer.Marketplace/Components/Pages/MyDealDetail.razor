@@ -6,6 +6,7 @@
 @inject Services.Deals.DealShipping Shipping
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
 @inject Services.Queries.AccountQueries Accounts
+@inject Services.Queries.TenantDirectory Tenants
 @inject IHttpContextAccessor HttpCtx
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
@@ -486,7 +487,7 @@
             <AcCard>
                 <ChildContent>
                     <h3 style="margin:0 0 6px;">@L.Markup("deals.detail.return_title")</h3>
-                    <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 8px;">@L.Format(DealNotices.ReturnKey("deals.detail.return_hint", vendorGone), Culture.FormatTime(DealReturnRequest.WindowEndsAt(deal)!.Value, "yyyy-MM-dd HH:mm"), (int)DealReturnRequest.Window.TotalDays)</p>
+                    <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 8px;">@L.Format(DealNotices.ReturnKey("deals.detail.return_hint", returnTold), Culture.FormatTime(DealReturnRequest.WindowEndsAt(deal)!.Value, "yyyy-MM-dd HH:mm"), (int)DealReturnRequest.Window.TotalDays)</p>
                     <form method="post" action="@($"/{Slug}/deals/{deal.Id}/return")">
                         <input name="reason" class="ac-input" placeholder="@L["deals.detail.return_reason_placeholder"]" style="margin-bottom:6px;" />
                         <AcButton Type="submit" Variant="ghost" Block="true" Text="@L["deals.detail.return_action"]" />
@@ -576,8 +577,13 @@
     /// و<c>null</c> حَيثُ لا يُعرَفُ أَو كانَ هُوَ أَنا — فَلا يُرسَمُ الزِرّ.</summary>
     Guid? vendorId;
     /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤ — XS-2) البائِعُ أَغلَقَ حِسابَه أَو لا وَثيقَةَ لَه — <see cref="Services.Identity.AccountErasure.PartnerGone"/> الَّتي يَسأَلُها
-    /// بابُ المُحادَثَة: فَلا تُرسَمُ استِمارَتُه، ويَقولُ التَلميحُ إنّ إدارَةَ المَتجَرِ تُخبَرُ بِالاستِرجاع.</summary>
+    /// بابُ المُحادَثَة: فَلا تُرسَمُ استِمارَتُه، ويَقولُ التَلميحُ إنّ إدارَةَ المَتجَرِ تُخبَرُ بِالاستِرجاع. (‏2026-11-05، G1b-R1-1: والتَلميحُ صارَ مِن
+    /// <c>returnTold</c> أَدناه — قَرارُ الأُنبوبِ نَفسُه — و<c>vendorGone</c> لِبابِ المُحادَثَةِ وَحدَه.)</summary>
     bool vendorGone;
+    /// <summary>‏(‏2026-11-05، الموجَة ١٢ G1b — مُراجَعَةُ الإصلاح ١، G1b-R1-1) مَن يُخبِرُه أُنبوبُ الاستِرجاعِ لَو طُلِبَ الآن — <see cref="DealNotices.ReturnToldFor"/> الَّتي يَسأَلُها
+    /// <c>NotifyReturnRequestedAsync</c> بِالمُدخَلَينِ أَنفُسِهِما (بائِعُ <see cref="DealNotices.ReturnRecipient"/> وصاحِبُ المَتجَر)، فَالتَلميحُ يَقولُ ما يَفعَلُه البابُ لا ما يَفتَرِضُه
+    /// <c>vendorGone</c> وَحدَه: كانَ في مَتجَرٍ بِلا صاحِبٍ يَعِدُ بِإدارَةٍ لا تُخبَر.</summary>
+    DealNotices.ReturnTold returnTold;
     /// <summary>مَوقِعي مِن الصَّفقَة — يُغَذّي «دَورُكَ الآن» وَشَرح
     /// التَدَفُّق («صاحِب الطَلَب» تُصبِح «أَنتَ»).</summary>
     Services.Ux.DealSide mySide = Services.Ux.DealSide.Observer;
@@ -602,6 +608,8 @@
         if (vendorId == uid) vendorId = null;
         vendorGone = isInitiator && vendorId is { } seller
             && Services.Identity.AccountErasure.PartnerGone(await Accounts.ProfileAsync(Slug, seller));
+        if (isInitiator && DealNotices.ReturnRecipient(deal) is { } returnVendor)
+            returnTold = DealNotices.ReturnToldFor(await Accounts.ProfileAsync(Slug, returnVendor), DealNotices.StoreOwnerOf(await Tenants.FindAsync(Slug)));
 
         // بَياناتُ التَوصيلِ لِمَن يُسَلِّمُ وَحدَه — لا لِلمُشتَري (بَياناتُه هُوَ) ولا
         // لِثالِث (أُغلِقَت الصَفحَةُ عَلَيه أَعلاه). وبِثابِتَي `Deal` لا بِحَرفِيَّة،
