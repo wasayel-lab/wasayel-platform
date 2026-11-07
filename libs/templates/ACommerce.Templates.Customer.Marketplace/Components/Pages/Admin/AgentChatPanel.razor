@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject Marten.IDocumentStore Store
 @inject IHttpContextAccessor HttpCtx
 @inject NavigationManager Nav
@@ -182,9 +183,12 @@
 
     // ‏(‏2026-11-05، G2R1-1) كُلُّ مُعالِجٍ يَحجِزُ isWorking قَبلَ أَوَّلِ await ثُمَّ يَسأَلُ الجَلسَة، ويَفُكُّ الحَجزَ عَلى الرَفض — السُؤالُ قِراءَةُ Postgres، ونَقرَةٌ
     // ثانِيَةٌ تَصِلُ أَثناءَها كانَت تَرى العَلَمَ فارِغاً فَتَعبُر (نِداءا نَموذَجٍ وتَشغيلا أَداة). والتَخويلُ قَبلَ فَحصِ الرِسالَةِ الفارِغَة (القاعِدَة ٦).
+    // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والمِفتاحُ في رَأسِ المُعالِجاتِ الأَربَعَةِ قَبلَ
+    // الحَجزِ وأَيِّ نِداء، كَما في نَظيرِها `StudioAgent` (‏F3، `b5a0211`) — و`isWorking` أَوَّلُ الشُقوقِ كَما يَقرَؤُه ماسِحُ الدائِرَة (G2R1-1): `AgentChat.razor` يَحجُبُ التَصييرَ وَحدَه، وجَزيرَةٌ أُعيدَ تَشغيلُها مِن خادِمٍ مُضاءٍ عَلى خادِمٍ مُطفَأٍ
+    // (حَلقَةُ مَفاتيحٍ واحِدَة، واصِفٌ أَحدَثُ مِن خَمسِ دَقائِق) طَبَّقَت `create_tenant` فَكَتَبَ المُطفَأُ مَتجَراً (تَقريرُ العَدَسَة).
     async Task SendAsync()
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         var msg = newMessage?.Trim() ?? "";
         newMessage = "";
         isWorking = true;
@@ -208,7 +212,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
@@ -227,7 +231,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
@@ -240,7 +244,7 @@
 
     async Task ResetAsync()
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }

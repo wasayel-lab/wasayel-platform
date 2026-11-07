@@ -226,6 +226,45 @@ public class StudioAgentSwitchTests(ITestOutputHelper output)
     public void The_handler_switch_scanner_goes_red_on_a_missing_late_or_weakened_switch(string sample, bool asks)
         => Assert.Equal(asks, AsksTheSwitchBeforeTheDoor(sample, "SendAsync"));
 
+    // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-3) **وجَزيرَةُ `/admin/agent` بِالمِفتاحِ نَفسِه** — كانَ `AgentChat.razor` يَحجُبُ
+    // تَصييرَها وَحدَه، ومُعالِجاتُها الأَربَعَةُ تَسأَلُ `isWorking` والجَلسَة: جَزيرَةٌ أُعيدَ تَشغيلُها مِن خادِمٍ مُضاءٍ عَلى خادِمٍ مُطفَأٍ طَبَّقَت `create_tenant`
+    // (تَقريرُ العَدَسَة). والآن `!AgentSwitch.Enabled` شِقٌّ في رَأسِ كُلٍّ مِنها، قَبلَ الحَجزِ والجَلسَةِ وأَيِّ نِداء — لا بابَ فيها (حارِسُها `RequirePlatformAdmin`
+    // والجَلسَة)، و`isWorking` أَوَّلُ الشُقوقِ لِأَنّ ماسِحَ الدائِرَةِ (`SessionCircuitSwitchTests`، G2R1-1) يَقرَأُ «if (isWorking» ثُمَّ الحَجز.
+
+    /// <summary>أَوَّلُ عِبارَةٍ في جِسمِ المُعالِج <c>if (…) return;</c>، وفي شُقوقِ <c>||</c> العُليا لِشَرطِها <c>!AgentSwitch.Enabled</c> — لا مَربوطاً بِـ<c>&amp;&amp;</c>
+    /// ولا في عِبارَةٍ ثانِيَة.</summary>
+    internal static bool AsksTheSwitchInItsHead(string code, string handler)
+    {
+        var at = code.IndexOf($"async Task {handler}(", StringComparison.Ordinal);
+        if (at < 0) return false;
+        var body = code[(code.IndexOf('{', at) + 1)..].TrimStart();
+        var head = body[..(body.IndexOf(';') + 1)];
+        var m = Regex.Match(head, @"^if \((?<cond>.*)\) return;$", RegexOptions.Singleline);
+        return m.Success && m.Groups["cond"].Value.Split("||").Select(p => p.Trim()).Contains("!AgentSwitch.Enabled");
+    }
+
+    [Fact]
+    public void Every_admin_agent_panel_handler_asks_the_switch_in_its_head()
+    {
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(Read($"{Template}/Components/Pages/Admin/AgentChatPanel.razor")));
+        var found = AgentPageHandlers.Where(h => code.Contains($"async Task {h}(", StringComparison.Ordinal)).ToList();
+        var asking = found.Where(h => AsksTheSwitchInItsHead(code, h)).ToList();
+        output.WriteLine($"مُعالِجاتُ /admin/agent: {found.Count} · تَسأَلُ المِفتاحَ في رَأسِها: {asking.Count} ({string.Join("، ", asking)})");
+        Assert.Equal(AgentPageHandlers.Length, found.Count);
+        Assert.Equal(found, asking);
+        Assert.Contains("@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch", code, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (isWorking || !AgentSwitch.Enabled) return;\n", true)]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (!AgentSwitch.Enabled || isWorking) return;\n", true)]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (isWorking) return;\n", false)]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (isWorking || AgentSwitch.Enabled) return;\n", false)]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (!AgentSwitch.Enabled && isWorking) return;\n", false)]
+    [InlineData("    async Task ApplyAsync(string toolId)\n    {\n        if (isWorking) return;\n        if (!AgentSwitch.Enabled) return;\n", false)]
+    public void The_panel_switch_scanner_goes_red_on_a_missing_late_or_weakened_switch(string sample, bool asks)
+        => Assert.Equal(asks, AsksTheSwitchInItsHead(sample, "ApplyAsync"));
+
     [Fact]
     public void The_admin_agent_page_draws_its_interactive_panel_only_while_the_switch_is_lit()
     {
