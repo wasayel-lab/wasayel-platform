@@ -173,3 +173,13 @@ const string NoChannel = "no_auth_channel";
 وكانَت `StudioApp.razor:67‑75` تَعرِضُ القَناةَ **لِلقِراءَةِ فَقَط** —
 أَي أَنّ العَميلَ كانَ يَرى بابَه المُغلَقَ ولا يَملِكُ تَبديلَه.
 الآنَ يَراهُ **ويُبَدِّلُه**.
+
+## مُلحَق W13-1 — بابُ الاشتِقاقِ انتَقَلَ مَعَ بابِ وِلادَةِ المَتجَر (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2DD-3 — ‏ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)
+
+§٢·ب يَقولُ «والنُقطَةُ `POST /studio/s/{id}/build` تَشتَقُّه بِـ`Default(OfferedIn(...))`»، و§٢·ج إنّها «تَرُدُّ `build_err=no_auth_channel` قَبلَ أَن يُنادى المَصنَع» —
+و`/build` خَرَجَ (`5ba4cac`، ADR-049 §٢·١) وحَلَّ مَحَلَّه بابُ الإنشاءِ اليَدَوِيّ `POST /studio/apps/create` (`29bf59d`). **والقَرارُ نَفسُه باقٍ بِحَرفِه**: القَناةُ
+تُشتَقُّ ولا تُكتَب، والقائِمَةُ الفارِغَةُ تُجيبُ `null` فَيُرفَضُ الإنشاء. **وما تَغَيَّرَ البابُ والعُنوانُ والمَمسوحُ وَحدَها**: الاشتِقاقُ في
+`/studio/apps/create` (`TenantAuthChannelDoor.Default(TenantAuthChannelDoor.OfferedIn(http.RequestServices))` بَعدَ الحُقولِ وقَبلَ المَصنَع)، والرَفضُ يَعودُ إلى
+`/studio/new?err=no_auth_channel` بِنَصِّ القامُوس (`StudioStoreCreate.MessageKey(TenantAuthChannelDoor.NoChannel)`)، وفَحصُ المَصدَرِ الَّذي يَحمَرُّ عِندَ العَودَةِ
+يَقرَأُ `/studio/apps/create` (`TenantAuthChannelDoorTests.BuildEndpointBody`، ‏`:372-376`، بِسَطرٍ مُؤَرَّخٍ في `5ba4cac`). والمَقيسُ حَيّاً: بِلا قَناةٍ مُسَجَّلَةٍ
+لا مَتجَر (`StudioStoreCreateTests.Without_a_sign_in_channel_no_store_is_born_on_Postgres`).

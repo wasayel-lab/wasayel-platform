@@ -55,3 +55,10 @@
 | ‏415 بِلا نِداءِ النُقطَة، والاستِمارَةُ تَمُرّ | `FormBodyGateTests.The_filter_answers_415_without_calling_the_endpoint_and_passes_a_form` |
 | استِمارَةٌ بِلا جَلسَةٍ ⇒ ‏302 بِلا نِداء | `TenantGatewayEndpointsTests.The_endpoint_asks_the_session_before_reading_any_field_and_returns_each_outcome_to_its_page` |
 | لا نُقطَةَ كِتابَةٍ بِلا حارِسٍ مُعلَن | `WriteEndpointGuardTests` (`ChainGuards`/`BodyGuards`) |
+
+## مُلحَق W13-1 — مِثالُ §١ و§٢ خَرَجَ مِن الكود (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2DD-3 — ‏ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)
+
+`POST /studio/s/{id}/refine` — مِثالُ §١ البَندِ ٢ («بِلا جَلسَة ‏415 لا التَحويلُ إلى `/studio/auth`») ومِثالُ §٢ البَندِ ٢ («`auth.Load()` في جِسمِ `/studio/s/{id}/refine`
+وأَخَواتِها») — خَرَجَ مَعَ التَحليلِ مِن رِحلَةِ رائِدِ الأَعمالِ في `5ba4cac` (ADR-049 §٢·١). والقَرارُ باقٍ بِحَرفِه وفاحِصُه (`FormBodyGateTests`) يَعُدُّ نِقاطَه
+مِن المَصدَر؛ ومِثالُه الحَيُّ اليَومَ بابُ الإنشاءِ `POST /studio/apps/create` — `.RequireFormBody()` أَوَّلُ سِلسِلَتِه، و`auth.Load()` أَوَّلُ جِسمِه
+(`StudioStoreCreateTests.The_create_door_asks_identity_consent_and_quota_before_it_reads_a_single_field`).
