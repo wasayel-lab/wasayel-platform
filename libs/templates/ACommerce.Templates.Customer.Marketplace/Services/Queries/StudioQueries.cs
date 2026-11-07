@@ -46,8 +46,6 @@ public sealed class StudioQueries
         return ActorName.Of((await s.LoadAsync<StudioUser>(id, ct))?.FullName);
     }
 
-    /// <summary>هَل وَقَّعَ صاحِبُ الاستوديو على هذِه النُسخَة مِن
-    /// الشُروط؟ — <c>ConsentRecord</c> في مُستَأجِر الاستوديو.</summary>
     /// <summary>‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) دِراسَةٌ قَديمَةٌ بِمُعَرِّفِها — قِراءَةٌ لِصَفحَتَي الدِراسَةِ والطِباعَة، فَلا تَحقِنانِ خِدمَةَ
     /// التَحليلِ (وهي تَبلُغُ نَموذَجَ لُغَة). والمِلكِيَّةُ يَحكُمُ بِها المُنادي كَما كان.</summary>
     public async Task<IncubatorSession?> LoadStudyAsync(Guid id, CancellationToken ct = default)
@@ -56,6 +54,8 @@ public sealed class StudioQueries
         return await s.LoadAsync<IncubatorSession>(id, ct);
     }
 
+    /// <summary>هَل وَقَّعَ صاحِبُ الاستوديو على هذِه النُسخَة مِن
+    /// الشُروط؟ — <c>ConsentRecord</c> في مُستَأجِر الاستوديو.</summary>
     public async Task<bool> HasConsentedAsync(
         Guid userId, int version, CancellationToken ct = default)
     {
