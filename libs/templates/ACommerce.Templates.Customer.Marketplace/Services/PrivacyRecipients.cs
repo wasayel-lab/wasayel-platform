@@ -9,7 +9,8 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <list type="bullet">
 /// <item><see cref="SignInSenders"/> — قَناتا رَمزِ الدُخولِ <b>المُسَجَّلَتان</b> (أَثَرُ <c>AuthChannelSelection.Decide</c> في
 /// <c>Program.cs</c>، والقِراءَةُ نَفسُها الَّتي يَقرَؤُها بابُ الاستوديو)، والمُحاكي لا يُسَمّى لِأَنَّه لا يُرسِلُ إلى أَحَد.</item>
-/// <item><see cref="LanguageModels"/> — <c>ProviderName</c> خَلفِيَّتَي الوَكيلَين كَما يَبنيهِما <c>AgentBackendProvider</c>.</item>
+/// <item><see cref="LanguageModels"/> — <c>ProviderName</c> خَلفِيَّتَي الوَكيلَين كَما يَبنيهِما <c>AgentBackendProvider</c>. ‏(‏2026-11-07، W13-1·٨ —
+/// ADR-049: الصَفحَةُ تُمَرِّرُ خَلفِيَّةَ وَكيلِ <c>Studio</c> وَحدَها، ولا تَرسُمُ السَطرَ إلّا والمِفتاحُ مُضاء.)</item>
 /// <item><see cref="FileStore"/> — مَخزَنُ الصُوَرِ حينَ يَختارُ <see cref="FileStorageSelection.Decide"/> مَخزَنَ S3.</item>
 /// </list>
 /// <para><b>والمَعاجِمُ هُنا مُغلَقَة، والمَجهولُ يُسَمّى بِحَرفِه لا يُخفى</b>: مُزَوِّدٌ يُضافُ غَداً بِاسمٍ لا يَعرِفُه الجَدوَلُ

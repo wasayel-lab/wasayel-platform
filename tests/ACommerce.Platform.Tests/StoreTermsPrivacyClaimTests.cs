@@ -52,7 +52,9 @@ public class StoreTermsPrivacyClaimTests(ITestOutputHelper output)
         var body = LocaleCatalog.Find(LocaleCatalog.Arabic, "terms.privacy.body")!;
         Assert.StartsWith("نَحفَظ بَياناتكَ الشَخصِيَّة\n                    (اسم، هاتِف، مَوقِع) لِاستِخدامِها داخِل التَّطبيق فَقَط.", body, StringComparison.Ordinal);
         Assert.EndsWith("لا نَبيعُها، ونُشارِكُها مَعَ الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّةِ فَقَط.", body, StringComparison.Ordinal);
-        Assert.Contains("لا نَبيعُ بَياناتِك، ونُشارِكُها مَعَ مُزَوِّدِ نَموذَجِ اللُغَةِ لِتَوليدِ الدِراسَةِ ومَعَ الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّةِ فَقَط.",
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٨ — مُوافَقَةُ الاستوديو 4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَت تَقولُ «مَعَ مُزَوِّدِ نَموذَجِ اللُغَةِ لِتَوليدِ
+        // الدِراسَةِ ومَعَ الجِهاتِ …»، والتَحليلُ خَرَج — فَصارَت تَقولُ ما يَقولُه بَندُ المَتجَرِ هُنا: الجِهاتُ المُسَمّاةُ وَحدَها.
+        Assert.Contains("لا نَبيعُ بَياناتِك، ونُشارِكُها مَعَ الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّةِ فَقَط.",
             LocaleCatalog.Find(LocaleCatalog.Arabic, "studio.consent.item3_body"), StringComparison.Ordinal);
         Assert.False(string.IsNullOrWhiteSpace(LocaleCatalog.Find(LocaleCatalog.Arabic, "terms.privacy.policy_link")));
         var terms = SellerDisplayNameTests.Code("Components", "Pages", "Terms.razor");

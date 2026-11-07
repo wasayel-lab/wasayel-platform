@@ -34,14 +34,16 @@ public class StudioPlanPriceTests(ITestOutputHelper output)
 
     /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-29، قَرارُ المالِك د18 «ج»)</b> — كانَ <c>…_at_version_two</c>: الوَعدُ بِحَرفِه بَقِيَ في صِياغَةِ المالِكِ الجَديدَة
     /// («ويُعرَضُ لَكَ في الاستوديو قَبلَ أَيِّ دَفع»)، والإصدارُ صارَ 3 بِرَفعٍ واحِدٍ مَعَ البَندِ الثالِث (د20). وعَرضُ السِعرِ في لافِتَةِ التَجديدِ لَم يُمَسّ —
-    /// يَقيسُه الصَفُّ التالي كَما كان.</summary>
+    /// يَقيسُه الصَفُّ التالي كَما كان.
+    /// <para>‏(‏2026-11-07، الموجَة ١٣ W13-1·٨ — ADR-049 §٥؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>قُلِبَ بِاسمِه</b> — كانَ <c>…_at_version_three</c>:
+    /// الإصدارُ 4 أَسقَطَ جُمَلَ التَحليلِ وأَبقى جُمَلَ الاشتِراكِ بِحَرفِها، والوَعدُ مِنها.</para></summary>
     [Fact]
-    public void The_consent_promises_the_store_subscription_is_shown_in_the_studio_before_any_payment_at_version_three()
+    public void The_consent_promises_the_store_subscription_is_shown_in_the_studio_before_any_payment_at_version_four()
     {
         var item4 = LocaleCatalog.Find(LocaleCatalog.Arabic, ConsentItem4Key);
         output.WriteLine($"{ConsentItem4Key}: {item4} · ConsentPolicy.CurrentVersion = {ConsentPolicy.CurrentVersion}");
         Assert.Contains(ShownBeforePayment, item4, StringComparison.Ordinal);
-        Assert.Equal(3, ConsentPolicy.CurrentVersion);
+        Assert.Equal(4, ConsentPolicy.CurrentVersion);
     }
 
     /// <summary>كُتلَةُ النَصِّ مِن <paramref name="marker"/> إلى إغلاقِ الكُتلَةِ الَّتي تَليه — بِمُوازَنَةِ الأَقواس.</summary>

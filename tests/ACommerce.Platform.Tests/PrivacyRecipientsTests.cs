@@ -135,7 +135,9 @@ public class PrivacyRecipientsTests(ITestOutputHelper output)
         {
             "typeof(ACommerce.Kit.Auth.IOtpChannel)", "typeof(ACommerce.Kit.Auth.IEmailOtpChannel)", "ACommerce.Kit.Auth.IDevelopmentStubChannel",
             "PrivacyRecipients.SignInSenders(registered, Cfg[PrivacyRecipients.SmtpHostKey])",
-            "Agents.For(AgentNames.Analysis).ProviderName", "Agents.For(AgentNames.Studio).ProviderName",
+            // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ هُنا «Agents.For(AgentNames.Analysis).ProviderName» — التَحليلُ
+            // خَرَجَ مِن الرِحلَة، فَالسَطرُ يُسَمّي مُزَوِّدَ وَكيلِ التَصميمِ وَحدَه ويُرسَمُ خَلفَ مِفتاحِه (`PrivacyLanguageModelRowTests`).
+            "PrivacyRecipients.LanguageModels([Agents.For(AgentNames.Studio).ProviderName])", "@if (AgentSwitch.Enabled)",
             "PrivacyRecipients.FileStore(", "@if (fileStore is not null)",
             "@doc.Markup(\"platform.privacy.share_otp\", Names(signInSenders))", "@doc.Markup(\"platform.privacy.share_llm\", Names(languageModels))",
             "@doc.Markup(\"platform.privacy.share_files\", fileStore)", "platform.privacy.none_configured",

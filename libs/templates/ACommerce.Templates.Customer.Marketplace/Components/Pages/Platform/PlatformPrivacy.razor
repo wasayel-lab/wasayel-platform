@@ -5,6 +5,7 @@
 @inject IServiceProvider Sp
 @inject Microsoft.Extensions.Configuration.IConfiguration Cfg
 @inject IAgentBackendProvider Agents
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 
 @*
     سِياسَةُ الخُصوصِيَّة — **مَكتوبَةٌ بِالقِياسِ لا بِالتَعميم**.
@@ -30,6 +31,11 @@
     (`PrivacyRecipients`)، فَلا تَكذِبُ السِياسَةُ إن بُدِّلَت. والاستِضافَةُ وقاعِدَةُ البَياناتِ لا يَراهُما الجَردُ (لَيسا عَميلاً صادِراً)
     فَلَهُما صَفٌّ يَحرُسُهُما، وجُملَةُ المُعالَجَةِ خارِجَ المَملَكَةِ بَعدَ القائِمَة. وتاريخُ هذِه الوَثيقَةِ صارَ مِفتاحَها (`platform.privacy.updated`):
     الشُروطُ والاستِردادُ لَم يَتَغَيَّرا مَعَها، و§9 يَعِدُ بِأَن «يُنشَرُ أَيُّ تَغييرٍ في هذِه الصَفحَةِ مَع تاريخِه».
+
+    ‏(2026-11-07، الموجَة ١٣ W13-1·٨ — ADR-049 §٢·٨؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): سَطرُ مُزَوِّدِ النَموذَجِ يُرسَمُ ما دامَت ميزَةُ نَموذَجٍ
+    تُواجِهُ رائِدَ الأَعمالِ مَفتوحَة — وهي بَعدَ خُروجِ التَحليلِ وَكيلُ التَصميمِ وَحدَه، خَلفَ `StudioAgentSwitch` المُطفَإ ما لَم يُضِئه المالِك.
+    فَالمِفتاحُ المُطفَأُ لا سَطر (لا يَصِلُ النَموذَجَ شَيءٌ مِن مُستَخدِم)، والمُضاءُ سَطرٌ بِاسمِ مُزَوِّدِ وَكيلِ `Studio` وَحدَه: وَكيلُ `Analysis`
+    لا يَبلُغُه إلّا مُشرِفُ المَنَصَّةِ في حاضِنَتِه بِنَصِّه هُوَ. مَحروسٌ بِالتَصييرِ في `PrivacyLanguageModelRowTests`.
 *@
 
 <div class="acs-page">
@@ -110,7 +116,10 @@ else
                 <li>@doc.Markup("platform.privacy.share_payment")</li>
                 <li>@doc.Markup("platform.privacy.share_gateway")</li>
                 <li>@doc.Markup("platform.privacy.share_carrier")</li>
-                <li>@doc.Markup("platform.privacy.share_llm", Names(languageModels))</li>
+                @if (AgentSwitch.Enabled)
+                {
+                    <li>@doc.Markup("platform.privacy.share_llm", Names(languageModels))</li>
+                }
                 <li>@doc.Markup("platform.privacy.share_push")</li>
                 <li>@doc.Markup("platform.privacy.share_hosting")</li>
                 @if (fileStore is not null)
@@ -168,14 +177,14 @@ else
 
         // ‏(2026-10-29، د20) مَن يَستَلِمُ فِعلاً — القَناتانِ المُسَجَّلَتانِ (أَثَرُ `AuthChannelSelection.Decide`)، وخَلفِيَّتا الوَكيلَين،
         // ومَخزَنُ S3 إن اختارَه `FileStorageSelection.Decide` — لا نَصٌّ يُنسَخُ ويَنجَرِف.
+        // ‏(2026-11-07، W13-1·٨) وخَلفِيَّةُ وَكيلِ `Studio` وَحدَها لا الاثنَتان — ويُرسَمُ سَطرُها خَلفَ المِفتاحِ (التَعليقُ أَعلى الصَفحَة).
         var registered = new List<(string, bool)>();
         if (Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is ACommerce.Kit.Auth.IOtpChannel sms)
             registered.Add((sms.ChannelName, sms is ACommerce.Kit.Auth.IDevelopmentStubChannel));
         if (Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is ACommerce.Kit.Auth.IEmailOtpChannel email)
             registered.Add((email.ChannelName, email is ACommerce.Kit.Auth.IDevelopmentStubChannel));
         signInSenders = PrivacyRecipients.SignInSenders(registered, Cfg[PrivacyRecipients.SmtpHostKey]);
-        languageModels = PrivacyRecipients.LanguageModels(
-            [Agents.For(AgentNames.Analysis).ProviderName, Agents.For(AgentNames.Studio).ProviderName]);
+        languageModels = PrivacyRecipients.LanguageModels([Agents.For(AgentNames.Studio).ProviderName]);
         fileStore = PrivacyRecipients.FileStore(new ACommerce.Kit.Files.S3StorageSettings(
             Cfg[ACommerce.Kit.Files.FileStorageSelection.EndpointKey], Cfg[ACommerce.Kit.Files.FileStorageSelection.BucketKey],
             Cfg[ACommerce.Kit.Files.FileStorageSelection.AccessKeyIdKey], Cfg[ACommerce.Kit.Files.FileStorageSelection.SecretAccessKeyKey],
