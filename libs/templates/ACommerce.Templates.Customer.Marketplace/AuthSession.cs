@@ -245,12 +245,10 @@ public sealed class AuthSession
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>يَبني URL مُنبَثِق مِن tenant slug + role اختياريّ.</summary>
+    /// <summary>يَبني URL مُنبَثِق مِن tenant slug + role اختياريّ.
+    /// <para>‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>عارِفٌ بِمُضيفِ المَتجَرِ عَبرَ <see cref="HttpAccessor"/></b>:
+    /// عَلى <c>{slug}.R</c> نَظيف (<c>/explore</c>، <c>/r/{role}/…</c>)، وما سِواه بِشَكلِ المَسارِ بِحَرفِه — الجِسمُ القَديمُ هُوَ
+    /// <c>Services.Ux.StoreUrl.PathForm</c> نَفسُه، وتَوصيفُه <c>StoreLinkCharacterizationTests</c>. مِلَفٌّ واحِدٌ يَتَغَيَّرُ ومَواضِعُ استِدعائِه تَتبَعُه.</para></summary>
     public static string LinkFor(string tenantSlug, string? role, string path)
-    {
-        path = path.TrimStart('/');
-        return string.IsNullOrEmpty(role)
-            ? $"/{tenantSlug}/{path}".TrimEnd('/')
-            : $"/{tenantSlug}/r/{role}/{path}".TrimEnd('/');
-    }
+        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(HttpAccessor?.HttpContext), tenantSlug, role, path);
 }

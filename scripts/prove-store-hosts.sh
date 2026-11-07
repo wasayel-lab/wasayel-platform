@@ -152,11 +152,18 @@ fi
 # ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بابُ دُخولِ الجَوّالِ بِجَوّالٍ فارِغٍ يُحَوِّلُ بِـLink قَبلَ أَيِّ كِتابَة
 # (رَمزُ رَفضٍ: phone_required، أَو القَناةُ لا يَعرِضُها المَتجَر) — فَالوِجهَةُ تَقيسُ دَورَ الـReferer وَحدَه.
 echo "٧) الكِتابَةُ مِن صَفحَةِ دَورٍ بِعُنوانِها النَظيفِ تَبقى في الدَور (كانَ التَحويلُ يُسقِطُ /r/{role} — والـcanonical يُعلِنُ هذا العُنوان)"
-REF="$SCHEME://$S/r/customer/login";                row POST "$S" "/auth/phone/login" 302 "/$STORE/r/customer/login?*"
-REF="$SCHEME://$S/$STORE/r/customer/login";         row POST "$S" "/auth/phone/login" 302 "/$STORE/r/customer/login?*"
-REF="$SCHEME://$S/login";                          row POST "$S" "/auth/phone/login" 302 "/$STORE/login?*"
-REF="$SCHEME://$(hp "$OTHER.$DOMAIN")/r/customer/login"; row POST "$S" "/auth/phone/login" 302 "/$STORE/login?*"
+# ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهَةُ نَظيفَةٌ عَلى مُضيفِ المَتجَر (`Link` عارِفٌ بِالمُضيف) — كانَت
+# `/$STORE/r/customer/login?…`؛ والدَورُ مِن الـReferer كَما هُوَ.
+REF="$SCHEME://$S/r/customer/login";                row POST "$S" "/auth/phone/login" 302 "/r/customer/login?*"
+REF="$SCHEME://$S/$STORE/r/customer/login";         row POST "$S" "/auth/phone/login" 302 "/r/customer/login?*"
+REF="$SCHEME://$S/login";                          row POST "$S" "/auth/phone/login" 302 "/login?*"
+REF="$SCHEME://$(hp "$OTHER.$DOMAIN")/r/customer/login"; row POST "$S" "/auth/phone/login" 302 "/login?*"
 REF=""
+
+echo "٨) رَوابِطُ الصَفحَةِ نَظيفَةٌ عَلى مُضيفِ المَتجَرِ، وبِشَكلِ المَسارِ عَلى الجَذر (W13-4·C2b·1)"
+row GET  "$S" "/"                       200 - 'href="/explore"' "!href=\"/$STORE/explore\""
+row GET  "$S" "/explore"                200 - 'href="/explore"' 'ac-topnav-link-active' "!href=\"/$STORE/"
+row GET  "$R" "/$STORE/explore"         200 - "href=\"/$STORE/explore\"" 'ac-topnav-link-active'
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"

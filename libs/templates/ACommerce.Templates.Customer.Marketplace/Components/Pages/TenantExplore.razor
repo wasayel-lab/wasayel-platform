@@ -110,7 +110,7 @@ else
        ?filters=open. الـ backdrop رابِط يُغلِق الـ modal. *@
     @if (Filters == "open")
     {
-        var closeHref = $"/{Slug}/explore" + Preserve(except: "filters");
+        var closeHref = AuthSession.LinkFor(Slug, null, "explore") + Preserve(except: "filters");
         <a class="ac-modal-backdrop" href="@closeHref" aria-label="@(L["common.action.close"])"></a>
         <div class="ac-modal acm-explore-filter-modal" role="dialog" aria-modal="true">
             <div class="ac-modal-header">
@@ -256,7 +256,7 @@ else
            ? n : null;
 
     string FilterToggleHref =>
-        $"/{Slug}/explore" + Preserve(set: Filters == "open" ? null : ("filters", "open"),
+        AuthSession.LinkFor(Slug, null, "explore") + Preserve(set: Filters == "open" ? null : ("filters", "open"),
                                        except: "filters");
 
     /// <summary>اِسم وَصفيّ لِلبَحث المَحفوظ يَعتَمِد عَلى الفَلاتِر الحالِيَّة.</summary>

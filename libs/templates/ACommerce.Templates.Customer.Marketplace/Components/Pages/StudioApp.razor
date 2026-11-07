@@ -14,7 +14,7 @@
 <StudioShell Title="@(tenant?.Name ?? L["studio.app.title_fallback"])" Active="home">
     <TopBarActions>
         <a class="st-btn st-btn-ghost" href="/studio">@L.Markup("studio.app_nav.my_board")</a>
-        <a class="st-btn st-btn-light" href="@($"/{Slug}")" target="_blank" rel="noopener" style="margin-inline-start:8px;">@((MarkupString)"\n            ")@L.Markup("studio.app_nav.preview")@((MarkupString)"\n        ")
+        <a class="st-btn st-btn-light" href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.Open(Slug)" target="_blank" rel="noopener" style="margin-inline-start:8px;">@((MarkupString)"\n            ")@L.Markup("studio.app_nav.preview")@((MarkupString)"\n        ")
         </a>
     </TopBarActions>
     <ChildContent>

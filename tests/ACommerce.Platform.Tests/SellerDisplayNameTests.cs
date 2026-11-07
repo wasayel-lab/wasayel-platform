@@ -58,8 +58,8 @@ public class SellerDisplayNameTests(ITestOutputHelper output)
     public void A_first_phone_or_email_login_asks_for_the_name_before_the_post_login_route()
     {
         var ext = Code("MarketplaceTemplateExtensions.cs");
-        var straight = Regex.Matches(ext, Regex.Escape("return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));")).Count;
-        var stepped = Regex.Matches(ext, Regex.Escape("return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(slug, result.UserId, asRole, store), p => Link(req, slug, p)));")).Count;
+        var straight = Regex.Matches(ext, Regex.Escape("return Results.Redirect(await PostLoginRouteAsync(req, slug, result.UserId, asRole, store));")).Count;
+        var stepped = Regex.Matches(ext, Regex.Escape("return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(req, slug, result.UserId, asRole, store), p => Link(req, slug, p)));")).Count;
         var asks = Regex.Matches(ext, Regex.Escape("needsName = user is not null && Services.Queries.ActorName.NeedsName(user);")).Count;
         var page = Code("Components", "Pages", "MemberName.razor");
         output.WriteLine($"تَحويلٌ مُباشِرٌ بَعدَ الدُخول: {straight} · عَبرَ خُطوَةِ الاسم: {stepped} · سُؤالُ NeedsName: {asks}");

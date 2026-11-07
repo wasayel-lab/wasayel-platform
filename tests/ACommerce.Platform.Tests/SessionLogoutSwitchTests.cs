@@ -56,7 +56,10 @@ public class SessionLogoutSwitchTests(ITestOutputHelper output)
         var forget = body.IndexOf("Services.SessionVersionGate.ForgetDeviceAsync(", StringComparison.Ordinal);
         var read = body.IndexOf("ReadFormAsync()", StringComparison.Ordinal);
         var clear = body.IndexOf(ClearLine, StringComparison.Ordinal);
-        var back = body.IndexOf("return Results.Redirect($\"/{slug}\");", StringComparison.Ordinal);
+        // ‏(‏2026-11-07، W13-4·C2b·1) التَحويلُ إلى جَذرِ المَتجَرِ بِأَيٍّ مِن شَكلَيه: الحَرفِيِّ القَديمِ (صُفوفُ حَقنِ العَيبِ أَدناه بِحَرفِها) أَو `Home(http.Request, slug)`
+        // عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب — والخاصِّيَّةُ واحِدَة: يُحَوَّلُ بَعدَ المَسح.
+        var back = body.IndexOf("return Results.Redirect($\"/{slug}\");", StringComparison.Ordinal) is var literal and >= 0
+            ? literal : body.IndexOf("return Results.Redirect(Home(http.Request, slug));", StringComparison.Ordinal);
         if (forget < 0 || read < 0) return "لا سَحبَ لِاشتِراكِ المُتَصَفِّح — الأَداةُ عَمياء";
         if (clear < 0 || back < 0) return "لا يَمسَحُ بِأَدوارِ كوكيّاتِ المُتَصَفِّحِ أَو لا يُحَوِّل";
         var tryAt = System.Text.RegularExpressions.Regex.Matches(body[..Math.Min(forget, read)], @"\btry\s*\{").LastOrDefault()?.Index ?? -1;

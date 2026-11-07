@@ -37,7 +37,7 @@
                 </a>
                 <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("admin.theme.identity_of") @tenant.Name @L.Markup("admin.theme.identity_visual")</h1>
             </div>
-            <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")" target="_blank">
+            <a class="ac-btn ac-btn-ghost" href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.Open(Slug)" target="_blank">
                 <AcIcon Name="external-link" Size="16" /> @L.Markup("admin.theme.open_tenant")@((MarkupString)"\n            ")
             </a>
         </div>

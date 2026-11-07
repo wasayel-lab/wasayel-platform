@@ -17,10 +17,11 @@
         @foreach (var item in Items)
         {
             var match = item.Exact ? NavLinkMatch.All : NavLinkMatch.Prefix;
-            <NavLink class="ac-topnav-link"
+            <MatchNavLink class="ac-topnav-link"
                      ActiveClass="ac-topnav-link-active"
                      href="@item.Href"
-                     Match="@match">
+                     Match="@match"
+                     MatchUri="@MatchUri">
                 @if (!string.IsNullOrEmpty(item.IconName))
                 {
                     <AcIcon Name="@item.IconName" Size="18" />
@@ -38,7 +39,7 @@
                         @(item.Badge > 99 ? "99+" : item.Badge.Value.ToString())
                     </span>
                 }
-            </NavLink>
+            </MatchNavLink>
         }
     </div>
     @if (RightActions is not null)
@@ -52,6 +53,8 @@
     [Parameter] public RenderFragment? BrandContent { get; set; }
     [Parameter] public RenderFragment? RightActions { get; set; }
     [Parameter] public string? Class { get; set; }
+    /// <summary>العُنوانُ الظاهِرُ لِتَمييزِ التَبويبِ النَشِط (<see cref="MatchNavLink"/>) — <c>null</c> = عُنوانُ <c>NavigationManager</c>.</summary>
+    [Parameter] public string? MatchUri { get; set; }
 
     public record TopNavItem(string Href, string Label, string? IconName = null, int? Badge = null, bool Exact = false);
 

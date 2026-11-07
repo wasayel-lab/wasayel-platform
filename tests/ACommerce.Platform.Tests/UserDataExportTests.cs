@@ -247,7 +247,8 @@ public class UserDataExportTests(ITestOutputHelper output)
         var page = WriteEndpointGuardTests.StripMarkupComments(Read($"{TemplateRoot}/Components/Pages/MyData.razor"));
         Assert.Contains("Label=\"@(L[\"me.action.my_data\"])\"", me, StringComparison.Ordinal);
         Assert.Contains("AuthSession.LinkFor(Slug, Role, $\"me/data\")", me, StringComparison.Ordinal);
-        Assert.Contains("href=\"@($\"/{Slug}/me/data/download\")\" download", page, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، W13-4·C2b·1) الرابِطُ بِـLinkFor (عارِفٌ بِمُضيفِ المَتجَر) لا حَرفِيّاً — والمَسارُ `/{slug}/me/data/download` بِحَرفِه في وَضعِ المَسار.
+        Assert.Contains("href=\"@AuthSession.LinkFor(Slug, null, \"me/data/download\")\" download", page, StringComparison.Ordinal);
         Assert.Contains("/{slug}/me/data", ComplianceInspectorTests.RepoRoutes);
         Assert.Contains("/{slug}/me/data/download", ComplianceInspectorTests.RepoRoutes);
     }

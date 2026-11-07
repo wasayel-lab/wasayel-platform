@@ -25,7 +25,7 @@ else if (tenant.Roles.Count == 0)
 {
     @* مَتجَر بِلا أَدوار — لا داعِيَ لِلصَفحَة *@
     <AcEmptyState IconName="info" Title="@L["roles.picker.no_roles_title"]"
-                  ActionLabel="@L["roles.picker.no_roles_action"]" ActionHref="@($"/{Slug}")" />
+                  ActionLabel="@L["roles.picker.no_roles_action"]" ActionHref="@AuthSession.LinkFor(Slug, null, "")" />
 }
 else
 {

@@ -235,7 +235,7 @@ else
                 </AcCard>
 
                 <div style="display:flex;gap:8px;margin-top:16px;">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">@L.Markup("listings.create.cancel")</a>
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, null, "")">@L.Markup("listings.create.cancel")</a>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                         <AcIcon Name="check" Size="18" /> @L.Markup("listings.create.submit")@((MarkupString)"\n                    ")
                     </button>

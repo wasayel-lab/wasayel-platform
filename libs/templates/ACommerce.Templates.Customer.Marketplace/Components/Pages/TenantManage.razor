@@ -25,7 +25,7 @@ else if (!canManage)
                   Title="@L["tenant.manage.no_permission"]"
                   Message="@L["tenant.manage.no_permission_hint"]"
                   ActionLabel="@L["admin.action.back"]"
-                  ActionHref="@($"/{Slug}")" />
+                  ActionHref="@AuthSession.LinkFor(Slug, null, "")" />
 }
 else if (tenant is null)
 {

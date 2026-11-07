@@ -317,7 +317,7 @@ public sealed class TenantResolverMiddleware
     /// نُقطَةٍ أَخيرَة. و<c>null</c> لِلفارِغِ ولِعَنوانِ ‏IPv6
     /// الحَرفِيّ — <b>ولا تَعَدُّدَ مُستَأجِرينَ على عَنوانٍ
     /// رَقَمِيّ</b>.</summary>
-    private static string? NormaliseHost(string? value)
+    internal static string? NormaliseHost(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
 
@@ -428,6 +428,9 @@ public sealed class SubdomainTenancyOptions
     /// بِالمُضيف.</summary>
     public string? BaseDomain { get; init; }
 
+    /// <summary>النِطاقُ مُطَبَّعاً (حُروفٌ صَغيرَة، بِلا مَنفَذٍ ولا نُقطَةٍ أَخيرَة) — أَو <c>null</c> بِلا نِطاق (‏2026-11-07، W13-4·C2b·1).</summary>
+    public string? Apex => TenantResolverMiddleware.NormaliseHost(BaseDomain);
+
     public static SubdomainTenancyOptions FromConfiguration(IConfiguration? config)
     {
         var value = config?[ConfigurationKey];
@@ -481,6 +484,9 @@ public sealed class SubdomainTenantPathMiddleware
         // ‏(‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) القَرارُ كُلُّه في `AnswerStoreHost` النَقِيَّة: كانَ هُنا حَقنٌ
         // وَحدَه، فَمَناطِقُ المَنَصَّةِ و`/api/{مَتجَرٍ آخَر}` تُخدَمُ بِسِياقِ مَتجَرِ المُضيف، ومِلصَقٌ لَيسَ اسمَ مَتجَرٍ يُرسَمُ صَفحَةَ المَنَصَّة.
         var req = ctx.Request;
+        // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) النِطاقُ نَفسُه لِمَن بَعدَه عَلى كُلِّ طَلَبٍ مَتى هُيِّئ:
+        // «افتَح المَتجَر» مِن الجَذرِ يَبني عُنوانَ مُضيفِه المُطلَق. وبِلا نِطاقٍ لا يُكتَبُ شَيء.
+        if (_options.Apex is { } apex) ctx.Items[StoreHostItems.Apex] = apex;
         var answer = TenantResolverMiddleware.AnswerStoreHost(
             req.Host.Value, _options.BaseDomain, req.Method, req.Path.Value, req.QueryString.Value, req.Scheme);
 

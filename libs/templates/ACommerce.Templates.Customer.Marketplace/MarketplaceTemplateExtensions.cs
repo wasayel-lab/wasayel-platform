@@ -336,7 +336,7 @@ public static class MarketplaceTemplateExtensions
                         $"/admin/tenants/{slug}/users");
             }
             // ‏(2026-10-29، قَرارُ المالِك د40 «ج») الاسمُ يُطلَبُ عِندَ أَوَّلِ دُخول: ما دامَ «عُضو جَديد» تَسبِقُ خُطوَةُ الاسمِ مَسارَ ما بَعدَ الدُخول.
-            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(slug, result.UserId, asRole, store), p => Link(req, slug, p)));
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(req, slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Email OTP ──────────────────────────────────────────────────
@@ -435,7 +435,7 @@ public static class MarketplaceTemplateExtensions
                         $"/admin/tenants/{slug}/users");
             }
             // ‏(2026-10-29، د40 «ج») خُطوَةُ الاسمِ أَوَّلاً ما دامَ الاسمُ افتِراضِيّاً — كَبابِ الهاتِف.
-            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(slug, result.UserId, asRole, store), p => Link(req, slug, p)));
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(req, slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Nafath ─────────────────────────────────────────────────────
@@ -485,7 +485,7 @@ public static class MarketplaceTemplateExtensions
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
             if (!string.IsNullOrEmpty(asRole))
                 await AssignRoleAsync(slug, result.UserId, asRole, store);
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+            return Results.Redirect(await PostLoginRouteAsync(req, slug, result.UserId, asRole, store));
         }).RequireFormBody().DisableAntiforgery();
 
         // ─── Language toggle ─────────────────────────────────────────────
@@ -526,7 +526,7 @@ public static class MarketplaceTemplateExtensions
             // ‏(‏2026-11-05، G2 · ٢) والأَدوارُ مِن كوكيّاتِ هذا المُتَصَفِّحِ نَفسِها (`AuthSession.RoleCookiesIn`) لا مِن وَثيقَةِ المَتجَر: تُمحى بِتَهجِئَتِها الَّتي يَحمِلُها
             // (والمُتَصَفِّحُ يُفَرِّقُ بَينَ الحالات)، ودَورٌ حُذِفَ مِن المَتجَرِ لا يُبقي كوكيَّه، والقاعِدَةُ الغائِبَةُ لا تُبقي الجَلسَة. والكوكيّاتُ كُلُّها بِـ`Path=/` فَيَحمِلُها الطَلَب.
             AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
-            return Results.Redirect($"/{slug}");
+            return Results.Redirect(Home(http.Request, slug));
         }).DisableAntiforgery();
 
         // ─── اخرج من كل الأجهزة (‏2026-10-28، قَرارُ المالِك د28) ──────────
@@ -539,7 +539,7 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
             await Services.SessionVersionGate.RevokeTenantAsync(store, cache, slug, parsed.Value.UserId);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug, Array.Empty<string>());
-            return Results.Redirect($"/{slug}");
+            return Results.Redirect(Home(req, slug));
         }).RequireFormBody().DisableAntiforgery();
 
         // ─── أَضِف بَريدَك / أَضِف جَوّالَك (‏2026-10-28، قَرارُ المالِك د27 «ج»؛ NIST 800-63B) ──────────
@@ -642,7 +642,7 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Services.LocalRedirect.Resolve(
-                req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
+                req.Form["return"].ToString(), Home(req, slug, $"listings/{id}")));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
@@ -695,7 +695,7 @@ public static class MarketplaceTemplateExtensions
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
 
             // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الطَرَفُ مالِكُ الإعلانِ بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة (`CheckoutCart.OwnerOf`) — كانَ
             // `Guid.NewGuid()` «صاحِب الإعلان» بِلا وَثيقَة فَلا تَصِلُ المُحادَثَةُ أَحَداً. وإعلانٌ بِلا مالِكٍ أَو مالِكُه غائِبٌ (`AccountErasure.PartnerGone`) يُرَدُّ إلى صَفحَتِه
@@ -779,7 +779,7 @@ public static class MarketplaceTemplateExtensions
             if (needsOnboarding)
                 return Results.Redirect(Link(req, slug, $"me/role/onboarding"));
             return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
-                ? $"/{slug}" : $"/{slug}{picked.HomeRoute}");
+                ? Home(req, slug) : Home(req, slug, picked.HomeRoute));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
@@ -794,7 +794,7 @@ public static class MarketplaceTemplateExtensions
             // مَوضِع الالتِقاط (onboarding): مَسار الدَور المُؤَلَّف بَعد
             // الحِفظ يُقرَأ مِن تَعريفِه.
             var tenant = await LoadTenantWithRolesAsync(store, slug);
-            if (tenant is null) return Results.Redirect($"/{slug}");
+            if (tenant is null) return Results.Redirect(Home(req, slug));
 
             // ‏(‏2026-10-29، G-1) حُقولُ الاستِمارَةِ وَحدَها عَلى قِراءَةٍ جَديدَة، ويُعادُ تَطبيقُها مَرَّةً إن سَبَقَه كاتِب.
             var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
@@ -821,7 +821,7 @@ public static class MarketplaceTemplateExtensions
 
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
             return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
-                ? $"/{slug}" : $"/{slug}{active.HomeRoute}");
+                ? Home(req, slug) : Home(req, slug, active.HomeRoute));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
@@ -1033,7 +1033,7 @@ public static class MarketplaceTemplateExtensions
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,
                 tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>());
 
-            return Results.Redirect($"/{slug}?deleted=1");
+            return Results.Redirect(Home(req, slug) + "?deleted=1");
         }).DisableAntiforgery().RequireFormBody();
         // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3؛ تَوصيفُه 365dfdc) **وبِلا `RequireStoreWritable`** — مُثَبَّتٌ بِسَبَبِه في `PinnedUngatedStoreWrites`: الحَذفُ بابٌ يَفتَحُه
         // صاحِبُ الحِسابِ فَيُنفَّذُ دونَ انتِظار (د53)، وأَمانُ حِسابٍ لا مُحتَوىً في المَتجَر — كانَ «السَماحُ» و«التَعليقُ» يَرُدّانِه بِـ`store_locked` ولا يُمحى شَيء.
@@ -1518,7 +1518,7 @@ public static class MarketplaceTemplateExtensions
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
             // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1) ولا عَرضَ عَلى إعلانٍ مَحذوفٍ أَو أَغلَقَ مالِكُه حِسابَه: الحَذفُ يَسحَبُ إعلاناتِه (`ListingDeleted`)، وكانَ
             // هذا البابُ لا يَسأَلُ `IsDeleted` فَيولَدُ عَرضٌ عَلى إعلانٍ لا يَراه أَحَد؛ ولِحِسابٍ حُذِفَ قَبلَ ذلك `CheckoutCart.OwnerGone` القاعِدَةُ نَفسُها لِلسَلَّة.
             if (listing.IsDeleted || await Services.Deals.CheckoutCart.OwnerGoneAsync(s, listing))
@@ -1589,7 +1589,7 @@ public static class MarketplaceTemplateExtensions
             // القَبول عَن غَير المالِك لكِنّ التَّحَقُّق هُنا هو الحاجِز
             // الفِعليّ.
             var listing = await s.Events.AggregateStreamAsync<Listing>(offer.ListingId);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
             if (!listing.Attributes.TryGetValue("owner_id", out var ownerStr) ||
                 ownerStr != acceptorId.ToString())
                 return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err=not_owner"));
@@ -1678,7 +1678,7 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
-                return Results.Redirect($"/{slug}");
+                return Results.Redirect(Home(req, slug));
 
             // فَقَط مالِك الإعلان يَستَطيع رَفض عَرض (مَن أَرادَ سَحب
             // عَرضِه يَستَخدِم /withdraw).
@@ -1724,7 +1724,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"listings/{listingId}?err=not_driver"));
 
             var listing = await s.Events.AggregateStreamAsync<Listing>(listingId);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
 
             // قارِن المَسافَة بَين مَوقِع السائِق وَ نُقطَة الانطِلاق.
             if (listing.Attributes.TryGetValue("pickup_lat", out var plat) &&
@@ -1737,7 +1737,7 @@ public static class MarketplaceTemplateExtensions
                 var dKm = ACommerce.Kit.Offers.OfferHelpers.DistanceKm(lat, lng, pLat, pLng);
                 if (dKm > 1.0)   // عَتَبَة 1 كم — يُمكِن جَعلُها قابِلَة لِلتَكوين
                     return Results.Redirect(
-                        $"/{slug}/listings/{listingId}?err=too_far&dist={dKm:0.#}");
+                        Home(req, slug, $"listings/{listingId}?err=too_far&dist={dKm:0.#}"));
             }
 
             match.ArrivedAt = DateTime.UtcNow;
@@ -1868,7 +1868,7 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
-                return Results.Redirect($"/{slug}");
+                return Results.Redirect(Home(req, slug));
             // فَقَط مُقَدِّم العَرض يَسحَب عَرضَه.
             if (offer.OffererId != offererId)
                 return Results.Redirect(Link(req, slug, $"me/offers"));
@@ -4384,8 +4384,15 @@ public static class MarketplaceTemplateExtensions
     // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-033 الخُطوَة 3): نُقطَتا الشَحنِ في مِلَفِّهِما
     // (`Shipping/OtoShippingEndpoints.cs`) تَرتَدّانِ إلى صَفحَةِ الصَفقَةِ بِالدَورِ نَفسِه — نُسخَةٌ ثانِيَةٌ
     // مِن قِراءَةِ الدَورِ تَنجَرِف.
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والعُنوانُ عَلى المُضيفِ الَّذي يَخدِمُ هذا الطَلَب (`StoreUrl.For`)
+    // بِطَلَبِه هُوَ لا بِالوَصّالِ الساكِن: عَلى مُضيفِ المَتجَرِ نَظيف، وما سِواه بِشَكلِ المَسارِ بِحَرفِه (`StoreLinkCharacterizationTests`).
     internal static string Link(HttpRequest req, string slug, string path)
-        => AuthSession.LinkFor(slug, RoleFromReferer(req), path);
+        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, RoleFromReferer(req), path);
+
+    /// <summary><b>جَذرُ المَتجَرِ (أَو صَفحَةٌ بِلا دَورٍ فيه) عَلى المُضيفِ الَّذي يَخدِمُ هذا الطَلَب</b> (‏2026-11-07، W13-4·C2b·1): كانَت عَشرَةُ تَحويلاتٍ تَكتُبُ
+    /// <c>$"/{slug}"</c> بِيَدِها — عَلى مُضيفِ المَتجَرِ تُظهِرُ <c>ashare.R/ashare</c>. والآنَ <c>/</c> هُناك، و<c>/{slug}</c> بِحَرفِه في وَضعِ المَسار.</summary>
+    private static string Home(HttpRequest req, string slug, string path = "")
+        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path);
 
     /// <summary>رابِطُ الرَفض حينَ لا قَناةَ مُسَجَّلَةٌ لِطَريقَةِ دُخولِ
     /// الاستوديو. <b>الرَمزُ مِن الجَدوَلِ لا مِن حَرفِيَّةٍ مَنسوخَة</b>:
@@ -4822,16 +4829,23 @@ public static class MarketplaceTemplateExtensions
     //  2) إن وُجِدَ <paramref name="asRole"/> (مِن ?as= أَو /r/role/login)
     //     → URL مَفروع تَحت /r/{role}/ لِيَفصِل الـ session.
     //  3) خِلاف ذلك: نَتَّبِع ActiveRole مِن user doc (legacy/no-prefix).
+    //
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهاتُ كُلُّها بِـ`StoreUrl.For` عَلى المُضيفِ الَّذي
+    // كَتَبَ الكَعكَة: عَلى مُضيفِ المَتجَرِ نَظيفَة (`/`، `/r/{role}/…`)، وفي وَضعِ المَسارِ `/{slug}/…` بِحَرفِها. ولا تُغادِرُ المُضيفَ أَبَداً — الكَعكَةُ
+    // مَقصورَةٌ عَلَيه (ADR-050 §٥)، فَتَحويلٌ إلى مُضيفٍ آخَرَ بَعدَ الدُخولِ يُسقِطُ الجَلسَةَ لِتَوِّها.
     private static async Task<string> PostLoginRouteAsync(
-        string slug, Guid userId, string? asRole, IDocumentStore store)
+        HttpRequest req, string slug, Guid userId, string? asRole, IDocumentStore store)
     {
+        var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
+        string At(string? role, string path = "") => Services.Ux.StoreUrl.For(view, slug, role, path);
+
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null || tenant.Roles.Count == 0)
-            return $"/{slug}";
+            return At(null);
 
         ACommerce.Kit.Auth.User? user;
         await using (var t = store.QuerySession(slug)) user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
-        if (user is null) return $"/{slug}";
+        if (user is null) return At(null);
 
         // إن لَم يُعطَ asRole + لا ActiveRole + دَور واحِد → اِضبِطه تِلقائيّاً.
         //
@@ -4861,10 +4875,10 @@ public static class MarketplaceTemplateExtensions
         // ActiveRole كَ احتِياط.
         var effectiveRoleSlug = !string.IsNullOrEmpty(asRole) ? asRole : user.ActiveRole;
         if (string.IsNullOrEmpty(effectiveRoleSlug))
-            return $"/{slug}/me/role";
+            return At(null, "me/role");
 
         var role = tenant.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
-        if (role is null) return $"/{slug}/me/role";
+        if (role is null) return At(null, "me/role");
 
         // الـ onboarding مَطلوب لَو دَور لَه حُقول مَطلوبَة لَم تُملَأ بَعد.
         var roleValues = user.RoleAttributesJson.TryGetValue(role.Slug, out var rv)
@@ -4877,15 +4891,15 @@ public static class MarketplaceTemplateExtensions
         // المُتَصَفِّح في هذا التَّبويب يَستَخدِم الـ cookie role-scoped.
         if (!string.IsNullOrEmpty(asRole))
         {
-            if (needsOnboarding) return $"/{slug}/r/{asRole}/me/role/onboarding";
+            if (needsOnboarding) return At(asRole, "me/role/onboarding");
             return string.IsNullOrEmpty(role.HomeRoute)
-                ? $"/{slug}/r/{asRole}"
-                : $"/{slug}/r/{asRole}{role.HomeRoute}";
+                ? At(asRole)
+                : At(asRole, role.HomeRoute);
         }
 
-        if (needsOnboarding) return $"/{slug}/me/role/onboarding";
+        if (needsOnboarding) return At(null, "me/role/onboarding");
         return string.IsNullOrEmpty(role.HomeRoute)
-            ? $"/{slug}" : $"/{slug}{role.HomeRoute}";
+            ? At(null) : At(null, role.HomeRoute);
     }
 
     // قِراءَة قِيمَة Guid مِن Dictionary مَع التَّعامُل مَع JsonElement

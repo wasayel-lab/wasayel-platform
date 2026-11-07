@@ -32,7 +32,7 @@
         <AcCard>
             <ChildContent>
                 <p>@L.Markup("me.data.lead")</p>
-                <a class="ac-btn ac-btn-primary" href="@($"/{Slug}/me/data/download")" download>
+                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, null, "me/data/download")" download>
                     <AcIcon Name="download" Size="18" /> @L.Markup("me.data.download")
                 </a>
                 <p class="ac-text-muted">@L.Format("me.data.generated_at", Culture.FormatTime(export.GeneratedAt, "yyyy-MM-dd HH:mm"))</p>

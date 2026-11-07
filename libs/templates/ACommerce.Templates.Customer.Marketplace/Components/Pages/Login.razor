@@ -104,7 +104,7 @@ else
             }
 
             <p class="ac-auth-back">
-                <a href="@($"/{Slug}")">@L.Markup("auth.login.back_to") @Tenant.Name</a>
+                <a href="@AuthSession.LinkFor(Slug, null, "")">@L.Markup("auth.login.back_to") @Tenant.Name</a>
             </p>
         </div>
     </div>

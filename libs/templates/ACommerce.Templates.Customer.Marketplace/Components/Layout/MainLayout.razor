@@ -29,6 +29,12 @@
     var chromeHidden = isLogin || isEntry;
 
     var (topItems, bottomItems) = BuildNav(slug, activeRoleSlug, urlRole);
+
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1) عَلى مُضيفِ المَتجَرِ رَوابِطُ التَبويباتِ نَظيفَةٌ والمَسارُ بَعدَ الحَقنِ يَحمِلُ المَتجَر — فَالتَبويبُ
+    // النَشِطُ يُطابَقُ بِالعُنوانِ الظاهِر (`MatchNavLink`). وبِلا مُضيفٍ `null`: كَما يُطابِقُ `NavLink`.
+    var navMatchUri = HttpCtx.HttpContext is { } navCtx && ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.HostSlug(navCtx) is not null
+        ? $"{navCtx.Request.Scheme}://{navCtx.Request.Host}{ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.VisiblePath(navCtx)}{navCtx.Request.QueryString}"
+        : null;
 }
 
 @* ‏(‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3) إلّا صَفحَتَي صاحِبِ البَيانات — «بَياناتي» و«حَذفُ الحِساب» (`AccountErasure.OwnDataPage`): التِزامُ وَسايِل (د53) لا خِيارُ باقَة. *@
@@ -63,7 +69,7 @@ else if (Tenant.IsResolved)
                     <span class="acm-mobile-nav-brand-name">@Tenant.Name</span>
                 </div>
                 <div class="acm-mobile-nav-actions">
-                    <a class="acm-mobile-nav-btn" href="@($"/{slug}/notifications")" aria-label="@(L["shell.nav.notifs_aria"])">
+                    <a class="acm-mobile-nav-btn" href="@AuthSession.LinkFor(slug, null, "notifications")" aria-label="@(L["shell.nav.notifs_aria"])">
                         <AcIcon Name="bell" Size="24" />
                     </a>
                 </div>
@@ -75,7 +81,7 @@ else if (Tenant.IsResolved)
         @if (!chromeHidden)
         {
             <div class="acm-v2-topnav-wrap@(theme.VariantClassSuffix(ACommerce.Kit.Theme.ThemeVariantCatalog.HeaderBar))">
-                <AcTopNav Items="topItems">
+                <AcTopNav Items="topItems" MatchUri="@navMatchUri">
                     <BrandContent>
                         <div class="acm-brand">
                             <span class="acm-brand-text">@Tenant.Name</span>
@@ -121,7 +127,7 @@ else if (Tenant.IsResolved)
             @if (!chromeHidden)
             {
                 <div class="acm-v2-bottom-nav-wrap">
-                    <AcBottomNav Items="bottomItems" ExtraClass="acm-v2-bottomnav" />
+                    <AcBottomNav Items="bottomItems" ExtraClass="acm-v2-bottomnav" MatchUri="@navMatchUri" />
                 </div>
             }
         </main>

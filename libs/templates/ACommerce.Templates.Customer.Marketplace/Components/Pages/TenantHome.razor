@@ -176,7 +176,7 @@
             <AcActionCard Label="@(Auth.IsAuthenticated ? L["shell.nav.account"] : L["auth.action.login"])"
                           IconName="user"
                           Variant="surface"
-                          Href="@(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login")" />
+                          Href="@(Auth.IsAuthenticated ? AuthSession.LinkFor(Slug, null, "me") : AuthSession.LinkFor(Slug, null, "login"))" />
         </section>
 
         @* فَراغ مُوَجَّه: لا رِسالَة صامِتَة. ثَلاث حالات وَلِكُلٍّ خُطوَة

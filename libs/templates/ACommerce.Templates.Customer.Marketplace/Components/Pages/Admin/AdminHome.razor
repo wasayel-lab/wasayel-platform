@@ -164,7 +164,7 @@
                     </a>
                     @* رابِط مُنفَصِل لِفَتح المَتجَر نَفسه في تَبويب جَديد.
                        النَّقر عَلى البِطاقَة = تَحَكُّم، السَّهم = مُعايَنَة. *@
-                    <a href="@($"/{t.Slug}")" target="_blank" rel="noopener"
+                    <a href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.Open(t.Slug)" target="_blank" rel="noopener"
                        title="@(L["admin.home.open_title"])"
                        style="position:absolute;top:10px;inset-inline-end:10px;
                               display:inline-flex;align-items:center;justify-content:center;
