@@ -274,6 +274,7 @@ PAGES=(
 #  المُتَغَيِّرات:
 #    WSL_CAPTURE_ADMIN_PHONE   — هاتِف مُشرِف المَنصَّة (= PLATFORM_ADMIN_PHONE)
 #    WSL_CAPTURE_STUDIO_PHONE  — هاتِف صاحِب استوديو عاديّ
+#    WSL_CAPTURE_CONSENTER_PHONE — هاتِف صاحِب استوديو يَقبَلُ الشُروطَ قَبلَ لَقطَتِه (‏2026-11-07 — أَدناه)
 #    WSL_CAPTURE_USER_NID      — هُوِيَّة نَفاذ (‏10 أَرقام)
 #    WSL_CAPTURE_USER_TENANT   — مُستَأجِر التَجرِبَة (افتِراضيّ theme-demo)
 #    WSL_CAPTURE_DEV_CODE      — رَمز OTP التَطويريّ (افتِراضيّ 123456،
@@ -321,6 +322,10 @@ GUARDED_PAGES=(
   "studio-billing:studio:/studio/billing"
   "studio-new:studio:/studio/new"
   "studio-consent:studio:/studio/consent"
+  # ‏2026-11-07 (مُراجَعَةُ C1، الموجَة ١٣ W13-1) — **استِمارَةُ الإنشاءِ نَفسُها**: `studio-new` أَعلاه فَرعُ غَيرِ المُوافِق (تَحويلٌ إلى المُوافَقَة)،
+  # فَالصَفحَةُ الوَحيدَةُ الَّتي يولَدُ مِنها مَتجَرُ رائِدِ الأَعمالِ كانَت بِلا لَقطَةٍ بايتِيَّة. مِلَفُّها `consenter` (أَدناه) يَقبَلُ الإصدارَ القائِمَ
+  # في تَحضيرِها (`PREP`)، ولا يَمَسُّ مِلَفَّ `studio` الَّذي تَحتاجُ لَقطَتاه أَعلاه أَلّا يَكونَ قَبِل.
+  "studio-new-form:consenter:/studio/new"
   # ‏2026-11-07 (مُراجَعَةُ C1 · W13-1·F1) — **صُفوفُ analyze وrefine وexport تُثَبِّتُ غِيابَ اللافِتَة**: أَسبابٌ مُتَقاعِدَةٌ لا تَكتُبُها بَوّابَة
   # (`StudioUpgradeReason.Drawn`)، فَلَقطَتُها صَفحَةُ /studio بِلا لافِتَةٍ بايتاً — وعَودَةُ لافِتَتِها تُحمِرُّها.
   "studio-upgrade-analyze:studio:/studio?upgrade=analyze"
@@ -664,6 +669,20 @@ else
   PROFILES_MISSING="$PROFILES_MISSING studio(WSL_CAPTURE_STUDIO_PHONE)"
 fi
 
+# ‏2026-11-07 (مُراجَعَةُ C1، الموجَة ١٣ W13-1) — مِلَفٌّ ثامِن `consenter`: صاحِبُ استوديو **يَقبَلُ الإصدارَ القائِمَ مِن الشُروط** في تَحضيرِ صَفحَتِه
+# (`PREP[studio-new-form]` — النُقطَةُ نَفسُها الَّتي تُرسِلُ إلَيها صَفحَةُ المُوافَقَة)، فَيَرى استِمارَةَ الإنشاء. ولِماذا لا مِلَفُّ `studio`: لَقطَتا
+# `studio-new` و`studio-consent` تَحتاجانِ صاحِباً لَم يَقبَل. **وكِتابَتُه سَطرُ `ConsentRecord` واحِدٌ في قاعِدَةِ الالتِقاط** — نُسخَةٌ تُرمى في الإجراءِ
+# المَقيس، فَلا يَبلُغُ أَيَّ لَقطَةٍ أُخرى (مَقيس: ‏141 لَقطَةً بايتاً قَبلَه وبَعدَه، README).
+if [ -n "${WSL_CAPTURE_CONSENTER_PHONE:-}" ]; then
+  if studio_login "$JARS/consenter" "$WSL_CAPTURE_CONSENTER_PHONE"; then
+    PROFILE_JAR[consenter]="$JARS/consenter"; PROFILES_READY="$PROFILES_READY consenter"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'consenter' — لا كوكي studio." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING consenter(WSL_CAPTURE_CONSENTER_PHONE)"
+fi
+
 # ‏2026-08-16 — مِلَفٌّ رابِع: صاحِبُ استوديو **يَملِك مُستَأجِراً
 # مَملوءاً**. والحاجَةُ إلَيه مَقيسَة لا مَظنونَة: مِلَفُّ `admin` يَملِك
 # `owner-test` وَحدَه، وهو بِصِفر إعلان وصِفر صَفقَة — فَجِسمُ
@@ -756,6 +775,8 @@ declare -A PREP=(
   [member-checkout-pay]="/{member}/checkout/details|from=1&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
   [member-checkout-confirm-cash]="/{member}/checkout/details|from=2&pay=cash"
   [member-checkout-confirm-card]="/{member}/checkout/details|from=2&pay=card"
+  # ‏2026-11-07 — قَبولُ الإصدارِ القائِمِ ثُمَّ الاستِمارَة (‏302 إلى `/studio/new`).
+  [studio-new-form]="/studio/consent/accept|returnUrl=/studio/new"
 )
 
 guarded_ok=0
