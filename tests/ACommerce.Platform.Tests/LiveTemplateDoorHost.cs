@@ -71,8 +71,20 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
     }
 
     /// <summary>طَلَبُ استِمارَةٍ بِرَمزِ جَلسَةٍ في كوكيِّ المَتجَر — يُعيدُ الحالَةَ ووِجهَةَ التَحويل.</summary>
-    public async Task<(int Status, string Location)> PostFormAsync(string pattern, IReadOnlyDictionary<string, string> route, string slug, string? token,
+    public Task<(int Status, string Location)> PostFormAsync(string pattern, IReadOnlyDictionary<string, string> route, string slug, string? token,
         params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route,
+            token is null ? null : $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}", form);
+
+    /// <summary>‏(‏2026-11-07، الموجَة ١٣ W13-1·٢) طَلَبُ استِمارَةٍ بِرَمزِ جَلسَةِ الاستوديو في كوكيِّه (<c>StudioAuth.CookieName</c>) — لِنِقاطِ <c>/studio/…</c>
+    /// الَّتي تَقرَأُ الاستوديو لا المَتجَر. الطَلَبُ نَفسُه بِحَرفِه، والكوكيُّ وَحدَه يَختَلِف.</summary>
+    public Task<(int Status, string Location)> PostStudioFormAsync(string pattern, IReadOnlyDictionary<string, string> route, string? studioToken,
+        params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route,
+            studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form);
+
+    private async Task<(int Status, string Location)> PostFormWithCookieAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
+        (string Key, string Value)[] form)
     {
         var door = Door(pattern);
         await using var scope = _app.Services.CreateAsyncScope();
@@ -92,7 +104,7 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         foreach (var (k, v) in route) ctx.Request.RouteValues[k] = v;
         ctx.Request.ContentType = "application/x-www-form-urlencoded";
         ctx.Request.Form = new FormCollection(form.ToDictionary(f => f.Key, f => new Microsoft.Extensions.Primitives.StringValues(f.Value)));
-        if (token is not null) ctx.Request.Headers.Cookie = $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}";
+        if (cookie is not null) ctx.Request.Headers.Cookie = cookie;
         ctx.Response.Body = new MemoryStream();
         ctx.SetEndpoint(door);
         await door.RequestDelegate!(ctx);
