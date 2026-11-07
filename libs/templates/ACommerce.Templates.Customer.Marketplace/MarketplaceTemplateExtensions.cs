@@ -4416,8 +4416,10 @@ public static class MarketplaceTemplateExtensions
     private static string RoleHome(HttpRequest req, string slug, string role, string? homeRoute)
     {
         var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) العابِرُ المُعلَنُ بِاسمِه (`StoreUrl.App`) — `Link` صارَ يَبقى عَلى المُضيف
+        // لِدَورِ الصَفحَة؛ والجَوابُ بِحَرفِه (`RoleHostSessionLinkCharacterizationTests`).
         return Services.Ux.StoreUrl.OnHostOf(view, slug) && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.ContainsKey(role)
-            ? Services.Ux.StoreUrl.Link(view, slug, role, homeRoute ?? "")
+            ? Services.Ux.StoreUrl.App(view, slug, role, homeRoute ?? "")
             : Home(req, slug, homeRoute ?? "");
     }
 

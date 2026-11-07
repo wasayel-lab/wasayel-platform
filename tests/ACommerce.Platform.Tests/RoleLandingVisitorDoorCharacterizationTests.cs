@@ -68,8 +68,11 @@ public class RoleLandingVisitorDoorCharacterizationTests
         Assert.Equal(1, Count(razor, browse));
         Assert.Equal(1, Count(razor, "\"explore\""));
 
-        Assert.Equal(3, Count(razor, "AuthSession.LinkFor("));
-        Assert.Contains("AuthSession.LinkFor(Slug, null, $\"r/{r.Slug}/login\")", razor, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) البِطاقَةُ عابِرٌ مُعلَنٌ بِاسمِه (`StoreUrl.App`) لا `LinkFor` — كانَ
+        // «3 × LinkFor» ومِنها `LinkFor(Slug, null, $"r/{r.Slug}/login")`؛ والرَوابِطُ الثَلاثَةُ كَما هي، وفي وَضعِ المَسارِ بايتاً بِبايت (بَوّابَةُ المَظهَر).
+        Assert.Equal(2, Count(razor, "AuthSession.LinkFor("));
+        Assert.Equal(1, Count(razor, "StoreUrl.App("));
+        Assert.Contains("ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.App(Slug, r.Slug, \"login\")", razor, StringComparison.Ordinal);
         Assert.Contains("AuthSession.LinkFor(Slug, Role, $\"login\")", razor, StringComparison.Ordinal);
         Assert.Equal(3, Count(razor, "<a "));
 

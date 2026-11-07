@@ -16,6 +16,7 @@
 #   STORE=theme-demo OTHER=ashare ./scripts/prove-store-hosts.sh
 #   DIRECT=1 SCHEME=https PORT= DOMAIN=<R> STORE=<مَتجَر> OTHER=<آخَر> ./scripts/prove-store-hosts.sh   # بَعدَ النَشر: كُلُّ مُضيفٍ بِـDNS لا بِرَأسِ Host
 #   STORE=<مَتجَر> MANAGER_PHONE=<هاتِفُ مُديرِه> ./scripts/prove-store-hosts.sh   # ومَعَه المَجموعَةُ ٦: مُديرُ المَتجَرِ يَدخُلُ عَلى مُضيفِه ويَفتَحُ بِطاقَةَ /manage
+#   STORE=<مَتجَر> ROLE=vendor ROLE_PHONE=<هاتِف> ./scripts/prove-store-hosts.sh    # ومَعَه المَجموعَةُ ١٠: جَلسَةُ الدَورِ لا تُغادِرُ مُضيفَها (‏C2b-R1، تَكتُبُ دُخولاً)
 #
 #  ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المَجموعَةُ ٦ تَكتُبُ دُخولاً** (تَحَدّي الرَمزِ وجَلسَتُه) فَلا تَجري إلّا
 #  بِـ`MANAGER_PHONE` — هاتِفُ مُستَخدِمٍ لَه `tenant.manage` في `STORE` — وبِرَمزِ المُحاكي `DEV_CODE` (Development وَحدَه)؛ وبِلا هاتِفٍ تُطبَعُ «لَم تُفحَص» ولا تُعَدّ.
@@ -35,6 +36,7 @@ MANAGER_PHONE="${MANAGER_PHONE:-}" # هاتِفُ مُديرٍ لِـSTORE — �
 DEV_CODE="${DEV_CODE:-123456}"
 ROLE="${ROLE-vendor}"              # دَورٌ في STORE مِن الكَتالوج — مُضيفُه STORE-ROLE (W13-4·C2b·5)؛ فارِغاً لا تُفحَصُ المَجموعَةُ ٩
 ROLE_ABSENT="${ROLE_ABSENT:-driver}" # دَورٌ مِن الكَتالوجِ لا يَحمِلُه STORE — مُضيفُه 404
+ROLE_PHONE="${ROLE_PHONE:-}"       # هاتِفٌ يَدخُلُ بِدَورِ ROLE (بِرَمزِ المُحاكي) — يُشَغِّلُ المَجموعَةَ ١٠؛ يَكتُبُ دُخولاً ومُستَخدِماً إن لَم يَكُن (C2b-R1)
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
@@ -191,6 +193,58 @@ row GET  "$S" "/"                        200 - "$SCHEME://$RH/login"
 row GET  "$R" "/$STORE/r/$ROLE"          200 - "<link rel=\"canonical\" href=\"$SCHEME://$R/$STORE/r/$ROLE\" />" '"hostMode":false' "\"role\":\"$ROLE\""
 else
   echo "٩) – لَم تُفحَص: ROLE فارِغ (دَورٌ مِن الكَتالوجِ يَحمِلُه $STORE — مُضيفُه $STORE-{role})"
+fi
+
+# ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2 وC2b-P-01 وC2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **الجَلسَةُ تَنجو مِن النَقرَة** (القاعِدَة ١٢): عُضوٌ يَدخُلُ
+# بِدَورِه عَلى مُضيفِ الدَور، وآخَرُ بِالدَورِ نَفسِه عَلى مُضيفِ المَتجَرِ (`/r/{role}/…` حَيثُ يَنزِلُ تَحويلُ `For`)، وتُعَدُّ رَوابِطُ صَفَحاتِه الخارِجَةُ إلى مُضيفٍ آخَرَ
+# مِن عائِلَةِ النِطاق — والكَعكَتانِ بِلا `Domain=` فَكُلُّ رابِطٍ مِنها قَفزَةٌ إلى جَرَّةٍ فارِغَة. كانَ: الجَرَسُ و«تَنزيلُ بَياناتي» ومُرَشِّحاتُ الاستِكشافِ عَلى مُضيفِ الدَور،
+# وشَريطُ التَنَقُّلِ كُلُّه مِن `/r/{role}` عَلى مُضيفِ المَتجَر، وأَوَّلُ كِتابَةٍ إلى شُروطٍ بِلا جَلسَة. **تَكتُبُ دُخولاً** (ومُستَخدِماً جَديداً إن لَم يَكُن) فَلا تَجري إلّا بِـ`ROLE_PHONE`.
+echo "١٠) جَلسَةُ الدَورِ لا تُغادِرُ مُضيفَها — رَوابِطُ صَفَحاتِه عَلى المُضيفِ نَفسِه، والتَنزيلُ والشُروطُ تُخدَمُ هُناك (C2b-R1)"
+if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
+  # ‏signin_on <host> <jar> <path> <want> [--data-urlencode …] — خُطوَةُ دُخولٍ تُعَدُّ صَفّاً
+  signin_on() {
+    local host="$1" jar="$2" path="$3" want="$4"; shift 4
+    local code; code="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -c "$jar" -b "$jar" -H "Host: $host" "$@" "$(url "$host" "$path")")" || code=000
+    checked=$((checked + 1))
+    if [ "$code" = "$want" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$host" "$path" "$code"
+    else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا %s\n' POST "$host" "$path" "$code" "$want"; fi
+  }
+  # ‏stays <host> <path> — يَجلِبُ الصَفحَةَ بِالجَرَّةِ ويَعُدُّ رَوابِطَها: الخارِجُ إلى مُضيفٍ آخَرَ تَحتَ $DOMAIN يُفشِلُ الصَفّ؛ والصِفرُ رابِطاً أَداةٌ عَمياء
+  hrefs_all=0
+  stays() {
+    local host="$1" path="$2" out="$TMP/page" code
+    code="$(curl -s -m 20 -o "$out" -w '%{http_code}' -b "$JAR" -H "Host: $host" "$(url "$host" "$path")")" || code=000
+    local all off
+    all="$(grep -oE 'href="[^"]*"' "$out" | wc -l)"
+    off="$(grep -oE 'href="(https?:)?//[^"/]+' "$out" | sed -E 's#href="(https?:)?//##' \
+          | awk -v h="$host" -v d="$DOMAIN" '{ n=$0; sub(/:[0-9]+$/, "", n); if ($0 != h && (n == d || n ~ ("\\." d "$"))) print }' | sort | uniq -c)"
+    checked=$((checked + 1)); hrefs_all=$((hrefs_all + all))
+    # والجَلسَةُ حاضِرَة: صَفحَةٌ بِلا جَلسَةٍ تَرسُمُ رابِطَ دُخول (مَقيس: 1 في الجَرَسِ خارِجَ المُضيف، و0 عَلى مُضيفِ الدَور)
+    if [ "$code" = 200 ] && [ "$all" -gt 0 ] && [ -z "$off" ] && ! grep -qE 'href="[^"]*/login(\?[^"]*)?"' "$out"; then
+      printf '  ✓ %-4s %-34s %-52s → 200 · رَوابِط %s · خارِجَ المُضيف 0\n' GET "$host" "$path" "$all"
+    else
+      failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s · رَوابِط %s · خارِجَ المُضيف: %s\n' GET "$host" "$path" "$code" "$all" "$(echo "$off" | tr '\n' ' ')"
+    fi
+  }
+  # مُضيفُ الدَور
+  JAR="$TMP/rjar"
+  signin_on "$RH" "$JAR" "/auth/phone/login"  302 --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE"
+  signin_on "$RH" "$JAR" "/auth/phone/verify" 302 --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE"
+  for p in / /explore /explore?filters=open /me /me/data /notifications /me/listings; do stays "$RH" "$p"; done
+  row GET  "$RH" "/me/data/download"       200 - '"'
+  row GET  "$RH" "/notifications"          200 - "href=\"/notifications\"" "!href=\"$SCHEME://$S/notifications\""
+  row POST "$RH" "/listings/create"        302 "/$STORE/terms?returnUrl=%2F$STORE%2Flistings%2Fcreate"
+  row GET  "$RH" "/$STORE/terms?returnUrl=%2F$STORE%2Flistings%2Fcreate" 200 - "/$STORE/terms/accept"
+  # مُضيفُ المَتجَر، صَفَحاتُ الدَور
+  JAR="$TMP/sjar"
+  signin_on "$S" "$JAR" "/auth/phone/login"  302 --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE"
+  signin_on "$S" "$JAR" "/auth/phone/verify" 302 --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE"
+  for p in "/r/$ROLE" "/r/$ROLE/explore" "/r/$ROLE/me" "/r/$ROLE/me/listings" "/r/$ROLE/notifications"; do stays "$S" "$p"; done
+  JAR=""
+  echo "  الرَوابِطُ المَعدودَةُ في صَفَحاتِ الجَلسَة: $hrefs_all"
+  if [ "$hrefs_all" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ رابِط." >&2; failed=$((failed + 1)); fi
+else
+  echo "  – لَم تُفحَص: ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
 fi
 
 echo

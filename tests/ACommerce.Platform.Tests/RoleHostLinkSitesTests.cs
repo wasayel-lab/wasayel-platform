@@ -13,13 +13,21 @@ namespace ACommerce.Platform.Tests;
 // يَجِدُ كُلَّ مَوضِعِ استِدعاءٍ في القالِب (Razor وC#، بِلا التَعليقات)، ويَقرَأُ وَسيطَي الدَورِ والمَسار، ويَبني الرابِطَ بِـ`StoreUrl.Link` عَلى مُضيفِ الدَور
 // (`ashare-vendor`) — الدَورُ `null` كَما هُوَ، ودَورُ الصَفحَةِ (`Role`/`urlRole`/`role`) دَورَ المُضيفِ كَما يَحقِنُه الحاقِن — ويَحمَرُّ إن خَرَجَ واحِدٌ عَن المُضيف
 // سِوى العابِرِ المُعلَنِ بِاسمِه (بِطاقاتُ الأَدوار). يَطبَعُ ما عَدَّه، ويَحمَرُّ إن كانَ صِفراً.
+// ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ومِن صَفحَةِ دَورٍ عَلى مُضيفِ المَتجَرِ أَيضاً** (`/r/vendor/…` — حَيثُ يَنزِلُ دُخولُ
+// الدَور): كُلُّ مَوضِعٍ يُبنى ثانِيَةً عَلى `ashare.example.test` بِدَورِ الصَفحَةِ `vendor`. **والعابِرُ المُعلَنُ لَم يَعُد مَوضِعَ `LinkFor`**: بِطاقاتُ الأَدوارِ وبَيتُ الدَورِ
+// بَعدَ المُنتَقي يُنادِيانِ `StoreUrl.App` بِاسمِه — فَمَواضِعُه تُعَدُّ وتُطبَعُ، ويَحمَرُّ إن زادَت عَلى المُسَمّاة (عابِرٌ جَديدٌ قَرارٌ مَرئِيٌّ في مُراجَعَة).
 
 public class RoleHostLinkSitesTests(ITestOutputHelper output)
 {
-    private static readonly HostView VendorHost = new("example.test", "ashare", "https", "") { HostRole = "vendor" };
+    private static readonly HostView VendorHost = new("example.test", "ashare", "https", "") { HostRole = "vendor", PageRole = "vendor" };
+    private static readonly HostView StoreHostOnVendorPage = new("example.test", "ashare", "https", "") { PageRole = "vendor" };
 
-    /// <summary>العابِرُ المُعلَن: مِلَفٌّ ونَصُّ مَسارِه — رابِطٌ إلى تَطبيقِ دَورٍ آخَرَ عَمداً.</summary>
-    private static readonly (string File, string Path)[] DeclaredCrossApp = [("RoleLanding.razor", "$\"r/{r.Slug}/login\"")];
+    /// <summary>العابِرُ المُعلَن: مِلَفٌّ ونَصُّ مَسارِه — رابِطٌ إلى تَطبيقِ دَورٍ آخَرَ عَمداً. ‏(‏2026-11-07، C2b-P-02) خَرَجَت بِطاقاتُ الأَدوارِ إلى <c>StoreUrl.App</c>،
+    /// فَلا مَوضِعَ <c>LinkFor</c> يُعلَنُ عابِراً.</summary>
+    private static readonly (string File, string Path)[] DeclaredCrossApp = [];
+
+    /// <summary>مَواضِعُ <c>StoreUrl.App</c> المُسَمّاة — العابِرُ المُعلَنُ بِاسمِه (‏2026-11-07، C2b-P-02).</summary>
+    private static readonly string[] DeclaredAppSites = ["Components/RoleLanding.razor", "MarketplaceTemplateExtensions.cs"];
 
     internal sealed record Site(string File, int Line, string Role, string Path);
 
@@ -91,6 +99,20 @@ public class RoleHostLinkSitesTests(ITestOutputHelper output)
         return sites;
     }
 
+    /// <summary>مَواضِعُ <c>StoreUrl.App(</c> في القالِب (بِلا تَعريفِها) — <c>مِلَفّ:سَطر</c>.</summary>
+    internal static List<string> AppSites()
+    {
+        var root = TemplateRoot();
+        return Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
+            .Where(f => (f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
+                        && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                        && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+            .SelectMany(f => CodeText(f).Split('\n').Select((l, i) => (f, i, l)))
+            .Where(x => x.l.Contains("StoreUrl.App(", StringComparison.Ordinal))
+            .Select(x => $"{Path.GetRelativePath(root, x.f).Replace(Path.DirectorySeparatorChar, '/')}:{x.i + 1}")
+            .ToList();
+    }
+
     /// <summary>المَسارُ الَّذي يَبنيه المَوضِع: نَصٌّ حَرفِيٌّ كَما هُوَ، ومُقحَمٌ بِقِيَمٍ عَيِّنَة (<c>{…}</c> ← <c>x</c>)، وتَعبيرٌ ← أَوَّلُ نَصٍّ فيه أَو <c>explore</c>.</summary>
     internal static string SamplePath(string arg)
     {
@@ -116,18 +138,24 @@ public class RoleHostLinkSitesTests(ITestOutputHelper output)
             };
             if (role == "—") { named++; continue; }
             if (role is null) roleless++; else pageRole++;
-            var link = StoreUrl.Link(VendorHost, "ashare", role, SamplePath(s.Path));
-            var stays = link.StartsWith('/') && !link.StartsWith("//", StringComparison.Ordinal);
-            if (DeclaredCrossApp.Any(d => s.File.EndsWith(d.File, StringComparison.Ordinal) && s.Path == d.Path))
+            foreach (var (where, view) in new[] { ("ashare-vendor", VendorHost), ("ashare /r/vendor", StoreHostOnVendorPage) })
             {
-                declared.Add($"{s.File}:{s.Line} ⇒ {link}");
-                continue;
+                var link = StoreUrl.Link(view, "ashare", role, SamplePath(s.Path));
+                var stays = link.StartsWith('/') && !link.StartsWith("//", StringComparison.Ordinal);
+                if (DeclaredCrossApp.Any(d => s.File.EndsWith(d.File, StringComparison.Ordinal) && s.Path == d.Path))
+                {
+                    declared.Add($"{where} · {s.File}:{s.Line} ⇒ {link}");
+                    continue;
+                }
+                if (stays) kept++;
+                else leaving.Add($"{where} · {s.File}:{s.Line} LinkFor(…, {s.Role}, {s.Path}) ⇒ {link}");
             }
-            if (stays) kept++;
-            else leaving.Add($"{s.File}:{s.Line} LinkFor(…, {s.Role}, {s.Path}) ⇒ {link}");
         }
+        var apps = AppSites();
+        output.WriteLine($"مَواضِعُ StoreUrl.App (العابِرُ المُعلَن): {apps.Count} — {string.Join(" · ", apps)}");
+        Assert.Equal(DeclaredAppSites.Order(StringComparer.Ordinal), apps.Select(a => a[..a.LastIndexOf(':')]).Distinct().Order(StringComparer.Ordinal));
         output.WriteLine($"مَواضِعُ LinkFor: {sites.Count} · بِلا دَور: {roleless} · بِدَورِ الصَفحَة: {pageRole} · بِدَورٍ مُسَمّىً آخَر (لا تُفحَص هُنا): {named}");
-        output.WriteLine($"عَلى مُضيفِ الدَورِ تَبقى: {kept} · عابِرٌ مُعلَن: {declared.Count} · تُغادِر: {leaving.Count}");
+        output.WriteLine($"تَبقى عَلى المُضيف (مُضيفُ الدَور + صَفحَةُ دَورٍ عَلى مُضيفِ المَتجَر): {kept} · عابِرٌ مُعلَن: {declared.Count} · تُغادِر: {leaving.Count}");
         foreach (var d in declared) output.WriteLine("  ↗ " + d);
         foreach (var l in leaving) output.WriteLine("  ✗ " + l);
         Assert.True(sites.Count >= 150, $"فَحصٌ أَعمى: {sites.Count} مَوضِعاً");

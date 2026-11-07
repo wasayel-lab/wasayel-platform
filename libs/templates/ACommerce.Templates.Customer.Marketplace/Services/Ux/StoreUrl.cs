@@ -9,6 +9,11 @@ public readonly record struct HostView(string? Apex, string? HostSlug, string? S
 {
     /// <summary>دَورُ الكَتالوجِ عَلى مُضيفِ الدَور (<c>{slug}-{rolehost}.R</c>) — <c>null</c> عَلى مُضيفِ المَتجَرِ وما سِواه (‏2026-11-07، W13-4·C2b·4).</summary>
     public string? HostRole { get; init; }
+
+    /// <summary><b>دَورُ الصَفحَةِ في مَسارِ الطَلَبِ بَعدَ الحَقن</b> (<c>/{slug}/r/{role}/…</c>) — <c>null</c> لِصَفحَةٍ بِلا دَورٍ ولِكُلِّ طَلَبِ كِتابَة (‏2026-11-07،
+    /// مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02). عَلى مُضيفِ الدَورِ هُوَ دَورُ المُضيفِ في قَوالِبِ صَفَحاتِه؛ وعَلى مُضيفِ المَتجَرِ دَورُ <c>/r/{role}/…</c> —
+    /// حَيثُ يَنزِلُ دُخولُ الدَورِ بِتَحويلِ <see cref="StoreUrl.For"/>، فَرابِطُه بِدَورِه داخِلَ التَطبيقِ نَفسِه لا تَبديلٌ لَه.</summary>
+    public string? PageRole { get; init; }
 }
 
 /// <summary>
@@ -32,7 +37,7 @@ public static class StoreUrl
                 ctx.Items[StoreHostItems.Slug] as string,
                 string.IsNullOrEmpty(ctx.Request.Scheme) ? "https" : ctx.Request.Scheme,
                 ctx.Request.Host.Port is int port ? ":" + port : "")
-            { HostRole = ctx.Items[StoreHostItems.Role] as string };
+            { HostRole = ctx.Items[StoreHostItems.Role] as string, PageRole = AuthSession.ExtractRoleFromPath(ctx.Request.Path) };
 
     /// <summary><b>شَكلُ المَسار</b> — جِسمُ <c>AuthSession.LinkFor</c> كَما كانَ بِحَرفِه: <c>/{slug}/{path}</c> أَو <c>/{slug}/r/{role}/{path}</c>، بِلا شَرطَةٍ أَخيرَة.</summary>
     public static string PathForm(string slug, string? role, string path)
@@ -76,6 +81,24 @@ public static class StoreUrl
     /// وكانَت تَحمِلُ العُضوَ إلى مُضيفٍ جَرَّتُه فارِغَة. والعابِرُ لِدَورٍ مُسَمّى غَيرِ دَورِ المُضيفِ وَحدَه.</para>
     /// </summary>
     public static string Link(HostView view, string slug, string? role, string path = "")
+    {
+        if (!OnHostOf(view, slug)) return PathForm(slug, role, path);
+        role = string.IsNullOrEmpty(role) ? null : role;
+        if (role is null && PathRole(path) is { } carried) (role, path) = carried;
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ورابِطُ دَورِ الصَفحَةِ يَبقى عَلى المُضيف** كَدَورِ المُضيفِ والرابِطِ
+        // بِلا دَور: كانَ عَلى مُضيفِ المَتجَرِ يُسَمّي مِن صَفحَةِ `/r/vendor/…` (حَيثُ يَنزِلُ دُخولُ الدَورِ) مُضيفَ البائِعِ مُطلَقاً — شَريطُ التَنَقُّلِ كُلُّه قَفزَةٌ إلى مُضيفٍ
+        // بِلا جَلسَة (مَقيس: 19 هَدَفاً). والعابِرُ المُعلَنُ يُسَمّى بِاسمِه (<see cref="App"/>)، ودَورٌ مُسَمّىً غَيرُ دَورِ الصَفحَةِ والمُضيفِ يَبقى عابِراً.
+        if (role is null || string.Equals(role, view.HostRole, StringComparison.Ordinal) || string.Equals(role, view.PageRole, StringComparison.Ordinal))
+            return For(view, slug, role, path);
+        return App(view, slug, role, path);
+    }
+
+    /// <summary>
+    /// <para><b>الرابِطُ العابِرُ المُعلَنُ إلى تَطبيقٍ آخَرَ مِن المَتجَر</b> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — جِسمُ <see cref="Link"/> كَما كانَ قَبلَ
+    /// دَورِ الصَفحَة): بِطاقاتُ الأَدوارِ (<c>RoleLanding</c>) وبَيتُ الدَورِ بَعدَ المُنتَقي (<c>RoleHome</c>) — تَبديلٌ لِلتَطبيقِ بِقَصد، فَيُسَمّي مُضيفَ ذلكَ الدَورِ
+    /// ولَو كانَت الصَفحَةُ صَفحَةَ دَور. وفي وَضعِ المَسارِ <see cref="PathForm"/> بِحَرفِه.</para>
+    /// </summary>
+    public static string App(HostView view, string slug, string? role, string path = "")
     {
         if (!OnHostOf(view, slug)) return PathForm(slug, role, path);
         role = string.IsNullOrEmpty(role) ? null : role;
@@ -142,6 +165,9 @@ public static class StoreUrl
 
     /// <summary><see cref="Open(HostView, string)"/> بِالطَلَبِ الحالِيِّ (<c>AuthSession.HttpAccessor</c>) — لِصَفَحاتِ Razor.</summary>
     public static string Open(string slug) => Open(ViewOf(AuthSession.HttpAccessor?.HttpContext), slug);
+
+    /// <summary><see cref="App(HostView, string, string, string)"/> بِالطَلَبِ الحالِيِّ (<c>AuthSession.HttpAccessor</c>) — لِصَفَحاتِ Razor (بِطاقاتُ الأَدوار).</summary>
+    public static string App(string slug, string? role, string path = "") => App(ViewOf(AuthSession.HttpAccessor?.HttpContext), slug, role, path);
 
     /// <summary>
     /// <para><b>أَصلُ المَنَصَّةِ القانونِيُّ لِلعَناوينِ المُستَديمَة</b> (‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·3 — G14): ما يُسَجَّلُ عِندَ

@@ -143,6 +143,46 @@ public class LiveRoleHostSessionProofTests(ITestOutputHelper output)
         finally { await DropAsync(host, slug, vendor); }
     }
 
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02) <b>وصَفَحاتُ الدَورِ عَلى مُضيفِ المَتجَر</b> (<c>/r/vendor/…</c> — حَيثُ يَنزِلُ دُخولُ الدَورِ
+    /// بِتَحويلِ <c>For</c>، وكَعكَتُه عَلى مُضيفِ المَتجَر): كانَ شَريطُ التَنَقُّلِ كُلُّه (<c>LinkFor(slug, Role, …)</c>) يُسَمّي مُضيفَ البائِعِ مُطلَقاً — مَقيسٌ حَيّاً
+    /// 19 هَدَفاً خارِجَ المُضيف. والآن دَورُ الصَفحَةِ كَدَورِ المُضيف: عَلى المُضيفِ نَفسِه.</summary>
+    [Fact]
+    public async Task A_role_page_on_the_store_host_links_only_to_the_store_host_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var host = HostWithPhone();
+        var slug = NewSlug("w13rsp-");
+        await PutStoreAsync(host, slug);
+        var vendor = await PutMemberAsync(host, slug, "vendor");
+        var storeHost = $"{slug}.{Base}";
+        var pages = new (string Path, Type Page)[]
+        {
+            ("/r/vendor", typeof(TenantHome)), ("/r/vendor/explore", typeof(TenantExplore)), ("/r/vendor/me", typeof(Me)),
+            ("/r/vendor/me/listings", typeof(MyListings)), ("/r/vendor/notifications", typeof(Notifications)),
+        };
+        try
+        {
+            var (all, roleClean, leaving) = (0, 0, new List<string>());
+            foreach (var (visible, page) in pages)
+            {
+                var (path, html) = await RenderOnHostAsync(host, storeHost, slug, visible, page, vendor, "vendor");
+                var (n, off) = Leaving(html, storeHost);
+                all += n;
+                leaving.AddRange(off.Select(o => $"{visible} → {o}"));
+                // والأَداةُ لا تَعمى: صَفحَةُ الدَورِ تَرسُمُ رَوابِطَ دَورِها نَظيفَةً عَلى المُضيف (`/r/vendor/…`) — فَتُعَدُّ.
+                roleClean += Href.Matches(html).Count(m => m.Groups[1].Value.StartsWith("/r/vendor", StringComparison.Ordinal));
+                output.WriteLine($"[live] {storeHost}{visible} ⇒ {path} · رَوابِط: {n} · خارِجَ المُضيف: {off.Count}");
+                Assert.Equal($"/{slug}{visible}", path);
+            }
+            foreach (var l in leaving) output.WriteLine("  ✗ " + l);
+            output.WriteLine($"[live] الصَفَحات: {pages.Length} · الرَوابِطُ المَفحوصَة: {all} · خارِجَ مُضيفِ المَتجَر: {leaving.Count} · /r/vendor نَظيفَةً: {roleClean}");
+            Assert.True(all >= pages.Length * 5, $"فَحصٌ أَعمى: {all} رابِطاً");
+            Assert.True(roleClean >= pages.Length, $"فَحصٌ أَعمى: {roleClean} رابِطَ دَورٍ نَظيفاً");
+            Assert.Empty(leaving);
+        }
+        finally { await DropAsync(host, slug, vendor); }
+    }
+
     private static Action<HttpContext> OnHost(string hostName, string slug, string? hostRole) => ctx =>
     {
         ctx.Request.Scheme = "https";

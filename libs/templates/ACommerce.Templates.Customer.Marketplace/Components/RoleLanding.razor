@@ -51,8 +51,10 @@
                `/{slug}/r/{role}` (زائِرٌ يَفتَح تَطبيقَ دَورٍ مُباشَرَةً،
                أَو يَخرُج مِن جَلسَتِه فيه). فَبَوّابَةُ الأَدوارِ نَفسُها
                كانَت تَرُدُّ النَقرَةَ بِصَفحَةِ خَطَأ. *@
+            @* ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) البِطاقَةُ عابِرٌ مُعلَنٌ بِاسمِه (`StoreUrl.App`): عَلى مُضيفٍ لِلمَتجَرِ
+               مُضيفُ ذلكَ الدَورِ ولَو رُسِمَت عَلى صَفحَةِ دَور، و`LinkFor` صارَ يَبقى عَلى المُضيفِ لِدَورِ الصَفحَة. وفي وَضعِ المَسارِ `/{slug}/r/{role}/login` بِحَرفِه. *@
             <a class="acm-role-landing-card"
-               href="@AuthSession.LinkFor(Slug, null, $"r/{r.Slug}/login")">
+               href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.App(Slug, r.Slug, "login")">
                 <span class="acm-role-landing-card-icon">
                     <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="26" />
                 </span>
