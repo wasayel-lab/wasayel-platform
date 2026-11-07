@@ -53,8 +53,11 @@
                كانَت تَرُدُّ النَقرَةَ بِصَفحَةِ خَطَأ. *@
             @* ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) البِطاقَةُ عابِرٌ مُعلَنٌ بِاسمِه (`StoreUrl.App`): عَلى مُضيفٍ لِلمَتجَرِ
                مُضيفُ ذلكَ الدَورِ ولَو رُسِمَت عَلى صَفحَةِ دَور، و`LinkFor` صارَ يَبقى عَلى المُضيفِ لِدَورِ الصَفحَة. وفي وَضعِ المَسارِ `/{slug}/r/{role}/login` بِحَرفِه. *@
+            @* ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **عادَت `LinkFor(Slug, null, $"r/{r.Slug}/login")` بِحَرفِها**:
+               التَعبيرُ مُثَبَّتٌ في تَوصيفِ ADR-035 (`RoleLandingVisitorDoorCharacterizationTests` بِبَصمَتِه عِندَ 50d6293)، و`StoreUrl.Link` يَجعَلُ ذَيلَ
+               `r/{role}/…` بِلا دَورٍ تَطبيقَ ذلكَ الدَور — إلّا دَورَ الصَفحَةِ أَو المُضيفِ نَفسَه، فَالبَقاءُ عَلى المُضيفِ هُوَ التَطبيقُ نَفسُه. *@
             <a class="acm-role-landing-card"
-               href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.App(Slug, r.Slug, "login")">
+               href="@AuthSession.LinkFor(Slug, null, $"r/{r.Slug}/login")">
                 <span class="acm-role-landing-card-icon">
                     <AcIcon Name="@ACommerce.Widgets.AcIconMap.Resolve(r.Icon, "user")" Size="26" />
                 </span>

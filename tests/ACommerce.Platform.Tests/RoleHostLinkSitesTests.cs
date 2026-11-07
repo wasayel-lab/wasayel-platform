@@ -23,11 +23,14 @@ public class RoleHostLinkSitesTests(ITestOutputHelper output)
     private static readonly HostView StoreHostOnVendorPage = new("example.test", "ashare", "https", "") { PageRole = "vendor" };
 
     /// <summary>العابِرُ المُعلَن: مِلَفٌّ ونَصُّ مَسارِه — رابِطٌ إلى تَطبيقِ دَورٍ آخَرَ عَمداً. ‏(‏2026-11-07، C2b-P-02) خَرَجَت بِطاقاتُ الأَدوارِ إلى <c>StoreUrl.App</c>،
-    /// فَلا مَوضِعَ <c>LinkFor</c> يُعلَنُ عابِراً.</summary>
-    private static readonly (string File, string Path)[] DeclaredCrossApp = [];
+    /// فَلا مَوضِعَ <c>LinkFor</c> يُعلَنُ عابِراً.
+    /// ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وعادَت البِطاقَةُ <c>LinkFor(Slug, null, $"r/{r.Slug}/login")</c>**
+    /// بِحَرفِ تَوصيفِ ADR-035 — فَهِيَ العابِرُ المُعلَنُ هُنا ثانِيَةً، وتُفحَصُ بِسُلوكِها في <see cref="The_role_card_names_another_role_app_and_stays_for_its_own"/>.</summary>
+    private static readonly (string File, string Path)[] DeclaredCrossApp = [("RoleLanding.razor", "$\"r/{r.Slug}/login\"")];
 
-    /// <summary>مَواضِعُ <c>StoreUrl.App</c> المُسَمّاة — العابِرُ المُعلَنُ بِاسمِه (‏2026-11-07، C2b-P-02).</summary>
-    private static readonly string[] DeclaredAppSites = ["Components/RoleLanding.razor", "MarketplaceTemplateExtensions.cs"];
+    /// <summary>مَواضِعُ <c>StoreUrl.App</c> المُسَمّاة — العابِرُ المُعلَنُ بِاسمِه (‏2026-11-07، C2b-P-02). ‏(‏2026-11-07، SEC-C2b-R2-1) مَوضِعٌ واحِدٌ لا اثنان:
+    /// بَيتُ الدَورِ بَعدَ المُنتَقي (<c>RoleHome</c>)؛ والبِطاقَةُ عادَت <c>LinkFor</c>.</summary>
+    private static readonly string[] DeclaredAppSites = ["MarketplaceTemplateExtensions.cs"];
 
     internal sealed record Site(string File, int Line, string Role, string Path);
 
@@ -160,8 +163,31 @@ public class RoleHostLinkSitesTests(ITestOutputHelper output)
         foreach (var l in leaving) output.WriteLine("  ✗ " + l);
         Assert.True(sites.Count >= 150, $"فَحصٌ أَعمى: {sites.Count} مَوضِعاً");
         Assert.True(roleless >= 20, $"فَحصٌ أَعمى: {roleless} مَوضِعاً بِلا دَور");
-        Assert.Equal(DeclaredCrossApp.Length, declared.Count);
+        // ‏(‏2026-11-07، SEC-C2b-R2-1) والمُعلَنُ يُعَدُّ في كُلِّ مُضيفٍ مِن الاثنَين.
+        Assert.Equal(DeclaredCrossApp.Length * 2, declared.Count);
         Assert.Empty(leaving);
+    }
+
+    /// <summary>
+    /// <para><b>بِطاقَةُ الدَورِ بِسُلوكِها</b> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-1): <c>LinkFor(Slug, null, $"r/{role}/login")</c> بِالطَلَبِ
+    /// كَما يَترُكُه الحاقِن — مِن جَذرِ المَتجَرِ ومِن صَفحَةِ دَورٍ آخَرَ ومِن مُضيفِ دَورٍ آخَرَ تُسَمّي مُضيفَ ذلكَ الدَور؛ ومِن صَفحَةِ دَورِها أَو مُضيفِه تَبقى
+    /// (التَطبيقُ نَفسُه)؛ ودَورٌ مُؤَلَّفٌ بِلا اسمِ مُضيفٍ <c>/r/{role}/login</c> عَلى مُضيفِ المَتجَر؛ ووَضعُ المَسارِ بِحَرفِه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("none", "/ashare", "vendor", "/ashare/r/vendor/login")]
+    [InlineData("none", "/ashare/r/vendor", "vendor", "/ashare/r/vendor/login")]
+    [InlineData("store", "/ashare", "vendor", "https://ashare-vendor.example.test/login")]
+    [InlineData("store", "/ashare/r/customer", "vendor", "https://ashare-vendor.example.test/login")]
+    [InlineData("store", "/ashare/r/vendor", "vendor", "/r/vendor/login")]
+    [InlineData("store", "/ashare", "mandoob", "/r/mandoob/login")]
+    [InlineData("vendor", "/ashare/r/vendor", "customer", "https://ashare-customer.example.test/login")]
+    [InlineData("vendor", "/ashare/r/vendor", "vendor", "/login")]
+    [InlineData("vendor", "/ashare/r/vendor", "mandoob", "https://ashare.example.test/r/mandoob/login")]
+    public void The_role_card_names_another_role_app_and_stays_for_its_own(string where, string path, string cardRole, string expected)
+    {
+        var got = PageRoleLinkCharacterizationTests.LinkForOn(PageRoleLinkCharacterizationTests.Page(where, path), "ashare", null, $"r/{cardRole}/login");
+        output.WriteLine($"{where} {path}: بِطاقَةُ {cardRole} ⇒ {got}");
+        Assert.Equal(expected, got);
     }
 
     [Theory]
