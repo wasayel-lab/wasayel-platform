@@ -38,6 +38,42 @@ public static class StoreHostPage
     }
 
     /// <summary>
+    /// <para><b>دَورُ الصَفحَةِ الَّتي أَرسَلَت الطَلَبَ مِن رَأسِ <c>Referer</c> — كَما قَرَأَ حاقِنُ المُضيفِ تِلكَ الصَفحَة</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ
+    /// الثانِيَة · C2a-P2-01). كانَ مَسارُ الـReferer يُسأَلُ عَنه <c>AuthSession.ExtractRoleFromPath</c> كَما هُوَ — وهو يَنتَظِرُ <c>/{slug}/r/{role}/…</c> —
+    /// فَصَفحَةُ دَورٍ بِعُنوانِها النَظيفِ عَلى مُضيفِ المَتجَرِ (<c>{slug}.R/r/customer/login</c>، وهو ما يُعلِنُه الـcanonical وog:url، <see cref="CanonicalPath"/>)
+    /// تُرسِلُ <c>POST</c> فَيَرجِعُ تَحويلُه بِلا دَور: الزائِرُ يَخرُجُ مِن تَطبيقِ دَورِه ومِن نِطاقِ عامِلِ خِدمَتِه.</para>
+    /// <para><b>والقاعِدَة</b>: عَلى مُضيفِ المَتجَرِ (<paramref name="hostSlug"/>)، ومُضيفُ الـReferer (بِمَنفَذِه) هُوَ مُضيفُ الطَلَبِ نَفسُه، ومَسارُه لا يَبدَأُ
+    /// بِمَقطَعِ المَتجَر — يُقرَأُ بَعدَ <c>/{hostSlug}</c> كَما حَقَنَه الحاقِن. وما سِوى ذلك كَما كان بِحَرفِه: بِلا مُضيفِ مَتجَر، أَو الـReferer بِشَكلِ المَسار، أَو
+    /// مِن مُضيفٍ آخَر (فَلا يَختارُ مُضيفٌ غَريبٌ دَوراً بِعُنوانٍ نَظيف). وتَوصيفُ ما يَنجو <c>RefererRoleCharacterizationTests</c>.</para>
+    /// <para><b>ولِماذا لا يُحاكي الحاقِنَ في جُذورِ المَنَصَّة</b> (<c>/sw.js</c>، <c>/api/…</c>، <c>/studio</c>): الدَورُ مَقطَعٌ ثانٍ اسمُه <c>r</c> بَعدَ البادِئَة، و<c>r</c>
+    /// لَيسَ جَذراً مَخدوماً — فَلا يُعطي جَذرٌ دَوراً بِالبادِئَةِ ولا بِغَيرِها، والحارِسُ يَحمَرُّ إن صارَ <c>r</c> جَذراً.</para>
+    /// </summary>
+    public static string? RoleFromReferer(string? referer, string? requestHost, string? hostSlug)
+    {
+        if (string.IsNullOrEmpty(referer)) return null;
+        try
+        {
+            var uri = new Uri(referer);
+            var path = uri.AbsolutePath;
+            if (!string.IsNullOrEmpty(hostSlug) && !string.IsNullOrEmpty(requestHost)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                && string.Equals(uri.Authority, requestHost, StringComparison.OrdinalIgnoreCase)
+                && !StartsWithSegment(path, hostSlug))
+                path = "/" + hostSlug + (path == "/" ? "" : path);
+            return AuthSession.ExtractRoleFromPath(new PathString(path));
+        }
+        catch { return null; }
+    }
+
+    /// <summary>أَيَبدَأُ المَسارُ بِمَقطَعٍ هُوَ <paramref name="segment"/> بِعَينِه (بِلا حالَةِ أَحرُف) — كَما يَمتَنِعُ الحاقِنُ عَن مَسارٍ يَحمِلُ المَتجَرَ سَلَفاً.</summary>
+    private static bool StartsWithSegment(string path, string segment)
+    {
+        var firstSlash = path.IndexOf('/', 1);
+        var first = path.Length < 2 ? "" : firstSlash > 0 ? path[1..firstSlash] : path[1..];
+        return string.Equals(first, segment, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// <para><b>سِياقُ المُستَأجِرِ لِسكربتاتِ العَميل</b> — <c>{"slug":…,"role":…,"hostMode":…,"home":…}</c>: المَتجَرُ الَّذي حَلَّه الخادِم (فارِغٌ عَلى
     /// صَفَحاتِ المَنَصَّة)، ودَورُ المَسار، وهَل الطَلَبُ عَلى مُضيفِ المَتجَر، وهَل الصَفحَةُ جَذرُ المَتجَر. <b>فَلا تَستَخرِجُ كُتلَةُ سكربتٍ السلاجَ مِن
     /// <c>location.pathname</c></b> (G11). ومُسَلسَلٌ بِـ<c>System.Text.Json</c> بِمُرَمِّزِه الافتِراضيِّ الَّذي يَهرُبُ <c>&lt;</c> و<c>&gt;</c>

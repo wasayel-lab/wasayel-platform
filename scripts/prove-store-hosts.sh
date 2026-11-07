@@ -34,6 +34,7 @@ DIRECT="${DIRECT:-0}"             # 1 = يُطلَبُ كُلُّ مُضيفٍ �
 MANAGER_PHONE="${MANAGER_PHONE:-}" # هاتِفُ مُديرٍ لِـSTORE — يُشَغِّلُ المَجموعَةَ ٦ (دُخولٌ بِرَمزِ المُحاكي)
 DEV_CODE="${DEV_CODE:-123456}"
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
+REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
 ADDR="$SCHEME://$(hp 127.0.0.1)"
 S="$(hp "$STORE.$DOMAIN")"        # مُضيفُ المَتجَر
@@ -51,14 +52,21 @@ row() {
   local verb=(-X "$method"); [ "$method" = HEAD ] && verb=(-I)   # ‏`-X HEAD` يَنتَظِرُ جِسماً لا يَأتي
   local args=(-s -m 20 -o "$out" -w '%{http_code}|%{redirect_url}' "${verb[@]}" -H "Host: $host")
   local jar=(); [ -n "$JAR" ] && jar=(-b "$JAR"); args+=("${jar[@]}")
+  [ -n "$REF" ] && args+=(-H "Referer: $REF")
   [ "$method" = POST ] && args+=(-H 'Content-Type: application/x-www-form-urlencoded' --data '')
-  local got; got="$(curl "${args[@]}" "$(url "$host" "$path")")" || got="000|"
+  # ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن رُؤوسِ الجَوابِ نَفسِه (`-D`) لا مِن طَلَبٍ ثانٍ: الطَلَبُ
+  # الثاني كانَ بِلا جِسمِ الـPOST ولا Referer، فَلا يَقيسُ وِجهَةَ ما أُرسِل. ووِجهَةٌ تَنتَهي بِـ* تُقارَنُ بادِئَةً (لِما بَعدَ ? مِن رَمزِ رَفضٍ يَختَلِفُ بِقَناةِ المَتجَر).
+  local got; got="$(curl -D "$TMP/headers" "${args[@]}" "$(url "$host" "$path")")" || got="000|"
   local code="${got%%|*}" redirect="${got#*|}" why=""
   [ "$code" = "$want" ] || why="الرَمز $code لا $want"
   if [ -z "$why" ] && [ "$loc" != "-" ]; then
     # curl يَحُلُّ الوِجهَةَ نِسبَةً إلى 127.0.0.1 — والمُقارَنَةُ بِالوِجهَةِ الكامِلَةِ مِن رَأسِ Location
-    redirect="$(curl -s -m 20 -o /dev/null -D - "${verb[@]}" "${jar[@]}" -H "Host: $host" "$(url "$host" "$path")" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')"
-    [ "$redirect" = "$loc" ] || why="الوِجهَة «$redirect» لا «$loc»"
+    redirect="$(tr -d '\r' < "$TMP/headers" | sed -n 's/^[Ll]ocation: //p')"
+    if [ "${loc: -1}" = "*" ]; then
+      [ "${redirect#"${loc%\*}"}" != "$redirect" ] || why="الوِجهَة «$redirect» لا تَبدَأُ بِـ«${loc%\*}»"
+    else
+      [ "$redirect" = "$loc" ] || why="الوِجهَة «$redirect» لا «$loc»"
+    fi
   fi
   for needle in "$@"; do
     [ -n "$why" ] && break
@@ -140,6 +148,15 @@ if [ -n "$MANAGER_PHONE" ]; then
 else
   echo "  – لَم تُفحَص: MANAGER_PHONE غائِب (هاتِفُ مُديرٍ لِـ$STORE، وDevelopment لِرَمزِ المُحاكي)"
 fi
+
+# ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بابُ دُخولِ الجَوّالِ بِجَوّالٍ فارِغٍ يُحَوِّلُ بِـLink قَبلَ أَيِّ كِتابَة
+# (رَمزُ رَفضٍ: phone_required، أَو القَناةُ لا يَعرِضُها المَتجَر) — فَالوِجهَةُ تَقيسُ دَورَ الـReferer وَحدَه.
+echo "٧) الكِتابَةُ مِن صَفحَةِ دَورٍ بِعُنوانِها النَظيفِ تَبقى في الدَور (كانَ التَحويلُ يُسقِطُ /r/{role} — والـcanonical يُعلِنُ هذا العُنوان)"
+REF="$SCHEME://$S/r/customer/login";                row POST "$S" "/auth/phone/login" 302 "/$STORE/r/customer/login?*"
+REF="$SCHEME://$S/$STORE/r/customer/login";         row POST "$S" "/auth/phone/login" 302 "/$STORE/r/customer/login?*"
+REF="$SCHEME://$S/login";                          row POST "$S" "/auth/phone/login" 302 "/$STORE/login?*"
+REF="$SCHEME://$(hp "$OTHER.$DOMAIN")/r/customer/login"; row POST "$S" "/auth/phone/login" 302 "/$STORE/login?*"
+REF=""
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"

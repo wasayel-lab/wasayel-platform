@@ -4375,17 +4375,11 @@ public static class MarketplaceTemplateExtensions
 
     // اِستِخراج الدَور مِن Referer لِلطَلَبات POST الَّتي تَأتي مِن صَفحَة
     // داخِل /{slug}/r/{role}/... — نَستَخدِمه لِبِناء redirect role-aware.
+    // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والقَرارُ في `StoreHostPage.RoleFromReferer` النَقِيَّة: كانَ مَسارُ
+    // الـReferer يُقرَأُ كَما هُوَ، فَصَفحَةُ دَورٍ بِعُنوانِها النَظيفِ عَلى مُضيفِ المَتجَرِ (الـcanonical) تُرجِعُ تَحويلاتِ `Link` الـ179 بِلا دَور.
     private static string? RoleFromReferer(HttpRequest req)
-    {
-        var referer = req.Headers["Referer"].ToString();
-        if (string.IsNullOrEmpty(referer)) return null;
-        try
-        {
-            var uri = new Uri(referer);
-            return AuthSession.ExtractRoleFromPath(new PathString(uri.AbsolutePath));
-        }
-        catch { return null; }
-    }
+        => Services.Ux.StoreHostPage.RoleFromReferer(
+            req.Headers["Referer"].ToString(), req.Host.Value, Services.Ux.StoreHostPage.HostSlug(req.HttpContext));
 
     // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-033 الخُطوَة 3): نُقطَتا الشَحنِ في مِلَفِّهِما
     // (`Shipping/OtoShippingEndpoints.cs`) تَرتَدّانِ إلى صَفحَةِ الصَفقَةِ بِالدَورِ نَفسِه — نُسخَةٌ ثانِيَةٌ
