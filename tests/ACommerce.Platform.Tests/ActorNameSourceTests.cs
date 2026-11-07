@@ -89,7 +89,9 @@ public class ActorNameSourceTests(ITestOutputHelper output)
         output.WriteLine($"مَواضِعُ المَتجَر: {store} · مَواضِعُ الاستوديو: {studio} · مِن الوَثيقَة: {fromDocs}");
         Assert.Equal(0, store);
         Assert.Equal(0, studio);
-        Assert.Equal(21, fromDocs);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٢١ ← ١٩: قارِئانِ خَرَجا مَعَ الاستِئناف (`/studio/begin`
+        // و`/studio/consent/accept` كانا يُمَرِّرانِ الاسمَ إلَيه)؛ ولا قارِئَ مِن الكَعكَةِ بَقِيَ مَكانَهُما.
+        Assert.Equal(19, fromDocs);
 
         // والنَمَطانِ يَحمَرّانِ عَلى سَطرِ اليَومِ حَرفاً — والمُعَلَّقُ لا يُعَدّ.
         Assert.Matches(StoreCookieRead, "var userName = AuthSession.ResolveUserName(req, slug) ?? \"عميل\";");

@@ -239,13 +239,17 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
     [Fact]
     public void TheRefusalCode_HasAnArabicMessage_TheClientCanRead()
     {
-        var msg = LocaleCatalog.Find("ar", "studio.study.err_no_auth_channel");
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مِفتاحُ استِمارَةِ الإنشاءِ لا البِناء — النَصُّ نَفسُه.
+        var msg = LocaleCatalog.Find("ar", ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioStoreCreate.MessageKey(TenantAuthChannelDoor.NoChannel));
         Assert.False(string.IsNullOrWhiteSpace(msg),
             "رَمزُ الرَفضِ بِلا رِسالَة — العَميلُ يَرى `no_auth_channel`.");
 
         // والشاشَةُ تُتَرجِمُه فِعلاً، لا القامُوسُ وَحدَه يَحمِلُه.
-        var study = Read($"{TemplateRoot}/Components/Pages/StudioStudy.razor");
-        Assert.Contains("studio.study.err_no_auth_channel", study, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الشاشَةُ الَّتي تُتَرجِمُه صارَت استِمارَةَ الإنشاء: تَرسُمُ
+        // `StudioStoreCreate.MessageKey(Err)` لِكُلِّ رَمزٍ في المُعجَمِ المُغلَق، والرَمزُ مِنه.
+        var create = Read($"{TemplateRoot}/Components/Pages/StudioNewStore.razor");
+        Assert.Contains("@L.Markup(StudioStoreCreate.MessageKey(Err))", create, StringComparison.Ordinal);
+        Assert.Contains(TenantAuthChannelDoor.NoChannel, ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioStoreCreate.Refusals);
     }
 
     /// <summary>وصَفحَةُ الهُوِيَّةِ تَقولُ العِلَّةَ حينَ لا قَناةَ
@@ -367,7 +371,9 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
     private static string BuildEndpointBody()
     {
         var body = WriteEndpointGuardTests.AllMinimalApiEndpoints()
-            .FirstOrDefault(e => e.Route == "/studio/s/{id:guid}/build")?.Body;
+            // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) نُقطَةُ البِناءِ صارَت `/studio/apps/create` — خَرَجَ `/build`
+            // وحَلَّ مَحَلَّه بابُ الإنشاءِ اليَدَوِيِّ بِالاشتِقاقِ والرَفضِ نَفسَيهِما.
+            .FirstOrDefault(e => e.Route == "/studio/apps/create")?.Body;
         Assert.False(string.IsNullOrEmpty(body),
             "أَداة عَمياء: نُقطَةُ البِناءِ لَم يَجِدها الماسِح.");
         return body!;

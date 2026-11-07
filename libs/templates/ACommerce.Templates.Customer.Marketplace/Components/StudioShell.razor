@@ -28,9 +28,7 @@
                     <a class="studio-nav-item @(Active == "home" ? "active" : "")" href="/studio">
                         <AcIcon Name="home" Size="18" /> @L.Markup("studio.nav.home")@((MarkupString)"\n                    ")
                     </a>
-                    <a class="studio-nav-item @(Active == "ideas" ? "active" : "")" href="/studio/ideas">
-                        <AcIcon Name="star" Size="18" /> @L.Markup("studio.nav.ideas")@((MarkupString)"\n                    ")
-                    </a>
+                    @* ‏(‏2026-11-07، W13-1·٥ — ADR-049 §١) خَرَجَ مَدخَلُ «أَفكاري وتَحاليلي» (`/studio/ideas`): لا تَحليلَ في الرِحلَة. *@
                     <a class="studio-nav-item @(Active == "stores" ? "active" : "")" href="/studio">
                         <AcIcon Name="building" Size="18" /> @L.Markup("studio.nav.apps")@((MarkupString)"\n                    ")
                     </a>

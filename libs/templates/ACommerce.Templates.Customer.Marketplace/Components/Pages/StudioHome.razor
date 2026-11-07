@@ -1,8 +1,6 @@
 @page "/studio"
-@page "/studio/ideas"
 @inject Services.Incubator.StudioAuth Auth
 @inject ACommerce.Kit.Culture.ICultureContext Culture
-@inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -24,7 +22,7 @@
     والأَزرارُ الثَلاثَةُ الأُخرى إلَيها بِنُصوصِ المَتجَر لا الفِكرَة؛ وقِسمُ الأَفكارِ وإحصاءاتُه تَخرُجُ في W13-1·٥.
 *@
 
-<StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
+<StudioShell Title="@Title" Active="home">
     <TopBarActions>
         @* رابِطا `/studio/agent` (هُنا وبِطاقَتُه أَسفَلَ) لا يُرسَمانِ لِمَن لا يَفتَحُ لَه بابُ الوَكيل — `StudioAgentDoor.Opens` نَفسُه الَّذي
            تَسأَلُه الصَفحَة (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3، lens-security-2؛ القاعِدَة ١٢). وأَوَّلُ الشَريطِ بِلا فَراغٍ قَبلَه أَصلاً
@@ -49,13 +47,12 @@
         <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" RenewsOn="@renewsOn" />
 
         <div class="studio-page-head">
-            <h1>@(IsIdeas ? L["studio.home.ideas_title"] : Greeting)</h1>
-            <p>@(IsIdeas ? L["studio.home.ideas_sub"]
-                          : L["studio.home.home_sub"])</p>
+            <h1>@Greeting</h1>
+            <p>@L.Markup("studio.home.home_sub")</p>
         </div>
 
-        @if (!IsIdeas)
-        {
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §١) خَرَجَ مِن الصَفحَةِ مَسارُ `/studio/ideas` وإحصاءا «دِراسات مُكتَمِلَة» و«إجمالي الأَفكار»
+           وقِسمُ الأَفكارِ وحالَتُه الفارِغَة: لا تَحليلَ في الرِحلَة، والدِراساتُ القَديمَةُ يَبلُغُها شَريطُ مَتجَرِها وَحدَه. *@
             @* بِطاقَتان واضِحَتان لِمَساعِدَي الذَّكاء — كُلّ واحِدَة بِغَرَض مُختَلِف. *@
             <div class="studio-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px;">
                 <a class="studio-list-row" href="/studio/new" style="align-items:flex-start;">
@@ -88,14 +85,6 @@
                     <div class="studio-stat-label">@L.Markup("studio.home.stat_apps")</div>
                     <div class="studio-stat-value">@(myApps?.Count ?? 0)</div>
                     <div class="studio-stat-sub">@L.Markup("studio.home.stat_apps_sub")</div>
-                </div>
-                <div class="studio-stat">
-                    <div class="studio-stat-label">@L.Markup("studio.home.stat_studies")</div>
-                    <div class="studio-stat-value">@(sessions?.Count(s => s.Status == IncubatorStatus.Completed) ?? 0)</div>
-                </div>
-                <div class="studio-stat">
-                    <div class="studio-stat-label">@L.Markup("studio.home.stat_ideas")</div>
-                    <div class="studio-stat-value">@(sessions?.Count ?? 0)</div>
                 </div>
             </div>
 
@@ -228,9 +217,8 @@
                     }
                 </div>
             }
-        }
 
-        @if (!IsIdeas && recentDeals.Count > 0)
+        @if (recentDeals.Count > 0)
         {
             <div class="st-section-title">@L.Markup("studio.home.recent_deals")</div>
             <div class="studio-list">
@@ -250,48 +238,11 @@
             </div>
         }
 
-        <div class="st-section-title">@(IsIdeas ? L["studio.home.analysis_sessions"] : L["studio.home.recent_ideas"])</div>
-        @if (sessions is null)
-        {
-            <div class="st-card">@L.Markup("studio.state.loading")</div>
-        }
-        else if (sessions.Count == 0)
-        {
-            <div class="st-card" style="text-align:center;padding:36px;">
-                <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="lightbulb" Size="48" /></div>
-                <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_ideas")</h3>
-                <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_ideas_body")</p>
-                <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.describe_idea")</a>
-            </div>
-        }
-        else
-        {
-            <div class="studio-list">
-                @foreach (var s in (IsIdeas ? sessions : sessions.Take(5)))
-                {
-                    <a class="studio-list-row" href="@($"/studio/s/{s.Id}")">
-                        <span class="studio-list-icon"><AcIcon Name="@StatusIcon(s.Status)" Size="16" /></span>
-                        <div class="studio-list-body">
-                            <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
-                                ? L["studio.home.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                            <span>@StatusLabel(s.Status) · @Culture.FormatTime(s.UpdatedAt, "yyyy-MM-dd HH:mm")</span>
-                        </div>
-                        @if (s.Status == IncubatorStatus.Completed)
-                        { <span class="st-chip st-chip-success">@L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span> }
-                        else if (s.Status == IncubatorStatus.Analyzing)
-                        { <span class="st-chip st-chip-warning">@L.Markup("incubator.status.analyzing")</span> }
-                        else if (s.Status == IncubatorStatus.Failed)
-                        { <span class="st-chip st-chip-danger">@L.Markup("incubator.status.failed")</span> }
-                    </a>
-                }
-            </div>
-        }
     </ChildContent>
 </StudioShell>
 
 @code {
     [SupplyParameterFromQuery] public string? Upgrade { get; set; }
-    List<IncubatorSession>? sessions;
     List<Tenant>? myApps;
     List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
     string? currentTier;
@@ -406,12 +357,9 @@
         return ACommerce.Kit.Subscriptions.TenantPlanPolicy.HiddenAt(p)?.ToString("yyyy-MM-dd") ?? "—";
     }
 
-    [Microsoft.AspNetCore.Components.Inject] NavigationManager Nav { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Deals.DealsService Deals { get; set; } = default!;
-    bool IsIdeas => new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').EndsWith("/ideas");
-
-    string Title => IsIdeas ? L["studio.home.ideas_title"] : L["admin.nav.my_board"];
+    string Title => L["admin.nav.my_board"];
     string Greeting => L.Format("studio.home.greeting", Auth.UserName ?? L["studio.home.owner_fallback"]);
 
     protected override async Task OnInitializedAsync()
@@ -419,7 +367,6 @@
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
         var uid = Auth.UserId!.Value;
-        sessions = await Incubator.ListForUserAsync(uid);
         myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
@@ -458,24 +405,4 @@
         _ => "tag"
     };
 
-    static string StatusIcon(IncubatorStatus s) => s switch
-    {
-        IncubatorStatus.Completed => "check",
-        IncubatorStatus.Analyzing => "clock",
-        IncubatorStatus.Failed    => "alert-circle",
-        IncubatorStatus.PatternSuggested => "target",
-        _ => "edit"
-    };
-
-    string StatusLabel(IncubatorStatus s) => s switch
-    {
-        IncubatorStatus.Discovery => L["incubator.status.discovery"],
-        IncubatorStatus.PatternSuggested => L["incubator.status.pattern"],
-        IncubatorStatus.Analyzing => L["incubator.status.analyzing"],
-        IncubatorStatus.Completed => L["incubator.status.completed"],
-        IncubatorStatus.Failed => L["incubator.status.failed"],
-        _ => L["incubator.status.abandoned"]
-    };
-
-    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
 }

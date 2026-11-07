@@ -811,8 +811,10 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         foreach (var r in new[]
                  {
                      "/{slug}/auth/phone/login",
-                     "/studio/s/{id:guid}/analyze",
-                     "/studio/s/{id:guid}/build",
+                     // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `/analyze` و`/build` خَرَجا؛ والشاهِدُ بَعدَ «/*» صارَ
+                     // بابَ الإنشاءِ وبابَ الدُخول — في المِلَفِّ نَفسِه وبَعدَ المَوضِعِ نَفسِه.
+                     "/studio/apps/create",
+                     "/studio/auth/verify",
                      "/admin/incubator/start",
                      "/studio/apps/{slug}/roles/save",
                  })

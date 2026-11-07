@@ -1,7 +1,6 @@
 @page "/studio/s/{id:guid}"
 @inject Services.Incubator.StudioAuth Auth
-@inject Services.Incubator.FeasibilityAnalysisService Incubator
-@inject Services.Incubator.TenantFromAnalysisFactory Factory
+@inject Services.Queries.StudioQueries Studio
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject L L
@@ -12,23 +11,13 @@
 @*
     عرض دراسة الجدوى داخل لوحة العميل (تصميم studio احترافي). يُحدّث
     تلقائياً كل 4 ثوانٍ أثناء التحليل عبر meta refresh.
+
+    ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) صارَت صَفحَةَ **قِراءَةٍ فَقَط** لِدِراسَةٍ قَديمَةٍ لِصاحِبِها: لا تَحديثَ تِلقائيّ
+    (لا تَحليلَ يَجري مِن الاستوديو)، ولا استِمارَةَ إعادَةٍ ولا تَحسينٍ ولا تَقييمٍ ولا بِناء — والتَصديرانِ (PDF، Excel) قِراءَةٌ لِبَياناتِه. لا يَبلُغُها
+    إلّا شَريطُ «مَبنيّ عَلى فِكرَة» في `StudioApp`، وتَقرَأُ الجَلسَةَ مِن `StudioQueries` لا مِن خِدمَةِ التَحليل.
 *@
 
-@if (session?.Status == IncubatorStatus.Analyzing)
-{
-    <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
-}
-@if (!string.IsNullOrEmpty(Refining) && session?.Status == IncubatorStatus.Completed && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-{
-    @* Refine يَجري في الخَلفِيَّة — حَدِّث الصَفحَة كُلّ ٤ث حَتَّى تَتَحَدَّث Updated.
-       ‏(‏2026-10-24، تَيّارُ S16) وما دامَ جارِياً وَحدَه — `StudioRefineWait.Pending`: لَم تُكتَب الدِراسَةُ بَعدَ الطَلَبِ ولَم تَنقَضِ مُهلَتُه. *@
-    @if (RefinePending)
-    {
-        <HeadContent><meta http-equiv="refresh" content="4" /></HeadContent>
-    }
-}
-
-<StudioShell Title="@L["admin.study.heading"]" Active="ideas">
+<StudioShell Title="@L["admin.study.heading"]" Active="home">
     <TopBarActions>
         <a class="st-btn st-btn-ghost" href="/studio">← @L.Markup("studio.study.back_dashboard")</a>
         @if (session?.Status == IncubatorStatus.Completed)
@@ -60,18 +49,6 @@
             <div class="st-card">
                 <div class="st-chip st-chip-danger" style="margin-bottom:12px;">@L.Markup("studio.study.failed_title")</div>
                 <p style="margin:0 0 16px;color:var(--st-ink-700);">@session.AnalysisError</p>
-                @* زِرُّ الإعادَةِ لا يُرسَمُ بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens` نَفسُه الَّذي تَسأَلُه
-                   `/studio/s/{id}/analyze` (‏2026-10-24، S15 A؛ القاعِدَة ١٢). *@
-                @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-                {
-                @((MarkupString)"\n                ")<form method="post" action="@($"/studio/s/{session.Id}/analyze")">
-                    <button type="submit" class="st-btn st-btn-primary">@L.Markup("admin.study.retry")</button>
-                </form>
-                }
-                else
-                {
-                    <p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p>
-                }
             </div>
         }
         else if (root is null)
@@ -86,20 +63,6 @@
                 <h1>@L.Markup("admin.study.heading")</h1>
                 <p>@(string.IsNullOrEmpty(session.ProjectDescription) ? "" : Truncate(session.ProjectDescription, 120))</p>
             </div>
-
-            @if (!string.IsNullOrEmpty(Refining) && StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-            {
-                @if (RefinePending)
-                {
-                    <div class="st-card" style="background:#fff7ed;border:1px solid var(--st-warning);
-                                                display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:20px;"><AcIcon Name="clock" Size="20" /></span>
-                        <div style="flex:1;">@((MarkupString)"\n                        ")@L.Markup("studio.study.refining_prefix")<strong>@SectionLabel(Refining)</strong>»…
-                            @L.Markup("studio.study.refining_hint")@((MarkupString)"\n                    ")
-                        </div>
-                    </div>
-                }
-            }
 
             @if (r.TryGetProperty("summary", out var sum))
             {
@@ -236,138 +199,6 @@
                     </a>
                 </div>
             }
-            else if (r.TryGetProperty("recommendedPattern", out var rp))
-            {
-                <div class="st-card" style="margin-top:20px;border:1px solid var(--st-primary);background:var(--st-primary-50);">
-                    <h3 style="margin:0 0 6px;"><AcIcon Name="sparkle" Size="24" /> @L.Markup("studio.study.launch_heading") ACommerce</h3>
-                    <p style="margin:0 0 14px;font-size:14px;">
-                        <strong>@L.Markup("studio.study.pattern_label")</strong> @Str(rp,"pattern") ·
-                        <strong>@L.Markup("study.field.time")</strong> @Str(rp,"timeToLaunch")<br/>
-                        <span style="color:var(--st-ink-700);">@Str(rp,"reasoning")</span>
-                    </p>
-
-                    @if (suggestion is not null)
-                    {
-                        @if (BuildErr is not null)
-                        {
-                            <div class="st-chip st-chip-danger" style="margin-bottom:10px;">
-                                @FormatBuildErr(BuildErr)
-                            </div>
-                        }
-                        <form method="post" action="@($"/studio/s/{session!.Id}/build")"
-                              style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-                            <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">@L.Markup("studio.study.field_app_name")</label>
-                                <input class="st-input" name="name" required maxlength="60"
-                                       value="@suggestion.Name" />
-                            </div>
-                            <div class="st-field" style="margin:0;">
-                                <label class="st-label">@L.Markup("studio.study.field_slug")</label>
-                                <input class="st-input" name="slug" required dir="ltr"
-                                       pattern="^[a-z0-9_-]+$"
-                                       placeholder="my-app" />
-                            </div>
-                            <div class="st-field" style="margin:0;">
-                                <label class="st-label">@L.Markup("studio.study.field_color")</label>
-                                <input class="st-input" type="color" name="color" required
-                                       value="@suggestion.Color" style="padding:4px;height:46px;" />
-                            </div>
-                            <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">@L.Markup("studio.study.field_tagline")</label>
-                                <input class="st-input" name="tagline" maxlength="120"
-                                       value="@suggestion.TagLine" />
-                            </div>
-                            <div class="st-field" style="margin:0;grid-column:1/-1;">
-                                <label class="st-label">@L.Markup("studio.study.field_city")</label>
-                                <input class="st-input" name="city" maxlength="40"
-                                       value="@suggestion.City" />
-                            </div>
-                            <button type="submit" class="st-btn st-btn-primary"
-                                    style="grid-column:1/-1;">
-                                <AcIcon Name="sparkle" Size="16" /> @L.Markup("studio.study.build_now")@((MarkupString)"\n                            ")
-                            </button>
-                        </form>
-                        <p style="margin:10px 0 0;font-size:12px;color:var(--st-muted);">@((MarkupString)"\n                            ")@L.Markup("studio.study.build_hint")@((MarkupString)"\n                        ")
-                        </p>
-                    }
-                </div>
-            }
-
-            @* تَقييم سَريع لِلدِراسَة (👍/👎 لِكُلّ قِسم) *@
-            <div class="st-section-title"><AcIcon Name="check" Size="18" /> / <AcIcon Name="x" Size="18" /> @L.Markup("studio.study.feedback_title")</div>
-            <div class="st-card">
-                <p style="margin:0 0 12px;color:var(--st-muted);font-size:14px;">@((MarkupString)"\n                    ")@L.Markup("studio.study.feedback_hint")@((MarkupString)"\n                ")
-                </p>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;">
-                    @foreach (var sec in new[] { "marketSizing", "competitors", "revenueModel", "financialProjection", "risks", "roadmap" })
-                    {
-                        var prior = session.SectionFeedback.TryGetValue(sec, out var p) ? p : "";
-                        <div style="display:flex;align-items:center;justify-content:space-between;
-                                    padding:8px 12px;border:1px solid var(--st-line);border-radius:10px;font-size:13px;">
-                            <span>@SectionLabel(sec)</span>
-                            <span style="display:inline-flex;gap:4px;">
-                                <form method="post" action="@($"/studio/s/{session.Id}/feedback")" style="margin:0;">
-                                    <input type="hidden" name="section" value="@sec" />
-                                    <input type="hidden" name="rating" value="up" />
-                                    <button type="submit" class="st-btn st-btn-ghost" style="padding:4px 8px;font-size:14px;
-                                            @(prior == "up" ? "background:#dcfce7;border-color:var(--st-success);" : "")"><AcIcon Name="check" Size="16" /></button>
-                                </form>
-                                <form method="post" action="@($"/studio/s/{session.Id}/feedback")" style="margin:0;">
-                                    <input type="hidden" name="section" value="@sec" />
-                                    <input type="hidden" name="rating" value="down" />
-                                    <button type="submit" class="st-btn st-btn-ghost" style="padding:4px 8px;font-size:14px;
-                                            @(prior == "down" ? "background:#fee2e2;border-color:var(--st-danger);" : "")"><AcIcon Name="x" Size="16" /></button>
-                                </form>
-                            </span>
-                        </div>
-                    }
-                </div>
-            </div>
-
-            @* تَحسين الدِراسَة — أَعِد توليد قِسم بِناءً عَلى مُلاحَظَة. *@
-            @* ولا تُرسَمُ استِمارَتُه بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens` نَفسُه الَّذي تَسأَلُه `/studio/s/{id}/refine`، ولا
-               شَريطُ «جارٍ التَحسين» ولا تَحديثُه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ القاعِدَة ١٢). *@
-            @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-            {
-            <div class="st-section-title"><AcIcon Name="message" Size="18" /> @L.Markup("studio.study.refine_title")</div>
-            <details class="st-card" style="padding:0;">
-                <summary style="cursor:pointer;padding:16px 22px;font-weight:600;list-style:none;
-                                display:flex;align-items:center;gap:8px;">
-                    <span style="font-size:18px;"><AcIcon Name="sparkle" Size="18" /></span>
-                    @L.Markup("studio.study.refine_hint")@((MarkupString)"\n                ")
-                </summary>
-                <form method="post" action="@($"/studio/s/{session.Id}/refine")"
-                      style="padding:0 22px 22px;border-top:1px solid var(--st-line);">
-                    <div class="st-field" style="margin-top:14px;">
-                        <label class="st-label">@L.Markup("studio.study.refine_section_label")</label>
-                        <select name="section" required class="st-input">
-                            <option value="marketSizing">@L.Markup("study.section.market_size")</option>
-                            <option value="customerSegments">@L.Markup("study.section.segments")</option>
-                            <option value="competitors">@L.Markup("study.section.competitors")</option>
-                            <option value="revenueModel">@L.Markup("study.section.revenue_model")</option>
-                            <option value="costStructure">@L.Markup("study.section.cost_structure")</option>
-                            <option value="financialProjection">@L.Markup("study.section.financial")</option>
-                            <option value="risks">@L.Markup("study.section.risks")</option>
-                            <option value="lessonsFromFailures">@L.Markup("studio.study.section_lessons")</option>
-                            <option value="roadmap">@L.Markup("study.section.roadmap")</option>
-                            <option value="recommendedPattern">@L.Markup("studio.study.section_pattern")</option>
-                        </select>
-                    </div>
-                    <div class="st-field">
-                        <label class="st-label">@L.Markup("studio.study.refine_note_label")</label>
-                        <textarea name="feedback" required rows="3" class="st-textarea"
-                            placeholder="@L["studio.study.refine_placeholder"]"></textarea>
-                    </div>
-                    <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                        ")@L.Markup("studio.study.refine_submit")@((MarkupString)"\n                    ")
-                    </button>
-                </form>
-            </details>
-            }
-            else
-            {
-                <div class="st-card" style="margin-top:16px;"><p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p></div>
-            }
-
             <div class="st-card" style="margin-top:16px;background:var(--st-line-soft);border:0;font-size:13px;color:var(--st-muted);">
                 @Disclaimer
             </div>
@@ -377,11 +208,6 @@
 
 @code {
     [Parameter] public Guid Id { get; set; }
-    [SupplyParameterFromQuery(Name = "build_err")] public string? BuildErr { get; set; }
-    [SupplyParameterFromQuery(Name = "refining")]  public string? Refining { get; set; }
-    // ‏(‏2026-10-24، تَيّارُ S16) لَحظَةُ طَلَبِ التَحسينِ مِن الرابِط — والانتِظارُ مِن الدالَّةِ النَقِيَّةِ وَحدَها.
-    [SupplyParameterFromQuery(Name = "since")]     public long? Since { get; set; }
-    bool RefinePending => session is not null && StudioRefineWait.Pending(Refining, Since, session.UpdatedAt, DateTime.UtcNow);
     [SupplyParameterFromQuery]                     public string? Upgrade  { get; set; }
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     string? currentTier;
@@ -406,23 +232,8 @@
         _ => "other"
     };
 
-    string SectionLabel(string key) => key switch
-    {
-        "marketSizing"        => L["study.section.market_size"],
-        "customerSegments"    => L["study.section.segments"],
-        "competitors"         => L["studio.study.section_competitors"],
-        "revenueModel"        => L["study.section.revenue_model"],
-        "costStructure"       => L["study.section.cost_structure"],
-        "financialProjection" => L["study.section.financial"],
-        "risks"               => L["study.section.risks"],
-        "lessonsFromFailures" => L["studio.study.section_lessons"],
-        "roadmap"             => L["study.section.roadmap"],
-        "recommendedPattern"  => L["studio.study.section_pattern"],
-        _ => key
-    };
     IncubatorSession? session;
     JsonElement? root;
-    TenantFromAnalysisFactory.BuildSuggestion? suggestion;
     Tenant? builtTenant;
 
     // ‏لَيسَت `const`: القيمَة مِن `L` المَحقون scoped، والثابِتُ يُحسَب
@@ -434,7 +245,7 @@
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        session = await Incubator.LoadAsync(Id);
+        session = await Studio.LoadStudyAsync(Id);
         if (session is not null && session.OwnerUserId != Auth.UserId!.Value) { session = null; return; }
         if (session?.AnalysisJson is not null)
         {
@@ -443,7 +254,6 @@
         }
         if (session is { Status: IncubatorStatus.Completed })
         {
-            suggestion = Factory.DeriveSuggestion(session);
             // هَل أُنشِئ تَطبيق مِن هذه الجَلسَة سابِقاً؟ — سُؤالٌ عَن
             // سِجِلّ المُستَأجِرين، فَجَوابُه عِندَ TenantDirectory.
             builtTenant = await Tenants.FindBySourceAnalysisAsync(Id);
@@ -453,29 +263,6 @@
         renewsOn = u is not null && Services.Incubator.StudioLimitNextStep.RenewsAt(u.PeriodStart, DateTime.UtcNow) is { } at
             ? Culture.FormatTime(at, "yyyy-MM-dd") : null;
     }
-
-    // كُلُّ رَمزٍ يُقابِلُ مِفتاحاً في القامُوس. و`_ => err` تَبقى
-    // شَبَكَةَ أَمانٍ لا مَساراً: رَمزٌ بِلا مِفتاحٍ يُعرَض خاماً
-    // فَيُرى، ولا يُبتلَع صامِتاً.
-    string FormatBuildErr(string err) => err switch
-    {
-        "name_required" => L["studio.study.err_name_required"],
-        "color_invalid" => L["studio.study.err_color_invalid"],
-        Services.Incubator.TenantFromAnalysisFactory.SlugRequired
-            => L["studio.study.err_slug_required"],
-        Services.Incubator.TenantFromAnalysisFactory.SlugFormat
-            => L["studio.study.err_slug_format"],
-        Services.Incubator.TenantFromAnalysisFactory.SlugTaken
-            => L["studio.study.err_slug_taken"],
-        Services.Incubator.TenantFromAnalysisFactory.SlugReserved
-            => L["studio.study.err_slug_reserved"],
-        // لا قَناةَ مُهَيَّأَة ⇒ لَم يُبنَ المَتجَر. **رِسالَةٌ صَريحَةٌ
-        // لا مَتجَرٌ بِبابٍ مُغلَق** — وكانَ يُبنى بِـ`"phone"` ثابِتَةً
-        // ثُمَّ يَكتَشِفُ صاحِبُه أَنّ أَحَداً لا يَدخُلُه.
-        Services.Incubator.TenantAuthChannelDoor.NoChannel
-            => L["studio.study.err_no_auth_channel"],
-        _ => err
-    };
 
     static string Str(JsonElement e, string p)
         => e.TryGetProperty(p, out var v)

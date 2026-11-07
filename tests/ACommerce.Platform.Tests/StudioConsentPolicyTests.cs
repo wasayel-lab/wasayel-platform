@@ -191,7 +191,10 @@ public class StudioConsentPolicyTests
         Assert.Contains(".Where(ConsentPolicy.AcceptedBy(userId, version))", queries, StringComparison.Ordinal);
 
         var endpoints = StudioConsentCharacterizationTests.Endpoints();
-        Assert.Contains("Services.Incubator.ConsentPolicy.AcceptedBy(", endpoints, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) القارِئُ الثاني لَم يَعُد نُسخَةً في النِقاط: الاستِئنافُ خَرَج،
+        // وبابُ الإنشاءِ يَسأَلُ `StudioQueries.HasConsentedAsync` — المُسنَدُ نَفسُه أَعلاه — فَلا `AcceptedBy` في النِقاطِ ولا شَرطَ مُضَمَّن.
+        Assert.DoesNotContain("ConsentPolicy.AcceptedBy(", endpoints, StringComparison.Ordinal);
+        Assert.Contains("studio.HasConsentedAsync(ownerId, Services.Incubator.ConsentPolicy.CurrentVersion)", endpoints, StringComparison.Ordinal);
 
         var inline = new Regex(@"c\.Version\s*==", RegexOptions.Compiled);
         Assert.False(inline.IsMatch(queries), "نُسخَةٌ مُضَمَّنَةٌ مِن شَرطِ الإصدارِ في StudioQueries.");

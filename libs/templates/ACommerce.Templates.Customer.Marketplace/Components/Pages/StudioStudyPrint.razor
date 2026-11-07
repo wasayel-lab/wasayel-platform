@@ -1,7 +1,7 @@
 @page "/studio/s/{id:guid}/print"
 @inject Services.Incubator.StudioAuth Auth
 @inject ACommerce.Kit.Culture.ICultureContext Culture
-@inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject Services.Queries.StudioQueries Studio
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @using System.Text.Json
@@ -148,7 +148,7 @@ else
     {
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
-        session = await Incubator.LoadAsync(Id);
+        session = await Studio.LoadStudyAsync(Id);
         if (session is not null && session.OwnerUserId != Auth.UserId!.Value) { session = null; return; }
         if (session?.AnalysisJson is not null)
         {

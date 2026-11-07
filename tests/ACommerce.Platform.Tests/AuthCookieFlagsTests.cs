@@ -155,7 +155,8 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
     {
         ("libs/templates/ACommerce.Templates.Customer.Marketplace/AuthSession.cs", 6, "جَلسَةُ المَتجَرِ واسمُها — بِالدَورِ وبِالعامّ، ثُمَّ تَحديثُ الاسم"),
         ("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/StudioAuth.cs", 2, "جَلسَةُ الاستوديو واسمُها"),
-        ("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2, "تَفضيلُ اللُغَة، ومُطالَبَةُ الاستوديو المُعَلَّقَة — لَيسا كوكي جَلسَة"),
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٢ ← ١: كَعكَةُ المُطالَبَةِ `ac.studio.prompt` خَرَجَت مَعَ الاستِئناف.
+        ("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 1, "تَفضيلُ اللُغَة — لَيسَ كوكي جَلسَة"),
     };
 
     [Fact]
@@ -174,7 +175,8 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
             found.Add($"{Path.GetRelativePath(ThemeZeroEquivalenceTests.RepoRoot, f).Replace('\\', '/')}={n}");
         }
         output.WriteLine($"كُتّابُ الكوكي: {string.Join(" · ", found)} — {total} نِداءً");
-        Assert.True(total >= 10, "أَداةٌ عَمياء — " + string.Join(" · ", found));
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ١٠ ← ٩: خَرَجَت كَعكَةُ المُطالَبَةِ مَعَ الاستِئناف (الصَفُّ أَعلاه).
+        Assert.True(total >= 9, "أَداةٌ عَمياء — " + string.Join(" · ", found));
         Assert.Equal(KnownWriters.Select(k => $"{k.File}={k.Appends}").OrderBy(x => x, StringComparer.Ordinal),
             found.OrderBy(x => x, StringComparer.Ordinal));
 

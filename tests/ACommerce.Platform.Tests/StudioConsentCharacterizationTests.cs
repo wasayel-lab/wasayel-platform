@@ -69,7 +69,8 @@ public class StudioConsentCharacterizationTests
         Assert.Contains("Version = Services.Incubator.ConsentPolicy.CurrentVersion,", endpoints, StringComparison.Ordinal);
         // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049 §٥؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) قارِئٌ ثالِثٌ في النِقاط: بابُ الإنشاءِ اليَدَوِيِّ يَسأَلُ المُوافَقَةَ
         // بِالثابِتِ نَفسِه قَبلَ الحِصَّة؛ والاستِئنافُ يَخرُجُ في W13-1·٥ فَيَعودُ العَدُّ اثنَين (الكاتِبُ وبابُ الإنشاء).
-        Assert.Equal(3, Regex.Matches(endpoints, Regex.Escape("ConsentPolicy.CurrentVersion")).Count);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٣ ← ٢: خَرَجَ الاستِئناف؛ الباقِيانِ الكاتِبُ وبابُ الإنشاء.
+        Assert.Equal(2, Regex.Matches(endpoints, Regex.Escape("ConsentPolicy.CurrentVersion")).Count);
 
         var page = ConsentPage();
         Assert.Contains("@ConsentPolicy.CurrentVersion", page, StringComparison.Ordinal);

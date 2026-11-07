@@ -2,7 +2,6 @@
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Queries.PlatformStatsQueries PlatformStats
 @inject Services.Incubator.StudioAuth StudioAuthSvc
-@inject Services.Incubator.FeasibilityAnalysisService Incubator
 @inject L L
 
 @*
@@ -57,34 +56,8 @@
         </p>
         <a class="st-btn st-btn-primary st-btn-lg" href="/studio/new">@L.Markup("landing.cta.create")</a>
 
-        @* بابُ التَحليلِ (‏2026-10-24، S15 A): بِلا مُزَوِّدِ تَحليلٍ مَضبوطٍ لا تُرسَمُ الاستِمارَةُ ولا أَمثِلَتُها —
-           كانَت تَأخُذُ رائِدَ الأَعمالِ إلى الدُخولِ والشُروطِ ثُمَّ «فَشِلَ التَّحليل» (القاعِدَة ١٢). والقَرارُ
-           `StudioAnalysisDoor.Opens` نَفسُه الَّذي تَسأَلُه `/studio/begin`. *@
-        @if (Services.Incubator.StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-        {
-        @* الفَراغُ صَريحٌ قَبلَ الاستِمارَةِ وبَعدَها: المُصَيِّرُ يَحذِفُ عُقدَةَ النَصِّ الفارِغَةَ عَلى طَرَفِ الفَرع — وبِه يَبقى
-           المَفتوحُ بايتاً بِبايتٍ كَما كانَ قَبلَ البابِ (القاعِدَة ١٣؛ وأُختُه تَعليقُ الرَأسِ أَعلاه). *@
-        @((MarkupString)"\n\n        ")<form method="post" action="/studio/begin" class="landing-prompt">
-            @* و`placeholder` كَذلك — نَفس السَبَب: `<textarea>` هُنا ساكِن
-               بِالكامِل. (‏انظُر التَعليق على `alt` أَعلاه.) *@
-            <textarea name="prompt" required
-                      placeholder="@L["landing.idea.placeholder"]"></textarea>
-            <div class="landing-prompt-bar">
-                <span class="landing-prompt-hint">@L.Markup("landing.prompt.hint")</span>
-                <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                    ")@L.Markup("landing.prompt.submit")@((MarkupString)"\n                ")
-                </button>
-            </div>
-        </form>@((MarkupString)"\n\n        ")<div class="landing-examples">
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.cars")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.food")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.gear")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.home_services")</span>
-        </div>
-        }
-        else
-        {
-            <p class="landing-prompt-hint">@L.Markup(Services.Incubator.StudioAnalysisDoor.ClosedMessageKey)</p>
-        }
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَت مِن هُنا استِمارَةُ الفِكرَةِ وأَمثِلَتُها ونَصُّ بابِ التَحليلِ المُغلَق: لا تَحليلَ في رِحلَةِ
+           رائِدِ الأَعمال، والدَعوَةُ أَعلاه تَقودُ إلى استِمارَةِ الإنشاء. *@
     </section>
 
     <section class="landing-features">
@@ -149,13 +122,6 @@
         </section>
     }
 </div>
-
-<script>
-    function fillPrompt(el) {
-        var ta = document.querySelector('.landing-prompt textarea');
-        if (ta) { ta.value = el.textContent.trim(); ta.focus(); }
-    }
-</script>
 
 @code {
     IReadOnlyList<Tenant>? tenants;

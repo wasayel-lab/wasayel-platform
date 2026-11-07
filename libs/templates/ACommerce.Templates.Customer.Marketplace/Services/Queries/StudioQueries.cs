@@ -48,6 +48,14 @@ public sealed class StudioQueries
 
     /// <summary>هَل وَقَّعَ صاحِبُ الاستوديو على هذِه النُسخَة مِن
     /// الشُروط؟ — <c>ConsentRecord</c> في مُستَأجِر الاستوديو.</summary>
+    /// <summary>‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) دِراسَةٌ قَديمَةٌ بِمُعَرِّفِها — قِراءَةٌ لِصَفحَتَي الدِراسَةِ والطِباعَة، فَلا تَحقِنانِ خِدمَةَ
+    /// التَحليلِ (وهي تَبلُغُ نَموذَجَ لُغَة). والمِلكِيَّةُ يَحكُمُ بِها المُنادي كَما كان.</summary>
+    public async Task<IncubatorSession?> LoadStudyAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
+        return await s.LoadAsync<IncubatorSession>(id, ct);
+    }
+
     public async Task<bool> HasConsentedAsync(
         Guid userId, int version, CancellationToken ct = default)
     {

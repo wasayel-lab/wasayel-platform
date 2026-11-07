@@ -50,7 +50,7 @@ no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Componen
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppConsole.razor|5
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAppTicketDetail.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioHome.razor|1
-no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|2
+no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudy.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioStudyPrint.razor|3
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/RoleHomes/RiderHome.razor|1
 no-inline-color|libs/templates/ACommerce.Templates.Customer.Marketplace/Components/StudioShell.razor|1

@@ -2813,50 +2813,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Json(Services.ClientAddressProbe.Of(req));
         });
 
-        // ─── Studio — مُصادَقَة وهميَّة + بَدء مِن صَفحَة الهبوط ──────────
-        // صَفحَة الهبوط تُرسِل المُطالَبَة هُنا؛ نَحفَظها في cookie مُؤَقَّت
-        // ثُمَّ نُحَوِّل لِلدُخول. بَعد الدُخول الناجِح نُنشِئ جَلسَة تَحليل
-        // بِالمُطالَبَة ونُشَغِّلها.
-        // **ومَن دَخَلَ أَصلاً يُستَأنَفُ هُنا، لا يُرسَلُ إلى بابٍ
-        // دَخَلَه.** كانَ التَحويلُ إلى `/studio/auth` غَيرَ مَشروط،
-        // وتِلكَ تَرى الجَلسَةَ قائِمَةً فَتَقفِزُ إلى `/studio` —
-        // **والكَعكَةُ تَبقى غَيرَ مُستَهلَكَة**، فَلا تَحليلَ يُبدَأ
-        // ولا رِسالَةَ تُقال. قيسَ حَيّاً ‏2026-08-30: الكَعكَةُ
-        // مَملوءَةٌ في المُتَصَفِّحِ والصَفحَةُ تَقولُ «لا أَفكار بَعد».
-        // فَالتَدَفُّقُ كانَ أَخضَرَ لِأَوَّلِ زيارَةٍ في العُمرِ
-        // وأَحمَرَ لِكُلِّ زيارَةٍ بَعدَها (القاعِدَة ١٢).
-        app.MapPost("/studio/begin", async (
-            HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.StudioAuth auth, Services.Queries.StudioQueries studioNames) =>
-        {
-            // ‏**بابُ التَحليلِ قَبلَ الكَعكَةِ والدُخولِ والشُروط** (‏2026-10-24، S15 A): بِلا مُزَوِّدِ تَحليلٍ مَضبوطٍ
-            // كانَ رائِدُ الأَعمالِ يَدخُلُ ويَقبَلُ ثُمَّ يُنفِقُ تَحليلاً ويُنادى المُزَوِّدُ بِلا مِفتاحٍ فَيُرَدُّ 401. والصَفحَةُ
-            // لا تَرسُمُ الاستِمارَةَ بِالقَرارِ نَفسِه، فَهذا الفَرعُ لِطَلَبٍ مَصنوعٍ أَو صَفحَةٍ قَديمَة — يَعودُ إلى `/`
-            // وهي تَقولُ الحالَ بِنَصِّ القامُوس.
-            if (!Services.Incubator.StudioAnalysisDoor.Opens(incubator.IsConfigured)) return Results.Redirect("/");
-            var prompt = req.Form["prompt"].ToString().Trim();
-            if (!string.IsNullOrEmpty(prompt))
-                res.Cookies.Append(StudioPromptCookie, Uri.EscapeDataString(prompt),
-                    new CookieOptions { IsEssential = true, Path = "/",
-                        Expires = DateTimeOffset.UtcNow.AddHours(2) });
-
-            auth.Load();
-            if (auth.IsAuthenticated)
-                // المُطالَبَةُ تُمَرَّرُ صَريحَةً: الكَعكَةُ كُتِبَت على
-                // `Response` في هذا الطَلَبِ نَفسِه، **ولا تَظهَرُ في
-                // `Request.Cookies`** — فَقِراءَةُ الطَلَبِ وَحدَها
-                // تَرُدُّ `null` ويَسكُتُ العَطَبُ كَما كان.
-                return await ResumeStudioPromptAsync(
-                           req, res, auth.UserId!.Value, await studioNames.ActorNameAsync(auth.UserId) ?? "",
-                           store, scopeFactory, incubator,
-                           checkConsent: true,
-                           promptOverride: string.IsNullOrEmpty(prompt) ? null : prompt)
-                       ?? Results.Redirect("/studio");
-
-            return Results.Redirect("/studio/auth");
-        }).RequireFormBody().DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/begin` (استِمارَةُ الفِكرَةِ وكَعكَتُها) — التَحليلُ لَيسَ في رِحلَةِ رائِدِ الأَعمال؛ والمَتجَرُ يُنشَأُ بِـ`/studio/apps/create`.
 
         // ─── بابُ الاستوديو — عَبر القَناة المُسَجَّلَة، والغِيابُ إغلاق ──
         // ‏`IOtpChannel?` **اختِياريَّةٌ في التَوقيع** — نَفسُ شَكل نِقاط
@@ -2894,8 +2851,6 @@ public static class MarketplaceTemplateExtensions
 
         app.MapPost("/studio/auth/verify", async (
             HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator,
             Services.Queries.TenantDirectory tenants) =>
         {
             var method = Services.Incubator.StudioAuthDoor.Parse(req.Form["method"].ToString())
@@ -2918,10 +2873,8 @@ public static class MarketplaceTemplateExtensions
             // الجِسمُ في `ResumeStudioPromptAsync` — ويُنادى مِن نُقطَةِ
             // قَبولِ الشُروطِ أَيضاً، وذاكَ ما رَفَعَ الـ405.
             // ‏(‏2026-11-07، W13-1·٤ — ADR-049 §٨) ومَن لا مَتجَرَ لَه يَبلُغُ استِمارَةَ الإنشاءِ لا لَوحَةً فارِغَة.
-            return await ResumeStudioPromptAsync(
-                       req, res, user.Id, user.FullName,
-                       store, scopeFactory, incubator, checkConsent: true)
-                   ?? Results.Redirect(Services.Incubator.StudioStoreCreate.AfterSignIn((await tenants.ListOwnedByAsync(user.Id)).Count));
+            // ‏(‏2026-11-07، W13-1·٥) والاستِئنافُ خَرَج — لا فِكرَةَ مُعَلَّقَةً تُبدَأُ بَعدَ الدُخول.
+            return Results.Redirect(Services.Incubator.StudioStoreCreate.AfterSignIn((await tenants.ListOwnedByAsync(user.Id)).Count));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/logout", (HttpResponse res) =>
@@ -2951,10 +2904,8 @@ public static class MarketplaceTemplateExtensions
         // فَكانَ القَبولُ يَنتَهي بِـ**‏405** لِكُلّ مُستَخدِمٍ جَديدٍ
         // جاءَ بِفِكرَةٍ مِن صَفحَة الهُبوط.
         app.MapPost("/studio/consent/accept", async (
-            HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.StudioAuth auth, Services.Queries.StudioQueries studioNames) =>
+            HttpRequest req, IDocumentStore store,
+            Services.Incubator.StudioAuth auth) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
@@ -2973,36 +2924,11 @@ public static class MarketplaceTemplateExtensions
             });
             await s.SaveChangesAsync();
 
-            // الشُروطُ قُبِلَت الآن، فَلا يُعادُ فَحصُها
-            // (`checkConsent: false`) — وإلّا دارَت الصَفحَةُ على نَفسِها.
-            return await ResumeStudioPromptAsync(
-                       req, res, auth.UserId!.Value, await studioNames.ActorNameAsync(auth.UserId) ?? "",
-                       store, scopeFactory, incubator, checkConsent: false)
-                   ?? Results.Redirect(returnUrl);
+            // ‏(‏2026-11-07، W13-1·٥) والاستِئنافُ خَرَج — العَودَةُ إلى الوِجهَةِ وَحدَها (استِمارَةُ الإنشاءِ حينَ جاءَ مِنها).
+            return Results.Redirect(returnUrl);
         }).RequireFormBody().DisableAntiforgery();
 
-        // تَقييم قِسم في دِراسَة (👍/👎) — لِتَحسين الـ prompt لاحِقاً.
-        app.MapPost("/studio/s/{id:guid}/feedback", async (
-            Guid id, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var section = req.Form["section"].ToString().Trim();
-            var rating  = req.Form["rating"].ToString().Trim();
-            if (rating is not ("up" or "down") || string.IsNullOrEmpty(section))
-                return Results.Redirect($"/studio/s/{id}");
-
-            await using var s = store.LightweightSession(
-                Services.Incubator.FeasibilityAnalysisService.IncubatorTenant);
-            var session = await s.LoadAsync<Services.Incubator.IncubatorSession>(id);
-            if (session is null || session.OwnerUserId != auth.UserId!.Value)
-                return Results.Redirect("/studio");
-            session.SectionFeedback[section] = rating;
-            s.Store(session);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/s/{id}#section-{section}");
-        }).RequireFormBody().DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/feedback` — لا تُكتَبُ في دِراسَةٍ قَديمَة؛ صَفحَتُها قِراءَةٌ فَقَط.
 
         // ─── اختِيارُ دَرَجَة — والمَدفوعَةُ لا تُمنَح ذاتِيّاً ──────
         //
@@ -3057,16 +2983,18 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // تَصدير دِراسَة Excel — يَتَطَلَّب tier فيه AllowExport.
+        // ‏(‏2026-11-07، W13-1·٥ — ADR-049 §٢) تَصديرٌ لِبَياناتِ صاحِبِ الدِراسَةِ القَديمَةِ قِراءَةً — يَقرَؤُها مِن `StudioQueries` لا مِن خِدمَةِ التَحليل،
+        // فَلا نُقطَةَ استوديو تَبلُغُ خِدمَةً تُنادي نَموذَجاً (`StudioAnalysisRetiredTests`).
         app.MapGet("/studio/s/{id:guid}/export.xlsx", async (
             Guid id,
             Services.Incubator.StudioAuth auth,
-            Services.Incubator.FeasibilityAnalysisService svc,
+            Services.Queries.StudioQueries studio,
             Services.Incubator.StudioTierService tier,
             Services.Incubator.FeasibilityExcelExporter exporter) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var session = await svc.LoadAsync(id);
+            var session = await studio.LoadStudyAsync(id);
             if (session is null || session.OwnerUserId != auth.UserId!.Value)
                 return Results.NotFound();
             if (session.AnalysisJson is null)
@@ -3120,55 +3048,7 @@ public static class MarketplaceTemplateExtensions
                 : Results.File(result.Zip!, "application/zip", result.FileName);
         }).DisableAntiforgery();
 
-        // إعادَة تَوليد قِسم واحِد مِن الدِراسَة (refine) بِناءً عَلى مُلاحَظَة.
-        app.MapPost("/studio/s/{id:guid}/refine", async (
-            Guid id, HttpRequest req, IServiceScopeFactory scopeFactory,
-            Services.Incubator.StudioAuth auth,
-            Services.Incubator.StudioTierService tier,
-            Services.Incubator.FeasibilityAnalysisService svc) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            // ‏المِلكِيَّةُ بَعدَ الهُوِيَّةِ وقَبلَ البابِ والحُقولِ والحِصَّة (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2؛ تَوصيفُه 65d0b6a) —
-            // قَرارُ أَخَواتِها الأَربَعِ عَلى `/studio/s/{id}/…` بِحَرفِه. كانَت الهُوِيَّةُ وَحدَها، فَمُستَخدِمٌ آخَرُ يَعرِفُ المُعَرِّفَ يُعيدُ
-            // كِتابَةَ قِسمٍ في دِراسَةِ غَيرِه بِحِصَّتِه، ونِداءُ المُزَوِّدِ يُحسَبُ عَلى صاحِبِ الدِراسَة (مَقيسٌ: بَصمَتُها تَغَيَّرَت، 13 → 14 مِفتاحاً).
-            var session = await svc.LoadAsync(id);
-            if (session is null || session.OwnerUserId != auth.UserId!.Value)
-                return Results.Redirect("/studio");
-            // ‏بابُ التَحليلِ بَعدَ الهُوِيَّةِ وقَبلَ الحُقولِ والحِصَّةِ والإطلاق (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1؛ تَوصيفُه 2cbd3aa):
-            // التَحسينُ يُنفِقُ مِفتاحَ وَكيلِ `Analysis` كَالتَحليل، وكانَ بِلا مِفتاحٍ يَعُدُّ وَحدَةً ثُمَّ يُنادي فَيُرَدُّ 401 ويُبتلَع —
-            // وصَفحَةُ الدِراسَةِ لا تَرسُمُ استِمارَتَه بِالقَرارِ نَفسِه.
-            if (!Services.Incubator.StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($"/studio/s/{id}");
-            // ‏وما تَرُدُّه الخِدمَةُ صامِتَةً في الخَلفِيَّةِ يُرَدُّ هُنا قَبلَ أَن تُعَدَّ وَحدَة (الجَولَة 2): دِراسَةٌ غَيرُ مُكتَمِلَةٍ كانَت تُنفِقُ
-            // وَحدَةً بِلا نِداء — شَرطُ `RefineSectionAsync` نَفسُه، كَما يَسأَلُ `/build` الحالَ قَبلَ حِصَّتِه.
-            if (session.Status != Services.Incubator.IncubatorStatus.Completed || session.AnalysisJson is null)
-                return Results.Redirect($"/studio/s/{id}");
-            var section = req.Form["section"].ToString().Trim();
-            var feedback = req.Form["feedback"].ToString().Trim();
-            // ‏والقِسمُ مِن المَعجَمِ المُغلَقِ لا مِن الاستِمارَة (الجَولَة 2؛ القاعِدَة ٤): كانَ يُفحَصُ بِالفَراغِ وَحدَه فَزَرَعَ مِفتاحاً لَيسَ في المُخَطَّط.
-            if (!Services.Incubator.StudioRefineSection.IsKnown(section) || string.IsNullOrEmpty(feedback))
-                return Results.Redirect($"/studio/s/{id}");
-
-            var gate = await tier.CheckRefineAsync(auth.UserId!.Value);
-            if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
-            await tier.RecordRefineAsync(auth.UserId!.Value);
-
-            // ‏لَحظَةُ الطَلَبِ قَبلَ الإطلاق (‏2026-10-24، تَيّارُ S16): الصَفحَةُ تَنتَظِرُ ما لَم تُكتَب الدِراسَةُ بَعدَها ولَم تَنقَضِ مُهلَةُ النِداء
-            // (`StudioRefineWait.Pending`) — كانَ الرابِطُ `?refining=` وَحدَه فَتُحَدِّثُ نَفسَها إلى الأَبَد؛ تَوصيفُه 3375ff1.
-            var since = DateTime.UtcNow.Ticks;
-            // شَغِّل في الخَلفِيَّة، لا نُعَلِّق الـ POST عَلى الـ LLM.
-            _ = Task.Run(async () =>
-            {
-                using var scope = scopeFactory.CreateScope();
-                var bg = scope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RefineSectionAsync(id, section, feedback); }
-                // تُعرَضُ الدِراسَةُ كَما هي عَلى الفَشَل، والسَطرُ يَقولُ لِماذا (‏2026-10-24، مُراجَعَةُ S15 الجَولَة 1 — كَأَخَواتِه الثَلاثِ في K).
-                catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "studio.refine", ex); }
-            });
-            return Results.Redirect($"/studio/s/{id}?refining={section}&since={since}");
-        }).RequireFormBody().DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/refine` — لا نِداءَ نَموذَجٍ مِن الاستوديو؛ و`RefineSectionAsync` بِلا مُنادٍ مُثَبَّتٌ يَتيماً في `StudioAnalysisRetiredTests`.
 
         // ═══ Cart + Checkout (نَمَط Order.V2) ══════════════════════════════
         // POST /{slug}/listings/{id}/cart/add — أَضِف إلى السَّلَّة.
@@ -4195,130 +4075,9 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect($"/studio/apps/{form.Slug}?built=1");
         }).RequireFormBody().DisableAntiforgery();
 
-        // بِناء Tenant فِعليّ مِن جَلسَة تَحليل (الجِسر بَين الفِكرَة والتَّطبيق).
-        app.MapPost("/studio/s/{id:guid}/build", async (
-            Guid id, HttpRequest req, HttpContext http,
-            Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.TenantFromAnalysisFactory factory,
-            Services.Incubator.StudioTierService tier,
-            Services.Incubator.StudioAuth auth) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var ownerId = auth.UserId!.Value;
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/build` — بابُ الإنشاءِ اليَدَوِيُّ أَعلاه يَكتُبُ المَتجَرَ نَفسَه بايتاً (‏`StudioStoreBirthCharacterizationTests`) بِلا شَرطِ تَحليل.
 
-            var session = await incubator.LoadAsync(id);
-            if (session is null || session.OwnerUserId != ownerId)
-                return Results.Redirect("/studio");
-            if (session.Status != Services.Incubator.IncubatorStatus.Completed)
-                return Results.Redirect($"/studio/s/{id}");
-
-            var gate = await tier.CheckBuildAsync(ownerId);
-            if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
-
-            var slug    = req.Form["slug"].ToString().Trim().ToLowerInvariant();
-            var name    = req.Form["name"].ToString().Trim();
-            var color   = req.Form["color"].ToString().Trim();
-            var tagLine = req.Form["tagline"].ToString().Trim();
-            var city    = req.Form["city"].ToString().Trim();
-
-            var err = await factory.ValidateSlugAsync(slug);
-            if (err is not null)
-                return Results.Redirect($"/studio/s/{id}?build_err={Uri.EscapeDataString(err)}");
-            if (string.IsNullOrEmpty(name))
-                return Results.Redirect($"/studio/s/{id}?build_err=name_required");
-            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
-                return Results.Redirect($"/studio/s/{id}?build_err=color_invalid");
-
-            // القَناةُ **تُشتَقُّ مِن المُهَيَّإ في هذِه النُسخَة**، ولا
-            // تُكتَبُ ثابِتَةً. كانَت `"phone"` في المَصنَع، وعَلى نُسخَةٍ
-            // بِالبَريدِ وَحدَه (تَوصِيَة `docs/DEPLOY.md` §٢·ب) كانَ ذلكَ
-            // يُنتِج مَتجَراً لا يَدخُلُه أَحَد. ولا قَناةَ ⇒ **لا مَتجَرَ
-            // بِبابٍ مُغلَق**: رِسالَةٌ صَريحَةٌ يَقرَؤُها العَميل.
-            var channel = Services.Incubator.TenantAuthChannelDoor.Default(
-                Services.Incubator.TenantAuthChannelDoor.OfferedIn(http.RequestServices));
-            if (channel is null)
-                return Results.Redirect(
-                    $"/studio/s/{id}?build_err={Services.Incubator.TenantAuthChannelDoor.NoChannel}");
-
-            var sector = session.Answers.TryGetValue("sector", out var sec) ? sec : "";
-            await factory.CreateAsync(slug, name, color, tagLine, city,
-                session.SuggestedPattern, sector, channel, ownerId, id);
-            await tier.RecordStoreBuiltAsync(ownerId);
-            return Results.Redirect($"/studio/apps/{slug}?built=1");
-        }).RequireFormBody().DisableAntiforgery();
-
-        // إعادَة تَحليل مِن داخِل لوحَة العميل (تُبقيه في مَساحَة /studio).
-        //
-        // كانَت هذه النُقطَة <b>بِلا حارِس واحِد</b> بَينَ أُختَيها
-        // المَحروسَتَين (‏/refine و/build) — مَجهول يَقلِب حالَة أَيّ دِراسَة
-        // إلى Analyzing ويُطلِق تَحليل LLM في الخَلفِيَّة بِتَكلِفَتِه.
-        // القياس الحَيّ فَضَحَها: أُختاها تَرُدّان 302 إلى /studio/auth
-        // وهي تَرُدّ 302 إلى صَفحَة النَجاح. والحارِس هُنا هُوَ
-        // <b>قَرارُهُما نَفسُه حَرفِيّاً</b> — جَلسَة studio صالِحَة، ثُمَّ
-        // مِلكِيَّة الدِراسَة — لا حارِسٌ ثانٍ مَكتوب بِيَدٍ ثانِيَة.
-        //
-        // ═══ ‏2026-08-30 — والحارِسُ الأَوَّلُ لَم يَكُنِ الحارِسَ كُلَّه ═══
-        //
-        // أُضيفَت جَلسَةُ الاستوديو والمِلكِيَّةُ ولَم تُضَف <b>بَوّابَةُ
-        // الحِصَّة</b>: قائِمَةُ الوُسَطاءِ لا تَحوي
-        // <c>StudioTierService</c> إطلاقاً. فَصاحِبُ دِراسَةٍ عَلى
-        // <c>spark</c> (تَحليلٌ واحِدٌ شَهرِيّاً) يَنقُر «إعادَة»
-        // بِلا سَقف، وكُلُّ نَقرَةٍ <b>نِداءا</b> نَموذَجِ لُغَةٍ بِـ
-        // <c>MaxTokens: 8000</c> عَلى <b>مِفتاحِ المالِك</b>.
-        //
-        // والعِلاجُ بَندان لا بَند، لِأَنّ البَوّابَةَ وَحدَها فَحصٌ
-        // ثُمَّ إطلاقٌ بِنافِذَةٍ بَينَهُما:
-        //   ‏١. <c>CheckAnalyzeAsync</c> — نَفسُ بَوّابَةِ
-        //      `ResumeStudioPromptAsync`، ونَفسُ شَكلِ `/refine`.
-        //   ‏٢. <c>TryClaimAnalysisAsync</c> — حَجزٌ ذَرِّيٌّ بِمِفتاحِ
-        //      فَرادَةٍ في Postgres، فَخَمسونَ طَلَباً عَلى نَفسِ
-        //      المُعَرِّفِ يَفوزُ مِنها واحِد.
-        //
-        // <b>والتَرتيبُ جُزءٌ مِنَ العِلاج</b>: البَوّابَةُ تَسبِقُ
-        // الحَجز (فَلا يُقلَبُ شَيءٌ لِمَن تَجاوَزَ حِصَّتَه)، والحَجزُ
-        // يَسبِقُ العَدّ (فَخاسِرُ السِباقِ لا يُنفِقُ حِصَّةً)،
-        // والعَدُّ يَسبِقُ الإطلاق.
-        app.MapPost("/studio/s/{id:guid}/analyze", async (
-            Guid id, IServiceScopeFactory scopeFactory,
-            Services.Incubator.StudioAuth auth,
-            Services.Incubator.StudioTierService tier,
-            Services.Incubator.FeasibilityAnalysisService svc) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-
-            var session = await svc.LoadAsync(id);
-            if (session is null || session.OwnerUserId != auth.UserId!.Value)
-                return Results.Redirect("/studio");
-
-            // ‏بابُ التَحليلِ بَعدَ المِلكِيَّةِ وقَبلَ الحِصَّةِ والحَجز (‏2026-10-24، S15 A): بِلا مُزَوِّدٍ مَضبوطٍ لا يُنفَقُ
-            // تَحليلٌ ولا يُنادى أَحَد — وصَفحَةُ الدِراسَةِ لا تَرسُمُ زِرَّ الإعادَةِ بِالقَرارِ نَفسِه.
-            if (!Services.Incubator.StudioAnalysisDoor.Opens(svc.IsConfigured)) return Results.Redirect($"/studio/s/{id}");
-
-            var gate = await tier.CheckAnalyzeAsync(auth.UserId!.Value);
-            if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
-
-            // الحَجزُ والتَشغيلُ لا يَفتَرِقان. وكُلُّ ما لَيسَ
-            // `Claimed` يَعني «لا تُطلِق» — والوِجهَةُ صَفحَةُ
-            // الدِراسَةِ نَفسُها، وهي تَقولُ «التَحليلُ جارٍ» بِحالَتِها
-            // لا بِرِسالَةٍ ثانِيَة. فَالرَفضُ يُرى ولا يُبتلَع.
-            var claim = await svc.TryClaimAnalysisAsync(id);
-            if (claim != Services.Incubator.FeasibilityAnalysisService.ClaimOutcome.Claimed)
-                return Results.Redirect($"/studio/s/{id}");
-
-            await tier.RecordAnalysisAsync(auth.UserId!.Value);
-            _ = Task.Run(async () =>
-            {
-                using var scope = scopeFactory.CreateScope();
-                var bg = scope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RunAnalysisAsync(id); } catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "studio.analyze", ex); }
-            });
-            return Results.Redirect($"/studio/s/{id}");
-        }).DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/analyze` — لا تَحليلَ يُبدَأُ مِن الاستوديو؛ وحاضِنَةُ المُشرِفِ تُبقي بابَها `/admin/incubator/{id}/analyze`.
 
         // ─── Incubator — طبقة التحليل الاستثماري ─────────────────────────
         // نُسخَة الـ admin مِن الحاضِنَة: أَداة مَنصَّة لا أَداة عُمَلاء
@@ -4587,98 +4346,8 @@ public static class MarketplaceTemplateExtensions
     private static string StudioDoorClosed(Services.Incubator.StudioAuthMethod method)
         => $"/studio/auth?err={Services.Incubator.StudioAuthDoor.UnavailableError(method)}";
 
-    /// <summary>كوكي المُطالَبَة المُعَلَّقَة — يُكتَب في
-    /// <c>/studio/begin</c> ويُستَهلَك مَرَّةً واحِدَة.</summary>
-    private const string StudioPromptCookie = "ac.studio.prompt";
-
-    /// <summary>
-    /// <para><b>استِئنافُ المُطالَبَةِ المُعَلَّقَة — مَوضِعٌ واحِد،
-    /// نُقطَتانِ تُنادِيانِه.</b> صاحِبُ الجَلسَةِ كَتَبَ فِكرَتَه في
-    /// صَفحَةِ الهُبوطِ قَبلَ أَن يَملِكَ حِساباً، فَحُفِظَت في كوكي.
-    /// وتُستَهلَك في مَوضِعَين: بَعدَ التَحَقُّقِ مُباشَرَةً لِمَن سَبَقَ
-    /// أَن وافَقَ على الشُروط، وبَعدَ القَبولِ لِمَن لَم يُوافِق.</para>
-    ///
-    /// <para><b>ولِماذا استُخرِجَت (‏2026-08-23)</b>: كانَ المَوضِعُ
-    /// الثاني يُنجَز بِإعادَةِ التَحويلِ إلى النُقطَةِ الأولى نَفسِها —
-    /// <c>/studio/consent?returnUrl=/studio/auth/verify</c> — وتِلكَ
-    /// النُقطَةُ <c>POST</c> فَقَط، فَكانَ التَحويلُ يَنتَهي إلى
-    /// <b>‏405</b> بَعدَ قَبولِ الشُروطِ مُباشَرَةً. أَي أَنّ أَوَّلَ
-    /// دُخولٍ لِمُستَخدِمٍ جَديدٍ بِفِكرَةٍ مَكتوبَة كانَ يَنتَهي بِخَطَإ
-    /// بروتوكول. والحَلُّ لَيسَ تَبديلَ الوِجهَة وَحدَه: وِجهَةٌ تُصَيَّر
-    /// بِـ<c>GET</c> تَرفَع الـ405 <b>وتُسقِط الفِكرَةَ صامِتَةً</b> —
-    /// لِأَنّ لا قارِئَ لِلكوكي غَيرَ هذا الجِسم. فَاستُخرِجَ الجِسمُ
-    /// ليُنادى مِن حَيثُ يَقَع القَرار.</para>
-    ///
-    /// <para>يُعيد <c>null</c> إن لَم تَكُن ثَمَّةَ مُطالَبَة — فَيُكمِل
-    /// المُنادي بِوِجهَتِه الطَبيعِيَّة.</para>
-    /// </summary>
-    private static async Task<IResult?> ResumeStudioPromptAsync(
-        HttpRequest req, HttpResponse res, Guid userId, string userName,
-        IDocumentStore store, IServiceScopeFactory scopeFactory,
-        Services.Incubator.FeasibilityAnalysisService incubator,
-        bool checkConsent,
-        string? promptOverride = null)
-    {
-        // **مَصدَرانِ لِلمُطالَبَة، وأَحَدُهُما لا غِنى عَنه**: بابُ
-        // الدُخولِ ونُقطَةُ الشُروطِ يَقرَآنِها مِن كَعكَةِ **طَلَبٍ
-        // سابِق**؛ و`‎/studio/begin` يُمَرِّرُها صَريحَةً لِأَنَّه هُوَ
-        // مَن كَتَبَها للتَوّ على `Response` — وكَعكَةُ الرَدِّ لا
-        // تَظهَرُ في `Request.Cookies` أَبَداً.
-        var raw = promptOverride;
-        if (string.IsNullOrEmpty(raw))
-        {
-            var promptCookie = req.Cookies[StudioPromptCookie];
-            if (string.IsNullOrEmpty(promptCookie)) return null;
-            raw = Uri.UnescapeDataString(promptCookie);
-        }
-        if (string.IsNullOrEmpty(raw)) return null;
-
-        // ‏**بابُ التَحليلِ قَبلَ الشُروطِ والحِصَّةِ والجَلسَة** (‏2026-10-24، S15 A): مُطالَبَةٌ كُتِبَت والبابُ مَفتوحٌ ثُمَّ أُغلِق
-        // (أُزيلَ المِفتاح) لا تُنفِقُ تَحليلاً عَلى نِداءٍ بِلا مِفتاح. «لا شَيءَ يُستَأنَف» فَيُكمِلُ المُنادي بِوِجهَتِه،
-        // والكَعكَةُ تَبقى حَتّى تَنقَضيَ ساعَتاها — فَإن ضُبِطَ المِفتاحُ قَبلَها استُؤنِفَت الفِكرَةُ بِحَرفِها.
-        if (!Services.Incubator.StudioAnalysisDoor.Opens(incubator.IsConfigured)) return null;
-
-        if (checkConsent)
-        {
-            await using var consentQs = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
-            // الشَرطُ نَفسُه الَّذي يَسأَلُه بابُ صَفحَةِ الشُروط — مُسنَدٌ واحِدٌ لا
-            // نُسخَتان (القاعِدَة ٨)، فَرَفعُ الإصدارِ يُعيدُ الجَميعَ إلى الصَفحَةِ
-            // مِن المَوضِعَين مَعاً.
-            var consents = await consentQs.Query<Services.Incubator.ConsentRecord>()
-                .Where(Services.Incubator.ConsentPolicy.AcceptedBy(
-                    userId, Services.Incubator.ConsentPolicy.CurrentVersion))
-                .ToListAsync();
-            if (consents.Count == 0)
-                // ‏**وِجهَةُ العَودَةِ صَفحَةٌ تُصَيَّر بِـ`GET`**، ولا
-                // تَحمِل استِئنافاً: نُقطَةُ القَبولِ نَفسُها تَستَأنِف
-                // بِالنِداءِ أَدناه.
-                return Results.Redirect("/studio/consent?returnUrl=/studio");
-        }
-
-        res.Cookies.Delete(StudioPromptCookie);
-        var prompt = raw;
-
-        // tier gate — هَل بَلَغ المُستَخدِم حَدّ تَحاليلِه؟
-        using var checkScope = scopeFactory.CreateScope();
-        var tier = checkScope.ServiceProvider
-            .GetRequiredService<Services.Incubator.StudioTierService>();
-        var gate = await tier.CheckAnalyzeAsync(userId);
-        if (!gate.Allowed) return Results.Redirect($"/studio?upgrade={gate.BreachCode}");
-
-        var s = await incubator.StartAsync(userId, userName);
-        await incubator.SaveAnswerAsync(s.Id, "description", prompt);
-        await incubator.MarkAnalyzingAsync(s.Id);
-        await tier.RecordAnalysisAsync(userId);
-        _ = Task.Run(async () =>
-        {
-            using var scope = scopeFactory.CreateScope();
-            var bg = scope.ServiceProvider
-                .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-            try { await bg.RunAnalysisAsync(s.Id); }
-            catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, s.Id, "studio.resume", ex); }
-        });
-        return Results.Redirect($"/studio/s/{s.Id}");
-    }
+    // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `ResumeStudioPromptAsync` وكَعكَتُه `ac.studio.prompt` — لا فِكرَةَ تُستَأنَفُ بَعدَ الدُخول؛
+    // والمُوافَقَةُ صارَت تُسأَلُ قَبلَ استِمارَةِ الإنشاءِ وفي بابِه.
 
     /// <summary>
     /// <para><b>هَل هذا الفَشَل تَضارُبُ نُسخَة تَيار؟</b> — أَي: خَسِرَ

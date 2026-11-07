@@ -61,7 +61,8 @@ ROUTES=(
   "POST /admin/tenants/create"
   "POST /ashare/auth/phone/login"
   "POST /lang/ar"
-  "POST /studio/begin"
+  # ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `POST /studio/begin` خَرَجَ مَعَ التَحليل؛ ومَكانَه بابُ الإنشاءِ اليَدَوِيّ.
+  "POST /studio/apps/create"
 )
 
 printf '%-6s %-45s %-5s %-34s %s\n' "VERB" "ROUTE" "CODE" "CONTENT-TYPE" "BYTES"

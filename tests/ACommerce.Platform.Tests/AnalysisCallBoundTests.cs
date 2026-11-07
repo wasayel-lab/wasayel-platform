@@ -105,7 +105,9 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
     {
         var runs = BackgroundRuns(Endpoints(), "bg.RunAnalysisAsync(");
         output.WriteLine($"تَشغيلاتُ تَحليلٍ في الخَلفِيَّة: {runs.Count}");
-        Assert.Equal(3, runs.Count);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٣ ← ١: تَشغيلَتا الاستوديو (`studio.analyze` و`studio.resume`)
+        // خَرَجَتا مَعَ التَحليلِ مِن رِحلَةِ رائِدِ الأَعمال، وبَقِيَت تَشغيلَةُ حاضِنَةِ المُشرِفِ بِسَطرِها.
+        Assert.Equal(1, runs.Count);
         var doors = new List<string>();
         foreach (var r in runs)
         {
@@ -115,20 +117,22 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
             Assert.True(m.Success, "تَشغيلَةٌ بِلا سَطرِ فَشَل:\n" + r);
             doors.Add(m.Groups["door"].Value);
         }
-        Assert.Equal(new[] { "admin.analyze", "studio.analyze", "studio.resume" }, doors.OrderBy(d => d, StringComparer.Ordinal));
+        Assert.Equal(new[] { "admin.analyze" }, doors.OrderBy(d => d, StringComparer.Ordinal));
     }
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 1)</b> — كانَ <c>Today_the_background_refine_run_swallows_its_exception</c>
     /// (‏<c>2cbd3aa</c>): «catch فارِغ: True». والآن التَشغيلَةُ الرابِعَةُ — التَحسين، بِمُهلَةِ الخَلفِيَّةِ (‏420 ثانِيَة) نَفسِها — تَكتُبُ استِمارَتَها بِسَطرٍ
     /// يُسَمّي بابَها <c>studio.refine</c> كَأَخَواتِها الثَلاث.</summary>
+    /// <para><b>قُلِبَ بِاسمِه ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b> — كانَ <c>The_background_refine_run_logs_its_exception</c>:
+    /// تَشغيلَةُ التَحسينِ في <c>/studio/s/{id}/refine</c> تَكتُبُ استِثناءَها. والنُقطَةُ خَرَجَت، فَلا تَشغيلَةَ تَحسينٍ في أَيِّ بابٍ اليَوم —
+    /// و<c>RefineSectionAsync</c> بِلا مُنادٍ مُثَبَّتٌ يَتيماً في <c>StudioAnalysisRetiredTests</c> حَتّى يَقولَ المالِكُ مَصيرَ الحاضِنَة.</para>
     [Fact]
-    public void The_background_refine_run_logs_its_exception()
+    public void No_door_runs_a_refine_in_the_background_any_more()
     {
-        var run = Assert.Single(BackgroundRuns(Endpoints(), "bg.RefineSectionAsync("));
-        output.WriteLine($"تَشغيلَةُ التَحسين: {run.Length} مِحرَفاً · catch فارِغ: {Regex.IsMatch(run, @"catch\s*\{\s*\}")}");
-        Assert.DoesNotMatch(@"catch\s*\{\s*\}", run);
-        Assert.Matches(
-            @"catch \(Exception ex\) \{ Services\.Incubator\.FeasibilityAnalysisService\.LogBackgroundFailure\(scope\.ServiceProvider, id, ""studio\.refine"", ex\); \}", run);
+        var runs = BackgroundRuns(Endpoints(), "bg.RefineSectionAsync(");
+        output.WriteLine($"تَشغيلاتُ تَحسينٍ في الخَلفِيَّة: {runs.Count}");
+        Assert.Empty(runs);
+        Assert.Empty(Regex.Matches(Endpoints(), @"\.RefineSectionAsync\("));
     }
 
     /// <summary><b>ويَبقى بِحَرفِه</b>: ما يَطلُبُه كُلُّ نِداء — التَحليلُ مُحاوَلَتانِ بِـ8000، والتَحسينُ 3000، والمُحادَثَةُ 2048.</summary>
@@ -149,10 +153,11 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
     public void The_analysis_and_the_refine_run_in_the_background_and_no_request_waits_on_them()
     {
         var code = Endpoints();
-        Assert.Equal(3, BackgroundRuns(code, "bg.RunAnalysisAsync(").Count);
-        Assert.Single(BackgroundRuns(code, "bg.RefineSectionAsync("));
-        Assert.Equal(3, Regex.Matches(code, @"await\s+\w+\.RunAnalysisAsync\(").Count);
-        Assert.Single(Regex.Matches(code, @"await\s+\w+\.RefineSectionAsync\("));
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٣ ← ١ تَحليلاً، ولا تَحسين: الباقي تَشغيلَةُ حاضِنَةِ المُشرِفِ في `Task.Run`.
+        Assert.Equal(1, BackgroundRuns(code, "bg.RunAnalysisAsync(").Count);
+        Assert.Empty(BackgroundRuns(code, "bg.RefineSectionAsync("));
+        Assert.Equal(1, Regex.Matches(code, @"await\s+\w+\.RunAnalysisAsync\(").Count);
+        Assert.Empty(Regex.Matches(code, @"await\s+\w+\.RefineSectionAsync\("));
     }
 
     // ─── ما أَضافَه الإصلاح (‏2026-10-24، S15 K) ──────────────────────────────

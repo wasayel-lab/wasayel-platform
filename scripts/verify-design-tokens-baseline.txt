@@ -28,7 +28,7 @@
 #     Admin/Studio home screens, each picked ad hoc.
 #   • 22px (2) sits between the scale's 20 and 24.
 font-size|22px|2
-font-size|42px|4
+font-size|42px|3
 font-size|46px|1
 font-size|52px|1
 

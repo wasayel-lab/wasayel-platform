@@ -166,8 +166,11 @@ public class LanguageModelQuotaGateTests
         var entries = LlmEntries().ToList();
 
         // عَدّاد: أَداةٌ تَفحَصُ صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
-        Assert.True(entries.Count >= 9,
-            $"أَداة عَمياء: وُجِدَ {entries.Count} مَدخَلاً يَبلُغُ نَموذَجَ لُغَة — والمَقيسُ ٩ فَأَكثَر.");
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الأَرضِيَّةُ ٩ ← ٦: خَرَجَت مِن الاستوديو الأَبوابُ الثَلاثَةُ
+        // الَّتي يُنفِقُ فيها العَميلُ مِن مِفتاحِ المالِك (`/refine`، والاستِئناف، و`/analyze`) — التَحليلُ لَيسَ في رِحلَةِ رائِدِ الأَعمال.
+        // والسِتَّةُ الباقِيَةُ سُلطَةُ المالِكِ كُلُّها (`/admin/agent` ×٣، `/admin/incubator/{id}/analyze`، ولَوحَتُه، وصَفحَةُ الوَكيلِ لِلمُشرِف).
+        Assert.True(entries.Count >= 6,
+            $"أَداة عَمياء: وُجِدَ {entries.Count} مَدخَلاً يَبلُغُ نَموذَجَ لُغَة — والمَقيسُ ٦ فَأَكثَر.");
 
         var pinned = PinnedUngated.Select(p => p.Where).ToHashSet(StringComparer.Ordinal);
 
@@ -205,7 +208,13 @@ public class LanguageModelQuotaGateTests
             if (gateAt > spendAt) late.Add($"{e.Where}   ({e.File})");
         }
 
-        Assert.True(compared > 0, "أَداة عَمياء: لَم يُقارَن مَدخَلٌ واحِد.");
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) لا مَدخَلَ لِعَميلٍ يُنفِقُ بَعدَ اليَوم — فَالسِتَّةُ
+        // سُلطَةُ المالِكِ ولا بَوّابَةَ حِصَّةٍ فيها تُقارَن. والصَفُّ لا يَصيرُ أَعمى: يَشتَرِطُ إمّا مُقارَنَةً واحِدَةً عَلى الأَقَلّ أَو أَن يَكونَ
+        // كُلُّ مَدخَلٍ سُلطَةَ المالِك (وعَدَدُها يُطبَع)؛ ويَعودُ التَرتيبُ يُقاسُ يَومَ يُفتَحُ لِلعَميلِ بابٌ بِحِصَّة. والعَيبُ المَحقونُ يُقاسُ أَعلاه.
+        var owner = LlmEntries().Count(e => HasOwnerAuthority(e.Body));
+        System.Console.WriteLine($"مُقارَنَة {compared} · سُلطَةُ المالِك {owner} مِن {LlmEntries().Count()}");
+        Assert.True(compared > 0 || (owner > 0 && owner == LlmEntries().Count()),
+            "أَداة عَمياء: لَم يُقارَن مَدخَلٌ واحِد، ولَيسَت المَداخِلُ كُلُّها سُلطَةَ المالِك.");
         Assert.True(late.Count == 0,
             "بَوّابَةُ حِصَّةٍ تَقَعُ بَعدَ الإنفاق — فَلا تَمنَعُه:\n  " + string.Join("\n  ", late));
     }
@@ -336,8 +345,10 @@ public class LanguageModelQuotaGateTests
             .Where(e => e.Where.EndsWith("/analyze", StringComparison.Ordinal))
             .ToList();
 
-        Assert.True(analyze.Count >= 2,
-            $"أَداة عَمياء: وُجِدَت {analyze.Count} نُقطَةَ تَحليل — والمَقيسُ اثنَتان.");
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) نُقطَتا التَحليلِ صارَتا واحِدَة: خَرَجَ `/studio/s/{id}/analyze`
+        // وبَقِيَ `/admin/incubator/{id:guid}/analyze` لِحاضِنَةِ المُشرِف — والحَجزُ يُقاسُ عَلَيه كَما كان.
+        Assert.True(analyze.Count >= 1,
+            $"أَداة عَمياء: وُجِدَت {analyze.Count} نُقطَةَ تَحليل — والمَقيسُ واحِدَة.");
 
         var breaches = new List<string>();
         foreach (var e in analyze)
@@ -436,9 +447,8 @@ public class LanguageModelQuotaGateTests
             "RequirePlatformAdmin"),
 
         // ─── بَوّابَةُ حِصَّة: عَميلٌ يُنفِقُ مِن مِفتاحِ المالِك ─────
-        new("/studio/s/{id:guid}/refine",  "CheckRefineAsync"),
-        new("ResumeStudioPromptAsync()",   "CheckAnalyzeAsync"),
-        new("/studio/s/{id:guid}/analyze", "CheckAnalyzeAsync"),
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) خَرَجَت الثَلاثَة (`/refine`، `ResumeStudioPromptAsync()`،
+        // `/analyze`) مَعَ التَحليلِ مِن رِحلَةِ رائِدِ الأَعمال؛ وصَفُّ «لا بابَ استوديو يَبلُغُ نَموذَجاً» في `StudioAnalysisRetiredTests`.
 
         // ─── ‏2026-10-25 (W8-3): كانَ «مَفتوحٌ ومُعلَن» — صارَ سُلطَةَ المالِك حَتّى رَقَمِ الرَسائِل ──
         new("libs/templates/ACommerce.Templates.Customer.Marketplace/Components/Pages/StudioAgent.razor",
@@ -453,8 +463,9 @@ public class LanguageModelQuotaGateTests
         var actual = LlmEntries()
             .ToDictionary(e => e.Where, e => GateOf(e.Body), StringComparer.Ordinal);
 
-        Assert.True(actual.Count >= 9,
-            $"أَداة عَمياء: وُجِدَ {actual.Count} مَدخَلاً — والمَقيسُ ٩ فَأَكثَر.");
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ٩ ← ٦ — السَبَبُ عِندَ الجَردِ أَعلاه.
+        Assert.True(actual.Count >= 6,
+            $"أَداة عَمياء: وُجِدَ {actual.Count} مَدخَلاً — والمَقيسُ ٦ فَأَكثَر.");
 
         var expected = PinnedInventory.ToDictionary(v => v.Where, v => v.Gate, StringComparer.Ordinal);
 
