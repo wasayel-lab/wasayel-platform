@@ -821,8 +821,11 @@ public static class MarketplaceTemplateExtensions
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
-            return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
-                ? RoleHome(req, slug, active.Slug, "") : RoleHome(req, slug, active.Slug, active.HomeRoute));
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-1) كانَ الفَرعُ الفارِغُ يَبني بِـ`active.Slug` حَيثُ `active` قَد يَكونُ null (عُضوٌ بِلا دَورٍ
+            // فَعّال، أَو دَورُه المُخَزَّنُ لَيسَ مِن أَدوارِ المَتجَر) ← 500 بَعدَ الكِتابَة. والجَوابُ الآنَ جَوابُ الأَساسِ 50d6293 بِحَرفِه: جَذرُ المَتجَر.
+            // والمُتَرجِمُ يَحرُسُه: CS8602 خَطَأٌ في هذا المِلَفّ (`.editorconfig` القالِب).
+            if (active is null) return Results.Redirect(Home(req, slug));
+            return Results.Redirect(RoleHome(req, slug, active.Slug, active.HomeRoute ?? ""));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 

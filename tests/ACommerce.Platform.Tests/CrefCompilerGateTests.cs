@@ -56,7 +56,7 @@ public class CrefCompilerGateTests(ITestOutputHelper output)
     }
 
     /// <summary>مُتَرجِمُ الـSDK الَّذي يَبني المُستَودَع — <c>sdk/*/Roslyn/bincore/csc.dll</c> بِجِوارِ وَقتِ التَشغيلِ الحاليّ، وأَحدَثُها.</summary>
-    private static (string Dotnet, string Csc, string RuntimeDir)? Compiler()
+    internal static (string Dotnet, string Csc, string RuntimeDir)? Compiler()
     {
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         var root = Path.GetFullPath(Path.Combine(runtimeDir, "..", "..", ".."));
