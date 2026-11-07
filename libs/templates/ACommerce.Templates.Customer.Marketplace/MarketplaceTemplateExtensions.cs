@@ -4078,6 +4078,9 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.NameRequired, form));
             if (!Services.Incubator.StudioStoreCreate.ColorValid(form.Color))
                 return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.ColorInvalid, form));
+            // ‏(‏2026-11-07، W13-1·SEC-C1-3) حَدّا الاستِمارَةِ في الخادِم — كانا في المُتَصَفِّحِ وَحدَه؛ والمَنطِقُ في `StudioStoreCreate` لا في الجِسم.
+            if (Services.Incubator.StudioStoreCreate.LengthRefusal(form) is { } tooLong)
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(tooLong, form));
             var channel = Services.Incubator.TenantAuthChannelDoor.Default(
                 Services.Incubator.TenantAuthChannelDoor.OfferedIn(http.RequestServices));
             if (channel is null)

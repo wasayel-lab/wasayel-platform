@@ -29,6 +29,13 @@ public static class StudioStoreCreate
     public const string NameRequired = "name_required";
     public const string ColorInvalid = "color_invalid";
 
+    /// <summary><b>حَدّا الطولِ في الخادِم</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): الاستِمارَةُ تَقولُهُما
+    /// (`maxlength` ‏60 و120) والخادِمُ لا يَفرِضُهُما — فَاسمٌ بِمِئَتَي أَلفِ حَرفٍ وُلِدَ بِه مَتجَرٌ صَفحَتُه العامَّةُ عِشرونَ مِليونَ بايت، ورَفضٌ يَنسَخُه في
+    /// العُنوانِ ضَيَّعَ `Location`. والرَقَمانِ رَقَما الاستِمارَةِ لا جَديد (القاعِدَة ١٦).</summary>
+    public const int NameMax = 60, TagLineMax = 120;
+    public const string NameTooLong = "name_too_long";
+    public const string TagLineTooLong = "tagline_too_long";
+
     /// <summary>لَونُ <c>marketplace</c> — ما كانَت استِمارَةُ البِناءِ تُعَبِّئُه سَلَفاً لِجَلسَةٍ بِالوَصفِ وَحدَه.</summary>
     public const string DefaultColor = "#2563eb";
 
@@ -43,6 +50,8 @@ public static class StudioStoreCreate
         NameRequired,
         ColorInvalid,
         TenantAuthChannelDoor.NoChannel,
+        NameTooLong,
+        TagLineTooLong,
     ];
 
     public static string MessageKey(string code) => "studio.create.err_" + code;
@@ -62,8 +71,16 @@ public static class StudioStoreCreate
 
     public static bool ColorValid(string color) => Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$");
 
+    /// <summary>‏(‏2026-11-07، W13-1·SEC-C1-3) رَمزُ أَوَّلِ حَقلٍ فاتَ حَدَّه — الاسمُ ثُمَّ السَطر — أَو <c>null</c>.</summary>
+    public static string? LengthRefusal(Form form)
+        => form.Name.Length > NameMax ? NameTooLong : form.TagLine.Length > TagLineMax ? TagLineTooLong : null;
+
     /// <summary>العَودَةُ إلى الاستِمارَةِ بِرَمزِ الرَفضِ وبِما كُتِبَ فيها — فَلا يُعيدُ صاحِبُها كِتابَةَ حُقولٍ صَحيحَةٍ لِأَجلِ حَقلٍ واحِد.</summary>
+    /// <remarks>‏(‏2026-11-07، W13-1·SEC-C1-3) ويَنسَخُ ما كانَ في حَدِّه وَحدَه — حَقلٌ فَوقَ حَدِّه يَعودُ فارِغاً، فَيَبقى العُنوانُ مَحدوداً و`Location` حاضِراً.</remarks>
     public static string Refused(string code, Form form)
-        => $"{Page}?err={Uri.EscapeDataString(code)}&slug={Uri.EscapeDataString(form.Slug)}&name={Uri.EscapeDataString(form.Name)}"
-         + $"&color={Uri.EscapeDataString(form.Color)}&tagline={Uri.EscapeDataString(form.TagLine)}";
+        => $"{Page}?err={Uri.EscapeDataString(code)}&slug={Uri.EscapeDataString(Within(form.Slug, SlugMax))}&name={Uri.EscapeDataString(Within(form.Name, NameMax))}"
+         + $"&color={Uri.EscapeDataString(Within(form.Color, ColorMax))}&tagline={Uri.EscapeDataString(Within(form.TagLine, TagLineMax))}";
+
+    private const int SlugMax = 63, ColorMax = 7;   // مِلصَقُ DNS (‏SlugRefusal) و`#RRGGBB` (‏ColorValid)
+    private static string Within(string value, int max) => value.Length <= max ? value : "";
 }

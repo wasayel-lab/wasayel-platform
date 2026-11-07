@@ -101,7 +101,8 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
         var missing = StudioStoreCreate.Refusals.Where(c => !doc.RootElement.TryGetProperty(StudioStoreCreate.MessageKey(c), out var v)
                                                         || string.IsNullOrWhiteSpace(v.GetString())).ToList();
         output.WriteLine($"رُموزُ الرَفض: {StudioStoreCreate.Refusals.Count} — " + string.Join(" · ", StudioStoreCreate.Refusals));
-        Assert.Equal(7, StudioStoreCreate.Refusals.Count);
+        // ‏(‏2026-11-07، W13-1·SEC-C1-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) سَبعَةٌ ← تِسعَة: `name_too_long` و`tagline_too_long` — حَدّا الاستِمارَةِ صارا في الخادِم.
+        Assert.Equal(9, StudioStoreCreate.Refusals.Count);
         Assert.Equal(StudioStoreCreate.Refusals.Count, StudioStoreCreate.Refusals.Distinct().Count());
         Assert.Empty(missing);
     }
@@ -131,6 +132,45 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
     [InlineData("a-1")]
     public async Task A_valid_free_slug_passes_the_one_slug_door(string slug)
         => Assert.Null(await FactoryWithTaken("taken-store").ValidateSlugAsync(slug));
+
+    // ─── (‏2026-11-07، W13-1·SEC-C1-3) حَدّا الطولِ في الخادِم: موجَبٌ وسالِبٌ لِكُلِّ رَمز، والرَفضُ لا يَنسَخُ ما فاتَ حَدَّه ────────────────
+
+    [Fact]
+    public void The_door_bounds_the_name_and_the_tagline_after_the_name_and_colour_and_before_the_channel()
+    {
+        var body = WriteEndpointGuardTests.StripComments(CreateEndpoint().Body);
+        string[] order = ["StudioStoreCreate.NameRequired", "StudioStoreCreate.ColorInvalid", "StudioStoreCreate.LengthRefusal(form)", "TenantAuthChannelDoor.Default("];
+        var at = order.Select(o => body.IndexOf(o, StringComparison.Ordinal)).ToArray();
+        output.WriteLine(string.Join(" ← ", order.Zip(at, (o, p) => $"{o}@{p}")));
+        Assert.True(at.All(p => p > 0) && at.Zip(at.Skip(1)).All(p => p.First < p.Second), "حَدّا الطولِ غائِبانِ أَو في غَيرِ مَوضِعِهِما.");
+    }
+
+    [Theory]
+    [InlineData(StudioStoreCreate.NameMax, StudioStoreCreate.TagLineMax, null)]
+    [InlineData(StudioStoreCreate.NameMax + 1, 0, StudioStoreCreate.NameTooLong)]
+    [InlineData(1, StudioStoreCreate.TagLineMax + 1, StudioStoreCreate.TagLineTooLong)]
+    [InlineData(StudioStoreCreate.NameMax + 1, StudioStoreCreate.TagLineMax + 1, StudioStoreCreate.NameTooLong)]
+    public void The_length_refusal_names_the_first_field_past_its_limit(int name, int tagline, string? code)
+        => Assert.Equal(code, StudioStoreCreate.LengthRefusal(new StudioStoreCreate.Form("s", new string('ب', name), "#2563eb", new string('س', tagline))));
+
+    [Fact]
+    public void The_form_limits_are_the_numbers_the_form_states()
+    {
+        var page = Read($"{Template}/Components/Pages/StudioNewStore.razor");
+        Assert.Contains($"name=\"name\" required maxlength=\"{StudioStoreCreate.NameMax}\"", page, StringComparison.Ordinal);
+        Assert.Contains($"name=\"tagline\" maxlength=\"{StudioStoreCreate.TagLineMax}\"", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_refusal_copies_only_fields_within_their_limits_so_its_location_stays_bounded()
+    {
+        var huge = StudioStoreCreate.Refused(StudioStoreCreate.NameTooLong, new StudioStoreCreate.Form(new string('a', 9000), new string('ب', 200_000), "#2563eb", new string('س', 500)));
+        var fine = StudioStoreCreate.Refused(StudioStoreCreate.NameTooLong, new StudioStoreCreate.Form("my-store", "مَتجَري", "#2563eb", "سَطر"));
+        output.WriteLine($"الرَفضُ بِحُقولٍ فَوقَ حُدودِها: {huge.Length} حَرفاً — {huge}");
+        Assert.Equal("/studio/new?err=name_too_long&slug=&name=&color=%232563eb&tagline=", huge);
+        Assert.Contains("&slug=my-store&name=", fine, StringComparison.Ordinal);
+        Assert.Contains(Uri.EscapeDataString("مَتجَري"), fine, StringComparison.Ordinal);
+    }
 
     private static StudioStoreCreate.Form FormOf(string slug, string name, string color, string tagline)
         => StudioStoreCreate.Read(new FormCollection(new Dictionary<string, StringValues>
