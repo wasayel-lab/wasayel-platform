@@ -70,9 +70,13 @@ public static class SessionVersionGate
 
     /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت، و(‏2026-10-30) بِلا حالَةِ أَحرُف
     /// كَما يَبحَثُ <c>Request.Cookies</c>.</summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والاسمُ بِالبادِئَةِ <c>AuthSession.HostPrefix</c> مِنها — كوكيُّ الجَلسَةِ عَلى HTTPS.</remarks>
     private static bool InFamily(string name)
-        => name.Equals(StudioAuth.CookieName, StringComparison.OrdinalIgnoreCase)
-           || name.StartsWith(AuthCookiePrefix, StringComparison.OrdinalIgnoreCase);
+    {
+        var bare = name.StartsWith(AuthSession.HostPrefix, StringComparison.OrdinalIgnoreCase) ? name[AuthSession.HostPrefix.Length..] : name;
+        return bare.Equals(StudioAuth.CookieName, StringComparison.OrdinalIgnoreCase)
+               || bare.StartsWith(AuthCookiePrefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>رَأسُ <c>Cookie</c> بِلا الأَسماءِ المُسقَطَة (وكوكيّاتِ أَسمائِها) — نَقِيَّة، فَتُقاسُ بِلا خادِم.</summary>
     /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١) <b>بِلا حالَةِ أَحرُف</b>: المُحَلِّلُ يُبقي آخِرَ المُكَرَّرِ بِحالَتَين، فَنَزعُ الاسمِ بِحالَتِه وَحدَها

@@ -26,7 +26,8 @@ public sealed class StudioAuth
 
     /// <summary>اسمُ كوكيِّ جَلسَةِ الاستوديو كَما يُكتَبُ ويُقرَأُ عَلى طَلَبٍ آمِنٍ أَو غَيرِه (‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2) — نَظيرُ
     /// <c>AuthSession.CookieNameFor</c>، يَسأَلُه <see cref="Load"/> و<see cref="WriteCookie"/> و<see cref="DeleteCookie"/> وجَزيرَتا الوَكيل.</summary>
-    public static string CookieNameFor(bool secure) => CookieName;
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2) وعَلى طَلَبٍ آمِنٍ بِالبادِئَةِ <c>AuthSession.HostPrefix</c> — كوكيُّ المَتجَرِ نَفسُه.</remarks>
+    public static string CookieNameFor(bool secure) => secure ? AuthSession.HostPrefix + CookieName : CookieName;
 
     /// <summary>الاسمُ عَلى هذا الطَلَب — بِقَرارِ <c>AuthSession.SecureFor</c> نَفسِه الَّذي يَضبِطُ <c>Secure</c>.</summary>
     public static string CookieNameOn(HttpRequest? request) => CookieNameFor(AuthSession.SecureFor(request));
@@ -44,11 +45,11 @@ public sealed class StudioAuth
         var ctx = _http.HttpContext;
         if (ctx is null) return;
         var name = CookieNameOn(ctx.Request);
-        var token = ctx.Request.Cookies[name];
+        var token = AuthSession.CookieValue(ctx.Request, name);
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null || parsed.Value.TenantSlug != Tenant) { Clear(); return; }
         UserId = parsed.Value.UserId;
-        UserName = ctx.Request.Cookies[name + ".name"];
+        UserName = AuthSession.CookieValue(ctx.Request, name + ".name");
     }
 
     public void Clear() { UserId = null; UserName = null; }
