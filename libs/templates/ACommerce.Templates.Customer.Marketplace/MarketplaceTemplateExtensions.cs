@@ -2335,7 +2335,9 @@ public static class MarketplaceTemplateExtensions
             if (existing is not null) return Results.Redirect(Back("slug_taken"));
 
             // ── إنشاء ──
-            s.Store(new ACommerce.Kit.Tenants.Tenant
+            // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) إدراجٌ لا upsert: مُشرِفانِ بِمُعَرِّفٍ واحِدٍ مَعاً كانَ يُقالُ لِكِلَيهِما «أُنشِئ» ويَبقى مَتجَرُ آخِرِهِما
+            // (‏4/4 جَولاتٍ مَقيسَة) — والآنَ الثاني يُرَدُّ بِـ`slug_taken` كَمَن جاءَ بَعدَ الكِتابَة.
+            s.Insert(new ACommerce.Kit.Tenants.Tenant
             {
                 Id          = slug,
                 Name        = name,
@@ -2351,7 +2353,8 @@ public static class MarketplaceTemplateExtensions
                 // StudioOwnershipSeeder لِأَوَّل مُستَخدِم — أَيّاً كانَ.
                 OwnerUserId = creator.User!.Id
             });
-            await s.SaveChangesAsync();
+            try { await s.SaveChangesAsync(); }
+            catch (JasperFx.DocumentAlreadyExistsException) { return Results.Redirect(Back("slug_taken")); }
             return Results.Redirect($"/admin");
         }).DisableAntiforgery();
 
@@ -4076,8 +4079,17 @@ public static class MarketplaceTemplateExtensions
             if (channel is null)
                 return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantAuthChannelDoor.NoChannel, form));
 
-            await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
-                pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null);
+            // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) المَصنَعُ يُدرِجُ لا يَدهَس: مَن كَتَبَ المُعَرِّفَ بَعدَ سُؤالِ `ValidateSlugAsync` أَعلاه فازَ، وهذا
+            // الطَلَبُ يُجابُ كَمَن جاءَ بَعدَه (`slug_taken` بِما كُتِب) ولا يُعَدُّ لَه مَتجَرٌ لَم يُكتَب — العَدُّ بَعدَ الإدراجِ الناجِحِ وَحدَه.
+            try
+            {
+                await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
+                    pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null);
+            }
+            catch (JasperFx.DocumentAlreadyExistsException)
+            {
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantFromAnalysisFactory.SlugTaken, form));
+            }
             await tier.RecordStoreBuiltAsync(ownerId);
             return Results.Redirect($"/studio/apps/{form.Slug}?built=1");
         }).RequireFormBody().DisableAntiforgery();

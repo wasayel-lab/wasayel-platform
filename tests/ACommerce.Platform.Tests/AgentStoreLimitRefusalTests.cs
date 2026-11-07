@@ -75,7 +75,8 @@ public class AgentStoreLimitRefusalTests(ITestOutputHelper output)
         var body = CreateTenantBody();
         var gate = body.IndexOf("await tierService.CheckBuildAsync(quotaOwner, ct);", StringComparison.Ordinal);
         var refused = body.IndexOf("if (!gate.Allowed)", StringComparison.Ordinal);
-        var store = body.IndexOf("s.Store(new Tenant", StringComparison.Ordinal);
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) الكِتابَةُ صارَت إدراجاً (`s.Insert`) لا upsert — العَلامَةُ تَتبَعُها، والتَرتيبُ المَفحوصُ هُوَ هُوَ.
+        var store = body.IndexOf("s.Insert(new Tenant", StringComparison.Ordinal);
         Assert.True(gate > 0, "CreateTenantAsync لا يَسأَلُ CheckBuildAsync.");
         Assert.True(refused > gate && store > refused,
             $"التَرتيبُ: البَوّابَة {gate} ← الرَدّ {refused} ← الكِتابَة {store} — يَجِبُ أَن يَسبِقَ الرَدُّ الكِتابَة.");

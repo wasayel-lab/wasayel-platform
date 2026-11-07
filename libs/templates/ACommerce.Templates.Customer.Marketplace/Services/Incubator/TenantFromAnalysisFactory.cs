@@ -153,6 +153,12 @@ public sealed class TenantFromAnalysisFactory
     /// المالِكُ بِيَدِه. القَناةُ الآنَ تُشتَقُّ في النُقطَةِ مِن
     /// <see cref="TenantAuthChannelDoor"/>، والمَصنَعُ يَكتُبُ ما
     /// أُعطِيَ ولا يَختَرِعُ.</para>
+    ///
+    /// <para><b>ويُدرِجُ ولا يَدهَس</b> (‏2026-11-07، مُراجَعَةُ تَيّارِ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ <c>ws.Store(tenant)</c> — upsert —
+    /// فَسُؤالُ <see cref="ValidateSlugAsync"/> قَبلَه ظَنٌّ لا قُفل: حِسابانِ بِمُعَرِّفٍ واحِدٍ في اللَحظَةِ نَفسِها قيلَ لِكِلَيهِما «بُني» (‏12/12 في سِتِّ جَولاتٍ مَقيسَة)،
+    /// وبَقِيَ صَفٌّ واحِدٌ مالِكُه آخِرُ كاتِب، وعُدَّ لِكِلَيهِما مَتجَر. والآنَ <c>Insert</c>: مِفتاحُ الوَثيقَةِ هُوَ القُفل، والثاني يَرمي
+    /// <c>JasperFx.DocumentAlreadyExistsException</c> عِندَ الحِفظ — ويُجيبُه البابُ بِـ<see cref="SlugTaken"/> كَما يُجيبُ مَن جاءَ بَعدَ الكِتابَة.
+    /// والوَثيقَةُ المَكتوبَةُ هِيَ هِيَ بايتاً (‏<c>StudioStoreBirthCharacterizationTests.GoldenSha256</c>).</para>
     /// </summary>
     public async Task<Tenant> CreateAsync(
         string slug, string name, string color, string tagLine, string city,
@@ -180,7 +186,7 @@ public sealed class TenantFromAnalysisFactory
         };
 
         await using var ws = _store.LightweightSession();
-        ws.Store(tenant);
+        ws.Insert(tenant);
         await ws.SaveChangesAsync(ct);
         return tenant;
     }

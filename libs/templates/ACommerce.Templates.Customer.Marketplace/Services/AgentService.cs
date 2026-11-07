@@ -926,9 +926,12 @@ public sealed class AgentToolExecutor
 
         await using var s = _store.LightweightSession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
-        if (existing is not null) return (false, $"الـ slug «{slug}» مَوجود بِالفِعل.");
+        var taken = $"الـ slug «{slug}» مَوجود بِالفِعل.";
+        if (existing is not null) return (false, taken);
 
-        s.Store(new Tenant
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدراجٌ لا upsert: السُؤالُ أَعلاه ظَنٌّ، ومَن كَتَبَ المُعَرِّفَ بَعدَه كانَ يُدهَسُ
+        // ويُعَدُّ لِهذا المُنادي مَتجَرُه — والآنَ يُرَدُّ بِرِسالَةِ «مَوجود» نَفسِها ولا يُعَدّ.
+        s.Insert(new Tenant
         {
             Id = slug, Name = name, BrandColor = color, TagLine = tagline,
             City = city, AuthChannel = channel, Categories = cats,
@@ -940,7 +943,8 @@ public sealed class AgentToolExecutor
             OwnerUserId = ownerUserId ?? createdBy ?? Guid.Empty,
             CreatedAt = DateTime.UtcNow
         });
-        await s.SaveChangesAsync(ct);
+        try { await s.SaveChangesAsync(ct); }
+        catch (JasperFx.DocumentAlreadyExistsException) { return (false, taken); }
 
         // والعَدُّ **بَعدَ** الكِتابَةِ الناجِحَة — نَفسُ تَرتيبِ
         // `POST /studio/s/{id}/build` حَرفاً: لا يُحاسَبُ على مَتجَرٍ
