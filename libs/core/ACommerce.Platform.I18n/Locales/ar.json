@@ -896,6 +896,7 @@
   "studio.app_branding.auth_phone_hint": "كود ٦ خانات بِالرَسائِل القَصيرَة",
   "studio.app_branding.err_color": "اللَّون غَير صالِح",
   "studio.app_branding.err_cart_mode": "اختَر نَمَطاً مِن نَمَطَي السَّلَّة.",
+  "studio.app_branding.err_city_too_long": "المَدينَةُ 40 حَرفاً عَلى الأَكثَر.",
   "studio.app_branding.section_cart_mode": "نَمَطُ السَّلَّة — إن اشتَرى المُشتَري مِن أَكثَرَ مِن بائِع",
   "studio.app_branding.cart_mode_mixed": "سَلَّةٌ مُختَلِطَة",
   "studio.app_branding.cart_mode_mixed_hint": "مِن أَكثَرَ مِن بائِعٍ بِفاتورَةٍ واحِدَة — ويُلغى الطَّلَبُ قَبلَ الدَّفعِ كُلُّه أَو لا شَيء. الافتِراض.",

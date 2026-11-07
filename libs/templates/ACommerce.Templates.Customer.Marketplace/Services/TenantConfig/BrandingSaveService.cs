@@ -78,6 +78,11 @@ public static class BrandingSaveService
     {
         if (string.IsNullOrEmpty(r.Name.Trim())) return TenantConfigCodes.NameRequired;
         if (!HexColor.IsMatch(r.BrandColor.Trim())) return TenantConfigCodes.ColorInvalid;
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) حُدودُ الاستِمارَةِ في الخادِم، بِأَرقامِ
+        // بابِ الإنشاءِ نَفسِها: كانَ الحَدّانِ هُناكَ وَحدَه، فَمَتجَرٌ وُلِدَ بِاسمٍ قَصيرٍ صارَ اسمُه مِئَتَي أَلفِ حَرفٍ مِن هُنا (‏302 ?saved=1).
+        if (r.Name.Trim().Length > Incubator.StudioStoreCreate.NameMax) return TenantConfigCodes.NameTooLong;
+        if (r.TagLine.Trim().Length > Incubator.StudioStoreCreate.TagLineMax) return TenantConfigCodes.TagLineTooLong;
+        if (r.City.Trim().Length > Incubator.StudioStoreCreate.CityMax) return TenantConfigCodes.CityTooLong;
         // (‏2026-10-29، قَرارُ المالِك د2) — ونَمَطُ سَلَّةٍ مُرسَلٌ مِن المَعجَمِ وإلّا رَمزُه.
         if (r.CartMode is not null && !Patterns.CartModes.IsValid(r.CartMode)) return TenantConfigCodes.CartModeUnknown;
         return null;

@@ -36,6 +36,21 @@ public static class StudioStoreCreate
     public const string NameTooLong = "name_too_long";
     public const string TagLineTooLong = "tagline_too_long";
 
+    /// <summary><b>وحَدُّ المَدينَة، وأَبوابُ الهُوِيَّةِ الأُخرى</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ
+    /// حَرفٌ فَوقَه): الحَدّانِ أَعلاه كانا في بابِ الإنشاءِ وَحدَه، وحِفظُ الهُوِيَّةِ (`BrandingSaveService`) وبابُ المُشرِفِ وأَداتا الوَكيلِ (`create_tenant`،
+    /// `set_branding`) بِلا حَدّ — فَاسمٌ بِمِئَتَي أَلفِ حَرفٍ يُحفَظُ مِن «الهُوِيَّة» بَعدَ إنشاءٍ قَصير (صَفحَةُ المَتجَرِ ‏15,049,017 بايتاً، والصَفحَةُ الأُولى
+    /// ‏1,441,598 لِكُلِّ زائِرٍ بَعدَ إعلانٍ واحِد). والآنَ يَسأَلُها كُلُّها بِهذِه الأَرقامِ نَفسِها؛ و<see cref="CityMax"/> رَقمُ حَقلِ المَدينَةِ في استِمارَتَي
+    /// الهُوِيَّةِ واستِمارَةِ المُشرِف (<c>maxlength="40"</c>) لا رَقَمٌ جَديد (القاعِدَة ١٦) — والمَدينَةُ تُرسَمُ في واجِهَةِ الصَفحَةِ الأُولى كَالاسم.</summary>
+    public const int CityMax = 40;
+    public const string CityTooLong = "city_too_long";
+
+    /// <summary>رَمزُ أَوَّلِ حَقلِ هُوِيَّةٍ فاتَ حَدَّه — الاسمُ ثُمَّ السَطرُ ثُمَّ المَدينَة — أَو <c>null</c>؛ يَسأَلُه بابُ المُشرِفِ وأَداتا الوَكيل (‏W13-1·SEC2-C1-2).</summary>
+    public static string? LengthRefusal(string name, string tagLine, string city)
+        => name.Length > NameMax ? NameTooLong : tagLine.Length > TagLineMax ? TagLineTooLong : city.Length > CityMax ? CityTooLong : null;
+
+    /// <summary>مِفتاحُ قامُوسِ رَفضِ الطولِ عَلى كُلِّ سَطحِ هُوِيَّة: الاسمُ والسَطرُ بِنَصِّ استِمارَةِ الإنشاءِ لِلرَمزِ نَفسِه — مَعناهُ واحِد — والمَدينَةُ بِمِفتاحِها.</summary>
+    public static string LengthMessageKey(string code) => code == CityTooLong ? "studio.app_branding.err_city_too_long" : MessageKey(code);
+
     /// <summary>لَونُ <c>marketplace</c> — ما كانَت استِمارَةُ البِناءِ تُعَبِّئُه سَلَفاً لِجَلسَةٍ بِالوَصفِ وَحدَه.</summary>
     public const string DefaultColor = "#2563eb";
 

@@ -193,6 +193,9 @@
         Services.Incubator.TenantFromAnalysisFactory.SlugReserved => L[Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugReserved)],
         "name_required" => L["admin.new.err_name_required"],
         "color_invalid" => L["admin.new.err_color"],
+        // ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الطولِ في الخادِم — بِنَصِّ الاستوديو لِلرَمزِ نَفسِه، مَعناهُ واحِد.
+        Services.Incubator.StudioStoreCreate.NameTooLong or Services.Incubator.StudioStoreCreate.TagLineTooLong or Services.Incubator.StudioStoreCreate.CityTooLong
+            => L[Services.Incubator.StudioStoreCreate.LengthMessageKey(err)],
         // ‏رَمزا الفِئاتِ رَمزا المُحَلِّلِ المُشتَرَكِ (`TenantConfigCodes`) مُنذُ ‏2026-10-29 (قَرارُ المالِك د25) — وكانا
         // `no_categories`/`bad_categories`؛ والنَصّانِ هُما هُما، تَقولُهُما مَفاتيحُهُما القائِمَة.
         "empty"         => L["admin.new.err_no_categories"],

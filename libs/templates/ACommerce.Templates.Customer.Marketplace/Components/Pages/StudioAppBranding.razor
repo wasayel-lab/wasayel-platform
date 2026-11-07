@@ -47,6 +47,8 @@
             @if (Err == "name_required") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_name")</div> }
             @if (Err == "color_invalid") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_color")</div> }
             @if (Err == Services.Patterns.CartModes.Unknown) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup("studio.app_branding.err_cart_mode")</div> }
+            @* ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الطولِ في الخادِم — الاسمُ والسَطرُ بِنَصِّ استِمارَةِ الإنشاءِ لِلرَمزِ نَفسِه، والمَدينَةُ بِمِفتاحِها. *@
+            @if (Err is Services.Incubator.StudioStoreCreate.NameTooLong or Services.Incubator.StudioStoreCreate.TagLineTooLong or Services.Incubator.StudioStoreCreate.CityTooLong) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(Services.Incubator.StudioStoreCreate.LengthMessageKey(Err))</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/branding/save")" class="st-card">
                 <div class="st-field">

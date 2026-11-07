@@ -2308,12 +2308,15 @@ public static class MarketplaceTemplateExtensions
             var catsRaw = f["categories"].ToString();
 
             // ── سَلاسِل الإعادَة في حالَة الخَطَأ ──
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وما فاتَ حَدَّه يَعودُ فارِغاً — كَـ`StudioStoreCreate.Refused`:
+            // نَسخُه يَجعَلُ العُنوانَ بِطولِه فَيَضيعُ `Location`؛ وما في حَدِّه يُنسَخُ بِحَرفِه كَما كان.
+            static string Within(string v, int max) => v.Length <= max ? v : "";
             string Back(string err) => "/admin/tenants/new" + "?err=" + err
                 + "&slug="     + Uri.EscapeDataString(slug)
-                + "&name="     + Uri.EscapeDataString(name)
-                + "&tagline="  + Uri.EscapeDataString(tagline)
+                + "&name="     + Uri.EscapeDataString(Within(name, Services.Incubator.StudioStoreCreate.NameMax))
+                + "&tagline="  + Uri.EscapeDataString(Within(tagline, Services.Incubator.StudioStoreCreate.TagLineMax))
                 + "&color="    + Uri.EscapeDataString(color)
-                + "&city="     + Uri.EscapeDataString(city)
+                + "&city="     + Uri.EscapeDataString(Within(city, Services.Incubator.StudioStoreCreate.CityMax))
                 + "&channel="  + Uri.EscapeDataString(channel)
                 + "&categories=" + Uri.EscapeDataString(catsRaw);
 
@@ -2325,6 +2328,9 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(name))   return Results.Redirect(Back("name_required"));
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
                 return Results.Redirect(Back("color_invalid"));
+            // ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الاستِمارَةِ في الخادِمِ بِأَرقامِ بابِ الإنشاءِ نَفسِها — كانَت في المُتَصَفِّحِ وَحدَه.
+            if (Services.Incubator.StudioStoreCreate.LengthRefusal(name, tagline, city) is { } tooLong)
+                return Results.Redirect(Back(tooLong));
 
             // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" — بِالمُحَلِّلِ المُشتَرَكِ نَفسِه ──
             // (‏2026-10-29، قَرارُ المالِك د25 (٢-أ)): كانَت تُحَلَّلُ هُنا في الجِسمِ بِأَربَعَةِ فُروقٍ عَن

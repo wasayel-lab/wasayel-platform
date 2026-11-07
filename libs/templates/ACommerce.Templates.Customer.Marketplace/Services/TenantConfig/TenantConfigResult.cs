@@ -105,6 +105,12 @@ public static class TenantConfigCodes
     /// <c>CategoriesSaveService.Parse</c>، وتَقولُه الصَفَحاتُ الثَلاثُ مِن القامُوس (<c>categories.kind.err_unknown</c>).</summary>
     public const string CategoryKindUnknown = Patterns.CategoryKinds.Unknown;
 
+    /// <summary><b>حَقلُ هُوِيَّةٍ فاتَ حَدَّه</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2) — رُموزُ بابِ الإنشاءِ نَفسُها
+    /// (<c>StudioStoreCreate</c>) بِأَرقامِها: كانَ حِفظُ الهُوِيَّةِ يَقبَلُ اسماً بِمِئَتَي أَلفِ حَرفٍ فَتَصيرُ صَفحَةُ المَتجَرِ خَمسَةَ عَشَرَ مِليونَ بايت.</summary>
+    public const string NameTooLong = Incubator.StudioStoreCreate.NameTooLong;
+    public const string TagLineTooLong = Incubator.StudioStoreCreate.TagLineTooLong;
+    public const string CityTooLong = Incubator.StudioStoreCreate.CityTooLong;
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
@@ -112,5 +118,6 @@ public static class TenantConfigCodes
         BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType, RolesEmptySelection,
         CartModeUnknown,   // ‏2026-10-29، قَرارُ المالِك د2
         CategoryKindUnknown,   // ‏2026-10-29، قَرارُ المالِك د25
+        NameTooLong, TagLineTooLong, CityTooLong,   // ‏2026-11-07، W13-1·SEC2-C1-2
     };
 }

@@ -888,6 +888,8 @@ public sealed class AgentToolExecutor
         if (string.IsNullOrEmpty(name)) return (false, "الاسم مَطلوب.");
         if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
             return (false, "لَون غَير صالِح.");
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) حُدودُ بابِ الإنشاءِ نَفسُها، بِنَصِّها مِن القامُوس.
+        if (LengthRefused(name, tagline, city) is { } tooLong) return (false, tooLong);
 
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
@@ -1003,6 +1005,10 @@ public sealed class AgentToolExecutor
         if (TryStr(root, "name", out var name))       t.Name = name;
         if (TryStr(root, "tagline", out var tagline)) t.TagLine = tagline;
         if (TryStr(root, "city", out var city))       t.City = city;
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) حُدودُ «الهُوِيَّة» نَفسُها قَبلَ الحِفظ:
+        // كانَت الأَداةُ تَكتُبُ اسماً بِلا حَدٍّ — البابُ الثالِثُ إلى صَفحَةٍ عامَّةٍ بِعَشَراتِ المَلايين. ويُسأَلُ المُرسَلُ وَحدَه (الغائِبُ فارِغ):
+        // مَتجَرٌ قَديمٌ فَوقَ الحَدِّ لا تُرَدُّ عَنه أَداةٌ تُغَيِّرُ لَونَه — وما فيه قَرارُ المالِك («ب»).
+        if (LengthRefused(name, tagline, city) is { } tooLong) return (false, tooLong);
         if (TryStr(root, "color", out var color))
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
@@ -1386,6 +1392,12 @@ public sealed class AgentToolExecutor
         }
         return cats;
     }
+
+    /// <summary>‏(‏2026-11-07، W13-1·SEC2-C1-2) نَصُّ أَوَّلِ حَقلِ هُوِيَّةٍ فاتَ حَدَّه، مِن القامُوسِ بِالعَرَبِيَّة — أَو <c>null</c>.</summary>
+    private static string? LengthRefused(string name, string tagline, string city)
+        => Services.Incubator.StudioStoreCreate.LengthRefusal(name, tagline, city) is { } code
+            ? LocaleCatalog.Text(LocaleCatalog.Arabic, Services.Incubator.StudioStoreCreate.LengthMessageKey(code))
+            : null;
 
     private static string Str(JsonElement e, string key) =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
