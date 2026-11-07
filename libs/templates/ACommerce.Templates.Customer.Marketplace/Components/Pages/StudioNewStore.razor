@@ -1,6 +1,7 @@
 @page "/studio/new"
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.StudioQueries Studio
+@inject NavigationManager Nav
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
 
@@ -9,15 +10,15 @@
     `/studio/begin` (تَحليلٌ بِنَموذَجِ لُغَة)، والتَحليلُ هُوَ البابُ الوَحيدُ الَّذي يَملِكُ مِنه رائِدُ الأَعمالِ مَتجَراً؛ فَبِلا مِفتاحٍ لا مَتجَر.
     صارَت تُرسِلُ إلى `StudioStoreCreate.Endpoint` بِالحُقولِ الَّتي كانَت استِمارَةُ البِناءِ تَطلُبُها (الاسم، المُعَرِّف، اللَون، سَطرُ الوَصف).
     والمُوافَقَةُ قَبلَها: مَن لَم يَقبَل الإصدارَ القائِمَ يُرسَلُ إلى صَفحَتِها ويَعودُ إلى هُنا (البابُ يَسأَلُها ثانِيَةً).
+    ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والتَحويلُ مِن الخادِم (`Nav.NavigateTo` في `OnInitializedAsync` ⇒ ‏302) لا
+    `<script>location.replace(…)</script>`: الصَفحَةُ تُحمِّلُ `blazor.web.js`، فَالنَقرُ عَلى رابِطٍ تَنَقُّلٌ مُحَسَّن (`fetch` ثُمَّ رُقعَةُ DOM) لا يُنَفِّذُ
+    سكربتاً أَدرَجَتهُ الرُقعَة — فَكانَت «أَنشِئ مَتجَرَك» لِلزائِرِ و«مَتجَر جَديد» لِمَن لَم يَقبَل الإصدارَ 4 صَفحَةً فارِغَة. وتَحويلُ الخادِمِ يَتبَعُه التَنَقُّلُ
+    المُحَسَّنُ والتَحميلُ الكامِلُ مَعاً.
 *@
 
 <StudioShell Title="@(L["studio.create.head_title"])" Active="new">
     <ChildContent>
-        @if (Auth.IsAuthenticated && !consented)
-        {
-            <script>location.replace('@StudioStoreCreate.ConsentPage');</script>
-        }
-        else
+        @if (consented)
         {
             @* نافِذَةُ التَرقِيَةِ لِرَفضِ الحِصَّة (`?upgrade=build`) — وحَدُّ المَتاجِرِ ثابِتٌ لا يَتَجَدَّد، فَلا تاريخَ تَجديد (`UpgradePrompt` لا يَرسُمُه إلّا لِلتَحاليل). *@
             <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
@@ -76,14 +77,17 @@
     bool consented;
     string? currentTier;
 
+    /// <summary>صَفحَةُ دُخولِ الاستوديو — ما كانَ سكربتُ `StudioShell` يُحَوِّلُ إلَيه الزائِر.</summary>
+    internal const string StudioAuthPage = "/studio/auth";
+
     protected override async Task OnInitializedAsync()
     {
         Auth.Load();
-        if (!Auth.IsAuthenticated) return;
+        if (!Auth.IsAuthenticated) { Nav.NavigateTo(StudioAuthPage); return; }
         var uid = Auth.UserId!.Value;
         // السُؤالُ نَفسُه الَّذي يَسأَلُه البابُ وصَفحَةُ المُوافَقَة (`ConsentPolicy.AcceptedBy`) — مُسنَدٌ واحِد (القاعِدَة ٨).
         consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);
-        if (!consented) return;
+        if (!consented) { Nav.NavigateTo(StudioStoreCreate.ConsentPage); return; }
         currentTier = (await TierSvc.GetUserAsync(uid))?.Tier ?? "spark";
     }
 }

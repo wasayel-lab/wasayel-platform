@@ -24,6 +24,12 @@
 //     dotnet run scripts/verify-runtime.cs -- --viewport 390x844 <url>
 //     dotnet run scripts/verify-runtime.cs -- --report-only <url>
 //     dotnet run scripts/verify-runtime.cs -- --json out.json <url>
+//     dotnet run scripts/verify-runtime.cs -- [--cookie n=v] --click '<css>' --expect '<path?query>' <url>
+//
+//  ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وَضعُ النَقرَة**: يَفتَحُ <url>، ويَنقُرُ أَوَّلَ عُنصُرٍ يُطابِقُ
+//  <css> نَقرَةً حَقيقيَّة (فَيَعتَرِضُها `blazor.web.js` تَنَقُّلاً مُحَسَّناً كَما يَعتَرِضُ نَقرَةَ المُستَخدِم)، ويَنتَظِرُ أَن يَصيرَ عُنوانُ الصَفحَةِ <expect>
+//  وجِسمُها غَيرَ فارِغ. **العِلَّةُ**: `curl` يَقرَأُ ما يَبعَثُه الخادِمُ ولا يَرى ما يُنَفِّذُه المُتَصَفِّح — فَصَفحَةٌ تُحَوِّلُ بِـ`<script>location.replace`
+//  كانَت ✓ في رِحلَةِ الإطلاقِ وهي فارِغَةٌ بَعدَ النَقر (السكربتُ في رُقعَةِ DOM لا يُنَفَّذ). رَمزُ الخُروج: ٠ وَصَلَ، ١ لَم يَصِل، ٢ لا عُنصُرَ يُنقَر.
 //
 //  رَمز الخُروج: ٠ إن لَم تُوجَد مُخالَفَة، ١ إن وُجِدَت
 //  (إلّا مَع `--report-only`)، ٢ عِند عَطَب تَشغيلِيّ.
@@ -43,6 +49,7 @@ bool reportOnly = false;
 string? jsonOut = null;
 string? injectCss = null;
 var cookies = new List<(string Name, string Value)>();
+string? clickCss = null, expectAt = null;
 string contractsPath = Path.Combine(AppContext.BaseDirectory, "spatial-contracts.json");
 // المِلَفّ المُفرَد يُبنى في مُجَلَّد مُؤَقَّت، فَالعُقود تُطلَب بِجِوار المَصدَر.
 string srcDir = Path.GetDirectoryName(Path.GetFullPath(GetSourcePath())) ?? ".";
@@ -75,6 +82,8 @@ for (int i = 0; i < args.Length; i++)
             break;
         }
         case "--json": jsonOut = args[++i]; break;
+        case "--click": clickCss = args[++i]; break;
+        case "--expect": expectAt = args[++i]; break;
         case "--contracts": contractsPath = args[++i]; break;
         default: urls.Add(args[i]); break;
     }
@@ -188,6 +197,39 @@ try
         foreach (var (name, value) in cookies)
             await cdp.Send("Network.setCookie",
                 $$"""{"name":{{Cdp.JStr(name)}},"value":{{Cdp.JStr(value)}},"domain":"localhost","path":"/"}""");
+    }
+
+    // ═══ وَضعُ النَقرَة (‏2026-11-07، W13-1·C1D-1) — قَبلَ القِياسِ المَكانيِّ ويَخرُجُ دونَه ═══
+    if (clickCss is not null)
+    {
+        if (expectAt is null) { Console.Error.WriteLine("✗ --click يَحتاجُ --expect"); return 2; }
+        int reached = 0, missed = 0, blindClicks = 0;
+        foreach (var url in urls)
+        {
+            await cdp.Send("Page.navigate", $$"""{"url":{{Cdp.JStr(url)}}}""");
+            await cdp.WaitForEvent("Page.loadEventFired", TimeSpan.FromSeconds(30));
+            await Task.Delay(1500);   // يَنتَظِرُ تَهيِئَةَ `blazor.web.js` واعتِراضَه النَقر
+            var clickJs = $$"""(function(){ var e = document.querySelector({{Cdp.JStr(clickCss)}}); if (!e) return 'none'; e.click(); return 'clicked'; })()""";
+            var clicked = (await cdp.Send("Runtime.evaluate", $$"""{"expression":{{Cdp.JStr(clickJs)}},"returnByValue":true}"""))
+                .RootElement.GetProperty("result").GetProperty("value").GetString();
+            if (clicked != "clicked") { Console.WriteLine($"  ✗ {url}: لا عُنصُرَ يُطابِقُ «{clickCss}»"); blindClicks++; continue; }
+            const string whereJs = """(function(){ var b = document.body ? document.body.innerText.trim().length : 0; return location.pathname + location.search + '|' + b; })()""";
+            string at = "?"; int bodyText = 0; var ok = false;
+            for (var tries = 0; tries < 60 && !ok; tries++)
+            {
+                await Task.Delay(250);
+                var w = (await cdp.Send("Runtime.evaluate", $$"""{"expression":{{Cdp.JStr(whereJs)}},"returnByValue":true}"""))
+                    .RootElement.GetProperty("result").GetProperty("value").GetString() ?? "?|0";
+                at = w[..w.LastIndexOf('|')]; bodyText = int.Parse(w[(w.LastIndexOf('|') + 1)..]);
+                ok = at == expectAt && bodyText > 0;
+            }
+            Console.WriteLine(ok ? $"  ✓ {url}: نَقرَةُ «{clickCss}» ⇒ {at} · نَصُّ الجِسمِ {bodyText} حَرفاً"
+                                 : $"  ✗ {url}: نَقرَةُ «{clickCss}» ⇒ {at} (المُنتَظَر {expectAt}) · نَصُّ الجِسمِ {bodyText} حَرفاً");
+            if (ok) reached++; else missed++;
+        }
+        Console.WriteLine($"  النَقَرات: فُحِصَ {urls.Count} · وَصَلَ {reached} · لَم يَصِل {missed} · بِلا عُنصُر {blindClicks}");
+        exitCode = blindClicks > 0 || urls.Count == 0 ? 2 : missed > 0 ? 1 : 0;
+        return exitCode;
     }
 
     string js = BuildScript(contractsJson);

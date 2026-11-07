@@ -150,13 +150,14 @@ post() { # post <jar|-> <path> [args…] — args تُمَرَّرُ إلى curl
         -X POST "$BASE$path" "${body[@]}" -w '%{http_code}')" || CODE=000
     LOC="$(grep -i '^location:' "$h" | tr -d '\r' | sed 's/^[Ll]ocation: //')"
 }
-get() { # get <jar|-> <path> <out> — `-` بِلا جَلسَة
-    local jar="$1" path="$2" out="$3"
+get() { # get <jar|-> <path> <out> — `-` بِلا جَلسَة. ‏(‏2026-11-07، W13-1·C1D-1) ويَضبُطُ `LOC` بِوِجهَةِ التَحويلِ (فارِغَةً بِلا تَحويل) — صَفحَةٌ تُحَوِّلُ مِن الخادِمِ
+    local jar="$1" path="$2" out="$3" w
     if [ "$jar" = - ]; then
-        CODE="$(curl -s --max-time "$T" -o "$out" "$BASE$path" -w '%{http_code}')" || CODE=000
+        w="$(curl -s --max-time "$T" -o "$out" "$BASE$path" -w '%{http_code} %{redirect_url}')" || w=000
     else
-        CODE="$(curl -s --max-time "$T" -o "$out" -c "$jar" -b "$jar" "$BASE$path" -w '%{http_code}')" || CODE=000
+        w="$(curl -s --max-time "$T" -o "$out" -c "$jar" -b "$jar" "$BASE$path" -w '%{http_code} %{redirect_url}')" || w=000
     fi
+    CODE="${w%% *}"; LOC="${w#* }"; [ "$LOC" = "$w" ] && LOC=""; LOC="${LOC#"$BASE"}"
 }
 # نَصُّ الصَفحَةِ مَفكوكَ التَرميز: Razor يَكتُبُ مُخرَجَ التَعبيرِ كِياناتٍ
 # (‏`&#x627;`…)، فَبَحثٌ خامٌ عَن نَصٍّ عَرَبِيٍّ يُعطي صِفراً كاذِباً.
@@ -278,9 +279,11 @@ CTA="$(grep -o 'href="/studio/new"' "$F" | head -1 | sed 's/^href="//; s/"$//')"
 check "$([ "$CODE" = 200 ] && [ -n "$CTA" ] && [ "$NBEGIN" = 0 ] && has "$F" "$CREATE_CTA" && echo 1 || echo 0)" \
     "GET / → $CODE · دَعوَةُ «$CREATE_CTA» إلى ${CTA:-غائِب} · استِمارَةُ /studio/begin = $NBEGIN"
 [ -n "$CTA" ] || die "لا دَعوَةَ إلى /studio/new في الصَفحَةِ الأُولى"
+# ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1) التَحويلُ مِن الخادِم (‏302) لا سكربتٌ في الصَفحَة: النَقرُ تَنَقُّلٌ مُحَسَّنٌ لا يُنَفِّذُ سكربتاً أَدرَجَتهُ
+# الرُقعَة، فَكانَت هذِه الخُطوَةُ ✓ وصَفحَةُ الزائِرِ فارِغَة. والنَقرُ نَفسُه في مُتَصَفِّحٍ حَقيقيٍّ يَقيسُه `verify-runtime.cs --click … --expect …`.
 get "$J_ENT" "$CTA" "$F"
-check "$([ "$CODE" = 200 ] && grep -q "location.replace('/studio/auth')" "$F" && echo 1 || echo 0)" \
-    "GET $CTA (بِلا جَلسَة) → $CODE · إلى /studio/auth"
+check "$([ "$CODE" = 302 ] && [ "$LOC" = /studio/auth ] && echo 1 || echo 0)" \
+    "GET $CTA (بِلا جَلسَة) → $CODE ${LOC:-بِلا تَحويل} · إلى /studio/auth"
 post "$J_ENT" /studio/auth/login --data-urlencode "phone=$P_ENT"
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *stage=verify* ]] && echo 1 || echo 0)" "POST /studio/auth/login → $CODE $LOC"
 get "$J_ENT" "/studio/auth?stage=verify&method=phone&phone=$P_ENT" "$F"
@@ -293,8 +296,8 @@ check "$([ "$CODE" = 302 ] && [ "$LOC" = "$CTA" ] && echo 1 || echo 0)" \
 
 # ‏ذَهابُ الشُروطِ وإيابُها: الاستِمارَةُ تُرسِلُ غَيرَ المُوافِقِ إلى صَفحَتِها، و`returnUrl` مِن استِمارَةِ القَبولِ يُعيدُه.
 get "$J_ENT" "$CTA" "$F"
-CONSENT_AT="$(grep -o "location.replace('/studio/consent[^']*')" "$F" | head -1 | sed "s/^location.replace('//; s/')\$//")"
-check "$([ "$CODE" = 200 ] && [ -n "$CONSENT_AT" ] && echo 1 || echo 0)" \
+CONSENT_AT="$([ "$CODE" = 302 ] && [[ "$LOC" == /studio/consent* ]] && echo "$LOC")"
+check "$([ "$CODE" = 302 ] && [ -n "$CONSENT_AT" ] && echo 1 || echo 0)" \
     "GET $CTA (لا قَبولَ بَعد) → $CODE · إلى ${CONSENT_AT:-غائِب} (‏HasConsentedAsync = false)"
 [ -n "$CONSENT_AT" ] || die "الاستِمارَةُ لا تُرسِلُ غَيرَ المُوافِقِ إلى المُوافَقَة"
 get "$J_ENT" "$CONSENT_AT" "$F"

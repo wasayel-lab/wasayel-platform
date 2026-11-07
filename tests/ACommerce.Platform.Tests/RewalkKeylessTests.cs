@@ -67,7 +67,7 @@ public class RewalkKeylessTests(ITestOutputHelper output)
             "post \"$J_ENT\" /studio/auth/login",
             "post \"$J_ENT\" /studio/auth/verify",
             "[ \"$LOC\" = \"$CTA\" ]",
-            "location.replace('/studio/consent",
+            "[[ \"$LOC\" == /studio/consent* ]]",   // ‏(‏2026-11-07، W13-1·C1D-1) كانَ «location.replace('/studio/consent» — التَحويلُ صارَ مِن الخادِم
             "form_dump \"$F\" 'consent/accept'",
             "--data-urlencode \"returnUrl=$RETURN_TO\"",
             "form_dump \"$F\" 'name=\"slug\"'",

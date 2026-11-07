@@ -177,15 +177,22 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
 
     /// <summary>الصَفحَةُ تَسأَلُ المُسنَدَ الواحِدَ (<c>HasConsentedAsync</c> بِـ<c>ConsentPolicy.CurrentVersion</c>) وتُحَوِّلُ غَيرَ المُوافِقِ إلى المُوافَقَةِ
     /// بِوِجهَةِ عَودَةٍ إلَيها، والاستِمارَةُ في الفَرعِ الآخَرِ وَحدَه؛ ونُقطَةُ القَبولِ تُعيدُه إلى <c>returnUrl</c>.</summary>
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ التَحويلُ <c>&lt;script&gt;location.replace(…)</c> في
+    /// فَرعِ <c>@if (Auth.IsAuthenticated &amp;&amp; !consented)</c> وهذا الصَفُّ يَقرَؤُه بِحَرفِه — ولا يَجري تَحتَ التَنَقُّلِ المُحَسَّن (صَفحَةٌ فارِغَة). وصارَ
+    /// <c>Nav.NavigateTo</c> في <c>OnInitializedAsync</c> لِلزائِرِ ولِغَيرِ المُوافِق، والاستِمارَةُ في فَرعِ <c>@if (consented)</c>، ولا سكربتَ في الصَفحَة.</remarks>
     [Fact]
     public void The_page_sends_an_unconsented_user_to_consent_and_back_before_it_draws_the_form()
     {
         var page = WriteEndpointGuardTests.StripMarkupComments(Read($"{Template}/Components/Pages/StudioNewStore.razor"));
-        var redirect = page.IndexOf("@if (Auth.IsAuthenticated && !consented)", StringComparison.Ordinal);
-        var script = page.IndexOf("<script>location.replace('@StudioStoreCreate.ConsentPage');</script>", StringComparison.Ordinal);
+        var code = page[page.IndexOf("@code", StringComparison.Ordinal)..];
+        var (anonymous, asks, unconsented) = (code.IndexOf("if (!Auth.IsAuthenticated) { Nav.NavigateTo(StudioAuthPage); return; }", StringComparison.Ordinal),
+            code.IndexOf("consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);", StringComparison.Ordinal),
+            code.IndexOf("if (!consented) { Nav.NavigateTo(StudioStoreCreate.ConsentPage); return; }", StringComparison.Ordinal));
+        Assert.True(anonymous > 0 && asks > anonymous && unconsented > asks, "التَحويلُ مِن الخادِمِ ناقِصٌ أَو مَقلوب.");
+        var branch = page.IndexOf("@if (consented)", StringComparison.Ordinal);
         var form = page.IndexOf("<form", StringComparison.Ordinal);
-        Assert.True(redirect > 0 && script > redirect && form > script, "الاستِمارَةُ قَبلَ سُؤالِ المُوافَقَة.");
-        Assert.Contains("consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);", page, StringComparison.Ordinal);
+        Assert.True(branch > 0 && form > branch, "الاستِمارَةُ خارِجَ فَرعِ المُوافِق.");
+        Assert.DoesNotContain("<script", page, StringComparison.Ordinal);
         Assert.Equal("/studio/consent?returnUrl=/studio/new", StudioStoreCreate.ConsentPage);
         // ونُقطَةُ القَبولِ تُعيدُ إلى الوِجهَةِ المَحلِّيَّةِ كَما هي (`LocalRedirect` يَقبَلُها).
         Assert.Equal("/studio/new", ACommerce.Templates.Customer.Marketplace.Services.LocalRedirect.Resolve("/studio/new", "/studio"));
@@ -407,20 +414,25 @@ public class LiveStudioStoreCreateProofTests(ITestOutputHelper output)
         finally { await CleanAsync(host, p, slug); }
     }
 
-    private static async Task<string> RenderNewStoreAsync(LiveTemplateDoorHost host, string token)
+    /// <summary>الصَفحَةُ مُصَيَّرَةً — أَو <c>«→ {الوِجهَة}»</c> إن حَوَّلَت مِن الخادِم (‏2026-11-07، W13-1·C1D-1: <c>NavigateTo</c> في التَصييرِ الساكِنِ يُجابُ ‏302).</summary>
+    private static async Task<string> RenderNewStoreAsync(LiveTemplateDoorHost host, string? token)
     {
         await using var scope = host.Services.CreateAsyncScope();
         var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
         ctx.Request.Scheme = "http";
         ctx.Request.Host = new HostString("localhost");
         ctx.Request.Path = StudioStoreCreate.Page;
-        ctx.Request.Headers.Cookie = $"{StudioAuth.CookieName}={token}";
+        if (token is not null) ctx.Request.Headers.Cookie = $"{StudioAuth.CookieName}={token}";
         if (scope.ServiceProvider.GetService<IHttpContextAccessor>() is { } accessor) accessor.HttpContext = ctx;
         if (scope.ServiceProvider.GetService<NavigationManager>() is Microsoft.AspNetCore.Components.Routing.IHostEnvironmentNavigationManager nav)
             nav.Initialize("http://localhost/", "http://localhost" + StudioStoreCreate.Page);
         await using var renderer = new HtmlRenderer(scope.ServiceProvider, NullLoggerFactory.Instance);
-        return System.Net.WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(async () =>
-            (await renderer.RenderComponentAsync<ACommerce.Templates.Customer.Marketplace.Components.Pages.StudioNewStore>()).ToHtmlString()));
+        try
+        {
+            return System.Net.WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(async () =>
+                (await renderer.RenderComponentAsync<ACommerce.Templates.Customer.Marketplace.Components.Pages.StudioNewStore>()).ToHtmlString()));
+        }
+        catch (Microsoft.AspNetCore.Components.NavigationException e) { return "→ " + new Uri(new Uri("http://localhost/"), e.Location).PathAndQuery; }
     }
 
     /// <summary><b>القاعِدَة ١٢ بِالصَفحَةِ لا بِالمَصدَر</b>: لِلمُوافِقِ تُرسَمُ الاستِمارَةُ إلى البابِ وحُقولُها الأَربَعَة؛ ولِغَيرِه لا استِمارَةَ بَل تَحويلٌ
@@ -443,7 +455,11 @@ public class LiveStudioStoreCreateProofTests(ITestOutputHelper output)
                 Assert.Contains(field, consented, StringComparison.Ordinal);
             Assert.DoesNotContain(StudioStoreCreate.ConsentPage, consented, StringComparison.Ordinal);
             Assert.Equal(0, Forms(unconsented));
-            Assert.Contains($"location.replace('{StudioStoreCreate.ConsentPage}')", unconsented, StringComparison.Ordinal);
+            // ‏(‏2026-11-07، W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ: الصَفحَةُ تَحمِلُ `location.replace('/studio/consent?returnUrl=/studio/new')` — والتَحويلُ صارَ مِن الخادِم.
+            Assert.Equal("→ " + StudioStoreCreate.ConsentPage, unconsented);
+            var anonymous = await RenderNewStoreAsync(host, null);
+            output.WriteLine($"[live] زائِر: {anonymous}");
+            Assert.Equal("→ /studio/auth", anonymous);
         }
         finally { await CleanAsync(host, yes); await CleanAsync(host, no); }
     }
