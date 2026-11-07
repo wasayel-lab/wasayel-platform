@@ -185,7 +185,9 @@ public class StudioAnalysisRetiredTests(ITestOutputHelper output)
     [InlineData("StudioAnalysisDoor")]
     [InlineData("StudioRefineWait")]
     [InlineData("@page \"/studio/ideas\"")]
-    [InlineData("\"/studio/ideas\"")]
+    // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2D-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا صَفُّ `"\"/studio/ideas\""` — «صِفرُ مَوضِع».
+    // وصارَ المَسارُ تَحويلاً إلى `/studio` (كانَ 404 فارِغاً لِمَن حَفِظَه مِن شَريطِ كُلِّ صَفحَة)، فَانتَقَلَ الصَفُّ بِشَرطٍ أَضيَقَ إلى
+    // `RetiredStudioRouteTests.A_retired_route_lives_in_one_source_place_and_that_place_is_its_redirect`: مَوضِعٌ واحِدٌ هُوَ التَحويل، ولا رابِطَ ولا صَفحَة.
     public void A_retired_name_lives_in_no_source(string name)
     {
         var hits = Sources().Where(s => s.Code.Contains(name, StringComparison.Ordinal)).Select(s => s.File).ToList();

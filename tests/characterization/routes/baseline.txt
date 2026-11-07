@@ -10,6 +10,7 @@ GET    /admin/monitor                                200   text/html; charset=ut
 GET    /studio                                       200   text/html; charset=utf-8          30268
 GET    /studio/new                                   200   text/html; charset=utf-8          30459
 GET    /studio/auth                                  200   text/html; charset=utf-8          31278
+GET    /studio/ideas                                 302   —                                0
 GET    /favicon.ico                                  200   text/html; charset=utf-8          30331
 GET    /ashare                                       200   text/html; charset=utf-8          35958
 GET    /ashare/explore                               200   text/html; charset=utf-8          58446
@@ -27,4 +28,4 @@ POST   /ashare/auth/phone/login                      302                       
 POST   /lang/ar                                      302                                     0
 POST   /studio/apps/create                           302   —                                0
 ──────────────────────────────────────────────────────────────────────────────────────────────────────
-المَسارات المَوصوفَة: 26
+المَسارات المَوصوفَة: 27

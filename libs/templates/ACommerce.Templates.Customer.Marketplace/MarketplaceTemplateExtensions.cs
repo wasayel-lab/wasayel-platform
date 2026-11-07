@@ -3011,6 +3011,11 @@ public static class MarketplaceTemplateExtensions
         // تَصدير دِراسَة Excel — يَتَطَلَّب tier فيه AllowExport.
         // ‏(‏2026-11-07، W13-1·٥ — ADR-049 §٢) تَصديرٌ لِبَياناتِ صاحِبِ الدِراسَةِ القَديمَةِ قِراءَةً — يَقرَؤُها مِن `StudioQueries` لا مِن خِدمَةِ التَحليل،
         // فَلا نُقطَةَ استوديو تَبلُغُ خِدمَةً تُنادي نَموذَجاً (`StudioAnalysisRetiredTests`).
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2D-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `/studio/ideas` كانَ مَدخَلَ «أَفكاري وتَحاليلي» في شَريطِ
+        // كُلِّ صَفحَةِ استوديو حَتّى W13-1·٥ (`@page` ثانٍ عَلى `StudioHome`)، فَهُوَ في تاريخِ المُتَصَفِّحاتِ وعَلاماتِها — وصارَ 404 بِجِسمٍ فارِغٍ تَرسُمُه صَفحَةُ خَطَإِ
+        // المُتَصَفِّحِ بِلا طَريقِ عَودَة. يُحَوَّلُ إلى اللَوحَة، ولا يَقرَأُ شَيئاً ولا يَكتُب.
+        app.MapGet("/studio/ideas", () => Results.Redirect("/studio"));
+
         app.MapGet("/studio/s/{id:guid}/export.xlsx", async (
             Guid id, HttpContext http,
             Services.Incubator.StudioAuth auth,
