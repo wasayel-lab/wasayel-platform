@@ -321,6 +321,8 @@ GUARDED_PAGES=(
   "studio-billing:studio:/studio/billing"
   "studio-new:studio:/studio/new"
   "studio-consent:studio:/studio/consent"
+  # ‏2026-11-07 (مُراجَعَةُ C1 · W13-1·F1) — **صُفوفُ analyze وrefine وexport تُثَبِّتُ غِيابَ اللافِتَة**: أَسبابٌ مُتَقاعِدَةٌ لا تَكتُبُها بَوّابَة
+  # (`StudioUpgradeReason.Drawn`)، فَلَقطَتُها صَفحَةُ /studio بِلا لافِتَةٍ بايتاً — وعَودَةُ لافِتَتِها تُحمِرُّها.
   "studio-upgrade-analyze:studio:/studio?upgrade=analyze"
   "studio-upgrade-refine:studio:/studio?upgrade=refine"
   # ‏2026-10-25 — **«stores» لَم يَكُن سَبَباً**: `StudioUpgradeReason.Stores` قيمَتُه `"build"`، فَكانَ هذا الصَفُّ (`?upgrade=stores`) يَلتَقِطُ

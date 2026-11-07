@@ -89,6 +89,40 @@ public class TierOrphanFieldsTests(ITestOutputHelper output)
         Assert.Equal(OrphanedUntilThePricingAdr.Length, OrphanedUntilThePricingAdr.Select(o => o.Member).Distinct().Count());
     }
 
+    // ─── ونُصوصُ الأَسبابِ المُتَقاعِدَةِ في القامُوس — يَتيمَةٌ مُثَبَّتَةٌ بِشَرطِ الرَفعِ نَفسِه (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1) ──────────────────────
+    //
+    // نافِذَةُ التَرقِيَةِ لا تَرسُمُ analyze/refine/export (`StudioUpgradeReason.Drawn`)، وفُروعُها في `TitleFor`/`MessageFor` باقِيَةٌ مُعجَماً مُغلَقاً لا تَبلُغُه
+    // صَفحَة — فَنُصوصُها يَتيمَة، ومَعَها جُملَةُ التَجَدُّدِ الَّتي لا تَتبَعُ إلّا حِصَّتَيِ الشَهر (وما زالَت الصَفحَتانِ تَحسِبانِ `RenewsOn` لِلافِتَةٍ لا تَقرَؤُه).
+    // **وشَرطُ رَفعِها ADR التَسعير (W13-2)** — تُحذَفُ مَعَ حُقولِها مَرَّةً واحِدَة؛ والقائِمَةُ تَتَقَلَّصُ ولا تَنمو.
+
+    internal static readonly string[] RetiredReasonKeysUntilThePricingAdr =
+    [
+        "upgrade.title.analyze", "upgrade.msg.analyze", "upgrade.title.refine", "upgrade.msg.refine",
+        "upgrade.msg.export", "upgrade.msg.export_not_included", "upgrade.next.renews_on",
+    ];
+
+    [Fact]
+    public async Task The_retired_reason_texts_stay_in_the_dictionary_and_no_banner_draws_them()
+    {
+        Assert.True(RetiredReasonKeysUntilThePricingAdr.Length <= 7, "القائِمَةُ نَمَت — نَصٌّ يَتيمٌ جَديدٌ يُقَرَّرُ في مُراجَعَة.");
+        var reasons = StudioUpgradeReason.All.Append(UpgradePromptLiveReasonsCharacterizationTests.UnknownReason).ToList();
+        var banners = new List<string>();
+        foreach (var reason in reasons)
+            foreach (var tier in TierCatalog.All.Keys)
+                banners.Add(System.Net.WebUtility.HtmlDecode(await UpgradePromptNextStepTests.Render(reason, tier, "2026-11-18")));
+        var drawn = new List<string>();
+        foreach (var key in RetiredReasonKeysUntilThePricingAdr)
+        {
+            var text = ACommerce.Platform.I18n.LocaleCatalog.Find(ACommerce.Platform.I18n.LocaleCatalog.Arabic, key);
+            Assert.False(string.IsNullOrWhiteSpace(text), $"«{key}» غائِبٌ مِن القامُوس — يُرفَعُ مِن القائِمَةِ بِسَبَبِه.");
+            var probe = text!.Split("{0}")[0].Trim();
+            if (banners.Any(b => b.Contains(probe, StringComparison.Ordinal))) drawn.Add(key);
+        }
+        output.WriteLine($"نُصوصُ الأَسبابِ المُتَقاعِدَة: {RetiredReasonKeysUntilThePricingAdr.Length} · لافِتاتٌ مَرسومَة {banners.Count} ({reasons.Count} أَسبابٍ × {TierCatalog.All.Count} دَرَجات) · مَرسومٌ مِنها {drawn.Count}");
+        Assert.True(banners.Count >= 20 && banners.Count(b => b.Trim().Length > 0) >= 8, $"أَداةٌ عَمياء: {banners.Count} لافِتَة.");
+        Assert.True(drawn.Count == 0, "نَصٌّ يَتيمٌ تَرسُمُه لافِتَة — فَلَيسَ يَتيماً: " + string.Join("، ", drawn));
+    }
+
     /// <summary>صَفحَةُ الباقَةِ وسَطرُ الشَريطِ يَعرِضانِ المَتاجِرَ وَحدَها — بِمِفتاحِ «‏{0}/{1} مَتجَر» ذي العَنصَرَين.</summary>
     [Fact]
     public void The_billing_page_and_the_sidebar_show_the_store_limit_only()

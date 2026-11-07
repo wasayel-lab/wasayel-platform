@@ -283,6 +283,19 @@ public static class StudioUpgradeReason
 
     public static readonly IReadOnlyList<string> All =
         new[] { Analyses, Refines, Stores, Export };
+
+    /// <summary>
+    /// <para><b>الأَسبابُ المُتَقاعِدَة — لا تُرسَمُ لافِتَتُها</b> (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — ADR-049 §٧). لا بَوّابَةَ تَكتُبُها بَعدَ أَن خَرَجَ
+    /// التَحليلُ مِن الرِحلَةِ (·٥) وصارَ تَصديرُ الدِراسَةِ القَديمَةِ بِلا شَرطِ باقَة (·٧)، فَلا تُبلَغُ إلّا بِرابِطٍ قَديمٍ أَو مَصنوع — وكانَت تَقولُ
+    /// «بَلَغتَ حَدّ تَحاليل هذا الشَّهر» لِمَن لا تَحليلَ لَه، و«تَصديرُ الدِراسَةِ غَيرُ مَشمولٍ في باقَتِك» وهُوَ مَشمول.</para>
+    /// <para><b>وتَبقى رُموزُها ونُصوصُها</b> يَتيمَةً مُثَبَّتَةً في <c>TierOrphanFieldsTests</c> حَتّى ADR التَسعير (W13-2) — يُعادُ فيه تَشكيلُ الدَرَجاتِ مَرَّةً واحِدَة.</para>
+    /// </summary>
+    public static readonly IReadOnlyList<string> Retired =
+        new[] { Analyses, Refines, Export };
+
+    /// <summary>أَتُرسَمُ لافِتَةٌ لِهذا السَبَب؟ — الغائِبُ والفارِغُ والمُتَقاعِدُ لا. والسُؤالُ الوَحيدُ الَّذي يَسأَلُه <c>UpgradePrompt</c> قَبلَ أَن يَرسُم.</summary>
+    public static bool Drawn(string? reason)
+        => !string.IsNullOrEmpty(reason) && !Retired.Contains(reason, StringComparer.Ordinal);
 }
 
 /// <summary>

@@ -49,7 +49,7 @@ public class UpgradePromptPriceTests
         return WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
     }
 
-    private static string Prompt() => Code(
+    internal static string Prompt() => Code(
         "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "UpgradePrompt.razor");
 
     /// <summary>شُروطُ كُلِّ <c>if (…) { … }</c> تَحوي كُتلَتُه <paramref name="index"/> — مِن الخارِجِ إلى الداخِل، بِمُوازَنَةِ
@@ -101,7 +101,9 @@ public class UpgradePromptPriceTests
         var razor = Prompt();
         Assert.Single(Regex.Matches(razor, "MonthlyPriceSar"));
 
-        var expected = new[] { "!string.IsNullOrEmpty(Reason)", "Offer is not null" };
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) شَرطُ اللافِتَةِ صارَ `StudioUpgradeReason.Drawn(Reason)` — الغائِبُ والفارِغُ
+        // كَما كانا، والمُتَقاعِدُ (analyze/refine/export) لا يُرسَم؛ وكانَ «!string.IsNullOrEmpty(Reason)». وشَرطُ العَرضِ داخِلَه بِحَرفِه.
+        var expected = new[] { "StudioUpgradeReason.Drawn(Reason)", "Offer is not null" };
         foreach (var marker in new[] { "BenefitsFor(", "href=\"/studio/billing\"", "MonthlyPriceSar" })
             Assert.Equal(expected, EnclosingIfConditions(razor, razor.IndexOf(marker, StringComparison.Ordinal)));
 
@@ -153,15 +155,17 @@ public class UpgradePromptPriceTests
     /// <summary><b>وعُنوانُ الحَدِّ ورِسالَتُه يُرسَمانِ لِكُلِّ سَبَبٍ أَيّاً كانَ المَعروض</b> — تَحتَ شَرطِ <c>Reason</c> وَحدَه، فَإخفاءُ
     /// العَرضِ لا يُسقِطُ اللافِتَة: مَن بَلَغَ حَدَّه يُقالُ لَه ذلك ولو لَم يُبَع لَه شَيء (‏<c>UpgradeLadderTests</c>: «بَلَغتَ حَدَّك» بِلا زِرِّ
     /// بَيع).</summary>
+    /// <para><b>قُلِبَ بِاسمِه (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1)</b> — كانَ <c>The_limit_title_and_message_render_for_every_reason_whatever_is_offered</c>
+    /// بِشَرطِ <c>!string.IsNullOrEmpty(Reason)</c>. والسَبَبُ المُتَقاعِدُ لا تُرسَمُ لَه لافِتَة، فَالشَرطُ <c>StudioUpgradeReason.Drawn(Reason)</c> وَحدَه.</para>
     [Fact]
-    public void The_limit_title_and_message_render_for_every_reason_whatever_is_offered()
+    public void The_limit_title_and_message_render_for_every_drawn_reason_whatever_is_offered()
     {
         var razor = Prompt();
         foreach (var marker in new[] { "@TitleFor(Reason)", "@MessageFor(Reason)" })
         {
             var at = razor.IndexOf(marker, StringComparison.Ordinal);
             Assert.True(at > 0, $"«{marker}» غَيرُ مَرسومٍ في اللافِتَة.");
-            Assert.Equal(new[] { "!string.IsNullOrEmpty(Reason)" }, EnclosingIfConditions(razor, at));
+            Assert.Equal(new[] { "StudioUpgradeReason.Drawn(Reason)" }, EnclosingIfConditions(razor, at));
         }
     }
 
@@ -223,7 +227,10 @@ public class UpgradePromptPriceTests
 
         var compared = 0;
         var differ = new List<string>();
-        foreach (var reason in StudioUpgradeReason.All)
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الأَسبابُ المَرسومَةُ وَحدَها ومَعَها السَبَبُ المَجهول (فَرعُ الافتِراض): المُتَقاعِدُ
+        // لا لافِتَةَ لَه أَصلاً (`UpgradePromptRetiredReasonsTests`)، وكانَت الحَلقَةُ عَلى `StudioUpgradeReason.All`.
+        var reasons = StudioUpgradeReason.All.Where(StudioUpgradeReason.Drawn).Append(UpgradePromptLiveReasonsCharacterizationTests.UnknownReason).ToList();
+        foreach (var reason in reasons)
         {
             var none = await Render(noWider[0], reason);
             Assert.True(none.Length > 300 && none.Contains("<strong", StringComparison.Ordinal),
@@ -240,7 +247,7 @@ public class UpgradePromptPriceTests
                 differ.Add($"{tier}/{reason}: {drawn.Length} ≠ {none.Length} حَرفاً، أَوَّلُ فَرقٍ عِندَ {at}");
             }
         }
-        Assert.True(compared >= 3 * StudioUpgradeReason.All.Count,
+        Assert.True(compared >= 3 * reasons.Count,
             $"أَداةٌ عَمياء: قورِنَت {compared} لافِتَةً بِلافِتَةِ «لا أَوسَع».");
         Assert.True(differ.Count == 0,
             $"قورِنَت {compared} لافِتَةً، وتَختَلِفُ عَن لافِتَةِ «لا أَوسَع» {differ.Count}:\n  " + string.Join("\n  ", differ));

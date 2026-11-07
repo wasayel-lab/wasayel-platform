@@ -46,7 +46,8 @@ public class UpgradePromptNextStepTests(ITestOutputHelper output)
     public async Task The_banner_takes_the_renewal_date_from_its_page_and_the_two_next_step_keys_exist()
     {
         var parameters = PromptParameters();
-        var all = await UpgradePromptTextsCharacterizationTests.RenderAll();
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) اللافِتاتُ المَرسومَةُ وَحدَها: السَبَبُ المُتَقاعِدُ لا يَرسُمُ شَيئاً فَلا رِسالَةَ تُقرَأ.
+        var all = (await UpgradePromptTextsCharacterizationTests.RenderAll()).Where(b => b.Html.Trim().Length > 0).ToList();
         var withStep = all.Count(b =>
         {
             var m = UpgradePromptTextsCharacterizationTests.MessageOf(b.Html);
@@ -101,25 +102,34 @@ public class UpgradePromptNextStepTests(ITestOutputHelper output)
         Assert.Null(StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)));
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1)</b> — كانَ <c>The_renewal_date_follows_the_monthly_quotas_only</c>: صَفّا analyze وrefine
+    /// يُتبِعانِ الحَدَّ بِـ«تَتَجَدَّدُ حِصَّتُكَ في 2026-11-18.»، وbuild بِلا مَوعِد، وexport «غَيرُ مَشمولٍ في باقَتِك.». والحِصَّتانِ الشَهرِيَّتانِ خَرَجَتا مِن الرِحلَة
+    /// (·٥) والتَصديرُ بِلا باقَة (·٧) — فَالمُتَقاعِدُ لا يَرسُمُ شَيئاً ولَو أُعطِيَ مَوعِداً، ولافِتَةُ build تَقولُ الحَدَّ بِلا مَوعِد. وجُملَةُ التَجَدُّدِ في القامُوسِ
+    /// يَتيمَةٌ مُثَبَّتَةٌ في <c>TierOrphanFieldsTests</c> حَتّى ADR التَسعير.</summary>
     [Theory]
-    [InlineData(StudioUpgradeReason.Analyses, "عَدَدُ التَحاليلِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر. تَتَجَدَّدُ حِصَّتُكَ في 2026-11-18.")]
-    [InlineData(StudioUpgradeReason.Refines,  "عَدَدُ التَحسيناتِ في باقَتِكَ مَحدودٌ لِكُلِّ شَهر. تَتَجَدَّدُ حِصَّتُكَ في 2026-11-18.")]
+    [InlineData(StudioUpgradeReason.Analyses, "")]
+    [InlineData(StudioUpgradeReason.Refines,  "")]
     [InlineData(StudioUpgradeReason.Stores,   "عَدَدُ التَطبيقاتِ في باقَتِكَ مَحدود.")]
-    [InlineData(StudioUpgradeReason.Export,   "تَصديرُ الدِراسَةِ غَيرُ مَشمولٍ في باقَتِك.")]
-    public async Task The_renewal_date_follows_the_monthly_quotas_only(string reason, string message)
+    [InlineData(StudioUpgradeReason.Export,   "")]
+    public async Task No_drawn_banner_carries_a_renewal_date_and_a_retired_reason_draws_nothing(string reason, string message)
     {
         Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
         foreach (var tier in TierCatalog.All.Keys)
-            Assert.Equal(message, UpgradePromptTextsCharacterizationTests.MessageOf(await Render(reason, tier, "2026-11-18")));
+        {
+            var html = await Render(reason, tier, "2026-11-18");
+            if (message.Length == 0) Assert.Equal("", html.Trim());
+            else Assert.Equal(message, UpgradePromptTextsCharacterizationTests.MessageOf(html));
+        }
     }
 
     /// <summary>عُنوانُ الميزَةِ ورِسالَةُ التَصديرِ بِلا «تَرقِيَة» حينَ لا عَرض — و«الترقية» تَبقى مِفتاحَها لِيَومِ البَيع.</summary>
     [Fact]
     public async Task Without_a_self_purchasable_tier_the_feature_banner_says_not_included_not_upgrade()
     {
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1) لافِتَةُ «الميزَة» يَرسُمُها السَبَبُ المَجهولُ وَحدَه بَعدَ أَن كَفَّ التَصديرُ عَن الرَسم — الفَرعُ نَفسُه في `TitleFor`؛ وكانَت تُقرَأُ مِن `Export`.
         foreach (var tier in TierCatalog.All.Keys)
         {
-            var html = await Render(StudioUpgradeReason.Export, tier, null);
+            var html = await Render(UpgradePromptLiveReasonsCharacterizationTests.UnknownReason, tier, null);
             Assert.Equal("هذِه الميزَةُ غَيرُ مَشمولَةٍ في باقَتِك", UpgradePromptTextsCharacterizationTests.TitleOf(html));
             Assert.DoesNotContain("تَرقيَة", html, StringComparison.Ordinal);
             Assert.DoesNotContain("الأَعلى", html, StringComparison.Ordinal);
