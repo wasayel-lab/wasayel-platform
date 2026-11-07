@@ -380,8 +380,8 @@ public sealed class SubdomainTenancyOptions
 /// </summary>
 public sealed class SubdomainTenantPathMiddleware
 {
-    public const string HostSlugItem = "acommerce.tenant.host-slug";
-    public const string OriginalPathItem = "acommerce.tenant.original-path";
+    public const string HostSlugItem = StoreHostItems.Slug;             // ‏(‏2026-11-07، W13-4·C2a·6) قُرّاؤُهُما في القالِبِ والعُدَّة
+    public const string OriginalPathItem = StoreHostItems.OriginalPath;
 
     private readonly RequestDelegate _next;
     private readonly SubdomainTenancyOptions _options;

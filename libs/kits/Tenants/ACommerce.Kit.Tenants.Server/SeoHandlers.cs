@@ -45,6 +45,21 @@ public static class SeoHandlers
         // وَثيقَة Tenant مُسَجَّلَة SingleTenanted (عامَّة) — جَلسَة بِلا
         // مُستَأجِر هي الصَحيحَة هُنا، كَما في TenantResolverMiddleware.
         await using var session = store.QuerySession();
+
+        // ‏(‏2026-11-07، ADR-050 §٩ · W13-4·C2a·6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) عَلى مُضيفِ المَتجَرِ خَريطَتُه وَحدَه بِعَناوينِه النَظيفَة: كانَت هذِه
+        // الخَريطَةُ نَفسُها تُخدَمُ عَلى كُلِّ مُضيفٍ فَتَسرُدُ كُلَّ مَتجَرٍ بِمَسارِه تَحتَ مُضيفِ غَيرِه. والمَتجَرُ مِن الحاقِن (`StoreHostItems.Slug`)، وبِلا نِطاقٍ
+        // مُهَيَّإٍ لا يُكتَبُ أَبَداً فَلا يَتَغَيَّرُ هذا الفَرع.
+        if (context.Items[StoreHostItems.Slug] is string hostSlug)
+        {
+            IReadOnlyList<Tenant> own = await session.LoadAsync<Tenant>(hostSlug, context.RequestAborted) is { } t ? [t] : [];
+            if (own.Count > 0 && context.RequestServices.GetService(typeof(ITenantShowcase)) is ITenantShowcase hostShowcase)
+                own = await hostShowcase.ShowcaseAsync(own, context.RequestAborted);
+            context.Response.ContentType = "application/xml; charset=utf-8";
+            await context.Response.WriteAsync(
+                SeoDocuments.BuildSitemapXml(SeoDocuments.StoreHostEntries(own.FirstOrDefault(), BaseUrlOf(context))), context.RequestAborted);
+            return;
+        }
+
         IReadOnlyList<Tenant> tenants = await session.Query<Tenant>()
             .Take(5000).ToListAsync(context.RequestAborted);
         // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واجِهَةُ المَنَصَّةِ لا كُلُّ مُستَأجِر: كانَ كُلُّ مَتجَرٍ يُنشِئُه

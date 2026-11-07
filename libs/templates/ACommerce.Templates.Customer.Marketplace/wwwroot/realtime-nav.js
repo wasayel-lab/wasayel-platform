@@ -21,12 +21,15 @@
   if (!slug) return;
 
   // ═══ ١) إشعارُ القِراءَة — بَعدَ التَصيير، لا داخِلَ الطَلَب ═══
-  // المَسارانِ بِفَرعَيهِما: `/{slug}/…` و`/{slug}/r/{role}/…`.
+  // المَسارانِ بِفَرعَيهِما: `/{slug}/…` و`/{slug}/r/{role}/…` — وعَلى مُضيفِ المَتجَرِ (‏ADR-050، W13-4·C2a·6) قَد يَغيبُ `/{slug}` مِن العُنوان.
+  // فَيُنزَعُ مَقطَعُ المَتجَرِ الَّذي سَمّاه الخادِمُ إن حَمَلَه المَسار، ولا يُستَخرَجُ السلاجُ مِن المَسارِ أَبَداً: كانَ النَمَطُ يَفتَرِضُ مَقطَعاً أَوَّلَ
+  // أَيّاً كانَ، فَلا يُرسَلُ إشعارُ القِراءَةِ عَلى `ashare.R/chats/{id}`.
   const path = window.location.pathname;
-  const chat = path.match(/^\/[^\/]+(?:\/r\/[^\/]+)?\/chats\/([0-9a-fA-F-]{36})\/?$/);
+  const rel = path.replace(new RegExp('^/' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=/|$)', 'i'), '');
+  const chat = rel.match(/^(?:\/r\/[^\/]+)?\/chats\/([0-9a-fA-F-]{36})\/?$/);
   if (chat) {
     markRead(`/${slug}/chats/${chat[1]}/read`);
-  } else if (/^\/[^\/]+(?:\/r\/[^\/]+)?\/notifications\/?$/.test(path)) {
+  } else if (/^(?:\/r\/[^\/]+)?\/notifications\/?$/.test(rel)) {
     markRead(`/${slug}/notifications/read`);
   }
 

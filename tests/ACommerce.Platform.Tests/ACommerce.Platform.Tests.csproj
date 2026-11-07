@@ -55,6 +55,9 @@
          بِأَشكالِها — فَلا رَمزَ حَقيقيّاً ولا نِداءَ شَبَكَة. مَرجِعٌ صَريحٌ لا مُتَوارَث،
          بِحُجَّةِ مَرجِعِ Compliance أَعلاه. -->
     <ProjectReference Include="..\..\libs\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
+    <!-- خَريطَةُ مَوقِعِ مُضيفِ المَتجَر (‏ADR-050، W13-4·C2a·6 — G13): المُعالِجُ نَفسُه (`SeoHandlers.Sitemap`) يُشَغَّلُ بِسِياقِ طَلَبٍ ومَخزَنٍ
+         في الذاكِرَة، لا دالَّتُه النَقِيَّةُ وَحدَها — فَفَرعُ المُضيفِ مَقيسٌ حَيثُ يُتَّخَذ. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Tenants\ACommerce.Kit.Tenants.Server\ACommerce.Kit.Tenants.Server.csproj" />
   </ItemGroup>
 
 </Project>
