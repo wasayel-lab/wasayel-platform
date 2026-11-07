@@ -105,6 +105,34 @@ public class StoreHostRequestTests(ITestOutputHelper output)
         Assert.All(a.Location!, c => Assert.True(c is > ' ' and < (char)0x7F, $"مَحرَفٌ لا يَحمِلُه رَأس: U+{(int)c:X4}"));
     }
 
+    /// <summary><b>G6 — إدارَةُ مَتجَرِ المُضيفِ عَلى مُضيفِه</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01): <c>/admin/tenants/{مَتجَرِ المُضيف}</c>
+    /// وما تَحتَه يَمُرُّ كَما هُوَ لِكُلِّ طَريقَة — كانَ 301 إلى الجَذرِ حَيثُ لا يُرسَلُ كوكيُّ المَتجَرِ فَتَصيرُ بِطاقاتُ <c>/manage</c> السِتُّ «غَير مُصَرَّح».
+    /// وما سِواه في مَنطِقَةِ المَنَصَّةِ مُثَبَّتٌ في <c>StoreHostAdminAreaCharacterizationTests</c>.</summary>
+    [Theory]
+    [InlineData("GET", "/admin/tenants/ashare")]
+    [InlineData("GET", "/admin/tenants/ashare/")]
+    [InlineData("GET", "/admin/tenants/ashare/categories")]
+    [InlineData("HEAD", "/admin/tenants/ashare/users")]
+    [InlineData("GET", "/Admin/Tenants/ASHARE/roles")]
+    [InlineData("POST", "/admin/tenants/ashare/categories/save")]
+    [InlineData("POST", "/admin/tenants/ashare/users/0f8fad5b-d9cb-469f-a165-70867728950e/grant-admin")]
+    public void The_host_store_admin_pages_pass_on_their_own_host(string method, string path)
+        => Assert.Equal("Pass|ashare|", Show(TenantResolverMiddleware.AnswerStoreHost("ashare.example.test", Base, method, path, "?from=tenant", "https")));
+
+    /// <summary>مَنطِقَةُ المَنَصَّةِ لا تَحمِلُ سِياقَ مَتجَرٍ عَلى أَيِّ مُضيف — وما سِواها يَحمِلُه.</summary>
+    [Theory]
+    [InlineData("/admin/tenants/ashare/categories", false)]
+    [InlineData("/admin", false)]
+    [InlineData("/studio/apps/ashare", false)]
+    [InlineData("/ashare/admin", true)]
+    [InlineData("/ashare/explore", true)]
+    [InlineData("/api/ashare/manifest.json", true)]
+    [InlineData("/sw.js", true)]
+    [InlineData("/", true)]
+    [InlineData(null, true)]
+    public void A_platform_area_path_carries_no_store_context(string? path, bool carries)
+        => Assert.Equal(carries, TenantResolverMiddleware.CarriesStoreContext(path));
+
     /// <summary>والمَنفَذُ أَرقامٌ وَحدَها — وما سِواه لا يُنقَلُ إلى الوِجهَة.</summary>
     [Theory]
     [InlineData("ashare.example.test:5050", "https://example.test:5050/studio")]
@@ -209,7 +237,7 @@ file sealed class StoreHostPipeline : IAsyncDisposable
             app.Urls.Add($"http://127.0.0.1:{port}");
             app.UseSubdomainTenantPath();
             app.UsePlatformMultiTenancy();
-            app.Run(ctx => ctx.Response.WriteAsync($"{ctx.Request.Path}|{ctx.Items[SubdomainTenantPathMiddleware.OriginalPathItem]}"));
+            app.Run(ctx => ctx.Response.WriteAsync($"{ctx.Request.Path}|{ctx.Items[SubdomainTenantPathMiddleware.OriginalPathItem]}|{ctx.Items[ACommerce.Platform.Shared.TenantKeys.Slug]}"));
             try { await app.StartAsync(); }
             catch (IOException) when (attempt < 5) { await app.DisposeAsync(); continue; }
             return new StoreHostPipeline(app, new HttpClient(new HttpClientHandler { AllowAutoRedirect = false })
@@ -249,16 +277,40 @@ public class StoreHostPipelineTests(ITestOutputHelper output)
         await using var p = await StoreHostPipeline.StartAsync("example.test", world.Store);
         var rows = new (string Method, string Host, string Path, int Status, string Location, string Body)[]
         {
-            ("GET", "ashare.example.test", "/listings", 200, "", "/ashare/listings|/listings"),
-            ("GET", "ashare.example.test", "/", 200, "", "/ashare|/"),
+            ("GET", "ashare.example.test", "/listings", 200, "", "/ashare/listings|/listings|ashare"),
+            ("GET", "ashare.example.test", "/", 200, "", "/ashare|/|ashare"),
             ("GET", "ashare.example.test", "/studio?from=store", 301, "http://example.test/studio?from=store", ""),
             ("POST", "ashare.example.test", "/studio/apps/create", 404, "", ""),
             ("GET", "ashare.example.test", "/api/ejar/unread-counts", 404, "", ""),
             ("GET", "ashare-vendor.example.test", "/", 404, "", ""),
             ("GET", "vendor.ashare.example.test", "/", 404, "", ""),
             ("GET", "nosuch.example.test", "/", 404, "", ""),
-            ("GET", "example.test", "/nosuch", 200, "", "/nosuch|"),
-            ("GET", "www.example.test", "/", 200, "", "/|"),
+            ("GET", "example.test", "/nosuch", 200, "", "/nosuch||"),
+            ("GET", "www.example.test", "/", 200, "", "/||"),
+        };
+        foreach (var r in rows)
+        {
+            var (status, location, body) = await p.SendAsync(r.Method, r.Host, r.Path);
+            output.WriteLine($"{r.Method} {r.Host}{r.Path} ⇒ {status} {location}{body}");
+            Assert.Equal((r.Status, r.Location, r.Body), (status, location, body));
+        }
+        output.WriteLine($"الصُفوف: {rows.Length}");
+    }
+
+    /// <summary><b>إدارَةُ مَتجَرِ المُضيفِ بِالوَسيطَينِ الحَقيقِيَّين</b> (‏2026-11-07، C2a-P-01): تَبلُغُ الطَرَفَ عَلى مُضيفِها بِمَسارِها كَما هُوَ وبِلا سِياقِ مَتجَرٍ
+    /// (كَالجَذر — قِشرَةُ المَنَصَّة، ولا قُفلَ المُعَلَّق)، والكِتابَةُ إلَيها كَذلك؛ ومَتجَرٌ صالِحُ الاسمِ بِلا وَثيقَةٍ يَبقى 404 عَلى مُضيفِه.</summary>
+    [Fact]
+    public async Task The_host_store_admin_reaches_the_endpoint_on_its_own_host_without_a_store_context()
+    {
+        var world = new DocWorld().Put(new Tenant { Id = "ashare", Name = "عَشير" });
+        await using var p = await StoreHostPipeline.StartAsync("example.test", world.Store);
+        var rows = new (string Method, string Host, string Path, int Status, string Location, string Body)[]
+        {
+            ("GET",  "ashare.example.test", "/admin/tenants/ashare/categories?from=tenant", 200, "", "/admin/tenants/ashare/categories|/admin/tenants/ashare/categories|"),
+            ("POST", "ashare.example.test", "/admin/tenants/ashare/categories/save", 200, "", "/admin/tenants/ashare/categories/save|/admin/tenants/ashare/categories/save|"),
+            ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 301, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
+            ("GET",  "nosuch.example.test", "/admin/tenants/nosuch/categories", 404, "", ""),
+            ("GET",  "ashare.example.test", "/explore", 200, "", "/ashare/explore|/explore|ashare"),
         };
         foreach (var r in rows)
         {

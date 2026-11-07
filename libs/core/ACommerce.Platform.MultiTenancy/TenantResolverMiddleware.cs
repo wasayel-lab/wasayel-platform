@@ -211,6 +211,10 @@ public sealed class TenantResolverMiddleware
 
         if (ReservedTenantSlugs.PlatformAreas.Contains(first))
         {
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدارَةُ مَتجَرِ المُضيفِ نَفسِه تُخدَمُ عَلى مُضيفِه كَما هي
+            // (GET وكِتابَة): بِطاقاتُ `/manage` السِتُّ تَقودُ إلَيها، و`TenantAdminGuard` يَقبَلُ كوكيَّ المَتجَرِ وهو مَقصورٌ عَلى مُضيفِه — فَالتَحويلُ إلى
+            // الجَذرِ كانَ يُسقِطُ الجَلسَةَ «غَير مُصَرَّح». ومَسارُ الإدارَةِ يَحمِلُ مَتجَرَ المُضيفِ نَفسَه، فَلا سِياقَ يَختَلِف؛ وما سِواه يَبقى 301/404.
+            if (IsHostStoreAdmin(path, slug)) return new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
             if (!HttpMethods.IsGet(method ?? "") && !HttpMethods.IsHead(method ?? "")) return StoreHostAnswer.NotFound;
             // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2/C2a-P-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن المَسارِ **مُرَمَّزاً** لا مَفكوكاً:
             // `path` هُنا `req.Path.Value` المَفكوك، فَكانَ `/studio/%D9%85` يُكتَبُ «م» في `Location` ← 500 (Kestrel يَرفُضُ ما خارِجَ ASCII ومَحارِفَ
@@ -231,6 +235,28 @@ public sealed class TenantResolverMiddleware
         return PathWithSlug(path, slug) is { } rewritten
             ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
             : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+    }
+
+    /// <summary><b>صَفَحاتُ إدارَةِ مَتجَرِ المُضيف</b> — <c>/admin/tenants/{slug}</c> أَو <c>/admin/tenants/{slug}/…</c> ومُعَرِّفُها مَتجَرُ المُضيفِ بِعَينِه
+    /// (‏2026-11-07، C2a-P-01). والمُقارَنَةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه، ولا بادِئَةَ تَكفي (<c>ashare-x</c> لَيسَ <c>ashare</c>).</summary>
+    private static bool IsHostStoreAdmin(string path, string slug)
+    {
+        var s = path.Split('/', 5);
+        return s.Length >= 4
+               && string.Equals(s[1], "admin", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(s[2], "tenants", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(s[3], slug, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary><b>أَيَحمِلُ هذا المَسارُ سِياقَ مَتجَرٍ عَلى مُضيفِه؟</b> لا لِمَنطِقَةِ المَنَصَّة: مَسارُها عَلى الجَذرِ بِلا سِياقِ مَتجَر (<see cref="SlugFromPath"/>
+    /// يَرُدُّ <c>admin</c> مَحجوزاً)، والمُضيفُ اسمٌ آخَرُ لِلمَسارِ نَفسِه — فَصَفحَةُ إدارَةِ المَتجَرِ عَلى مُضيفِه تُرسَمُ بِقِشرَةِ المَنَصَّةِ كَما عَلى الجَذر، ولا
+    /// يُصيبُها قُفلُ المَتجَرِ المُعَلَّقِ في <c>MainLayout</c> (‏2026-11-07، C2a-P-01).</summary>
+    public static bool CarriesStoreContext(string? path)
+    {
+        var p = string.IsNullOrEmpty(path) ? "/" : path;
+        var firstSlash = p.IndexOf('/', 1);
+        var first = p.Length < 2 ? "" : firstSlash > 0 ? p[1..firstSlash] : p[1..];
+        return !ReservedTenantSlugs.PlatformAreas.Contains(first);
     }
 
     /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
@@ -327,10 +353,15 @@ public sealed class TenantResolverMiddleware
                 _cache.Set(cacheKey, entity, TimeSpan.FromMinutes(5));
         }
 
+        // ‏(‏2026-11-07، C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مَنطِقَةُ المَنَصَّةِ عَلى مُضيفِ المَتجَرِ (إدارَتُه وَحدَها تَبلُغُ هُنا) بِلا سِياقِ مَتجَرٍ كَالجَذر؛
+        // والمَتجَرُ المَجهولُ عَلى مُضيفِه يَبقى 404.
         if (entity is not null)
-            ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
-                          entity.TagLine, entity.City,
-                          hasRoles: entity.Roles.Count > 0);
+        {
+            if (hostSlug is null || CarriesStoreContext(ctx.Request.Path.Value))
+                ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
+                              entity.TagLine, entity.City,
+                              hasRoles: entity.Roles.Count > 0);
+        }
         else if (hostSlug is not null)
         {
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;

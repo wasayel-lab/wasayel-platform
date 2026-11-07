@@ -15,6 +15,10 @@
 #   ./scripts/prove-store-hosts.sh                                     # STORE=ashare OTHER=ejar DOMAIN=localhost PORT=5050
 #   STORE=theme-demo OTHER=ashare ./scripts/prove-store-hosts.sh
 #   DIRECT=1 SCHEME=https PORT= DOMAIN=<R> STORE=<مَتجَر> OTHER=<آخَر> ./scripts/prove-store-hosts.sh   # بَعدَ النَشر: كُلُّ مُضيفٍ بِـDNS لا بِرَأسِ Host
+#   STORE=<مَتجَر> MANAGER_PHONE=<هاتِفُ مُديرِه> ./scripts/prove-store-hosts.sh   # ومَعَه المَجموعَةُ ٦: مُديرُ المَتجَرِ يَدخُلُ عَلى مُضيفِه ويَفتَحُ بِطاقَةَ /manage
+#
+#  ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المَجموعَةُ ٦ تَكتُبُ دُخولاً** (تَحَدّي الرَمزِ وجَلسَتُه) فَلا تَجري إلّا
+#  بِـ`MANAGER_PHONE` — هاتِفُ مُستَخدِمٍ لَه `tenant.manage` في `STORE` — وبِرَمزِ المُحاكي `DEV_CODE` (Development وَحدَه)؛ وبِلا هاتِفٍ تُطبَعُ «لَم تُفحَص» ولا تُعَدّ.
 #
 # ─── رُموزُ الخُروج ────────────────────────────────────────────────────
 #   0 — كُلُّ صَفٍّ كَما يَجِب.   1 — صَفٌّ واحِدٌ خالَف، أَو صِفرُ صَفٍّ مَفحوص (أَداةٌ عَمياء — القاعِدَة ١٠).   2 — الخادِمُ لا يُجيب.
@@ -27,6 +31,9 @@ SCHEME="${SCHEME:-http}"
 STORE="${STORE:-ashare}"
 OTHER="${OTHER:-ejar}"
 DIRECT="${DIRECT:-0}"             # 1 = يُطلَبُ كُلُّ مُضيفٍ بِاسمِه (DNS)، لا 127.0.0.1 بِرَأسِ Host
+MANAGER_PHONE="${MANAGER_PHONE:-}" # هاتِفُ مُديرٍ لِـSTORE — يُشَغِّلُ المَجموعَةَ ٦ (دُخولٌ بِرَمزِ المُحاكي)
+DEV_CODE="${DEV_CODE:-123456}"
+JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
 ADDR="$SCHEME://$(hp 127.0.0.1)"
 S="$(hp "$STORE.$DOMAIN")"        # مُضيفُ المَتجَر
@@ -43,13 +50,14 @@ row() {
   local out="$TMP/body"
   local verb=(-X "$method"); [ "$method" = HEAD ] && verb=(-I)   # ‏`-X HEAD` يَنتَظِرُ جِسماً لا يَأتي
   local args=(-s -m 20 -o "$out" -w '%{http_code}|%{redirect_url}' "${verb[@]}" -H "Host: $host")
+  local jar=(); [ -n "$JAR" ] && jar=(-b "$JAR"); args+=("${jar[@]}")
   [ "$method" = POST ] && args+=(-H 'Content-Type: application/x-www-form-urlencoded' --data '')
   local got; got="$(curl "${args[@]}" "$(url "$host" "$path")")" || got="000|"
   local code="${got%%|*}" redirect="${got#*|}" why=""
   [ "$code" = "$want" ] || why="الرَمز $code لا $want"
   if [ -z "$why" ] && [ "$loc" != "-" ]; then
     # curl يَحُلُّ الوِجهَةَ نِسبَةً إلى 127.0.0.1 — والمُقارَنَةُ بِالوِجهَةِ الكامِلَةِ مِن رَأسِ Location
-    redirect="$(curl -s -m 20 -o /dev/null -D - "${verb[@]}" -H "Host: $host" "$(url "$host" "$path")" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')"
+    redirect="$(curl -s -m 20 -o /dev/null -D - "${verb[@]}" "${jar[@]}" -H "Host: $host" "$(url "$host" "$path")" | tr -d '\r' | sed -n 's/^[Ll]ocation: //p')"
     [ "$redirect" = "$loc" ] || why="الوِجهَة «$redirect» لا «$loc»"
   fi
   for needle in "$@"; do
@@ -106,6 +114,27 @@ row GET  "$R" "/"                       200 - '"slug":""'
 row GET  "$(hp "www.$DOMAIN")" "/"        200 - '"slug":""'
 row GET  "$R" "/$STORE/explore"         200 - "<link rel=\"canonical\" href=\"$SCHEME://$R/$STORE/explore\" />" '"hostMode":false'
 row GET  "$(hp "$OTHER.$DOMAIN")" "/"     200 - "<link rel=\"canonical\" href=\"$SCHEME://$(hp "$OTHER.$DOMAIN")/\" />" "\"slug\":\"$OTHER\""
+
+echo "٦) مُديرُ المَتجَرِ عَلى مُضيفِه — يَدخُلُ ويَفتَحُ بِطاقاتِ /manage (كانَت 301 إلى الجَذرِ حَيثُ لا كَعكَتُه ← «غَير مُصَرَّح»)"
+if [ -n "$MANAGER_PHONE" ]; then
+  JAR="$TMP/jar"
+  # ‏signin <path> <want> [--data-urlencode …] — خُطوَةُ دُخولٍ تُعَدُّ صَفّاً
+  signin() {
+    local path="$1" want="$2"; shift 2
+    local code; code="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -c "$JAR" -b "$JAR" -H "Host: $S" "$@" "$(url "$S" "$path")")" || code=000
+    checked=$((checked + 1))
+    if [ "$code" = "$want" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$S" "$path" "$code"
+    else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا %s\n' POST "$S" "$path" "$code" "$want"; fi
+  }
+  signin "/auth/phone/login"  302 --data-urlencode "phone=$MANAGER_PHONE"
+  signin "/auth/phone/verify" 302 --data-urlencode "phone=$MANAGER_PHONE" --data-urlencode "code=$DEV_CODE"
+  row GET "$S" "/manage"                                   200 - "/admin/tenants/$STORE/categories?from=tenant"
+  row GET "$S" "/admin/tenants/$STORE/categories?from=tenant" 200 - "acm-wizard-title" "!auth-title"
+  row GET "$S" "/admin/tenants/$OTHER/categories?from=tenant" 301 "$SCHEME://$R/admin/tenants/$OTHER/categories?from=tenant"
+  JAR=""
+else
+  echo "  – لَم تُفحَص: MANAGER_PHONE غائِب (هاتِفُ مُديرٍ لِـ$STORE، وDevelopment لِرَمزِ المُحاكي)"
+fi
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
