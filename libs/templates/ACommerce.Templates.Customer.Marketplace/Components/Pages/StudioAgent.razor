@@ -222,9 +222,11 @@
 
     // ‏(‏2026-11-05، G2R1-1) كُلُّ مُعالِجٍ يَحجِزُ isWorking قَبلَ أَوَّلِ await ثُمَّ يَسأَلُ الجَلسَة، ويَفُكُّ الحَجزَ عَلى الرَفض — السُؤالُ قِراءَةُ Postgres، ونَقرَةٌ
     // ثانِيَةٌ تَصِلُ أَثناءَها كانَت تَرى العَلَمَ فارِغاً فَتَعبُر (نِداءا نَموذَجٍ وتَشغيلا أَداة). والتَخويلُ قَبلَ فَحصِ الرِسالَةِ الفارِغَة (القاعِدَة ٦).
+    // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والمُعالِجاتُ الأَربَعَةُ تَسأَلُ مِفتاحَ الوَكيلِ قَبلَ البابِ كَما يَسأَلُه فَرعُ الرَسم
+    // (‏ADR-049 §٦): كانَت تَسأَلُ البابَ وَحدَه، و`ApplyAsync` يَكتُبُ بِـ`Executor` — فَلَم يَكُن ما يَمنَعُ فِعلَها والمِفتاحُ مُطفَأٌ إلّا أَنّ أَزرارَها لا تُرسَم.
     async Task SendAsync()
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         var msg = newMessage?.Trim() ?? "";
         newMessage = "";
         isWorking = true;
@@ -245,7 +247,7 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
@@ -265,7 +267,7 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
@@ -278,7 +280,7 @@
 
     async Task ResetAsync()
     {
-        if (isWorking || _userId == Guid.Empty || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
+        if (isWorking || _userId == Guid.Empty || !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;
         isWorking = true;
         StateHasChanged();
         if (!await StillPlatformAdminAsync()) { isWorking = false; return; }

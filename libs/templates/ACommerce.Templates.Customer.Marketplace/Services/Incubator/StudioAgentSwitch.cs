@@ -15,6 +15,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 /// وكُلُّ رابِطٍ إلى <c>/admin/agent</c>، و<c>AgentService</c> نَفسُه قَبلَ نِداءِ الخَلفِيَّة — فَلا نِداءَ نَموذَجٍ مِن الوَكيلِ والمِفتاحُ مُطفَأ.</para>
 ///
 /// <para><b>ولا يَقرَأُ حالَةً مُخَزَّنَة</b> (القاعِدَة ٧): إعدادٌ يُقرَأُ مَرَّةً عِندَ التَركيب.</para>
+///
+/// <para>(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <c>StudioAgent</c> يَسأَلُه في فَرعِ الرَسمِ <b>وفي رَأسِ مُعالِجاتِه الأَربَعَة</b>
+/// (‏<c>SendAsync</c>/<c>ApplyAsync</c>/<c>RejectAsync</c>/<c>ResetAsync</c>) قَبلَ البابِ — كَما قالَ ADR-049 §٦؛ وكانَت تَسأَلُ البابَ وَحدَه. ويُقاسُ بِصَفٍّ في
+/// <c>StudioAgentSwitchTests</c>.</para>
 /// </summary>
 public sealed class StudioAgentSwitch(bool enabled)
 {

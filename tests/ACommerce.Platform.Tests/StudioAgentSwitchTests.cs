@@ -184,6 +184,48 @@ public class StudioAgentSwitchTests(ITestOutputHelper output)
         Assert.DoesNotContain("@onclick", branch, StringComparison.Ordinal);
     }
 
+    // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F3) **والمُعالِجاتُ الأَربَعَةُ تَسأَلُ المِفتاحَ قَبلَ الباب** — ADR-049 §٦ قالَها («الفرعُ المرسومُ ومعالجاتُه الأربعة
+    // قبلَ أيِّ نداء») والكودُ لَم يَكُن يَقولُها: كانَت تَسأَلُ البابَ وَحدَه، و`ApplyAsync` يَكتُبُ بِـ`Executor`. والماسِحُ يُقاسُ بِعَيِّناتٍ مَحقونَة.
+
+    internal static readonly string[] AgentPageHandlers = ["SendAsync", "ApplyAsync", "RejectAsync", "ResetAsync"];
+
+    /// <summary>أَوَّلُ عِبارَةٍ في جِسمِ المُعالِج <c>if (…) return;</c>، وفي شُقوقِ <c>||</c> العُليا لِشَرطِها <c>!AgentSwitch.Enabled</c> قَبلَ
+    /// <c>!StudioAgentDoor.Opens(</c> — لا بَعدَه، ولا مَربوطاً بِـ<c>&amp;&amp;</c>، ولا في عِبارَةٍ ثانِيَة.</summary>
+    internal static bool AsksTheSwitchBeforeTheDoor(string code, string handler)
+    {
+        var at = code.IndexOf($"async Task {handler}(", StringComparison.Ordinal);
+        if (at < 0) return false;
+        var body = code[(code.IndexOf('{', at) + 1)..].TrimStart();
+        var head = body[..(body.IndexOf(';') + 1)];
+        var m = Regex.Match(head, @"^if \((?<cond>.*)\) return;$", RegexOptions.Singleline);
+        if (!m.Success) return false;
+        var parts = m.Groups["cond"].Value.Split("||").Select(p => p.Trim()).ToList();
+        var sw = parts.IndexOf("!AgentSwitch.Enabled");
+        var door = parts.FindIndex(p => p.StartsWith("!StudioAgentDoor.Opens(", StringComparison.Ordinal));
+        return sw >= 0 && door > sw;
+    }
+
+    [Fact]
+    public void Every_studio_agent_handler_asks_the_switch_before_the_door()
+    {
+        var code = WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(Read($"{Template}/Components/Pages/StudioAgent.razor")));
+        var found = AgentPageHandlers.Where(h => code.Contains($"async Task {h}(", StringComparison.Ordinal)).ToList();
+        var asking = found.Where(h => AsksTheSwitchBeforeTheDoor(code, h)).ToList();
+        output.WriteLine($"مُعالِجاتُ /studio/agent: {found.Count} · تَسأَلُ المِفتاحَ قَبلَ الباب: {asking.Count} ({string.Join("، ", asking)})");
+        Assert.Equal(AgentPageHandlers.Length, found.Count);
+        Assert.Equal(found, asking);
+    }
+
+    [Theory]
+    [InlineData("    async Task SendAsync()\n    {\n        if (isWorking || !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n", true)]
+    [InlineData("    async Task SendAsync()\n    {\n        if (isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n", false)]
+    [InlineData("    async Task SendAsync()\n    {\n        if (isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin) || !AgentSwitch.Enabled) return;\n", false)]
+    [InlineData("    async Task SendAsync()\n    {\n        if (isWorking && !AgentSwitch.Enabled || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n", false)]
+    [InlineData("    async Task SendAsync()\n    {\n        if (isWorking || !StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin)) return;\n        if (!AgentSwitch.Enabled) return;\n", false)]
+    [InlineData("    async Task SendAsync()\n    {\n        if (!AgentSwitch.Enabled) isWorking = true;\n", false)]
+    public void The_handler_switch_scanner_goes_red_on_a_missing_late_or_weakened_switch(string sample, bool asks)
+        => Assert.Equal(asks, AsksTheSwitchBeforeTheDoor(sample, "SendAsync"));
+
     [Fact]
     public void The_admin_agent_page_draws_its_interactive_panel_only_while_the_switch_is_lit()
     {
