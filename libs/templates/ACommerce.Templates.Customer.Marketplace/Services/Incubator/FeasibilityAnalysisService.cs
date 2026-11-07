@@ -339,6 +339,8 @@ public sealed class FeasibilityAnalysisService
         // (المَقروءَةِ قَبلَ نِداءٍ يَبلُغُ 420 ثانِيَة) ثُمَّ يُكتَبُ فَوقَ `fresh` — فَتَحسينٌ آخَرُ لِقِسمٍ آخَرَ حُفِظَ في الأَثناءِ يَعودُ قَديماً
         // (تَوصيفُه `StudioRefineInterleaveTests`). والنافِذَةُ الباقِيَةُ بَينَ إعادَةِ القِراءَةِ والحِفظِ رِحلَةُ قاعِدَةٍ واحِدَة لا مُدَّةُ نِداء؛
         // وإغلاقُها كُلِّيّاً حَجزٌ أَو تَزامُنٌ تَفاؤُلِيٌّ (‏ADR-036) عَلى الدِراسَة — لَم يُكتَب (سِجِلُّ المالِكِ «أ» S16·٤).
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `StudioRefineInterleaveTests` حُذِفَ مَعَ نُقطَةِ التَحسينِ في `5ba4cac`،
+        // وهذِه الدالَّةُ بِلا مُنادٍ — يُثَبِّتُها `StudioAnalysisRetiredTests` يَتيمَةً بِشَرطِ رَفعِها (قَرارُ المالِكِ عَلى حاضِنَةِ المُشرِف)، فَالتَوصيفُ المُسَمّى أَعلاه غائِب.
         await using var session = _store.LightweightSession(IncubatorTenant);
         var fresh = await session.LoadAsync<IncubatorSession>(id, ct) ?? s;
         var merged = MergeSection(fresh.AnalysisJson ?? s.AnalysisJson, newJson, sectionKey);
