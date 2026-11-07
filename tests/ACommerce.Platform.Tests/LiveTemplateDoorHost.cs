@@ -87,27 +87,81 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         => PostFormWithCookieAsync(pattern, route,
             studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form);
 
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1) استِمارَةٌ مُتَعَدِّدَةُ الأَجزاءِ بِمِلَفّاتٍ وكوكيِّ الاستوديو — لِبابَي حِفظِ الـPWA:
+    /// نَوعُ كُلِّ مِلَفٍّ هُوَ رَأسُ جُزئِه كَما يُرسِلُه المُتَصَفِّح، والطَلَبُ فيما سِوى ذلكَ بِحَرفِ <see cref="PostStudioFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostStudioMultipartAsync(string pattern, IReadOnlyDictionary<string, string> route, string? studioToken,
+        (string Key, string Value)[] form, params (string Name, string FileName, string ContentType, byte[] Bytes)[] files)
+        => PostFormWithCookieAsync(pattern, route,
+            studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form, files);
+
+    /// <summary>‏(‏2026-11-07، SEC-C2a-1) بابُ <c>GET</c> بِنَمَطِ مَسارِه كَما سُجِّل — ويَرمي إن لَم يَكُن واحِداً.</summary>
+    public RouteEndpoint GetDoor(string pattern)
+    {
+        var found = _endpoints.Where(e => e.RoutePattern.RawText == pattern
+            && (e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("GET") ?? false)).ToList();
+        if (found.Count != 1) throw new InvalidOperationException($"بابُ GET «{pattern}»: {found.Count} نُقطَة — الأَداةُ عَمياء.");
+        return found[0];
+    }
+
+    /// <summary>‏(‏2026-11-07، SEC-C2a-1) طَلَبُ <c>GET</c> بِلا جَلسَة — يُعيدُ الحالَةَ ونَوعَ المُحتَوى والرُؤوسَ والبايتات كَما كَتَبَها البابُ نَفسُه.</summary>
+    public async Task<(int Status, string ContentType, IReadOnlyDictionary<string, string> Headers, byte[] Body)> GetAsync(
+        string pattern, IReadOnlyDictionary<string, string> route)
+    {
+        var door = GetDoor(pattern);
+        await using var scope = _app.Services.CreateAsyncScope();
+        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var accessor = scope.ServiceProvider.GetService<IHttpContextAccessor>();
+        if (accessor is not null) accessor.HttpContext = ctx;
+        ctx.Request.Method = "GET";
+        ctx.Request.Scheme = "http";
+        ctx.Request.Host = new HostString("localhost");
+        ctx.Request.Path = PathOf(door, route);
+        foreach (var (k, v) in route) ctx.Request.RouteValues[k] = v;
+        var body = new MemoryStream();
+        ctx.Response.Body = body;
+        ctx.SetEndpoint(door);
+        await door.RequestDelegate!(ctx);
+        return (ctx.Response.StatusCode, ctx.Response.ContentType ?? "",
+                ctx.Response.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase), body.ToArray());
+    }
+
+    private static string PathOf(RouteEndpoint door, IReadOnlyDictionary<string, string> route)
+        => "/" + string.Join('/', door.RoutePattern.PathSegments.Select(seg => string.Concat(seg.Parts.Select(p => p switch
+        {
+            Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart lit => lit.Content,
+            Microsoft.AspNetCore.Routing.Patterns.RoutePatternParameterPart par => route[par.Name],
+            _ => "",
+        }))));
+
     private async Task<(int Status, string Location)> PostFormWithCookieAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
-        (string Key, string Value)[] form)
+        (string Key, string Value)[] form, (string Name, string FileName, string ContentType, byte[] Bytes)[]? files = null)
     {
         var door = Door(pattern);
         await using var scope = _app.Services.CreateAsyncScope();
         var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
         var accessor = scope.ServiceProvider.GetService<IHttpContextAccessor>();
         if (accessor is not null) accessor.HttpContext = ctx;
-        var path = "/" + string.Join('/', door.RoutePattern.PathSegments.Select(seg => string.Concat(seg.Parts.Select(p => p switch
-        {
-            Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart lit => lit.Content,
-            Microsoft.AspNetCore.Routing.Patterns.RoutePatternParameterPart par => route[par.Name],
-            _ => "",
-        }))));
+        var path = PathOf(door, route);
         ctx.Request.Method = "POST";
         ctx.Request.Scheme = "http";
         ctx.Request.Host = new HostString("localhost");
         ctx.Request.Path = path;
         foreach (var (k, v) in route) ctx.Request.RouteValues[k] = v;
-        ctx.Request.ContentType = "application/x-www-form-urlencoded";
-        ctx.Request.Form = new FormCollection(form.ToDictionary(f => f.Key, f => new Microsoft.Extensions.Primitives.StringValues(f.Value)));
+        var fields = form.ToDictionary(f => f.Key, f => new Microsoft.Extensions.Primitives.StringValues(f.Value));
+        if (files is null)
+        {
+            ctx.Request.ContentType = "application/x-www-form-urlencoded";
+            ctx.Request.Form = new FormCollection(fields);
+        }
+        else
+        {
+            ctx.Request.ContentType = "multipart/form-data; boundary=----ac-live-door";
+            var parts = new FormFileCollection();
+            foreach (var f in files)
+                parts.Add(new FormFile(new MemoryStream(f.Bytes), 0, f.Bytes.Length, f.Name, f.FileName)
+                    { Headers = new HeaderDictionary(), ContentType = f.ContentType });
+            ctx.Request.Form = new FormCollection(fields, parts);
+        }
         if (cookie is not null) ctx.Request.Headers.Cookie = cookie;
         ctx.Response.Body = new MemoryStream();
         ctx.SetEndpoint(door);
