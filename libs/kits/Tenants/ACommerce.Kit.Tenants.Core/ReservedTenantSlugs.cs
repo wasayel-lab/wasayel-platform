@@ -175,6 +175,18 @@ public static class ReservedTenantSlugs
     public static bool IsPlatformApiSegment(string? name)
         => !string.IsNullOrWhiteSpace(name) && PlatformApiSegments.Contains(name.Trim());
 
+    /// <summary>
+    /// <para><b>أَيُخدَمُ هذا المَقطَعُ الأَوَّلُ مِن الجَذرِ نَفسِه عَلى كُلِّ مُضيف؟</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+    /// جُذورُ البِنيَةِ التَحتِيَّة (<see cref="RootEndpoints"/>) ومَناطِقُ المَنَصَّة (<see cref="PlatformAreas"/>) وسَطحُ الـAPI (<see cref="ApiRoot"/>)، بِلا حالَةِ أَحرُف.
+    /// <b>وهُوَ ما لا يَحقِنُ فيه الحاقِنُ مَتجَرَ المُضيف</b> (<c>TenantResolverMiddleware.PathWithSlug</c> يَسأَلُه)، <b>فَيَسأَلُه أَيضاً بانِي الرابِطِ النَظيف</b>
+    /// (<c>StoreUrl</c>): ذَيلٌ يَبدَأُ بِه لا يَكونُ نَظيفاً عَلى المُضيفِ بَل <c>/{slug}/…</c> — كانَ <c>LinkFor(slug, role, "terms?…")</c> يَكتُبُ <c>/terms</c>
+    /// فَيُحَوَّلُ إلى شُروطِ المَنَصَّةِ عَلى الجَذر. قائِمَةٌ واحِدَةٌ يَقرَؤُها الطَرَفان، فَلا يَنجَرِفُ أَحَدُهُما عَن الآخَر (القاعِدَة ٨).</para>
+    /// </summary>
+    public static bool ServedAtRoot(string? first)
+        => !string.IsNullOrEmpty(first)
+           && (RootEndpoints.Contains(first) || PlatformAreas.Contains(first)
+               || string.Equals(first, ApiRoot, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>أَهذا الاسمُ مَحجوز؟ — <b>الفَراغُ لَيسَ مَحجوزاً بَل
     /// غائِب</b>، ويَرُدُّه فاحِصُ الشَكلِ لا هذا.</summary>
     public static bool Contains(string? slug)

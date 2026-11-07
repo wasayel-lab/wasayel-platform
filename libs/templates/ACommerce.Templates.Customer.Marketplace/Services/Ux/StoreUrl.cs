@@ -60,8 +60,7 @@ public static class StoreUrl
         var p = path.TrimStart('/');
         // ‏(‏2026-11-07، W13-4·C2b·4) وعَلى مُضيفِ الدَور: دَورُه (أَو بِلا دَور — الحاقِنُ يَضَعُ دَورَ المُضيفِ في قالِبِ صَفحَةِ الدَور) نَظيفٌ بِلا /r/.
         var bare = string.IsNullOrEmpty(role) || string.Equals(role, view.HostRole, StringComparison.Ordinal);
-        var clean = (bare ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
-        return clean.Length == 0 ? "/" : clean;
+        return HostTail(slug, string.IsNullOrEmpty(role) ? null : role, bare, p);
     }
 
     /// <summary>
@@ -83,9 +82,9 @@ public static class StoreUrl
         var scheme = string.IsNullOrEmpty(view.Scheme) ? "https" : view.Scheme;
         var p = path.TrimStart('/');
         if (role is not null && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.TryGetValue(role, out var label))
-            return $"{scheme}://{slug}-{label}.{view.Apex}{view.Port}{StoreHostTail(null, p)}";
+            return $"{scheme}://{slug}-{label}.{view.Apex}{view.Port}{HostTail(slug, role, bare: true, p)}";
         if (view.HostRole is null) return For(view, slug, role, path);
-        return $"{scheme}://{slug}.{view.Apex}{view.Port}{StoreHostTail(role, p)}";
+        return $"{scheme}://{slug}.{view.Apex}{view.Port}{HostTail(slug, role, bare: role is null, p)}";
     }
 
     /// <summary>الدَورُ الَّذي يَحمِلُه مَسارٌ بِلا دَور (<c>r/{role}</c> أَو <c>r/{role}/…</c>) — ومَعَه ما بَعدَه.</summary>
@@ -97,11 +96,29 @@ public static class StoreUrl
             : null;
     }
 
-    /// <summary>ذَيلُ العُنوانِ عَلى مُضيفِ المَتجَر: <c>/{path}</c> أَو <c>/r/{role}/{path}</c> (وأَقَلُّه <c>/</c>).</summary>
-    private static string StoreHostTail(string? role, string p)
+    /// <summary>
+    /// <para><b>ذَيلُ العُنوانِ عَلى مُضيفٍ لِهذا المَتجَر</b>: <c>/{path}</c> (<paramref name="bare"/> — مُضيفُ المَتجَرِ بِلا دَور، أَو مُضيفُ الدَورِ ودَورُه) أَو
+    /// <c>/r/{role}/{path}</c> (وأَقَلُّه <c>/</c>).</para>
+    /// <para>‏(‏2026-11-07، W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والنَظيفُ لِما يَحقِنُه الحاقِنُ وَحدَه</b>: ذَيلٌ مَقطَعُه الأَوَّلُ يُخدَمُ مِن الجَذر
+    /// (<see cref="ReservedTenantSlugs.ServedAtRoot"/> — <c>terms</c> مِنطَقَةُ مَنَصَّة) أَو هُوَ اسمُ المَتجَرِ نَفسُه يَبقى <see cref="PathForm"/> — والحاقِنُ يُمَرِّرُ
+    /// <c>/{slug}/…</c> كَما هُوَ عَلى المُضيفَين. كانَ <c>/terms</c>: <c>TermsFilter</c> و<c>GatedPage</c> يُرسِلانِ مَن لَم يَقبَل شُروطَ المَتجَرِ إلى شُروطِ المَنَصَّةِ
+    /// عَلى الجَذرِ بِلا جَلسَتِه، فَلا يَبلُغُ زِرَّ القَبول. ويَحرُسُه <c>StoreUrlRoundTripTests</c>: رابِطُ كُلِّ قالِبِ صَفحَةٍ يَعودُ إلَيها عَبرَ الحاقِنِ الحَقيقِيّ.</para>
+    /// </summary>
+    private static string HostTail(string slug, string? role, bool bare, string p)
     {
-        var tail = (role is null ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
+        if (bare && !Injected(slug, p)) return PathForm(slug, role, p);
+        var tail = (bare ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
         return tail.Length == 0 ? "/" : tail;
+    }
+
+    /// <summary>أَيَحقِنُ الحاقِنُ مَتجَرَ المُضيفِ في <c>/{p}</c>؟ — المَقطَعُ الأَوَّلُ (قَبلَ <c>/</c> أَو <c>?</c> أَو <c>#</c>) فارِغٌ، أَو لا يُخدَمُ مِن الجَذرِ ولَيسَ
+    /// اسمَ المَتجَر (شَرطا <c>TenantResolverMiddleware.PathWithSlug</c> بِقائِمَتِه نَفسِها).</summary>
+    private static bool Injected(string slug, string p)
+    {
+        var end = p.IndexOfAny(['/', '?', '#']);
+        var first = end < 0 ? p : p[..end];
+        return first.Length == 0
+               || (!ReservedTenantSlugs.ServedAtRoot(first) && !string.Equals(first, slug, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

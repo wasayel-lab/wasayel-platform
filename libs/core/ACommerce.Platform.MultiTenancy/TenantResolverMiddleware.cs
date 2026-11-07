@@ -171,10 +171,8 @@ public sealed class TenantResolverMiddleware
     /// ومَناطِقُ المَنَصَّةِ وسَطحُ الـAPI. <b>وكانَ الامتِناعُ أَعلاه عَلى المَحجوزِ كُلِّه</b> — فَأَسماءُ مِحوَرِ المُضيفِ (<c>support</c>، <c>help</c>،
     /// <c>app</c>…) لا تُحقَنُ وهي لَيسَت جُذوراً مَخدومَة: <c>ashare.R/support</c> كانَ <c>/support</c> ← 404، وصَفحَةُ <c>/{slug}/support</c> قائِمَة.
     /// والمَحجوزُ يَبقى مَحجوزاً اسمَ مَتجَر؛ وما يُخدَمُ مِن الجَذرِ هُوَ ما لا يُحقَن.</summary>
-    internal static bool ServedAtRoot(string first)
-        => ReservedTenantSlugs.RootEndpoints.Contains(first)
-           || ReservedTenantSlugs.PlatformAreas.Contains(first)
-           || string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase);
+    /// <remarks>‏(‏2026-11-07، W13-4·C2b·1) الجِسمُ في <see cref="ReservedTenantSlugs.ServedAtRoot"/> بِحَرفِه — يَسأَلُه بانِي الرابِطِ النَظيفِ أَيضاً.</remarks>
+    internal static bool ServedAtRoot(string first) => ReservedTenantSlugs.ServedAtRoot(first);
 
     /// <summary><b>مُعَرِّفُ المَتجَرِ مِن المُضيف</b> (‏2026-11-07، ADR-050 §٣): مِلصَقُ <see cref="SlugFromHost"/> إن صَلَحَ اسمَ مُضيفِ مَتجَرٍ
     /// (<see cref="StoreHostName"/>) — فَمَتجَرٌ قائِمٌ لا يَجتازُه لا مُضيفَ لَه ويَبقى بِمَسارِه، ومِلصَقٌ يَنتَهي بِاسمِ مُضيفِ دَورٍ لا يُقرَأُ مَتجَراً.</summary>
