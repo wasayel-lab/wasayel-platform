@@ -19,6 +19,9 @@
          قائِمَة (فِئات/أَدوار/مُدُن/خَصائِص) مَع فَحص ملكيَّة كُلّ عَمَلِيَّة.
 
     الـ Active يَتَبَدَّل بَين home/ideas حَسَب المَسار.
+
+    ‏(‏2026-11-07، الموجَة ١٣ W13-1·٤ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «حَلِّل فِكرَة» صارَ «أَنشِئ مَتجَراً» إلى استِمارَةِ الإنشاءِ بِلا مِفتاح،
+    والأَزرارُ الثَلاثَةُ الأُخرى إلَيها بِنُصوصِ المَتجَر لا الفِكرَة؛ وقِسمُ الأَفكارِ وإحصاءاتُه تَخرُجُ في W13-1·٥.
 *@
 
 <StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
@@ -39,7 +42,7 @@
            الصَفحَةُ بِالمِفتاحِ بايتاً كَما كانَت (مَقيسٌ؛ نَفسُ حيلَةِ تَرحيلِ القامُوس). *@
         @* ‏(‏2026-11-07، W13-1·٣ — ADR-049) الروابِطُ السِتَّةُ إلى `/studio/new` تُرسَمُ بِلا باب: الصَفحَةُ صارَت استِمارَةَ إنشاءٍ لا تَحتاجُ مِفتاحاً. *@
         <a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
-            <AcIcon Name="lightbulb" Size="14" /> @L.Markup("studio.home.new_idea")@((MarkupString)"\n        ")
+            <AcIcon Name="plus" Size="14" /> @L.Markup("studio.home.create_cta")@((MarkupString)"\n        ")
         </a>
     </TopBarActions>
     <ChildContent>
@@ -57,11 +60,11 @@
             <div class="studio-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px;">
                 <a class="studio-list-row" href="/studio/new" style="align-items:flex-start;">
                     <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;">
-                        <AcIcon Name="lightbulb" Size="18" />
+                        <AcIcon Name="store" Size="18" />
                     </span>
                     <div class="studio-list-body" style="flex:1;">
-                        <strong>@L.Markup("studio.home.analyze_title")</strong>
-                        <span style="line-height:1.6;">@L.Markup("studio.home.analyze_body")</span>
+                        <strong>@L.Markup("studio.home.create_title")</strong>
+                        <span style="line-height:1.6;">@L.Markup("studio.home.create_body")</span>
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
@@ -103,7 +106,7 @@
                    مَقيسٌ بِالطَبَقَة السادِسَة. والأَخضَرُ الغامِق
                    مَوجودٌ في اللَوحَة سَلَفاً لِهذا بِعَينِه، فَلا لَونَ
                    جَديد يُخترَع. *@
-                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_store")</a>
             </div>
             @if (myApps is null)
             {
@@ -115,7 +118,7 @@
                     <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="package" Size="48" /></div>
                     <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_apps")</h3>
                     <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_apps_body")</p>
-                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_idea")</a>
+                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_store")</a>
                 </div>
             }
             else

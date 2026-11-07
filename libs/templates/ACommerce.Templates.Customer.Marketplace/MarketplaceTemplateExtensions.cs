@@ -2895,7 +2895,8 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/studio/auth/verify", async (
             HttpRequest req, HttpResponse res, IDocumentStore store,
             IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator) =>
+            Services.Incubator.FeasibilityAnalysisService incubator,
+            Services.Queries.TenantDirectory tenants) =>
         {
             var method = Services.Incubator.StudioAuthDoor.Parse(req.Form["method"].ToString())
                          ?? Services.Incubator.StudioAuthMethod.Phone;
@@ -2916,10 +2917,11 @@ public static class MarketplaceTemplateExtensions
             // مُطالَبَة مُعَلَّقَة؟ أَنشِئ جَلسَة وشَغِّل التَّحليل في الخَلفِيَّة.
             // الجِسمُ في `ResumeStudioPromptAsync` — ويُنادى مِن نُقطَةِ
             // قَبولِ الشُروطِ أَيضاً، وذاكَ ما رَفَعَ الـ405.
+            // ‏(‏2026-11-07، W13-1·٤ — ADR-049 §٨) ومَن لا مَتجَرَ لَه يَبلُغُ استِمارَةَ الإنشاءِ لا لَوحَةً فارِغَة.
             return await ResumeStudioPromptAsync(
                        req, res, user.Id, user.FullName,
                        store, scopeFactory, incubator, checkConsent: true)
-                   ?? Results.Redirect("/studio");
+                   ?? Results.Redirect(Services.Incubator.StudioStoreCreate.AfterSignIn((await tenants.ListOwnedByAsync(user.Id)).Count));
         }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/logout", (HttpResponse res) =>

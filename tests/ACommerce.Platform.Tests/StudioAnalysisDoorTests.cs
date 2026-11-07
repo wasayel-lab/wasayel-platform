@@ -554,7 +554,7 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
     /// الحالَتانِ الفارِغَتانِ تَرسُمانِ نَصَّ البابِ المُغلَقِ مَكانَ الزِرِّ بِلا مِفتاح. والزِرُّ صارَ يَبلُغُ استِمارَةَ إنشاءٍ بِلا مِفتاح، فَيُرسَمُ دائِماً
     /// ولا نَصَّ مُغلَقَ بَعدَه.</summary>
     [Theory]
-    [InlineData("studio.home.start_idea")]
+    [InlineData("studio.home.start_store")] // ‏(‏2026-11-07، W13-1·٤) المِفتاحُ صارَ «أَنشِئ مَتجَرَكَ» — start_idea خَرَجَ مِن القامُوس.
     [InlineData("studio.home.describe_idea")]
     public void The_home_empty_state_draws_its_create_link_and_no_closed_text(string buttonKey)
     {

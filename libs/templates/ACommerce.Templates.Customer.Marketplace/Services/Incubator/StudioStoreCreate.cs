@@ -47,6 +47,10 @@ public static class StudioStoreCreate
 
     public static string MessageKey(string code) => "studio.create.err_" + code;
 
+    /// <summary><b>وِجهَةُ ما بَعدَ الدُخول</b> (‏W13-1·٤ — ADR-049 §٨): حِسابُ استوديو لا يَملِكُ مَتجَراً يَبلُغُ استِمارَةَ الإنشاءِ مُباشَرَةً، فَدَعوَةُ
+    /// الصَفحَةِ الأُولى «أَنشِئ مَتجَرَك» دُخولٌ ثُمَّ الاستِمارَة؛ ومَن يَملِكُ مَتجَراً يَبلُغُ لَوحَتَه كَما كان.</summary>
+    public static string AfterSignIn(int ownedStores) => ownedStores == 0 ? Page : "/studio";
+
     /// <summary>حُقولُ الاستِمارَةِ كَما قُرِئَت — المُعَرِّفُ بِحُروفٍ صَغيرَة كَما كانَ <c>/build</c> يَقرَؤُه.</summary>
     public sealed record Form(string Slug, string Name, string Color, string TagLine);
 

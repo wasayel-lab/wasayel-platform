@@ -451,7 +451,9 @@ public class EndpointBodyBleedTests
         // الوَحيدُ `/build` يَشتَرِطُ تَحليلاً بِمِفتاح. وجِسمُه حَرَسُه المُشتَرَكُ بِتَرتيبِه (الهُوِيَّة ← المُوافَقَة ← الحِصَّة ← المُعَرِّف ← الاسم ← اللَون
         // ← القَناة) ثُمَّ نِداءُ المَصنَعِ والعَدّ — **وعَلاماتُه في الجِسمِ شَرطٌ لا اختِيار**: `StudioStoreBirthCharacterizationTests` يَقرَؤُها هُناك. والقِراءَةُ
         // والمَساراتُ والمُعجَمُ في `StudioStoreCreate` النَقِيَّة. ويَنزِلُ السَقفُ في W13-1·٥ حينَ يَخرُجُ `/build` و`begin` و`analyze` و`refine` و`feedback`.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2869),
+        // ‏2869 ← **2870** يَوم ‏2026-11-07 (الموجَة ١٣ W13-1·٤ — ADR-049 §٨): بابُ `/studio/auth/verify` يَحقِنُ `TenantDirectory` في تَوقيعِه، فَمَن لا
+        // مَتجَرَ لَه يَبلُغُ استِمارَةَ الإنشاءِ بَعدَ الدُخولِ لا لَوحَةً فارِغَة (`StudioStoreCreate.AfterSignIn` النَقِيَّة). طَبَعَ العَدّادُ «‏2869 → 2870».
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", 2870),
 
         // ─── مِلَفٌّ ثانٍ يَحمِل نِقاطاً — الأَوَّلُ مُنذُ نَشأَةِ
         //     هذا العَدّاد، ويُقال لِماذا ────────────────────────────
@@ -1217,7 +1219,8 @@ public class EndpointBodyBleedTests
     /// (<c>AuthSession.RoleCookiesIn</c>) لا مِن قِراءَةِ المَتجَر. وعَدَدُ النِقاطِ ‏145 لَم يَتَحَرَّك.</remarks>
     /// <remarks><b>‏3186 ← 3216 يَوم ‏2026-11-07</b> (الموجَة ١٣ W13-1·٣ — ADR-049 §٤): بابُ الإنشاءِ اليَدَوِيّ `POST /studio/apps/create` — حَرَسُه بِتَرتيبِه
     /// ونِداءُ المَصنَع؛ والسَبَبُ عِندَ سَقفِ المِلَفّ. وعَدَدُ النِقاطِ ‏145 ← ‏146.</remarks>
-    private const int PinnedTotal = 3216;
+    /// <remarks><b>‏3216 ← 3217 يَوم ‏2026-11-07</b> (الموجَة ١٣ W13-1·٤): سَطرُ التَوقيعِ في بابِ الدُخولِ الَّذي يُعطيه عَدَدَ مَتاجِرِ صاحِبِ الجَلسَة. وعَدَدُ النِقاطِ ‏146 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3217;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

@@ -43,7 +43,9 @@
     </nav>
 
     <section class="landing-hero">
-        <span class="landing-eyebrow"><AcIcon Name="sparkle" Size="16" /> @L.Markup("landing.hero.eyebrow")</span>
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٤ — ADR-049 §٨) النَصُّ بِلا ذَكاءٍ اصطِناعيٍّ ولا دَعوى غَيرِ مَقيسَة، والتَموضُعُ «مَن يَجمَعُ بائِعي غَيرِه ويَملِكُ
+           جُمهوراً يَبيعُ لَه»؛ والدَعوَةُ رابِطٌ إلى استِمارَةِ الإنشاءِ لِلزائِرِ والمُسَجَّلِ مَعاً — الزائِرُ يَدخُلُ أَوَّلاً ثُمَّ يَبلُغُها (`StudioStoreCreate.AfterSignIn`). *@
+        <span class="landing-eyebrow"><AcIcon Name="store" Size="16" /> @L.Markup("landing.hero.eyebrow")</span>
         @* الفَراغ الحافّ صَريح — رَأساً وذَيلاً. المُصَيِّر يَحذِف عُقدَة
            النَصّ الفارِغَة **في طَرَفَي** مُحتَوى العُنصُر (لا الذَيل
            وَحدَه كَما كُتِبَ في المَوجَة الأولى)، والداخِلِيَّة تَنجو.
@@ -53,6 +55,7 @@
         </h1>
         <p class="landing-sub">@((MarkupString)"\n            ")@L.Markup("landing.hero.sub")@((MarkupString)"\n        ")
         </p>
+        <a class="st-btn st-btn-primary st-btn-lg" href="/studio/new">@L.Markup("landing.cta.create")</a>
 
         @* بابُ التَحليلِ (‏2026-10-24، S15 A): بِلا مُزَوِّدِ تَحليلٍ مَضبوطٍ لا تُرسَمُ الاستِمارَةُ ولا أَمثِلَتُها —
            كانَت تَأخُذُ رائِدَ الأَعمالِ إلى الدُخولِ والشُروطِ ثُمَّ «فَشِلَ التَّحليل» (القاعِدَة ١٢). والقَرارُ
@@ -86,19 +89,19 @@
 
     <section class="landing-features">
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="bar-chart" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.analysis_title")</h3>
-            <p>@L.Markup("landing.feature.analysis_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="people" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.vendors_title")</h3>
+            <p>@L.Markup("landing.feature.vendors_body")</p>
         </div>
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="sparkle" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.launch_title")</h3>
-            <p>@L.Markup("landing.feature.launch_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="settings" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.setup_title")</h3>
+            <p>@L.Markup("landing.feature.setup_body")</p>
         </div>
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="target" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.candid_title")</h3>
-            <p>@L.Markup("landing.feature.candid_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="credit-card" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.payments_title")</h3>
+            <p>@L.Markup("landing.feature.payments_body")</p>
         </div>
     </section>
 
