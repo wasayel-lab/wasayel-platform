@@ -1921,7 +1921,7 @@ public class WriteEndpointGuardTests(Xunit.Abstractions.ITestOutputHelper output
         }
     }
 
-    private static IEnumerable<Endpoint> WolverineWriteEndpoints()
+    internal static IEnumerable<Endpoint> WolverineWriteEndpoints()
     {
         foreach (var (file, text) in EntitlementContractTests.SourceFiles())
         {

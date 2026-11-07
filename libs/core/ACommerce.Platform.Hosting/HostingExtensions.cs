@@ -317,6 +317,9 @@ public static class HostingExtensions
     public static IApplicationBuilder UsePlatformRequestFront(this IApplicationBuilder app)
     {
         app.UseSubdomainTenantPath();
+        // ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) طَلَبُ الكِتابَةِ مِن أَصلٍ آخَرَ يُرَدُّ 403 — بَعدَ الحاقِنِ فَيَرى
+        // المَسارَ بِشَكلِ القالِبِ عَلى كُلِّ مُضيف (نِقاطُ المُزَوِّدينَ تُستَثنى بِه). التَعليلُ في `CrossOriginWriteGate`.
+        app.UseCrossOriginWriteGate();
         return app;
     }
 }
