@@ -4072,8 +4072,12 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect($"{Services.Incubator.StudioStoreCreate.Page}?upgrade={gate.BreachCode}");
 
             var form = Services.Incubator.StudioStoreCreate.Read(req.Form);
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) استِمارَةُ الصاحِبِ نَفسُها بَعدَ أَن وَلَدَت
+            // مَتجَرَه تُجابُ بِمَتجَرِه: نَقرَتانِ يَصِلُ ثانيهِما بَعدَ الحِفظِ كانَ يُقالُ لَه «مُستَخدَم مِن قَبل» عَن مَتجَرِه، والمُتَصَفِّحُ يُبقي الجَوابَ الأَخير.
+            // يُسأَلُ بَعدَ الرَفضِ وَحدَه — عِندَ سُؤالِ المُعَرِّفِ وعِندَ وِلادَةٍ لَم تَقَع — ولا يَكتُبُ ولا يَعُدّ (‏`factory.RepeatOfAsync`).
             if (await factory.ValidateSlugAsync(form.Slug) is { } slugRefused)
-                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(slugRefused, form));
+                return Results.Redirect(slugRefused == Services.Incubator.TenantFromAnalysisFactory.SlugTaken && await factory.RepeatOfAsync(ownerId, form) is { } own
+                    ? own : Services.Incubator.StudioStoreCreate.Refused(slugRefused, form));
             if (string.IsNullOrEmpty(form.Name))
                 return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.NameRequired, form));
             if (!Services.Incubator.StudioStoreCreate.ColorValid(form.Color))
@@ -4095,6 +4099,8 @@ public static class MarketplaceTemplateExtensions
             var tenant = await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
                 pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null, write: false);
             var birth = await tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant));
+            if (birth.Outcome != Services.Incubator.StudioTierService.StoreBirthOutcome.Born && await factory.RepeatOfAsync(ownerId, form) is { } ownStore)
+                return Results.Redirect(ownStore);
             return birth.Outcome switch
             {
                 Services.Incubator.StudioTierService.StoreBirthOutcome.Born => Results.Redirect($"/studio/apps/{form.Slug}?built=1"),

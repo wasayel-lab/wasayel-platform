@@ -56,6 +56,21 @@ public sealed class TenantFromAnalysisFactory
         return existing is null ? null : SlugTaken;
     }
 
+    /// <summary><b>المَتجَرُ القائِمُ بِهذا المُعَرِّف، أَو <c>null</c></b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ
+    /// حَرفٌ فَوقَه): يَسأَلُه بابُ الاستوديو بَعدَ أَن يُرَدَّ الطَلَبُ عَلى مُعَرِّفٍ مَكتوب، لِيَعرِفَ مالِكَه وما كُتِبَ فيه — فَاستِمارَةُ صاحِبِه نَفسُها
+    /// مُكَرَّرَةً (نَقرَتانِ يَصِلُ ثانيهِما بَعدَ أَن حُفِظَ الأَوَّل) تُجابُ بِمَتجَرِه لا بِـ<see cref="SlugTaken"/> عَنه (<c>StudioStoreCreate.Repeats</c>).</summary>
+    public async Task<Tenant?> FindAsync(string slug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(slug)) return null;
+        await using var s = _store.QuerySession();
+        return await s.LoadAsync<Tenant>(slug, ct);
+    }
+
+    /// <summary>لَوحَةُ المَتجَرِ إن كانَت الاستِمارَةُ تَكرارَ صاحِبِه لِما وَلَدَه (<see cref="StudioStoreCreate.Repeats"/>)، أَو <c>null</c> — يَسأَلُه بابُ الاستوديو
+    /// بَعدَ الرَفضِ وَحدَه، فَلا يَكبُرُ جِسمُ البابِ بِمَنطِقِه (‏W13-1·SEC2-C1-1).</summary>
+    public async Task<string?> RepeatOfAsync(Guid ownerId, StudioStoreCreate.Form form, CancellationToken ct = default)
+        => StudioStoreCreate.Repeats(await FindAsync(form.Slug, ct), ownerId, form) ? StudioStoreCreate.StorePage(form.Slug) : null;
+
     /// <summary>
     /// <para><b>شَكلُ مُعَرِّفِ المَتجَرِ الواحِد</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): يَبدَأُ بِحَرفٍ
     /// لاتينيٍّ صَغيرٍ أَو رَقَم، ثُمَّ حُروفٌ وأَرقامٌ وشَرطَة، وطولُه 63 عَلى الأَكثَر — حَدُّ مِلصَقِ المُضيفِ في DNS (‏RFC 1035)، وهو ما يَلزَمُ

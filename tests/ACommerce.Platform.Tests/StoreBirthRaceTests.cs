@@ -214,7 +214,10 @@ public class LiveStoreBirthRaceProofTests(ITestOutputHelper output)
         finally { await CleanAsync(host, [a, b], slugs); }
     }
 
-    /// <summary>نَقرَتانِ مُتَزامِنَتانِ مِن صاحِبٍ واحِد: مَتجَرٌ واحِد، و<c>built=1</c> واحِدٌ و<c>slug_taken</c> واحِد، والعَدّادُ 1.</summary>
+    /// <summary>نَقرَتانِ مُتَزامِنَتانِ مِن صاحِبٍ واحِد: مَتجَرٌ واحِد، و<c>built=1</c> واحِدٌ و<c>slug_taken</c> واحِد، والعَدّادُ 1.
+    /// ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والنَقرَةُ الثانِيَةُ صارَت دُخولاً إلى المَتجَرِ
+    /// (<c>StudioStoreCreate.StorePage</c>) لا <c>slug_taken</c>: المُتَصَفِّحُ يُبقي الجَوابَ الأَخير، وكانَ يَقولُ لِصاحِبِ المَتجَرِ إنّ مُعَرِّفَه «مُستَخدَم مِن قَبل»
+    /// (تَقريرُ العَدَسَة). والمَعنى الَّذي يَحرُسُه الصَفُّ باقٍ: مَتجَرٌ واحِدٌ و<c>built=1</c> واحِدٌ والعَدّادُ 1.</summary>
     [Fact]
     public async Task A_double_submit_by_one_owner_builds_one_store_and_counts_one_on_Postgres()
     {
@@ -228,7 +231,7 @@ public class LiveStoreBirthRaceProofTests(ITestOutputHelper output)
             var built = await StoresBuiltAsync(host, a);
             output.WriteLine($"[live] النَقرَتان ⇒ {both[0].Location} · {both[1].Location} · العَدّاد {built}");
             Assert.Equal(1, both.Count(r => r == (302, $"/studio/apps/{slug}?built=1")));
-            Assert.Equal(1, both.Count(r => r == (302, StudioSlugTaken(slug, "أ"))));
+            Assert.Equal(1, both.Count(r => r == (302, StudioStoreCreate.StorePage(slug))));
             Assert.Equal(1, built);
         }
         finally { await CleanAsync(host, [a], slug); }
