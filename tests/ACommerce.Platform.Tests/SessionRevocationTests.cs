@@ -495,7 +495,9 @@ public class SessionRevocationTests(ITestOutputHelper output)
         var body = doors[0].Body;
         Assert.Contains("var token = AuthSession.ResolveToken(req, slug);", body, StringComparison.Ordinal);
         Assert.Contains("handler.HandleAsync(cmd, admit: u => Services.SessionVersionGate.StillOpen(u, token))", body, StringComparison.Ordinal);
-        Assert.Contains("if (!accepted) return Results.Redirect(AuthSession.LinkFor(slug, role, \"login?err=auth\"));", body, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ نَفسُها (`login?err=auth`) عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب —
+        // كانَت `AuthSession.LinkFor(slug, role, …)`، رابِطَ تَنَقُّلٍ يُسَمّي تَطبيقاً آخَرَ مُطلَقاً (ADR-050 §١٤ بِسَطرِه المُؤَرَّخ).
+        Assert.Contains("if (!accepted) return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, \"login?err=auth\"));", body, StringComparison.Ordinal);
         Assert.True(AsksTheSession(body));
     }
 

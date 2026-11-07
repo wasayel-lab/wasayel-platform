@@ -36,8 +36,9 @@ public sealed class AuthFilter : IEndpointFilter
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null || parsed.Value.TenantSlug != slug)
         {
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤) لا رابِطُ تَنَقُّل.
             return _redirectOnFailure
-                ? Results.Redirect(AuthSession.LinkFor(slug, role,
+                ? Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role,
                     $"login?returnUrl={Uri.EscapeDataString(http.Request.Path + http.Request.QueryString)}"))
                 : Results.Unauthorized();
         }

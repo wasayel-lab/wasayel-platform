@@ -53,7 +53,8 @@ public sealed class ListingOwnerFilter : IEndpointFilter
         if (userId is null) return Results.Unauthorized();
 
         var slug = http.Slug();
-        var reject = Results.Redirect(AuthSession.LinkFor(
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤) لا رابِطُ تَنَقُّل.
+        var reject = Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http),
             slug, http.Role(), $"{RejectPath}?err={ListingEditCodes.NotOwner}"));
 
         if (!Guid.TryParse(http.Request.RouteValues[RouteArgument]?.ToString(), out var listingId))

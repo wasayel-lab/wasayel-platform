@@ -62,8 +62,9 @@ public sealed class EntitlementFilter : IEndpointFilter
         var ents = http.Entitlements(_capability);
 
         var peek = await ents.PeekAsync(slug, userId ?? Guid.Empty, _capability, http.RequestAborted);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤) لا رابِطُ تَنَقُّل.
         if (!peek.Allowed)
-            return Results.Redirect(AuthSession.LinkFor(
+            return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http),
                 slug, http.Role(), $"{_redirectPath}?err={_errCode}"));
 
         return await next(ctx);

@@ -2034,9 +2034,11 @@ public static class MarketplaceTemplateExtensions
         {
             var userId = http.UserId();
             var role   = http.Role();
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) تَحويلاتُ هذا البابِ الثَلاثَةُ عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤)
+            // لا رابِطُ تَنَقُّل (`LinkFor`): القَبولُ يُرسَلُ مِن صَفحَةِ الشُروطِ عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة، وما بَعدَه هُناك.
             // نَفس القَرار الواحِد — كانَ StartsWith("/") وَحدَه هُنا أَيضاً.
             var returnUrl = Services.LocalRedirect.Resolve(
-                req.Query["returnUrl"].ToString(), AuthSession.LinkFor(slug, role, ""));
+                req.Query["returnUrl"].ToString(), Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, ""));
 
             var cmd = new Commands.AcceptTermsCommand(userId, slug, TermsPolicy.CurrentVersion);
             // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٦) قَبولُ الشُروطِ سِجِلٌّ يَبقى بَعدَ الجَلسَة — فَيُكتَبُ مِن جَلسَةٍ مَفتوحَةٍ عَلى القِراءَةِ الجَديدَةِ وَحدَها.
@@ -2048,9 +2050,9 @@ public static class MarketplaceTemplateExtensions
             }
             catch (Gates.GateDeniedException ex)
             {
-                return Results.Redirect(AuthSession.LinkFor(slug, role, $"login?err={ex.GateName}"));
+                return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, $"login?err={ex.GateName}"));
             }
-            if (!accepted) return Results.Redirect(AuthSession.LinkFor(slug, role, "login?err=auth"));
+            if (!accepted) return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, "login?err=auth"));
             return Results.Redirect(returnUrl);
         }).DisableAntiforgery().RequireAuth();
 
