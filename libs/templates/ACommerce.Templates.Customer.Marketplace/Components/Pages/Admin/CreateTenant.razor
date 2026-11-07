@@ -33,7 +33,7 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <AcField Label="@(L["admin.new.slug"])" Required="true">
                         <input type="text" name="slug" required maxlength="32"
-                               pattern="[a-z0-9][a-z0-9-]*" class="ac-input"
+                               pattern="[a-z0-9][a-z0-9\-]{0,62}" class="ac-input"
                                placeholder="ashare" dir="ltr"
                                value="@Form?["slug"]" />
                     </AcField>
