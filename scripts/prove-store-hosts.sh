@@ -89,6 +89,10 @@ row GET  "$S" "/admin"                  301 "$SCHEME://$R/admin"
 row GET  "$S" "/pricing"                301 "$SCHEME://$R/pricing"
 row HEAD "$S" "/privacy"                301 "$SCHEME://$R/privacy"
 row POST "$S" "/studio/apps/create"     404
+# ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2) المَسارُ المُرَمَّزُ يُحَوَّلُ بِوِجهَةٍ مُرَمَّزَة — كانَ 500 («م» حَرفاً في Location)، و%3F يَنقَلِبُ استِعلاماً
+row GET  "$S" "/studio/%D9%85"          301 "$SCHEME://$R/studio/%D9%85"
+row GET  "$S" "/admin/%0d%0aSet-Cookie:x=1" 301 "$SCHEME://$R/admin/%0D%0ASet-Cookie:x=1"
+row GET  "$S" "/studio/%3F%3Fx"         301 "$SCHEME://$R/studio/%3F%3Fx"
 
 echo "٤) ما لا يَخُصُّ المَتجَرَ لا يُبلَغُ مِن مُضيفِه"
 row GET  "$S" "/api/$OTHER/unread-counts" 404

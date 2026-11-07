@@ -212,11 +212,11 @@ public sealed class TenantResolverMiddleware
         if (ReservedTenantSlugs.PlatformAreas.Contains(first))
         {
             if (!HttpMethods.IsGet(method ?? "") && !HttpMethods.IsHead(method ?? "")) return StoreHostAnswer.NotFound;
-            var raw = host!.Trim();
-            var colon = raw.IndexOf(':');
-            var port = colon >= 0 ? raw[colon..] : "";
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2/C2a-P-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن المَسارِ **مُرَمَّزاً** لا مَفكوكاً:
+            // `path` هُنا `req.Path.Value` المَفكوك، فَكانَ `/studio/%D9%85` يُكتَبُ «م» في `Location` ← 500 (Kestrel يَرفُضُ ما خارِجَ ASCII ومَحارِفَ
+            // التَحَكُّم)، و`%3F` يَصيرُ `?` فَيَنقَلِبُ المَسارُ استِعلاماً، و`%25` يَصيرُ `%` باطِلاً. وتَطابُقُ المَقاطِعِ أَعلاه يَبقى عَلى المَفكوك.
             return new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null,
-                $"{(string.IsNullOrEmpty(scheme) ? "https" : scheme)}://{apex}{port}{path}{query}");
+                $"{(string.IsNullOrEmpty(scheme) ? "https" : scheme)}://{apex}{PortOf(host)}{new PathString(path).ToUriComponent()}{AsciiOnly(query)}");
         }
 
         if (string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase))
@@ -231,6 +231,33 @@ public sealed class TenantResolverMiddleware
         return PathWithSlug(path, slug) is { } rewritten
             ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
             : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+    }
+
+    /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
+    private static string PortOf(string? host)
+    {
+        var raw = host?.Trim() ?? "";
+        var colon = raw.LastIndexOf(':');
+        if (colon < 0 || raw.StartsWith('[')) return "";
+        var digits = raw[(colon + 1)..];
+        return digits.Length is >= 1 and <= 5 && digits.All(char.IsAsciiDigit) ? ":" + digits : "";
+    }
+
+    /// <summary><b>الاستِعلامُ كَما أُرسِل، بِلا مَحرَفٍ لا يَحمِلُه رَأس</b>: ما خارِجَ ASCII المَطبوعِ (ومَعَه المَسافَةُ ومَحارِفُ التَحَكُّم) يُرَمَّزُ بِبايتاتِه
+    /// UTF-8 بِنِسبَةٍ مِئَوِيَّة، وما سِواه لا يُمَسّ — فَالاستِعلامُ المُرَمَّزُ سَلَفاً يَبقى بِحَرفِه (‏2026-11-07، SEC-C2a-2).</summary>
+    private static string AsciiOnly(string? query)
+    {
+        if (string.IsNullOrEmpty(query)) return "";
+        if (query.All(c => c is > ' ' and < (char)0x7F)) return query;
+        var sb = new System.Text.StringBuilder(query.Length * 3);
+        Span<byte> utf8 = stackalloc byte[4];
+        foreach (var rune in query.EnumerateRunes())
+        {
+            if (rune.Value is > ' ' and < 0x7F) { sb.Append((char)rune.Value); continue; }
+            var n = rune.EncodeToUtf8(utf8);
+            for (var i = 0; i < n; i++) sb.Append('%').Append(utf8[i].ToString("X2"));
+        }
+        return sb.ToString();
     }
 
     /// <summary>يُطَبِّعُ مُضيفاً: حُروفٌ صَغيرَة، بِلا مَنفَذٍ ولا
