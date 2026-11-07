@@ -3012,7 +3012,7 @@ public static class MarketplaceTemplateExtensions
         // ‏(‏2026-11-07، W13-1·٥ — ADR-049 §٢) تَصديرٌ لِبَياناتِ صاحِبِ الدِراسَةِ القَديمَةِ قِراءَةً — يَقرَؤُها مِن `StudioQueries` لا مِن خِدمَةِ التَحليل،
         // فَلا نُقطَةَ استوديو تَبلُغُ خِدمَةً تُنادي نَموذَجاً (`StudioAnalysisRetiredTests`).
         app.MapGet("/studio/s/{id:guid}/export.xlsx", async (
-            Guid id,
+            Guid id, HttpContext http,
             Services.Incubator.StudioAuth auth,
             Services.Queries.StudioQueries studio,
             Services.Incubator.FeasibilityExcelExporter exporter) =>
@@ -3028,6 +3028,10 @@ public static class MarketplaceTemplateExtensions
             // ‏(‏2026-11-07، W13-1·٧ — ADR-049 §٢ و§٧) كانَ هُنا حَجبُ «ميزَةِ التَصدير» بِـ`AllowExport`. والدِراسَةُ القَديمَةُ بَياناتُ صاحِبِها،
             // تُصَدَّرُ لَه قِراءَةً بِلا باقَة — والرَمزُ `export` لا تَكتُبُه بَوّابَةٌ بَعدَ اليَوم، والحَقلُ يَتيمٌ حَتّى ADR التَسعير.
 
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `no-store, private` كَتَنزيلِ «بَياناتي»:
+            // كانَ الجَوابُ بِلا `Cache-Control`، والمَسارُ يَنتَهي بِـ`.xlsx` — امتِدادٌ تُخَزِّنُه طَبَقَةُ Cloudflare (W13-3) افتِراضاً، فَيَصدُقُ «صاحِبُها وَحدَه»
+            // في الطَلَبِ الأَوَّلِ وَحدَه ويَأخُذُ الدِراسَةَ مِن الحافَّةِ مَن يَحمِلُ الرابِط.
+            http.Response.Headers.CacheControl = "no-store, private";
             var bytes = exporter.Export(session);
             return Results.File(bytes,
                 contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
