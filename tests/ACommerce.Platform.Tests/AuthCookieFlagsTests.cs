@@ -80,7 +80,9 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
             Assert.Contains("httponly", attrs);
             Assert.Contains("samesite=lax", attrs);
             Assert.Contains("secure", attrs);
-            Assert.StartsWith(".acommerce.auth.theme-demo", name, StringComparison.Ordinal);
+            // ‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الاسمُ عَلى HTTPS بِالقَرارِ الواحِدِ لِلكاتِبِ والقارِئِ (`CookieNameFor`) —
+            // كانَ «يَبدَأُ بِـ`.acommerce.auth.theme-demo`» حَرفاً، والبادِئَةُ `__Host-` تَتبَعُه في الكوميتِ التالي؛ والصِفاتُ أَعلاه كَما أُودِعَت.
+            Assert.StartsWith(AuthSession.CookieNameFor(secure: true, "theme-demo"), name, StringComparison.Ordinal);
         }
     }
 
@@ -110,7 +112,9 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
         var written = Written(http.Response);
         output.WriteLine(string.Join(" | ", written.Select(w => $"{w.Key}: {string.Join(",", w.Value.Where(a => !a.StartsWith("expires") && !a.StartsWith("path")))}")));
 
-        Assert.Equal(new[] { StudioAuth.CookieName, StudioAuth.CookieName + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        // ‏(‏2026-11-07، W13-4·C2c·2) الاسمُ عَلى HTTPS بِالقَرارِ الواحِد (`StudioAuth.CookieNameFor`) — كانَ `StudioAuth.CookieName` حَرفاً.
+        var studio = StudioAuth.CookieNameFor(secure: true);
+        Assert.Equal(new[] { studio, studio + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
         foreach (var (_, attrs) in written)
         {
             Assert.Contains("httponly", attrs);
@@ -128,7 +132,9 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
         var http = Request(https);
         StudioAuth.DeleteCookie(http.Response);
         var written = Written(http.Response);
-        Assert.Equal(new[] { StudioAuth.CookieName, StudioAuth.CookieName + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        // ‏(‏2026-11-07، W13-4·C2c·2) الاسمُ بِقَرارِ الطَلَبِ نَفسِه (`StudioAuth.CookieNameFor`) — كانَ `StudioAuth.CookieName` حَرفاً عَلى الطَرَفَين.
+        var studio = StudioAuth.CookieNameFor(https);
+        Assert.Equal(new[] { studio, studio + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
         foreach (var (_, attrs) in written)
         {
             Assert.Contains(attrs, a => a.StartsWith("expires=thu, 01 jan 1970", StringComparison.Ordinal));

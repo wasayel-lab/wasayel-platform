@@ -168,7 +168,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _studioToken = HttpCtx.HttpContext?.Request.Cookies[Services.Incubator.StudioAuth.CookieName];
+        _studioToken = HttpCtx.HttpContext?.Request.Cookies[Services.Incubator.StudioAuth.CookieNameOn(HttpCtx.HttpContext?.Request)];
         session = await Agent.LoadSessionAsync();
     }
 

@@ -69,7 +69,8 @@ public class LiveRoleHostClaimProofTests(ITestOutputHelper output)
         if (answer.Role is { } r) ctx.Items[StoreHostItems.Role] = r;
         ctx.Items[StoreHostItems.OriginalPath] = "/manage";
         var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(who.Id, slug, who.SessionVersion);
-        ctx.Request.Headers.Cookie = $"{AuthSession.CookieName(slug, "tenant_admin")}={token}; {AuthSession.CookieName(slug)}={token}";
+        // ‏(‏2026-11-07، W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الاسمُ بِقَرارِ الكاتِبِ والقارِئِ نَفسِه لِهذا الطَلَب (`CookieNameOn`) — ما يَحمِلُه مُتَصَفِّحٌ عَلى HTTPS.
+        ctx.Request.Headers.Cookie = $"{AuthSession.CookieNameOn(ctx.Request, slug, "tenant_admin")}={token}; {AuthSession.CookieNameOn(ctx.Request, slug)}={token}";
         if (scope.ServiceProvider.GetService<IHttpContextAccessor>() is { } accessor) accessor.HttpContext = ctx;
         if (scope.ServiceProvider.GetService<NavigationManager>() is Microsoft.AspNetCore.Components.Routing.IHostEnvironmentNavigationManager nav)
             nav.Initialize($"https://{hostName}/", $"https://{hostName}{ctx.Request.Path}");

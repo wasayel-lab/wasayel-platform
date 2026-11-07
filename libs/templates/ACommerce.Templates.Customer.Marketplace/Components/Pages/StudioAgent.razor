@@ -200,7 +200,7 @@
                 if (StudioAuth.IsAuthenticated)
                 {
                     _userId = StudioAuth.UserId!.Value;
-                    _studioToken = HttpCtx.HttpContext.Request.Cookies[Services.Incubator.StudioAuth.CookieName];
+                    _studioToken = HttpCtx.HttpContext.Request.Cookies[Services.Incubator.StudioAuth.CookieNameOn(HttpCtx.HttpContext.Request)];
                     _scopeId = "studio-" + _userId.ToString("N");
                     _platformAdmin = (await Services.PlatformAdminGuard.EvaluateAsync(Store, StudioAuth)).Allowed;
                 }

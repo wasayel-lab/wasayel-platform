@@ -137,7 +137,9 @@ public class SessionCircuitSwitchTests(ITestOutputHelper output)
             var init = HandlerBody(page, "OnInitializedAsync");
             if (!ask.Contains("Services.SessionVersionGate.PlatformAdminStillOpenAsync(Store, _studioToken,", StringComparison.Ordinal)) pageBreaches.Add($"{name}: السُؤالُ لا يَسأَلُ الغِلافَ بِالرَمزِ المُلتَقَط");
             if (!ask.Contains("Nav.NavigateTo(\"/studio/auth\", forceLoad: true);", StringComparison.Ordinal)) pageBreaches.Add($"{name}: الرَفضُ لا يَنتَقِلُ إلى الدُخول");
-            if (!Regex.IsMatch(init, @"_studioToken\s*=\s*HttpCtx\.HttpContext\??\.Request\.Cookies\[Services\.Incubator\.StudioAuth\.CookieName\];")) pageBreaches.Add($"{name}: الرَمزُ لا يُلتَقَطُ عِندَ التَصييرِ الأَوَّل");
+            // ‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الاسمُ بِقَرارِ الطَلَبِ (`StudioAuth.CookieNameOn`) — كانَ `StudioAuth.CookieName` حَرفاً،
+            // فَعَلى HTTPS يَلتَقِطُ الكوكيَّ الَّذي يَكتُبُه الكاتِبُ ويَقرَؤُه `StudioAuth.Load`.
+            if (!Regex.IsMatch(init, @"_studioToken\s*=\s*HttpCtx\.HttpContext\??\.Request\.Cookies\[Services\.Incubator\.StudioAuth\.CookieNameOn\(HttpCtx\.HttpContext\??\.Request\)\];")) pageBreaches.Add($"{name}: الرَمزُ لا يُلتَقَطُ عِندَ التَصييرِ الأَوَّل");
         }
         output.WriteLine($"سُطوحٌ تَفاعُلِيَّةٌ تَكتُبُ في مُعالِجاتِها: {surfaces.Count} ({string.Join(" · ", surfaces.Select(x => Path.GetFileName(x.Where)))}) · "
             + $"مُعالِجاتٌ مَفحوصَة {checkedHandlers} · تَسأَلُ قَبلَ أَيِّ نِداء {checkedHandlers - handlerBreaches.Count} · صَفَحاتٌ تَلتَقِطُ وتَسأَلُ وتَنتَقِل {surfaces.Count - pageBreaches.Select(b => b.Split(':')[0]).Distinct().Count()}");

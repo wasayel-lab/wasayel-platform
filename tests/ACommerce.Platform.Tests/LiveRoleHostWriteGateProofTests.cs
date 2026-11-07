@@ -42,7 +42,7 @@ public class LiveRoleHostWriteGateProofTests(ITestOutputHelper output)
         {
             var route = new Dictionary<string, string> { ["slug"] = slug };
             var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(vendor.Id, slug, vendor.SessionVersion);
-            var generic = $"{AuthSession.CookieName(slug)}={token}";
+            var generic = $"{AuthSession.CookieNameFor(secure: true, slug)}={token}";   // ‏(‏2026-11-07، W13-4·C2c·2) ما يَحمِلُه مُتَصَفِّحٌ عَلى HTTPS (`OnRoleHost`)
             var create = await host.PostFormOnHostAsync("/{slug}/listings/create", route, generic, OnRoleHost(slug), ("as", "vendor"), ("title", "x"));
             var signedOut = await host.PostFormOnHostAsync("/{slug}/listings/create", route, null, OnRoleHost(slug), ("as", "vendor"), ("title", "x"));
             var accept = await host.PostFormOnHostAsync("/{slug}/terms/accept", route, generic, OnRoleHost(slug));

@@ -55,6 +55,17 @@ public sealed class AuthSession
             ? CookieName(tenantSlug)
             : $".acommerce.auth.{tenantSlug}.{role}";
 
+    /// <summary><b>اسمُ كوكيِّ الجَلسَةِ كَما يُكتَبُ ويُقرَأُ — عَلى طَلَبٍ آمِنٍ أَو غَيرِه</b> (‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2): القَرارُ الواحِدُ
+    /// الَّذي يَسأَلُه كُلُّ كاتِبٍ وقارِئٍ لِكوكيِّ المَتجَر (<see cref="ResolveCookieBase"/> و<see cref="WriteCookie"/> و<see cref="UpdateNameCookie"/>
+    /// و<see cref="ClearCookie"/> و<c>EffectiveRole.OwnsRole</c>) — فَلا يَختَلِفُ الكاتِبُ والقارِئُ في اسم. ومَعَه
+    /// <c>StudioAuth.CookieNameFor</c> لِكوكيِّ الاستوديو.</summary>
+    public static string CookieNameFor(bool secure, string tenantSlug, string? role = null)
+        => CookieName(tenantSlug, role);
+
+    /// <summary>الاسمُ عَلى هذا الطَلَب — <see cref="CookieNameFor"/> بِقَرارِ <see cref="SecureFor"/> نَفسِه الَّذي يَضبِطُ <c>Secure</c>.</summary>
+    public static string CookieNameOn(HttpRequest? request, string tenantSlug, string? role = null)
+        => CookieNameFor(SecureFor(request), tenantSlug, role);
+
     // ─── حَلّ الجَلسَة: القاعِدَة الواحِدَة ───────────────────────────────
     //
     // كُلّ قارِئ لِلجَلسَة (AuthSession.Load، AuthFilter، وكُلّ form endpoint)
@@ -90,14 +101,14 @@ public sealed class AuthSession
         var role = ExtractRoleFromPath(req.Path);
         if (role is not null)
         {
-            var scoped = CookieName(tenantSlug, role);
+            var scoped = CookieNameOn(req, tenantSlug, role);
             // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1؛ تَوصيفُه `cf0f9bc`) دَورٌ اسمُه `name` (أَو يَنتَهي بِـ`.name`) يُسَمّي كوكيَّ اسمِ العَرض —
             // كانَ يُقرَأُ جَلسَةً وتَتَخَطّاه البَوّابَة، فَرَمزٌ ساقِطٌ فيه يَفتَحُ صَفَحاتِ `/r/name/`. القَرارُ الواحِدُ `IsNameCookie`.
             if (IsNameCookie(scoped)) return null;
             return IsValidFor(req.Cookies[scoped], tenantSlug) ? scoped : null;
         }
 
-        var generic = CookieName(tenantSlug);
+        var generic = CookieNameOn(req, tenantSlug);
         if (IsValidFor(req.Cookies[generic], tenantSlug)) return generic;
 
         var prefix = generic + ".";
@@ -187,7 +198,7 @@ public sealed class AuthSession
                                     string? role = null)
     {
         var opts = BuildOpts();
-        var name = CookieName(tenantSlug, role);
+        var name = CookieNameOn(res.HttpContext.Request, tenantSlug, role);
         res.Cookies.Append(name, auth.Token, opts);
         res.Cookies.Append(name + ".name", auth.FullName, opts);
 
@@ -199,7 +210,7 @@ public sealed class AuthSession
         // وَ ClearAllCookiesForTenant يَمسَح العامّ وَكُلّ الأَدوار مَعاً.
         if (!string.IsNullOrEmpty(role))
         {
-            var generic = CookieName(tenantSlug);
+            var generic = CookieNameOn(res.HttpContext.Request, tenantSlug);
             res.Cookies.Append(generic, auth.Token, opts);
             res.Cookies.Append(generic + ".name", auth.FullName, opts);
         }
@@ -209,15 +220,15 @@ public sealed class AuthSession
                                          string? role = null)
     {
         var opts = BuildOpts();
-        res.Cookies.Append(CookieName(tenantSlug, role) + ".name", newName, opts);
+        res.Cookies.Append(CookieNameOn(res.HttpContext.Request, tenantSlug, role) + ".name", newName, opts);
         if (!string.IsNullOrEmpty(role))
-            res.Cookies.Append(CookieName(tenantSlug) + ".name", newName, opts);
+            res.Cookies.Append(CookieNameOn(res.HttpContext.Request, tenantSlug) + ".name", newName, opts);
     }
 
     public static void ClearCookie(HttpResponse res, string tenantSlug, string? role = null)
     {
         var opts = new CookieOptions { Path = "/", Secure = ShouldUseSecure };
-        var name = CookieName(tenantSlug, role);
+        var name = CookieNameOn(res.HttpContext.Request, tenantSlug, role);
         res.Cookies.Delete(name, opts);
         res.Cookies.Delete(name + ".name", opts);
     }

@@ -64,7 +64,7 @@ public static class EffectiveRole
     public static bool OwnsRole(HttpRequest req, string slug, Guid userId, string? role)
     {
         if (string.IsNullOrEmpty(role) || role == AdminRole) return false;
-        var cookie = req.Cookies[AuthSession.CookieName(slug, role)];
+        var cookie = req.Cookies[AuthSession.CookieNameOn(req, slug, role)];
         var parsed = AuthHandlers.ParseToken(cookie);
         return parsed is not null
             && parsed.Value.TenantSlug == slug

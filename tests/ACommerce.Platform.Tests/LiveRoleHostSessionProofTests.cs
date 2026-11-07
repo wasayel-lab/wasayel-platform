@@ -54,9 +54,10 @@ public class LiveRoleHostSessionProofTests(ITestOutputHelper output)
         ctx.Items[StoreHostItems.OriginalPath] = visiblePath;
         ctx.SetTenant(slug, "حِفظُ بَياناتِ الدَور", "#0f766e", "phone", hasRoles: true);
         var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(who.Id, slug, who.SessionVersion);
+        // ‏(‏2026-11-07، W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الاسمُ بِقَرارِ الكاتِبِ والقارِئِ نَفسِه لِهذا الطَلَب (`CookieNameOn`) — ما يَحمِلُه مُتَصَفِّحٌ عَلى HTTPS.
         ctx.Request.Headers.Cookie = cookieRole is null
-            ? $"{AuthSession.CookieName(slug)}={token}"
-            : $"{AuthSession.CookieName(slug, cookieRole)}={token}; {AuthSession.CookieName(slug)}={token}";
+            ? $"{AuthSession.CookieNameOn(ctx.Request, slug)}={token}"
+            : $"{AuthSession.CookieNameOn(ctx.Request, slug, cookieRole)}={token}; {AuthSession.CookieNameOn(ctx.Request, slug)}={token}";
         var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
         accessor.HttpContext = ctx;
         // ‏`AuthSession.LinkFor` يَقرَأُ الطَلَبَ مِن الوَصّالِ الساكِنِ الَّذي يَضَعُه `Program.cs` — وبِدونِه يُجيبُ بِشَكلِ المَسارِ فَلا يَرى الرَسمُ المُضيفَ أَصلاً
@@ -206,7 +207,7 @@ public class LiveRoleHostSessionProofTests(ITestOutputHelper output)
         {
             var route = new Dictionary<string, string> { ["slug"] = slug };
             var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(vendor.Id, slug, vendor.SessionVersion);
-            var generic = $"{AuthSession.CookieName(slug)}={token}";
+            var generic = $"{AuthSession.CookieNameFor(secure: true, slug)}={token}";   // ‏(‏2026-11-07، W13-4·C2c·2) ما يَحمِلُه مُتَصَفِّحٌ عَلى HTTPS (`OnHost`)
             var onStore = await host.PostFormOnHostAsync(Door, route, generic, OnHost($"{slug}.{Base}", slug, null), ("role_x_attr_y", "1"));
             var onRole = await host.PostFormOnHostAsync(Door, route, generic, OnHost($"{slug}-vendor.{Base}", slug, "vendor"), ("role_x_attr_y", "2"));
             var path = await SaveAsync(host, slug, vendor);

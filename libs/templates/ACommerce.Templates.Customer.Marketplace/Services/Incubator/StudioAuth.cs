@@ -24,6 +24,13 @@ public sealed class StudioAuth
     public const string Tenant = "_studio";
     public const string CookieName = ".acommerce.studio";
 
+    /// <summary>اسمُ كوكيِّ جَلسَةِ الاستوديو كَما يُكتَبُ ويُقرَأُ عَلى طَلَبٍ آمِنٍ أَو غَيرِه (‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2) — نَظيرُ
+    /// <c>AuthSession.CookieNameFor</c>، يَسأَلُه <see cref="Load"/> و<see cref="WriteCookie"/> و<see cref="DeleteCookie"/> وجَزيرَتا الوَكيل.</summary>
+    public static string CookieNameFor(bool secure) => CookieName;
+
+    /// <summary>الاسمُ عَلى هذا الطَلَب — بِقَرارِ <c>AuthSession.SecureFor</c> نَفسِه الَّذي يَضبِطُ <c>Secure</c>.</summary>
+    public static string CookieNameOn(HttpRequest? request) => CookieNameFor(AuthSession.SecureFor(request));
+
     private readonly IHttpContextAccessor _http;
     public StudioAuth(IHttpContextAccessor http) => _http = http;
 
@@ -36,11 +43,12 @@ public sealed class StudioAuth
     {
         var ctx = _http.HttpContext;
         if (ctx is null) return;
-        var token = ctx.Request.Cookies[CookieName];
+        var name = CookieNameOn(ctx.Request);
+        var token = ctx.Request.Cookies[name];
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null || parsed.Value.TenantSlug != Tenant) { Clear(); return; }
         UserId = parsed.Value.UserId;
-        UserName = ctx.Request.Cookies[CookieName + ".name"];
+        UserName = ctx.Request.Cookies[name + ".name"];
     }
 
     public void Clear() { UserId = null; UserName = null; }
@@ -148,15 +156,17 @@ public sealed class StudioAuth
             Secure = AuthSession.SecureFor(res.HttpContext.Request),
             Path = "/", Expires = DateTimeOffset.UtcNow.AddDays(30)
         };
-        res.Cookies.Append(CookieName, token, opts);
-        res.Cookies.Append(CookieName + ".name", user.FullName, opts);
+        var name = CookieNameOn(res.HttpContext.Request);
+        res.Cookies.Append(name, token, opts);
+        res.Cookies.Append(name + ".name", user.FullName, opts);
     }
 
     public static void DeleteCookie(HttpResponse res)
     {
         // المَحوُ بِصِفَةِ الكِتابَةِ نَفسِها — نَسَقُ `AuthSession.ClearCookie`.
         var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(res.HttpContext.Request) };
-        res.Cookies.Delete(CookieName, opts);
-        res.Cookies.Delete(CookieName + ".name", opts);
+        var name = CookieNameOn(res.HttpContext.Request);
+        res.Cookies.Delete(name, opts);
+        res.Cookies.Delete(name + ".name", opts);
     }
 }

@@ -150,7 +150,8 @@ public class LogoutHopsTests(ITestOutputHelper output)
         ctx.Items[StoreHostItems.Slug] = "ashare";
         if (hostRole is not null) ctx.Items[StoreHostItems.Role] = hostRole;
         if (hosted is not null) ctx.Items[StoreHostItems.HostedRoles] = hosted;
-        if (cookieToken is not null) ctx.Request.Headers.Cookie = $"{AuthSession.CookieName("ashare")}={cookieToken}";
+        // ‏(‏2026-11-07، W13-4·C2c·2) الاسمُ بِقَرارِ الكاتِبِ والقارِئِ نَفسِه لِهذا الطَلَب — ما يَحمِلُه مُتَصَفِّحٌ عَلى HTTPS.
+        if (cookieToken is not null) ctx.Request.Headers.Cookie = $"{AuthSession.CookieNameOn(ctx.Request, "ashare")}={cookieToken}";
         if (ticket is not null) ctx.Request.QueryString = new QueryString($"?{LogoutHops.TicketKey}={ticket}");
         return ctx;
     }
