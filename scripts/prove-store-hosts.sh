@@ -18,6 +18,7 @@
 #   STORE=<مَتجَر> MANAGER_PHONE=<هاتِفُ مُديرِه> ./scripts/prove-store-hosts.sh   # ومَعَه المَجموعَةُ ٦: مُديرُ المَتجَرِ يَدخُلُ عَلى مُضيفِه ويَفتَحُ بِطاقَةَ /manage
 #   STORE=<مَتجَر> ROLE=vendor ROLE_PHONE=<هاتِف> ./scripts/prove-store-hosts.sh    # ومَعَه المَجموعَةُ ١٠: جَلسَةُ الدَورِ لا تُغادِرُ مُضيفَها (‏C2b-R1، تَكتُبُ دُخولاً)
 #   ALLOWED=1 ./scripts/prove-store-hosts.sh   # خادِمٌ شُغِّلَ بِـAllowedHosts="<domain>;*.<domain>" — ومَعَه المَجموعَةُ ١٤ (C2c، ‏ADR-050 §١٥)
+#   ADMIN_PHONE=<PLATFORM_ADMIN_PHONE لِلخادِم> ./scripts/prove-store-hosts.sh   # ومَعَه صُفوفُ الاستوديو في المَجموعَةِ ١٣ (C2c-R1، تَكتُبُ دُخولاً وتُسقِطُ جَلَساتِ المُشرِف)
 #
 #  ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المَجموعَةُ ٦ تَكتُبُ دُخولاً** (تَحَدّي الرَمزِ وجَلسَتُه) فَلا تَجري إلّا
 #  بِـ`MANAGER_PHONE` — هاتِفُ مُستَخدِمٍ لَه `tenant.manage` في `STORE` — وبِرَمزِ المُحاكي `DEV_CODE` (Development وَحدَه)؛ وبِلا هاتِفٍ تُطبَعُ «لَم تُفحَص» ولا تُعَدّ.
@@ -38,6 +39,7 @@ DEV_CODE="${DEV_CODE:-123456}"
 ROLE="${ROLE-vendor}"              # دَورٌ في STORE مِن الكَتالوج — مُضيفُه STORE-ROLE (W13-4·C2b·5)؛ فارِغاً لا تُفحَصُ المَجموعَةُ ٩
 ROLE_ABSENT="${ROLE_ABSENT:-driver}" # دَورٌ مِن الكَتالوجِ لا يَحمِلُه STORE — مُضيفُه 404
 ROLE_PHONE="${ROLE_PHONE:-}"       # هاتِفٌ يَدخُلُ بِدَورِ ROLE (بِرَمزِ المُحاكي) — يُشَغِّلُ المَجموعَةَ ١٠؛ يَكتُبُ دُخولاً ومُستَخدِماً إن لَم يَكُن (C2b-R1)
+ADMIN_PHONE="${ADMIN_PHONE:-}"     # PLATFORM_ADMIN_PHONE لِلخادِم — يُشَغِّلُ صُفوفَ الاستوديو في المَجموعَةِ ١٣ (C2c-R1)؛ يَكتُبُ دُخولاً ويَرفَعُ إصدارَ جَلسَتِه
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 ORIGIN=""                         # رَأسُ Origin يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ١٢ وَحدَها (W13-4·C2c·1)
@@ -375,8 +377,69 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
     if [ "$kind" = with ]; then tick "$([ "$st" = in ] && echo 1 || echo 0)" "/me بِكَعكاتِ __Host- عَلى HTTPS ← داخِل" "$code · $st"
     else tick "$([ "$st" = out ] && echo 1 || echo 0)" "/me بِالقيَمِ نَفسِها تَحتَ الاسمِ القَديم ← خارِج" "$code · $st"; fi
   done
+  # ‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **«اخرج من كل الأجهزة» لا يَعودُ بِمُكَرَّرٍ ولا بِتَنصيص**: كانَ
+  # القارِئُ بِالبادِئَةِ يَقرَأُ أَوَّلَ زَوجٍ بِحُروفِه (بِلا تَنصيص) والبَوّابَةُ تَحكُمُ بِالقامُوس (آخِرُ المُكَرَّرِ بِلا حالَةِ أَحرُف) — فَالرَمزُ الساقِطُ ومَعَه «=x» بَعدَه
+  # (بِحُروفِه، أَو __HOST-، أَو في سَطرٍ ثانٍ) أَو بَينَ عَلامَتَي تَنصيصٍ كانَ /me بِه داخِلاً. المُكَرَّرُ قَبلَ الإسقاطِ داخِلٌ (الصَفُّ لَيسَ أَعمى)، ثُمَّ الإسقاطُ بِالجَلسَةِ
+  # نَفسِها، ثُمَّ الرَمزُ وَحدَه وبِصُوَرِه خارِج — العامُّ عَلى /me وكَعكَةُ الدَورِ عَلى /r/$ROLE/me. **يَكتُبُ** (يَرفَعُ إصدارَ جَلسَةِ ROLE_PHONE).
+  me_state() { # me_state <path> <curl…> — «الرَمز in|out» لِصَفحَةٍ عَلى مُضيفِ المَتجَرِ بِـHTTPS المُمَرَّر
+    local path="$1" code; shift
+    code="$(hs "$path" "$TMP/h4" "$@")"
+    if [ "$code" = 200 ] && grep -qF "\"slug\":\"$STORE\"" "$TMP/hsbody" && ! grep -qE 'href="[^"]*/login(\?[^"]*)?"' "$TMP/hsbody"; then echo "$code in"; else echo "$code out"; fi
+  }
+  gpair="$(printf '%s\n' "$setc" | sed 's/;.*//' | grep -E "^__Host-\.acommerce\.auth\.$STORE=" | head -1)"
+  rpair="$(printf '%s\n' "$setc" | sed 's/;.*//' | grep -E "^__Host-\.acommerce\.auth\.$STORE\.$ROLE=" | head -1)"
+  gn="${gpair%%=*}" gv="${gpair#*=}" rn="${rpair%%=*}" rv="${rpair#*=}"
+  st="$(me_state /me -H "Cookie: $gn=$gv; $gn=x")"
+  tick "$([ -n "$gpair" ] && [ -n "$rpair" ] && [ "${st#* }" = in ] && echo 1 || echo 0)" "قَبلَ الإسقاط: /me بِالرَمزِ ومَعَه مُكَرَّرٌ تالِف ← داخِل" "$st"
+  code="$(hs /me/sessions/revoke "$TMP/h5" -H "Cookie: $pairs" -H 'Content-Type: application/x-www-form-urlencoded' --data '')"
+  tick "$([ "$code" = 302 ] && echo 1 || echo 0)" "POST /me/sessions/revoke («اخرج من كل الأجهزة») ← 302" "$code"
+  for v in "وَحدَه|/me|Cookie: $gn=$gv" "ومَعَه مُكَرَّرٌ بِحُروفِه|/me|Cookie: $gn=$gv; $gn=x" "ومَعَه مُكَرَّرٌ __HOST-|/me|Cookie: $gn=$gv; __HOST-${gn#__Host-}=x" \
+           "بَينَ عَلامَتَي تَنصيص|/me|Cookie: $gn=\"$gv\"" "كَعكَةُ الدَورِ ومَعَها مُكَرَّر|/r/$ROLE/me|Cookie: $rn=$rv; $rn=x"; do
+    IFS='|' read -r label path cookie <<< "$v"
+    st="$(me_state "$path" -H "$cookie")"
+    tick "$([ "${st#* }" = out ] && echo 1 || echo 0)" "بَعدَ الإسقاط: $path بِالساقِطِ $label ← خارِج" "$st"
+  done
+  st="$(me_state /me -H "Cookie: $gn=$gv" -H "Cookie: $gn=x")"
+  tick "$([ "${st#* }" = out ] && echo 1 || echo 0)" "بَعدَ الإسقاط: /me بِالساقِطِ ومُكَرَّرِه في سَطرَينِ ← خارِج" "$st"
 else
   echo "  – لَم تُفحَص: ROLE أَو ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
+fi
+# ‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والاستوديو مِثلُه**: مُشرِفُ المَنَصَّةِ يَدخُلُ عَلى الجَذرِ بِـHTTPS المُمَرَّر، و/admin
+# بِكَعكَتِه وَحدَها ومَعَ مُكَرَّرٍ تالِفٍ لَوحَةُ الإدارَة؛ ثُمَّ «اخرج من كل الأجهزة» (/studio/me/sessions/revoke)، فَـ/admin بِها وَحدَها وبِالمُكَرَّرِ بِحُروفِه وبِـ__HOST- لَيسَ لَوحَةَ
+# الإدارَة (صِفرُ رابِطٍ إلى /admin/tenants). كانَ المُكَرَّرُ يُعيدُها. **يَكتُبُ دُخولاً ويَرفَعُ إصدارَ جَلسَةِ المُشرِف** فَلا يَجري إلّا بِـ`ADMIN_PHONE`.
+if [ -n "$ADMIN_PHONE" ]; then
+  hr() { # hr <path> <out-headers> [curl…] — طَلَبٌ عَلى الجَذرِ بِـHTTPS المُمَرَّر؛ يَطبَعُ الرَمز
+    local path="$1" head="$2"; shift 2
+    curl -s -m 20 -o "$TMP/hrbody" -D "$head" -w '%{http_code}' -H "Host: $R" -H 'X-Forwarded-Proto: https' "$@" "$(url "$R" "$path")" || echo 000
+  }
+  tick() { # tick <ok:0|1> <label> <detail>
+    checked=$((checked + 1))
+    if [ "$1" = 1 ]; then printf '  ✓ %-60s %s\n' "$2" "$3"; else failed=$((failed + 1)); printf '  ✗ %-60s %s\n' "$2" "$3"; fi
+  }
+  admin_state() { # admin_state <curl…> — «الرَمز in|out · رَوابِط» لِـ/admin
+    local code links; code="$(hr /admin "$TMP/h6" "$@")"
+    links="$(grep -oE 'href="/admin/tenants[^"]*"' "$TMP/hrbody" | wc -l)"
+    if [ "$code" = 200 ] && [ "$links" -gt 0 ]; then echo "$code in · $links"; else echo "$code out · $links"; fi
+  }
+  c1="$(hr /studio/auth/login "$TMP/a1" --data-urlencode "phone=$ADMIN_PHONE")"
+  c2="$(hr /studio/auth/verify "$TMP/a2" --data-urlencode method=phone --data-urlencode "phone=$ADMIN_PHONE" --data-urlencode "code=$DEV_CODE")"
+  spair="$(tr -d '\r' < "$TMP/a2" | sed -n 's/^[Ss]et-[Cc]ookie: //p' | sed 's/;.*//' | grep -E '^__Host-\.acommerce\.studio=' | head -1)"
+  sn="${spair%%=*}" sv="${spair#*=}"
+  tick "$([ "$c1" = 302 ] && [ "$c2" = 302 ] && [ -n "$spair" ] && echo 1 || echo 0)" "دُخولُ المُشرِفِ عَلى $R بِـHTTPS: كَعكَةُ __Host-.acommerce.studio" "$c1 ← $c2"
+  for v in "وَحدَها|Cookie: $sn=$sv" "ومَعَها مُكَرَّرٌ تالِف|Cookie: $sn=$sv; $sn=x"; do
+    IFS='|' read -r label cookie <<< "$v"
+    st="$(admin_state -H "$cookie")"
+    tick "$([ "$(echo "$st" | cut -d' ' -f2)" = in ] && echo 1 || echo 0)" "قَبلَ الإسقاط: /admin بِكَعكَةِ المُشرِفِ $label ← داخِل" "$st"
+  done
+  code="$(hr /studio/me/sessions/revoke "$TMP/a3" -H "Cookie: $sn=$sv" -H 'Content-Type: application/x-www-form-urlencoded' --data '')"
+  tick "$([ "$code" = 302 ] && echo 1 || echo 0)" "POST /studio/me/sessions/revoke ← 302" "$code"
+  for v in "وَحدَها|Cookie: $sn=$sv" "ومَعَها مُكَرَّرٌ بِحُروفِه|Cookie: $sn=$sv; $sn=x" "ومَعَها مُكَرَّرٌ __HOST-|Cookie: $sn=$sv; __HOST-${sn#__Host-}=x"; do
+    IFS='|' read -r label cookie <<< "$v"
+    st="$(admin_state -H "$cookie")"
+    tick "$([ "$(echo "$st" | cut -d' ' -f2)" = out ] && echo 1 || echo 0)" "بَعدَ الإسقاط: /admin بِالساقِطَةِ $label ← خارِج" "$st"
+  done
+else
+  echo "  – صُفوفُ الاستوديو لَم تُفحَص: ADMIN_PHONE غائِب (PLATFORM_ADMIN_PHONE لِلخادِم، وDevelopment لِرَمزِ المُحاكي)"
 fi
 
 # ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الرابِعَة · W13-4·C2c·3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **`AllowedHosts=R;*.R` يُقاسُ قَبلَ أَن يُضبَط** (A2 W18 — دَعمُ

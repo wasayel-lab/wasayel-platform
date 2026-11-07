@@ -83,16 +83,20 @@ public sealed class AuthSession
     }
 
     /// <summary>أَزواجُ رَأسِ <c>Cookie</c> بِتَرتيبِها وحالَةِ أَحرُفِها — القيمَةُ مَفكوكَةُ التَرميزِ كَما يَفُكُّها <c>Request.Cookies</c>.</summary>
-    private static IEnumerable<(string Name, string Value)> HeaderCookies(HttpRequest req)
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«كَما يَفُكُّها» لَم تَصدُق، والبَوّابَةُ لَم تَكُن تَرى
+    /// ما يُقرَأُ مِن هُنا</b>: كانَ يَنزِعُ عَلامَتَي التَنصيصِ والقامُوسُ يُبقيهِما (مَقيس: <c>__Host-x="QUJD"</c> ⇒ القامُوسُ <c>"QUJD"</c>)، و<c>SessionVersionGate</c>
+    /// تَحكُمُ بِالقامُوسِ وَحدَه (آخِرُ المُكَرَّرِ بِلا حالَةِ أَحرُف) و<see cref="CookieValue"/> يَقرَأُ أَوَّلَ زَوجٍ مِن هُنا — فَرَمزٌ أَسقَطَه «اخرج من كل الأجهزة» أَو حَذفُ الحِسابِ
+    /// كانَ يُفتَحُ عَلى HTTPS بِمُكَرَّرٍ تالِفٍ بَعدَه أَو بَينَ عَلامَتَين. <b>والآن</b>: الفَكُّ فَكُّ القامُوسِ بِحَرفِه (<see cref="Uri.UnescapeDataString"/> وَحدَه، والتَنصيصُ يَبقى
+    /// فَلا يُقرَأُ رَمزاً — والكاتِبُ لا يَكتُبُه: <c>Append</c> يُرَمِّزُ <c>"</c>)، و<c>internal</c> لِتَحكُمَ البَوّابَةُ عَلى كُلِّ زَوجٍ مِنه (<c>SessionVersionGate.ReadablePairs</c>)
+    /// — فَما يَقرَؤُه قارِئٌ قيمَةُ زَوجٍ حُكِمَ عَلَيه، بِالبِناء. مَحروسٌ في <c>SessionGateReadsWhatTheReaderReadsTests</c>.</remarks>
+    internal static IEnumerable<(string Name, string Value)> HeaderCookies(HttpRequest req)
     {
         foreach (var header in req.Headers.Cookie)
             foreach (var part in (header ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
             {
                 var eq = part.IndexOf('=');
                 if (eq <= 0) continue;
-                var value = part[(eq + 1)..].Trim();
-                if (value.Length >= 2 && value[0] == '"' && value[^1] == '"') value = value[1..^1];
-                yield return (part[..eq].Trim(), Uri.UnescapeDataString(value));
+                yield return (part[..eq].Trim(), Uri.UnescapeDataString(part[(eq + 1)..].Trim()));
             }
     }
 

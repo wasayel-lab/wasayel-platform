@@ -68,6 +68,18 @@ public static class SessionVersionGate
             .ToList();
     }
 
+    /// <summary>
+    /// <para><b>كُلُّ زَوجٍ يَقرَؤُه قارِئٌ لِلجَلسَة — وهُوَ ما تَحكُمُ عَلَيه البَوّابَة</b> (‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01): القامُوسُ
+    /// <c>Request.Cookies</c> (قُرّاءُ الاسمِ بِلا بادِئَة، وجَزيرَتا الوَكيل) <b>وأَزواجُ الرَأسِ بِمُحَلِّلِ القارِئِ نَفسِه</b> (<c>AuthSession.HeaderCookies</c> — كُلُّ مُكَرَّرٍ وكُلُّ
+    /// حالَةٍ وكُلُّ سَطر؛ ومِنها يَقرَأُ <c>AuthSession.CookieValue</c> الاسمَ بِالبادِئَةِ <c>__Host-</c>).</para>
+    /// <para>كانَت البَوّابَةُ تَحكُمُ بِالقامُوسِ وَحدَه، و<c>c297172</c> جَعَلَ القارِئَ بِالبادِئَةِ يَقرَأُ أَوَّلَ زَوجٍ بِحُروفِه — فَعَلى HTTPS
+    /// <c>__Host-.acommerce.auth.X=&lt;ساقِط&gt;; __Host-.acommerce.auth.X=x</c> (أَو <c>__HOST-…=x</c>، أَو سَطرانِ، أَو الساقِطُ بَينَ عَلامَتَي تَنصيص) يُفحَصُ فيه «x» ويُفتَحُ
+    /// الساقِط (مَقيسٌ حَيّاً: <c>/me</c> داخِلٌ بَعدَ «اخرج من كل الأجهزة»، ومُشرِفُ المَنَصَّةِ يَعودُ إلى <c>/admin</c>). <b>فَالشَرطُ صارَ بِالبِناء</b>: ما يُعيدُه قارِئٌ قيمَةُ
+    /// زَوجٍ في هذِه القائِمَة — والاختِبارُ يُعيدُه عَلى كُلِّ صورَةٍ مِن صُوَرِ الرَأس.</para>
+    /// </summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> ReadablePairs(HttpRequest request)
+        => request.Cookies.Concat(AuthSession.HeaderCookies(request).Select(p => KeyValuePair.Create(p.Name, p.Value))).ToList();
+
     /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت، و(‏2026-10-30) بِلا حالَةِ أَحرُف
     /// كَما يَبحَثُ <c>Request.Cookies</c>.</summary>
     /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والاسمُ بِالبادِئَةِ <c>AuthSession.HostPrefix</c> مِنها — كوكيُّ الجَلسَةِ عَلى HTTPS.</remarks>
@@ -278,16 +290,19 @@ public static class SessionVersionGate
     /// «لا رَمزَ ساقِطاً بَعدَ البَوّابَةِ عِندَ أَيِّ قارِئ» يُفحَصُ بِالبِناءِ لا بِحُجَّةٍ عَن تَطابُقِ مُحَلِّلَين.</para>
     /// <para>‏(‏2026-10-30، الموجَة ١٢) <b>والمَحوُ دِفاعيٌّ بِلا حالَةٍ مَقيسَةٍ تَبلُغُه</b>: ثَلاثَةٌ وثَلاثونَ رَأساً مَحقوناً عَلى نُسخَةٍ فَرعُ المَحوِ فيها «يَضَعُ المَنزوعَ
     /// ويَخرُج» لَم يَبقَ في أَيٍّ مِنها رَمزٌ ساقِطٌ عِندَ القارِئ — المُحَلِّلُ يَرُدُّ ما لا يُطابِقُ تَقسيمَ «;». يَبقى لِأَنّ كُلفَتَه صِفرٌ عَلى رَأسٍ سَليم.</para>
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«بِمُحَلِّلِ القارِئِ نَفسِه» صارَ بِمُحَلِّلَيه</b>:
+    /// <c>c297172</c> أَعطى القارِئَ مُحَلِّلاً ثانِياً لِلاسمِ بِالبادِئَة (<c>AuthSession.HeaderCookies</c>) والبَوّابَةُ بَقِيَت عَلى القامُوس — فَالحُكمُ والفَحصُ بَعدَ النَزعِ
+    /// صارا عَلى <see cref="ReadablePairs"/>: كُلُّ زَوجٍ بِقيمَتِه، لا قيمَةُ القامُوسِ تَحتَ الاسم. والنَزعُ كَما كانَ بِلا حالَةِ أَحرُفٍ يَأخُذُ كُلَّ مُكَرَّرٍ لِلاسمِ المُسقَط.</para>
     /// </remarks>
     public static async Task ApplyAsync(HttpContext ctx)
     {
-        if (CheckedCookieNames(ctx.Request.Cookies).Count == 0) return;
+        if (CheckedCookieNames(ReadablePairs(ctx.Request)).Count == 0) return;
         var store = ctx.RequestServices.GetRequiredService<IDocumentStore>();
         var cache = ctx.RequestServices.GetRequiredService<IMemoryCache>();
         var deleted = new List<string>();
         for (var pass = 1; ; pass++)
         {
-            var revoked = await RevokedNamesAsync(ctx.Request.Cookies, store, cache);
+            var revoked = await RevokedNamesAsync(ReadablePairs(ctx.Request), store, cache);
             if (revoked.Count == 0) break;
             var header = ctx.Request.Headers.Cookie.ToString();
             var stripped = WithoutCookies(header, revoked);
@@ -305,12 +320,15 @@ public static class SessionVersionGate
     public const int Passes = 3;
 
     /// <summary>ما أَسقَطَه رَفعُ الإصدارِ مِن <see cref="CheckedCookieNames"/> — بِالرَمزِ الَّذي يَقرَؤُه القارِئُ تَحتَ ذلِكَ الاسم.</summary>
-    private static async Task<List<string>> RevokedNamesAsync(IRequestCookieCollection cookies, IDocumentStore store, IMemoryCache cache)
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>بِكُلِّ زَوجٍ مِن <see cref="ReadablePairs"/></b> لا بِقيمَةِ القامُوسِ
+    /// تَحتَ الاسم — فَالاسمُ يُسقَطُ إن حَمَلَ زَوجٌ مِنه رَمزاً ساقِطاً أَيّاً كانَ تَرتيبُه وحالَتُه وسَطرُه.</remarks>
+    private static async Task<List<string>> RevokedNamesAsync(IReadOnlyList<KeyValuePair<string, string>> pairs, IDocumentStore store, IMemoryCache cache)
     {
         var revoked = new List<string>();
-        foreach (var name in CheckedCookieNames(cookies))
+        var checkedNames = CheckedCookieNames(pairs).ToHashSet(StringComparer.Ordinal);
+        foreach (var (name, token) in pairs)
         {
-            var token = cookies[name];
+            if (!checkedNames.Contains(name) || revoked.Contains(name, StringComparer.Ordinal)) continue;
             if (AuthHandlers.ParseToken(token) is not { } parsed || AuthHandlers.SessionVersionOf(token) is not int version) continue;
             if (IsRevoked(version, await AccountVersionAsync(store, cache, parsed.TenantSlug, parsed.UserId))) revoked.Add(name);
         }
