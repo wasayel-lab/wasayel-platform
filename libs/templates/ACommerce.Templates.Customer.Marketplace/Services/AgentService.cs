@@ -931,7 +931,7 @@ public sealed class AgentToolExecutor
 
         // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدراجٌ لا upsert: السُؤالُ أَعلاه ظَنٌّ، ومَن كَتَبَ المُعَرِّفَ بَعدَه كانَ يُدهَسُ
         // ويُعَدُّ لِهذا المُنادي مَتجَرُه — والآنَ يُرَدُّ بِرِسالَةِ «مَوجود» نَفسِها ولا يُعَدّ.
-        s.Insert(new Tenant
+        void Insert(IDocumentSession s) => s.Insert(new Tenant
         {
             Id = slug, Name = name, BrandColor = color, TagLine = tagline,
             City = city, AuthChannel = channel, Categories = cats,
@@ -943,16 +943,36 @@ public sealed class AgentToolExecutor
             OwnerUserId = ownerUserId ?? createdBy ?? Guid.Empty,
             CreatedAt = DateTime.UtcNow
         });
-        try { await s.SaveChangesAsync(ct); }
-        catch (JasperFx.DocumentAlreadyExistsException) { return (false, taken); }
 
         // والعَدُّ **بَعدَ** الكِتابَةِ الناجِحَة — نَفسُ تَرتيبِ
         // `POST /studio/s/{id}/build` حَرفاً: لا يُحاسَبُ على مَتجَرٍ
         // لَم يوجَد.
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والكِتابَةُ والعَدُّ وسُؤالُ السَقفِ حِفظٌ واحِدٌ لِمَن يُعَدُّ
+        // عَلَيه — وَحدَةُ بابِ الاستوديو نَفسُها (`RecordStoreBuiltAsync`): كانَت البَوّابَةُ أَعلاه ثُمَّ إدراجٌ ثُمَّ عَدٌّ بِلا قُفل، فَاثنا عَشَرَ نِداءً مُتَزامِناً
+        // مِن صاحِبٍ عَدّادُه 39 (السَقفُ 40) كَتَبَت 12 مَتجَراً والعَدّادُ 43، وثَمانِيَةٌ مِنها رُدَّت «خَطَأ في تَنفيذ الأَداة» بَعدَ أَن كُتِبَ مَتجَرُها.
+        // وسُلطَةُ المُشرِفِ (`ownerUserId == null`) لا تُعَدُّ فَتَكتُبُ وَحدَها كَما كانَت.
         if (ownerUserId is Guid counted)
-            await tierService.RecordStoreBuiltAsync(counted, ct);
+        {
+            var birth = await tierService.RecordStoreBuiltAsync(counted, Insert, ct);
+            if (birth.Outcome == Services.Incubator.StudioTierService.StoreBirthOutcome.SlugTaken) return (false, taken);
+            if (birth.Outcome == Services.Incubator.StudioTierService.StoreBirthOutcome.QuotaReached) return LimitRefusal(birth.Gate);
+        }
+        else
+        {
+            Insert(s);
+            try { await s.SaveChangesAsync(ct); }
+            catch (JasperFx.DocumentAlreadyExistsException) { return (false, taken); }
+        }
 
         return (true, $"تَمّ إنشاء «{slug}» بِـ {cats.Count} فِئَات.");
+
+        // نَصُّ الحَدِّ لِسُؤالِ الحِفظِ بِالوَسيطَينِ اللَذَينِ رَآهُما — وهُوَ نَصُّ البَوّابَةِ أَعلاه بِحَرفِه: تِلكَ يَقرَؤُها في سَطرِها
+        // `UpgradePromptNextStepTests` و`AgentStoreLimitRefusalTests`، وهذِه يَقيسُها بايتاً `LiveStoreQuotaRaceProofTests` — فَلا تَنجَرِفُ واحِدَةٌ صامِتَة.
+        static (bool, string) LimitRefusal(Services.Incubator.StudioTierService.GateCheck gate)
+            => (false, string.Join(" ", new[] { string.Format(
+                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit),
+                    Services.Incubator.StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)) }
+                    .Where(x => !string.IsNullOrEmpty(x))));
     }
 
     private async Task<(bool, string)> SetCategoriesAsync(JsonElement root, CancellationToken ct)

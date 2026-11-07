@@ -159,11 +159,15 @@ public sealed class TenantFromAnalysisFactory
     /// وبَقِيَ صَفٌّ واحِدٌ مالِكُه آخِرُ كاتِب، وعُدَّ لِكِلَيهِما مَتجَر. والآنَ <c>Insert</c>: مِفتاحُ الوَثيقَةِ هُوَ القُفل، والثاني يَرمي
     /// <c>JasperFx.DocumentAlreadyExistsException</c> عِندَ الحِفظ — ويُجيبُه البابُ بِـ<see cref="SlugTaken"/> كَما يُجيبُ مَن جاءَ بَعدَ الكِتابَة.
     /// والوَثيقَةُ المَكتوبَةُ هِيَ هِيَ بايتاً (‏<c>StudioStoreBirthCharacterizationTests.GoldenSha256</c>).</para>
+    ///
+    /// <para><b>و<paramref name="write"/> <c>false</c> يُعيدُ الوَثيقَةَ ولا يَكتُبُها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ
+    /// حَرفٌ فَوقَه): بابُ الاستوديو يُدرِجُها في حِفظِ <see cref="StudioTierService.RecordStoreBuiltAsync"/> نَفسِه مَعَ عَدّادِ صاحِبِها وسُؤالِ سَقفِه —
+    /// فَلا مَتجَرَ بِلا عَدٍّ ولا عَدَّ بِلا مَتجَر. والوَثيقَةُ هِيَ هِيَ في الحالَين.</para>
     /// </summary>
     public async Task<Tenant> CreateAsync(
         string slug, string name, string color, string tagLine, string city,
         string pattern, string sector, string authChannel,
-        Guid ownerId, Guid? sourceAnalysisId,
+        Guid ownerId, Guid? sourceAnalysisId, bool write = true,
         CancellationToken ct = default)
     {
         // **النَمَطُ يُسَوّى قَبلَ أَن يُشتَقَّ مِنهُ شَيء.** ولا يُغَيِّرُ
@@ -184,6 +188,7 @@ public sealed class TenantFromAnalysisFactory
             SourceAnalysisId = sourceAnalysisId,
             CreatedAt = DateTime.UtcNow
         };
+        if (!write) return tenant;
 
         await using var ws = _store.LightweightSession();
         ws.Insert(tenant);

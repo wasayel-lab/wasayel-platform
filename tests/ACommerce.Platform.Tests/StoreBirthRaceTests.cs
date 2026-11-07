@@ -40,13 +40,22 @@ public class StoreBirthRaceTests(ITestOutputHelper output)
     private static readonly Regex Insert = new(@"\.Insert\((?:tenant|new (?:ACommerce\.Kit\.Tenants\.)?Tenant\b)", RegexOptions.Compiled);
     private const string Collision = "catch (JasperFx.DocumentAlreadyExistsException)";
 
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والتِقاطُ التَصادُمِ في وَحدَةِ العَدِّ بِشَكلِه الثاني:
+    /// ‏Marten يَجمَعُ خَرقَي الحِفظِ الواحِدِ في <c>AggregateException</c>، فَالوَحدَةُ تَلتَقِطُ <c>Exception</c> بِشَرطِ أَنّه يَحمِلُ التَصادُم.</summary>
+    private static readonly Regex CollisionCaught = new(
+        @"catch \((?:JasperFx\.DocumentAlreadyExistsException\)|Exception \w+\) when \(Holds<JasperFx\.DocumentAlreadyExistsException>\(\w+\)\))", RegexOptions.Compiled);
+
     internal static Writer Scan(string door, string body, string answer)
     {
         int At(Regex r) => r.Match(body) is { Success: true } m ? m.Index : -1;
-        var c = body.IndexOf(Collision, StringComparison.Ordinal);
+        var c = At(CollisionCaught);
         var a = c < 0 ? -1 : body.IndexOf(answer, c, StringComparison.Ordinal);
         return new Writer(door, At(Insert), At(Upsert), c, a);
     }
+
+    /// <summary>وَحدَةُ العَدِّ الَّتي يُدرِجُ فيها بابُ الاستوديو وأَداةُ الوَكيلِ المَتجَرَ مَعَ عَدّادِ صاحِبِه.</summary>
+    internal static string BirthUnit()
+        => Slice(Read($"{Template}/Services/Incubator/StudioTier.cs"), "public async Task<StoreBirth> RecordStoreBuiltAsync(", "private static bool Holds<T>(");
 
     /// <summary>كاتِبٌ سَليم: يُدرِجُ ولا يَدهَس، ويَلتَقِطُ التَصادُمَ ويُجيبُ بَعدَه بِـ<c>slug_taken</c>.</summary>
     internal static bool Sound(Writer w) => w.Insert >= 0 && w.Upsert < 0 && w.Catch >= 0 && w.Answer > w.Catch;
@@ -59,11 +68,18 @@ public class StoreBirthRaceTests(ITestOutputHelper output)
         var admin = Slice(ext, "app.MapPost(\"/admin/tenants/create\"", "app.MapPost(\"/admin/tenants/{slug}/users/");
         var agent = AgentStoreLimitRefusalTests.CreateTenantBody();
         // المَصنَعُ يُدرِجُ ولا يَلتَقِط — بابُه يَلتَقِطُ ويُجيب؛ فَيُقاسانِ مَعاً كاتِباً واحِداً: الإدراجُ مِن المَصنَعِ والجَوابُ مِن الباب.
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَ بابُ الاستوديو يُدرِجُ (`s => s.Insert(tenant)`) في وَحدَةِ
+        // العَدِّ (`RecordStoreBuiltAsync`) الَّتي تَلتَقِطُ التَصادُمَ وتُجيبُ `SlugTaken`، والبابُ يُتَرجِمُه رَمزَ الاستِمارَة — فَكاتِبُه ثَلاثَةُ أَطراف: الإدراجُ مِن
+        // البابِ والتِقاطُ الوَحدَةِ وجَوابُها، ولا upsert في أَيٍّ مِنها ولا في المَصنَع. وكاتِبُ المَصنَعِ نَفسِه (حينَ يَكتُبُ) صَفٌّ رابِع: يُدرِجُ ولا يَدهَس.
         var f = Scan("factory", factory, "");
-        var s = Scan(StudioStoreCreate.Endpoint, studio, "TenantFromAnalysisFactory.SlugTaken");
+        var s = Scan(StudioStoreCreate.Endpoint, studio, "");
+        var u = Scan("RecordStoreBuiltAsync", BirthUnit(), "StoreBirthOutcome.SlugTaken");
+        var answered = studio.IndexOf("StoreBirthOutcome.SlugTaken =>", StringComparison.Ordinal) is var at and >= 0
+                       && studio.IndexOf("TenantFromAnalysisFactory.SlugTaken", at, StringComparison.Ordinal) > at;
         return
         [
-            new Writer($"{StudioStoreCreate.Endpoint} ← factory.CreateAsync", f.Insert, Math.Max(f.Upsert, s.Upsert), s.Catch, s.Answer),
+            new Writer($"{StudioStoreCreate.Endpoint} ← RecordStoreBuiltAsync", s.Insert, Math.Max(Math.Max(f.Upsert, s.Upsert), u.Upsert), u.Catch, answered ? u.Answer : -1),
+            new Writer("factory.CreateAsync", f.Insert, f.Upsert, 0, f.Insert >= 0 ? 1 : -1),
             Scan("/admin/tenants/create", admin, "Back(\"slug_taken\")"),
             Scan("create_tenant", agent, "(false, taken)"),
         ];
@@ -74,21 +90,30 @@ public class StoreBirthRaceTests(ITestOutputHelper output)
     {
         var writers = Writers();
         foreach (var w in writers) output.WriteLine($"{w.Door}: Insert@{w.Insert} · Store@{w.Upsert} · catch@{w.Catch} · slug_taken@{w.Answer} ⇒ {(Sound(w) ? "سَليم" : "يَدهَس")}");
-        Assert.Equal(3, writers.Count);
+        Assert.Equal(4, writers.Count);
         var broken = writers.Where(w => !Sound(w)).Select(w => w.Door).ToList();
         Assert.True(broken.Count == 0, "بابٌ يَلِدُ مَتجَراً بِكِتابَةٍ تَدهَسُ أَو بِلا جَوابٍ لِلتَصادُم: " + string.Join("، ", broken));
     }
 
-    /// <summary>وفي بابِ الاستوديو: التَصادُمُ يُجابُ <b>قَبلَ</b> العَدّ — لا حِصَّةَ تُنفَقُ عَلى مَتجَرٍ لَم يُكتَب.</summary>
+    /// <summary>وفي بابِ الاستوديو: لا حِصَّةَ تُنفَقُ عَلى مَتجَرٍ لَم يُكتَب. ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)
+    /// كانَ الصَفُّ <c>The_studio_door_answers_the_collision_before_it_counts_the_store</c>: التِقاطُ التَصادُمِ في البابِ قَبلَ <c>tier.RecordStoreBuiltAsync(ownerId)</c>
+    /// — حِفظانِ مُتَتالِيان. وصارا حِفظاً واحِداً: الوَحدَةُ تَسأَلُ السَقفَ ثُمَّ تَزيدُ ثُمَّ تُدرِجُ ثُمَّ تَحفَظُ مَرَّةً، والتَصادُمُ يُلتَقَطُ بَعدَ الحِفظِ الَّذي لَم
+    /// يَقَع فَلا عَدَّ يَبقى. والمَعنى نَفسُه أَقوى: لا عَدَّ بِلا مَتجَرٍ ولا مَتجَرَ بِلا عَدّ.</summary>
     [Fact]
-    public void The_studio_door_answers_the_collision_before_it_counts_the_store()
+    public void The_studio_door_counts_the_store_in_the_one_save_that_inserts_it()
     {
         var body = WriteEndpointGuardTests.AllMinimalApiEndpoints().Single(e => e.Route == StudioStoreCreate.Endpoint).Body;
         var create = body.IndexOf("factory.CreateAsync(", StringComparison.Ordinal);
-        var collision = body.IndexOf(Collision, StringComparison.Ordinal);
-        var count = body.IndexOf("tier.RecordStoreBuiltAsync(ownerId)", StringComparison.Ordinal);
-        output.WriteLine($"الإنشاء@{create} ← التِقاطُ التَصادُم@{collision} ← العَدّ@{count}");
-        Assert.True(create > 0 && collision > create && count > collision, "العَدُّ قَبلَ جَوابِ التَصادُمِ أَو بِلا جَواب.");
+        var unit = body.IndexOf("tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant))", StringComparison.Ordinal);
+        var code = WriteEndpointGuardTests.StripComments(BirthUnit());
+        string[] order = ["StoresBuilt >= limit", "CountStore(user)", "s.Store(user)", "insertStore(s)", "SaveChangesAsync"];
+        var at = order.Select(o => code.IndexOf(o, StringComparison.Ordinal)).ToArray();
+        output.WriteLine($"الإنشاء@{create} ← الوَحدَة@{unit} · " + string.Join(" ← ", order.Zip(at, (o, p) => $"{o}@{p}")));
+        Assert.True(create > 0 && unit > create, "البابُ لا يُدرِجُ المَتجَرَ في وَحدَةِ العَدّ.");
+        Assert.DoesNotContain("SaveChangesAsync", body, StringComparison.Ordinal);
+        Assert.True(at.All(p => p >= 0) && at.Zip(at.Skip(1)).All(p => p.First < p.Second), "وَحدَةُ العَدِّ مَقلوبَةٌ أَو ناقِصَة.");
+        Assert.Equal(1, Regex.Matches(code, @"\.SaveChangesAsync\(").Count);
+        Assert.False(Regex.IsMatch(WriteEndpointGuardTests.StripComments(body), @"\.Store\("), "البابُ يَكتُبُ خارِجَ الوَحدَة.");
     }
 
     /// <summary><b>الماسِحُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): الكاتِبُ السَليمُ يَمُرّ، وكُلُّ عَيبٍ مَحقونٍ يُحمِرُّه.</summary>
@@ -99,6 +124,8 @@ public class StoreBirthRaceTests(ITestOutputHelper output)
     [InlineData("s.Insert(new Tenant { Id = x }); try { await s.SaveChangesAsync(); } catch (JasperFx.DocumentAlreadyExistsException) { return Ok(); }", false)]
     [InlineData("try { await s.SaveChangesAsync(); } catch (JasperFx.DocumentAlreadyExistsException) { return Back(\"slug_taken\"); }", false)]
     [InlineData("ws.Insert(tenant); ws.Store(tenant); try { } catch (JasperFx.DocumentAlreadyExistsException) { return Back(\"slug_taken\"); }", false)]
+    [InlineData("s.Insert(tenant); try { } catch (Exception ex) when (Holds<JasperFx.DocumentAlreadyExistsException>(ex)) { return Back(\"slug_taken\"); }", true)]
+    [InlineData("s.Insert(tenant); try { } catch (Exception ex) when (Holds<JasperFx.ConcurrencyException>(ex)) { return Back(\"slug_taken\"); }", false)]
     public void The_writer_scanner_goes_red_on_an_upsert_or_an_unanswered_collision(string body, bool sound)
         => Assert.Equal(sound, Sound(Scan("عَيِّنَة", body, "Back(\"slug_taken\")")));
 }

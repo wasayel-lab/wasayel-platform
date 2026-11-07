@@ -4081,17 +4081,20 @@ public static class MarketplaceTemplateExtensions
 
             // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) المَصنَعُ يُدرِجُ لا يَدهَس: مَن كَتَبَ المُعَرِّفَ بَعدَ سُؤالِ `ValidateSlugAsync` أَعلاه فازَ، وهذا
             // الطَلَبُ يُجابُ كَمَن جاءَ بَعدَه (`slug_taken` بِما كُتِب) ولا يُعَدُّ لَه مَتجَرٌ لَم يُكتَب — العَدُّ بَعدَ الإدراجِ الناجِحِ وَحدَه.
-            try
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والإدراجُ والعَدُّ وسُؤالُ السَقفِ حِفظٌ واحِد: كانَ
+            // `CheckBuildAsync` أَعلاه ثُمَّ إدراجٌ ثُمَّ عَدٌّ بِلا قُفل، فَالدَفعَةُ المُتَزامِنَةُ تَعبُرُ السَقفَ (‏60 مَتجَراً والعَدّادُ 14، و46 جَواباً 500 بَعدَ
+            // الكِتابَة). والآن المَصنَعُ يُعيدُ الوَثيقَةَ ولا يَكتُبُها، و`RecordStoreBuiltAsync` يُعيدُ السُؤالَ ويُدرِجُ ويَعُدُّ مَعاً؛ والسُؤالُ أَعلاه
+            // يَبقى رَدّاً قَبلَ قِراءَةِ حَقل.
+            var tenant = await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
+                pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null, write: false);
+            var birth = await tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant));
+            return birth.Outcome switch
             {
-                await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
-                    pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null);
-            }
-            catch (JasperFx.DocumentAlreadyExistsException)
-            {
-                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantFromAnalysisFactory.SlugTaken, form));
-            }
-            await tier.RecordStoreBuiltAsync(ownerId);
-            return Results.Redirect($"/studio/apps/{form.Slug}?built=1");
+                Services.Incubator.StudioTierService.StoreBirthOutcome.Born => Results.Redirect($"/studio/apps/{form.Slug}?built=1"),
+                Services.Incubator.StudioTierService.StoreBirthOutcome.SlugTaken =>
+                    Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantFromAnalysisFactory.SlugTaken, form)),
+                _ => Results.Redirect($"{Services.Incubator.StudioStoreCreate.Page}?upgrade={birth.Gate.BreachCode}"),
+            };
         }).RequireFormBody().DisableAntiforgery();
 
         // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/build` — بابُ الإنشاءِ اليَدَوِيُّ أَعلاه يَكتُبُ المَتجَرَ نَفسَه بايتاً (‏`StudioStoreBirthCharacterizationTests`) بِلا شَرطِ تَحليل.

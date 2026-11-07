@@ -434,8 +434,64 @@ public sealed class StudioTierService
     public Task RecordRefineAsync(Guid uid, CancellationToken ct = default)
         => Bump(uid, u => u.RefinesUsed++, ct);
 
-    public Task RecordStoreBuiltAsync(Guid uid, CancellationToken ct = default)
-        => Bump(uid, u => u.StoresBuilt++, ct);
+    /// <summary>جَوابُ وِلادَةِ مَتجَرٍ عَلى حِصَّةِ صاحِبِه — مُعجَمٌ مُغلَق: وُلِدَ وعُدَّ، أَو بَلَغَ السَقفَ فَلا كِتابَة، أَو سَبَقَه إلى المُعَرِّفِ كاتِبٌ فَلا كِتابَة.</summary>
+    public enum StoreBirthOutcome { Born, QuotaReached, SlugTaken }
+
+    /// <summary>الجَوابُ وما رَآه سُؤالُ الحِصَّةِ في الحِفظِ نَفسِه (<see cref="GateCheck.Used"/> و<see cref="GateCheck.Limit"/>) — فَنَصُّ الحَدِّ يَقولُ ما قيسَ لا ما ظُنّ.</summary>
+    public sealed record StoreBirth(StoreBirthOutcome Outcome, GateCheck Gate);
+
+    /// <summary>
+    /// <para><b>يُدرِجُ المَتجَرَ ويَعُدُّه عَلى صاحِبِه في حِفظٍ واحِد — بَعدَ أَن يُعيدَ سُؤالَ الحِصَّةِ عَلى القِراءَةِ نَفسِها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ
+    /// C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَوصيفُه <c>e58732f</c>).</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b>: كانَ <c>RecordStoreBuiltAsync(uid)</c> حِفظاً ثانِياً بَعدَ حِفظِ المَتجَر، وبَينَهُما وبَينَ سُؤالِ <see cref="CheckBuildAsync"/>
+    /// لا قُفل. فَسِتّونَ طَلَباً مُتَزامِناً بِمُعَرِّفاتٍ مُختَلِفَةٍ مِن صاحِبٍ عَدّادُه 0 كَتَبَت 60 مَتجَراً والعَدّادُ 14، و46 جَواباً 500
+    /// (<c>ConcurrencyException</c> بَعدَ أَن كُتِبَ المَتجَر)؛ وصاحِبٌ عَدّادُه 39 أَرسَلَ سِتّاً فَصارَت مَتاجِرُه 45 عَلى سَقفِ 40. العَدّادُ يَتَخَلَّفُ عَن
+    /// المَتاجِرِ فَلا سَقفَ لِلدَفَعات — وهي «الحَلقَةُ الآلِيَّةُ» الَّتي وُضِعَ السَقفُ لِيُغلِقَها.</para>
+    ///
+    /// <para><b>والآن وَحدَةُ عَمَلٍ واحِدَة</b>: جَلسَةٌ عَلى <see cref="StudioAuth.Tenant"/> تَقرَأُ <c>StudioUser</c> (بِتَزامُنٍ تَفاؤُلِيّ)، وتُديرُ الفَترَة، وتَسأَلُ
+    /// السَقفَ، وتَزيدُ العَدّاد، وتُدرِجُ المَتجَرَ بِـ<paramref name="insertStore"/> — و<c>Tenant</c> وَحيدُ الإيجار (لا <c>tenant_id</c> في جَدوَلِه) فَيَركَبُ
+    /// المُعامَلَةَ نَفسَها — ثُمَّ حِفظٌ واحِد. فَإمّا الكِتابَتانِ مَعاً وإمّا لا شَيء. وتَعارُضُ <c>StudioUser</c> يُعيدُ القِراءَةَ والسُؤال: كُلُّ تَعارُضٍ مِن
+    /// وِلادَةٍ أُخرى رَفَعَ العَدّادَ واحِداً، فَبَعدَ <c>StoresMax</c> مِنها عَلى الأَكثَرِ يُجيبُ السُؤالُ «بَلَغَ السَقف» — والإعادَةُ مَحدودَةٌ بِذلك وبِمُحاوَلاتِ
+    /// كاتِبٍ واحِدٍ (<see cref="ACommerce.Kit.Auth.Server.AccountWrites.Attempts"/>) لِلكُتّابِ الآخَرين (الدُخولُ واختِيارُ الباقَة)، ثُمَّ يَرمي كَما في كُلِّ كاتِب.
+    /// والتَصادُمُ عَلى المُعَرِّف (<c>DocumentAlreadyExistsException</c>) لا يُكتَبُ مَعَه شَيءٌ ويُجابُ <see cref="StoreBirthOutcome.SlugTaken"/>.</para>
+    ///
+    /// <para><b>والعَدُّ ما زالَ كِتابَةً واحِدَة</b> (<see cref="CountStore"/> — ‏<c>AgentStoreLimitRefusalTests</c> يَعُدُّ كُتّابَ <c>StoresBuilt</c>).</para>
+    /// </summary>
+    public async Task<StoreBirth> RecordStoreBuiltAsync(Guid ownerId, Action<IDocumentSession> insertStore, CancellationToken ct = default)
+    {
+        for (var conflicts = 0; ; conflicts++)
+        {
+            await using var s = _store.LightweightSession(StudioAuth.Tenant);
+            var user = await s.LoadAsync<StudioUser>(ownerId, ct) ?? throw new InvalidOperationException("user not found");
+            ApplyPeriodRollover(user, DateTime.UtcNow);
+            var limit = TierCatalog.For(user.Tier).StoresMax;
+            if (user.StoresBuilt >= limit)
+                return new(StoreBirthOutcome.QuotaReached, new(false, user.StoresBuilt, limit, StudioUpgradeReason.Stores));
+
+            CountStore(user);
+            s.Store(user);
+            insertStore(s);
+            try
+            {
+                await s.SaveChangesAsync(ct);
+                return new(StoreBirthOutcome.Born, new(true, user.StoresBuilt, limit, null));
+            }
+            // ‏Marten يَجمَعُ خَرقَي الحِفظِ الواحِدِ في `AggregateException` — نَقرَتانِ بِمُعَرِّفٍ واحِدٍ تَخسَرُ ثانِيَتُهُما الإصدارَ والمُعَرِّفَ مَعاً: فَيُعادُ
+            // أَوَّلاً (قِراءَةٌ جَديدَةٌ لا تَتَعارَض)، ثُمَّ يُجابُ التَصادُمُ وَحدَه بِلا عَدّ.
+            catch (Exception ex) when (Holds<JasperFx.ConcurrencyException>(ex) && conflicts < limit + ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
+            catch (Exception ex) when (Holds<JasperFx.DocumentAlreadyExistsException>(ex))
+            {
+                return new(StoreBirthOutcome.SlugTaken, new(true, user.StoresBuilt - 1, limit, null));
+            }
+        }
+    }
+
+    private static bool Holds<T>(Exception ex) where T : Exception
+        => ex is T || (ex is AggregateException all && all.Flatten().InnerExceptions.Any(e => e is T));
+
+    /// <summary>كِتابَةُ العَدّادِ الوَحيدَة.</summary>
+    private static readonly Action<StudioUser> CountStore = u => u.StoresBuilt++;
 
     // ═══ قياسُ استِهلاكِ نَماذِجِ اللُغَة ═════════════════════════════
     //

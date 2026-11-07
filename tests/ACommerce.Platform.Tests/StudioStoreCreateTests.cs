@@ -36,7 +36,10 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
     // ─── (١) البابُ — تَرتيبُ حَرَسِه في أَوَّلِ أَسطُرِه ───────────────────────────────────────────────
 
     /// <summary>الهُوِيَّة ← المُوافَقَةُ بِالإصدارِ القائِم ← الحِصَّة ← قِراءَةُ الحُقول ← المُعَرِّف ← الاسم ← اللَون ← القَناة ← الإنشاء ← العَدّ
-    /// ← التَحويلُ إلى لَوحَةِ المَتجَر. و<c>req.Form</c> لا يُقرَأُ قَبلَ الحِصَّة: خَطَأُ حَقلٍ لا يَكونُ قِناعاً لِبابٍ مَفتوح.</summary>
+    /// ← التَحويلُ إلى لَوحَةِ المَتجَر. و<c>req.Form</c> لا يُقرَأُ قَبلَ الحِصَّة: خَطَأُ حَقلٍ لا يَكونُ قِناعاً لِبابٍ مَفتوح.
+    /// ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) عَلامَتا الإنشاءِ والعَدِّ تَبِعَتا الكود: كانَ «الإنشاء» حِفظاً
+    /// و«العَدّ» <c>tier.RecordStoreBuiltAsync(ownerId)</c> حِفظاً ثانِياً؛ وصارَ المَصنَعُ يُعيدُ الوَثيقَةَ (<c>write: false</c>) ويُدرِجُها العَدُّ في حِفظِه
+    /// (<c>tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant))</c>). والتَرتيبُ المَفحوصُ هُوَ هُوَ.</summary>
     [Fact]
     public void The_create_door_asks_identity_consent_and_quota_before_it_reads_a_single_field()
     {
@@ -52,7 +55,8 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
             "StudioStoreCreate.ColorInvalid",
             "TenantAuthChannelDoor.Default(",
             "factory.CreateAsync(",
-            "tier.RecordStoreBuiltAsync(ownerId)",
+            "write: false",
+            "tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant))",
             "/studio/apps/{form.Slug}?built=1",
         ];
         var at = order.Select(o => body.IndexOf(o, StringComparison.Ordinal)).ToArray();
