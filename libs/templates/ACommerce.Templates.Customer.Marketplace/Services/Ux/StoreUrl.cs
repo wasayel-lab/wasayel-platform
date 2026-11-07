@@ -71,4 +71,19 @@ public static class StoreUrl
 
     /// <summary><see cref="Open(HostView, string)"/> بِالطَلَبِ الحالِيِّ (<c>AuthSession.HttpAccessor</c>) — لِصَفَحاتِ Razor.</summary>
     public static string Open(string slug) => Open(ViewOf(AuthSession.HttpAccessor?.HttpContext), slug);
+
+    /// <summary>
+    /// <para><b>أَصلُ المَنَصَّةِ القانونِيُّ لِلعَناوينِ المُستَديمَة</b> (‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·3 — G14): ما يُسَجَّلُ عِندَ
+    /// مُزَوِّدٍ ويَبقى هُناك (إشعارُ Moyasar، ووارِدُ OTO) يُبنى مِن <c>{scheme}://R{port}</c> مَتى هُيِّئَ النِطاق — لا مِن مُضيفِ الطَلَب. كانَ
+    /// <c>OriginFrom(req)</c>: بائِعٌ رَبَطَ مِن مُضيفِ مَتجَرٍ أَو دَورٍ يُسَجِّلُ ذلكَ المُضيف، ومُضيفٌ يَتَغَيَّرُ اسمُه أَو يَخرُجُ مِن الخِدمَةِ يَقطَعُ الخَطّافَ صامِتاً.
+    /// والمَسارُ يَحمِلُ المَتجَرَ (<c>/{slug}/payments/notify</c>)، والجَذرُ لا يُحَوِّلُه أَبَداً (لا مُضيفَ ولا مَرحَلَةَ خامِسَة).</para>
+    /// <para><b>وبِلا نِطاقٍ مُهَيَّإٍ أَصلُ الطَلَبِ كَما كان</b> (<c>OriginFrom</c> بِحَرفِه) — فَلا يَتَغَيَّرُ شَيءٌ في وَضعِ المَسار.</para>
+    /// </summary>
+    public static string PlatformOrigin(HttpRequest req)
+    {
+        var view = ViewOf(req.HttpContext);
+        return string.IsNullOrEmpty(view.Apex)
+            ? ACommerce.Templates.Customer.Marketplace.Billing.PayPalOrderSurface.OriginFrom(req)
+            : $"{(string.IsNullOrEmpty(view.Scheme) ? "https" : view.Scheme)}://{view.Apex}{view.Port}";
+    }
 }

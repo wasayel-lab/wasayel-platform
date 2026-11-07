@@ -224,7 +224,8 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
             "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
         var bindAt = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
         var bind = template[bindAt..template.IndexOf(".DisableAntiforgery();", bindAt, StringComparison.Ordinal)];
-        Assert.Contains("gateway.ConnectNoticesAsync(slug, read.Capability, Billing.PayPalOrderSurface.OriginFrom(req))", bind, StringComparison.Ordinal);
+        // ‏(‏2026-11-07، W13-4·C2b·3 — G14) الأَصلُ الَّذي يُسَجَّلُ عِندَ البَوّابَةِ أَصلُ المَنَصَّةِ مَتى هُيِّئَ النِطاق (`StoreUrl.PlatformOrigin`)، وأَصلُ الطَلَبِ بِدونِه.
+        Assert.Contains("gateway.ConnectNoticesAsync(slug, read.Capability, Services.Ux.StoreUrl.PlatformOrigin(req))", bind, StringComparison.Ordinal);
     }
 
     // ═══ ٤) الإشعارُ المَقبولُ يُثبَتُ بِالفاتورَةِ المَجلوبَة ═══════════════════════════════════════════════════════

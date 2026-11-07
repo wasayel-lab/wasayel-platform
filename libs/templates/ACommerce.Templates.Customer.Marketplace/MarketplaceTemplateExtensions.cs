@@ -4306,7 +4306,8 @@ public static class MarketplaceTemplateExtensions
             var bound = await providers.BindProviderAsync(
                 slug, read.Capability, read.ProviderSlug, read.Values,
                 auth.UserId?.ToString() ?? "");
-            await gateway.ConnectNoticesAsync(slug, read.Capability, Billing.PayPalOrderSurface.OriginFrom(req));
+            // ‏(‏2026-11-07، W13-4·C2b·3 — G14) العُنوانُ يُسَجَّلُ عِندَ البَوّابَةِ ويَبقى: بِأَصلِ المَنَصَّةِ مَتى هُيِّئَ النِطاق، لا بِمُضيفِ الطَلَب.
+            await gateway.ConnectNoticesAsync(slug, read.Capability, Services.Ux.StoreUrl.PlatformOrigin(req));
             await SyncPaymentProviderFlagAsync(store, providers, slug);
 
             await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",

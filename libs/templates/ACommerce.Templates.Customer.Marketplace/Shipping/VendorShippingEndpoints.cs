@@ -35,7 +35,7 @@ public static class VendorShippingEndpoints
                 return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={admitted.Violation!.Code}"));
 
             var res = await vendors.SaveTokenAsync(slug, vendor, req.Form["refresh_token"].ToString(),
-                Services.Shipping.VendorShippingSurface.InboundUrl(Billing.PayPalOrderSurface.OriginFrom(req), slug));
+                Services.Shipping.VendorShippingSurface.InboundUrl(Services.Ux.StoreUrl.PlatformOrigin(req), slug));
             if (res.Ok)
                 await audit.WriteAsync(slug, vendor.UserId, vendor.Name, "provider.vendor.bind", "provider",
                     res.After!.Id, note: res.After.ProviderSlug, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
@@ -72,7 +72,7 @@ public static class VendorShippingEndpoints
                 return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug, $"me/listings?shipping_err={contact.Violation!.Code}"));
 
             var res = await vendors.RegisterAsync(slug, registrant, Services.Shipping.VendorRegistrationForm.Read(req.Form),
-                Services.Shipping.VendorShippingSurface.InboundUrl(Billing.PayPalOrderSurface.OriginFrom(req), slug),
+                Services.Shipping.VendorShippingSurface.InboundUrl(Services.Ux.StoreUrl.PlatformOrigin(req), slug),
                 req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect(MarketplaceTemplateExtensions.Link(req, slug,
                 "me/listings" + (res.Ok ? "?shipping=registered" : $"?shipping_err={res.Code}")));
