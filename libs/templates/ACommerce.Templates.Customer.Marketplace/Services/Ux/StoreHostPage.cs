@@ -65,6 +65,24 @@ public static class StoreHostPage
         catch { return null; }
     }
 
+    /// <summary>
+    /// <para><b>وعَلى مُضيفِ الدَور</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4): الـReferer مِن المُضيفِ نَفسِه بِلا دَورٍ صَريحٍ في مَسارِه صَفحَةٌ في تَطبيقِ
+    /// ذلكَ الدَور — فَالدَورُ دَورُ المُضيف (<paramref name="hostRole"/>)، كَما وَضَعَه الحاقِنُ في قالِبِ صَفحَتِه؛ والدَورُ الصَريحُ (<c>/r/{role}/…</c>) كَما هُوَ.
+    /// ومِن مُضيفٍ آخَر لا دَورَ مِنه. وبِلا دَورِ مُضيفٍ هِيَ <see cref="RoleFromReferer(string?, string?, string?)"/> بِحَرفِها.</para>
+    /// </summary>
+    public static string? RoleFromReferer(string? referer, string? requestHost, string? hostSlug, string? hostRole)
+    {
+        var role = RoleFromReferer(referer, requestHost, hostSlug);
+        if (role is not null || string.IsNullOrEmpty(hostRole) || string.IsNullOrEmpty(referer) || string.IsNullOrEmpty(requestHost)) return role;
+        try
+        {
+            var uri = new Uri(referer);
+            return (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                   && string.Equals(uri.Authority, requestHost, StringComparison.OrdinalIgnoreCase) ? hostRole : null;
+        }
+        catch { return null; }
+    }
+
     /// <summary>أَيَبدَأُ المَسارُ بِمَقطَعٍ هُوَ <paramref name="segment"/> بِعَينِه (بِلا حالَةِ أَحرُف) — كَما يَمتَنِعُ الحاقِنُ عَن مَسارٍ يَحمِلُ المَتجَرَ سَلَفاً.</summary>
     private static bool StartsWithSegment(string path, string segment)
     {
@@ -79,6 +97,9 @@ public static class StoreHostPage
     /// <c>location.pathname</c></b> (G11). ومُسَلسَلٌ بِـ<c>System.Text.Json</c> بِمُرَمِّزِه الافتِراضيِّ الَّذي يَهرُبُ <c>&lt;</c> و<c>&gt;</c>
     /// و<c>&amp;</c> — فَلا يُغلِقُ حَرفٌ وَسمَ <c>&lt;script&gt;</c>.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وعَلى مُضيفِ الدَور</b> يُرسِلُ <c>App.razor</c> الدَورَ فارِغاً
+    /// و<c>home</c> كاذِباً: العُنوانُ الظاهِرُ بِلا <c>/r/{role}</c> — فَنِطاقُ عامِلِ الخِدمَةِ ومِفتاحُ التَثبيتِ <c>/</c> كَما يُعلِنُ البَيان، وجَذرُ المُضيفِ بَيتُ تَطبيقِ
+    /// الدَورِ لا مُنتَقٍ — فَيُعرَضُ زِرُّ التَثبيت. وسكربتُ العَميلِ لا يَتَغَيَّرُ حَرفاً (فَوَضعُ المَسارِ بايتاً بِبايت).</remarks>
     public static string ClientContextJson(string? slug, string? role, bool hostMode, bool home)
         => JsonSerializer.Serialize(new Dictionary<string, object>
         {

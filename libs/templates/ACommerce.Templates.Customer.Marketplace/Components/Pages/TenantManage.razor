@@ -108,8 +108,10 @@ else
         // ودَورَ المُستَخدِم مَعاً — تَأليفٌ لا استِعلام. والدَورُ
         // المَحفوظُ وَحدَه هُوَ ما يُسأَل عَنه.
         var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId!.Value);
+        // ‏(‏2026-11-07، W13-4·C2b·4 — G7) والدَورُ الفَعّالُ مِن `EffectiveRole.Resolve` لا `Role ?? storedRole`: دَورُ الرابِطِ (أَو مُضيفِ الدَورِ) الإداريُّ دَعوى،
+        // يُفتَحُ لِمَن دَورُه المُخَزَّنُ هُوَ — كانَ عُضوٌ عَلى `/r/tenant_admin/manage` يَرى اللَوحَةَ بِأَعدادِها.
         canManage = ACommerce.Kit.Roles.RolePermissions.Has(
-            tenant.Roles, Role ?? storedRole, "tenant.manage");
+            tenant.Roles, ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, storedRole), "tenant.manage");
         if (!canManage) return;
 
         var overview  = await TenantAdmin.OverviewAsync(Slug);

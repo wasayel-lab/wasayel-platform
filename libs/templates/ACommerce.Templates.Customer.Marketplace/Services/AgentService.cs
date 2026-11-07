@@ -932,6 +932,8 @@ public sealed class AgentToolExecutor
         var existing = await s.LoadAsync<Tenant>(slug, ct);
         var taken = $"الـ slug «{slug}» مَوجود بِالفِعل.";
         if (existing is not null) return (false, taken);
+        // ‏(‏2026-11-07، W13-4·C2b·4) ومُضيفُ دَورٍ مُمكِنٍ لَه اسمُ مَتجَرٍ قائِم — الرِسالَةُ نَفسُها.
+        if (await Services.TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug, ct) is not null) return (false, taken);
 
         // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدراجٌ لا upsert: السُؤالُ أَعلاه ظَنٌّ، ومَن كَتَبَ المُعَرِّفَ بَعدَه كانَ يُدهَسُ
         // ويُعَدُّ لِهذا المُنادي مَتجَرُه — والآنَ يُرَدُّ بِرِسالَةِ «مَوجود» نَفسِها ولا يُعَدّ.
@@ -1061,6 +1063,10 @@ public sealed class AgentToolExecutor
         await using var s = _store.LightweightSession();
         var t = await s.LoadAsync<Tenant>(slug, ct);
         if (t is null) return (false, "المَتجَر غَير مَوجود.");
+        // ‏(‏2026-11-07، W13-4·C2b·4) دَورٌ يَدخُلُ ومُضيفُه اسمُ مَتجَرٍ قائِم — يُرَدُّ بِرَمزِه كَحِفظِ الأَدوارِ في السَطحَين.
+        var held = t.Roles.Select(x => x.CatalogSlug).ToHashSet(StringComparer.Ordinal);
+        if (await Services.TenantConfig.RoleHostCollision.FirstTakenAsync(s, slug, roles.Select(x => x.CatalogSlug).Where(c => !held.Contains(c)), ct) is { } takenHost)
+            return (false, $"{Services.TenantConfig.TenantConfigCodes.RoleHostTaken}: مُضيفُ الدَورِ «{takenHost}» اسمُ مَتجَرٍ قائِم.");
         t.Roles = roles;
         s.Store(t);
         await s.SaveChangesAsync(ct);

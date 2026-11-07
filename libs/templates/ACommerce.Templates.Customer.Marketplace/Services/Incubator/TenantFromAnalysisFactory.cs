@@ -53,7 +53,9 @@ public sealed class TenantFromAnalysisFactory
 
         await using var s = _store.QuerySession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
-        return existing is null ? null : SlugTaken;
+        if (existing is not null) return SlugTaken;
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُضيفُ دَورٍ مُمكِنٍ لَه (`{slug}-{rolehost}`) اسمُ مَتجَرٍ قائِم ← الرَمزُ نَفسُه.
+        return await TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug, ct) is null ? null : SlugTaken;
     }
 
     /// <summary><b>المَتجَرُ القائِمُ بِهذا المُعَرِّف، أَو <c>null</c></b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ

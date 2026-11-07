@@ -5,7 +5,11 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Ux;
 
 /// <summary>ما يَعرِفُه الطَلَبُ الحالِيُّ عَن المُضيف: النِطاقُ الأَساسُ المُهَيَّأ (<c>R</c>)، ومَتجَرُ المُضيفِ إن جاءَ الطَلَبُ عَلى <c>{slug}.R</c>، والمُخَطَّطُ
 /// والمَنفَذُ لِلعُنوانِ المُطلَق. يَكتُبُ الحاقِنُ عَناصِرَه (<see cref="StoreHostItems"/>)، فَبِلا نِطاقٍ مُهَيَّإٍ كُلُّها فارِغَة.</summary>
-public readonly record struct HostView(string? Apex, string? HostSlug, string? Scheme, string? Port);
+public readonly record struct HostView(string? Apex, string? HostSlug, string? Scheme, string? Port)
+{
+    /// <summary>دَورُ الكَتالوجِ عَلى مُضيفِ الدَور (<c>{slug}-{rolehost}.R</c>) — <c>null</c> عَلى مُضيفِ المَتجَرِ وما سِواه (‏2026-11-07، W13-4·C2b·4).</summary>
+    public string? HostRole { get; init; }
+}
 
 /// <summary>
 /// <para><b>عُنوانُ صَفحَةٍ في مَتجَرٍ كَما يَستَعمِلُه المُتَصَفِّحُ مِن الطَلَبِ الحالِيّ</b> (‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1). كانَ
@@ -27,7 +31,8 @@ public static class StoreUrl
                 ctx.Items[StoreHostItems.Apex] as string,
                 ctx.Items[StoreHostItems.Slug] as string,
                 string.IsNullOrEmpty(ctx.Request.Scheme) ? "https" : ctx.Request.Scheme,
-                ctx.Request.Host.Port is int port ? ":" + port : "");
+                ctx.Request.Host.Port is int port ? ":" + port : "")
+            { HostRole = ctx.Items[StoreHostItems.Role] as string };
 
     /// <summary><b>شَكلُ المَسار</b> — جِسمُ <c>AuthSession.LinkFor</c> كَما كانَ بِحَرفِه: <c>/{slug}/{path}</c> أَو <c>/{slug}/r/{role}/{path}</c>، بِلا شَرطَةٍ أَخيرَة.</summary>
     public static string PathForm(string slug, string? role, string path)
@@ -53,8 +58,50 @@ public static class StoreUrl
     {
         if (!OnHostOf(view, slug)) return PathForm(slug, role, path);
         var p = path.TrimStart('/');
-        var clean = (string.IsNullOrEmpty(role) ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
+        // ‏(‏2026-11-07، W13-4·C2b·4) وعَلى مُضيفِ الدَور: دَورُه (أَو بِلا دَور — الحاقِنُ يَضَعُ دَورَ المُضيفِ في قالِبِ صَفحَةِ الدَور) نَظيفٌ بِلا /r/.
+        var bare = string.IsNullOrEmpty(role) || string.Equals(role, view.HostRole, StringComparison.Ordinal);
+        var clean = (bare ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
         return clean.Length == 0 ? "/" : clean;
+    }
+
+    /// <summary>
+    /// <para><b>رابِطُ تَنَقُّلٍ في المَتجَرِ — <c>AuthSession.LinkFor</c></b> (‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4). عَلى مُضيفٍ لِهذا المَتجَر:
+    /// <b>تَطبيقُ الطَلَبِ نَفسُه</b> (مُضيفُ المَتجَرِ ورابِطٌ بِلا دَور، أَو مُضيفُ الدَورِ ودَورُه) ← <see cref="For"/> نَظيفاً؛ <b>وتَطبيقٌ آخَرُ مِن المَتجَرِ نَفسِه</b> ←
+    /// مُضيفُه هُوَ مُطلَقاً: دَورٌ في <see cref="ACommerce.Kit.Roles.RoleHostNames"/> ← <c>{scheme}://{slug}-{rolehost}.R{port}/…</c> (بِطاقاتُ الأَدوارِ ومُنتَقي الدَورِ
+    /// والرَوابِطُ العابِرَةُ بَينَ الأَدوار)، وبِلا دَورٍ مِن مُضيفِ دَورٍ ← <c>{slug}.R</c>، ودَورٌ بِلا اسمِ مُضيفٍ (مُؤَلَّفٌ في المَتجَر) ← <c>/r/{role}/…</c> عَلى
+    /// مُضيفِ المَتجَر. <b>وما سِوى ذلك بِشَكلِ المَسارِ بِحَرفِه</b> — الجَذرُ (لا تَحويلَ لِلمَسارِ قَبلَ المَرحَلَةِ الخامِسَة)، والنِطاقُ فارِغ، ومَتجَرٌ آخَر.</para>
+    /// <para><b>والجَلسَةُ لِكُلِّ مُضيفٍ وَحدَه</b> (ADR-050 §٥): الرابِطُ العابِرُ يَحمِلُ الزائِرَ إلى دُخولٍ عَلى مُضيفِ ذلكَ التَطبيق — فَتَحويلُ ما بَعدَ الدُخولِ
+    /// والاستِمارات <see cref="For"/> لا هذا (لا يُغادِرُ المُضيفَ الَّذي كَتَبَ الكَعكَة).</para>
+    /// </summary>
+    public static string Link(HostView view, string slug, string? role, string path = "")
+    {
+        if (!OnHostOf(view, slug)) return PathForm(slug, role, path);
+        role = string.IsNullOrEmpty(role) ? null : role;
+        // ورابِطٌ بِلا دَورٍ مَسارُه `r/{role}/…` (بِطاقاتُ الأَدوار: `LinkFor(slug, null, "r/vendor/login")`) رابِطُ ذلكَ الدَور.
+        if (role is null && PathRole(path) is { } carried) (role, path) = carried;
+        if (string.Equals(role, view.HostRole, StringComparison.Ordinal)) return For(view, slug, role, path);
+        var scheme = string.IsNullOrEmpty(view.Scheme) ? "https" : view.Scheme;
+        var p = path.TrimStart('/');
+        if (role is not null && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.TryGetValue(role, out var label))
+            return $"{scheme}://{slug}-{label}.{view.Apex}{view.Port}{StoreHostTail(null, p)}";
+        if (view.HostRole is null) return For(view, slug, role, path);
+        return $"{scheme}://{slug}.{view.Apex}{view.Port}{StoreHostTail(role, p)}";
+    }
+
+    /// <summary>الدَورُ الَّذي يَحمِلُه مَسارٌ بِلا دَور (<c>r/{role}</c> أَو <c>r/{role}/…</c>) — ومَعَه ما بَعدَه.</summary>
+    private static (string Role, string Tail)? PathRole(string path)
+    {
+        var parts = path.TrimStart('/').Split('/', 3);
+        return parts.Length >= 2 && parts[0] == "r" && parts[1].Length > 0
+            ? (parts[1], parts.Length == 3 ? parts[2] : "")
+            : null;
+    }
+
+    /// <summary>ذَيلُ العُنوانِ عَلى مُضيفِ المَتجَر: <c>/{path}</c> أَو <c>/r/{role}/{path}</c> (وأَقَلُّه <c>/</c>).</summary>
+    private static string StoreHostTail(string? role, string p)
+    {
+        var tail = (role is null ? $"/{p}" : $"/r/{role}/{p}").TrimEnd('/');
+        return tail.Length == 0 ? "/" : tail;
     }
 
     /// <summary>

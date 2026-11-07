@@ -301,7 +301,10 @@
            و`realtime-nav.js` تَستَخرِجُ السلاجَ مِن `location.pathname`، فَعَلى `ashare.R/listings` يَصيرُ `listings` مَتجَراً. ولا مَتجَرَ عَلى صَفَحاتِ
            المَنَصَّة. والتَعليقُ تَعليقُ Razor لا JS — فَلا يُشحَنُ في كُلِّ صَفحَة. *@
         window.acTenant = @((MarkupString)ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.ClientContextJson(
-            Tenant.IsResolved ? Tenant.Slug : "", roleForPwa, seoHostSlug is not null, seoIsHome));
+            Tenant.IsResolved ? Tenant.Slug : "",
+            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null ? roleForPwa : null,
+            seoHostSlug is not null,
+            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null && seoIsHome));
 
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.

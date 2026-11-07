@@ -32,6 +32,8 @@ public static class MarketplaceTemplateExtensions
     public static IServiceCollection AddCustomerMarketplaceTemplate(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4) قَوالِبُ صَفَحاتِ الدَورِ لِحاقِنِ المُضيف: يَضَعُ دَورَ مُضيفِ الدَورِ في مَسارِ GET ما يُطابِقُها وَحدَه.
+        services.AddSingleton(Services.Ux.RoleHostPages.Templates);
         services.AddScoped<AuthSession>();
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
@@ -778,8 +780,7 @@ public static class MarketplaceTemplateExtensions
                 .Any(f => !roleValues.TryGetValue(f.Code, out var v) || string.IsNullOrEmpty(v));
             if (needsOnboarding)
                 return Results.Redirect(Link(req, slug, $"me/role/onboarding"));
-            return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
-                ? Home(req, slug) : Home(req, slug, picked.HomeRoute));
+            return Results.Redirect(RoleHome(req, slug, picked.Slug, picked.HomeRoute));
         }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
@@ -821,7 +822,7 @@ public static class MarketplaceTemplateExtensions
 
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
             return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
-                ? Home(req, slug) : Home(req, slug, active.HomeRoute));
+                ? RoleHome(req, slug, active.Slug, "") : RoleHome(req, slug, active.Slug, active.HomeRoute));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
@@ -2345,6 +2346,8 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession();
             var existing = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
             if (existing is not null) return Results.Redirect(Back("slug_taken"));
+            // ‏(‏2026-11-07، W13-4·C2b·4) ومُضيفُ دَورٍ مُمكِنٍ لَه اسمُ مَتجَرٍ قائِم — الرَمزُ نَفسُه (`RoleHostCollision`).
+            if (await Services.TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug) is not null) return Results.Redirect(Back("slug_taken"));
 
             // ── إنشاء ──
             // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) إدراجٌ لا upsert: مُشرِفانِ بِمُعَرِّفٍ واحِدٍ مَعاً كانَ يُقالُ لِكِلَيهِما «أُنشِئ» ويَبقى مَتجَرُ آخِرِهِما
@@ -4382,7 +4385,8 @@ public static class MarketplaceTemplateExtensions
     // الـReferer يُقرَأُ كَما هُوَ، فَصَفحَةُ دَورٍ بِعُنوانِها النَظيفِ عَلى مُضيفِ المَتجَرِ (الـcanonical) تُرجِعُ تَحويلاتِ `Link` الـ179 بِلا دَور.
     private static string? RoleFromReferer(HttpRequest req)
         => Services.Ux.StoreHostPage.RoleFromReferer(
-            req.Headers["Referer"].ToString(), req.Host.Value, Services.Ux.StoreHostPage.HostSlug(req.HttpContext));
+            req.Headers["Referer"].ToString(), req.Host.Value, Services.Ux.StoreHostPage.HostSlug(req.HttpContext),
+            req.HttpContext.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] as string);   // ‏W13-4·C2b·4: ومُضيفُ الدَورِ دَورُه
 
     // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-033 الخُطوَة 3): نُقطَتا الشَحنِ في مِلَفِّهِما
     // (`Shipping/OtoShippingEndpoints.cs`) تَرتَدّانِ إلى صَفحَةِ الصَفقَةِ بِالدَورِ نَفسِه — نُسخَةٌ ثانِيَةٌ
@@ -4396,6 +4400,16 @@ public static class MarketplaceTemplateExtensions
     /// <c>$"/{slug}"</c> بِيَدِها — عَلى مُضيفِ المَتجَرِ تُظهِرُ <c>ashare.R/ashare</c>. والآنَ <c>/</c> هُناك، و<c>/{slug}</c> بِحَرفِه في وَضعِ المَسار.</summary>
     private static string Home(HttpRequest req, string slug, string path = "")
         => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path);
+
+    /// <summary><b>بَيتُ الدَورِ بَعدَ اختِيارِه أَو إعدادِه</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — مُنتَقي الدَور): عَلى مُضيفٍ لِهذا المَتجَرِ والدَورُ لَه
+    /// مُضيف ← مُضيفُ ذلكَ الدَور (<c>StoreUrl.Link</c>)؛ وما سِوى ذلك <see cref="Home"/> بِحَرفِها — في وَضعِ المَسارِ <c>/{slug}{home}</c> بِلا دَورٍ كَما كان.</summary>
+    private static string RoleHome(HttpRequest req, string slug, string role, string? homeRoute)
+    {
+        var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
+        return Services.Ux.StoreUrl.OnHostOf(view, slug) && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.ContainsKey(role)
+            ? Services.Ux.StoreUrl.Link(view, slug, role, homeRoute ?? "")
+            : Home(req, slug, homeRoute ?? "");
+    }
 
     /// <summary>رابِطُ الرَفض حينَ لا قَناةَ مُسَجَّلَةٌ لِطَريقَةِ دُخولِ
     /// الاستوديو. <b>الرَمزُ مِن الجَدوَلِ لا مِن حَرفِيَّةٍ مَنسوخَة</b>:

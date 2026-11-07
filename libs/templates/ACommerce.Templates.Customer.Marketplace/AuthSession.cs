@@ -249,6 +249,8 @@ public sealed class AuthSession
     /// <para>‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>عارِفٌ بِمُضيفِ المَتجَرِ عَبرَ <see cref="HttpAccessor"/></b>:
     /// عَلى <c>{slug}.R</c> نَظيف (<c>/explore</c>، <c>/r/{role}/…</c>)، وما سِواه بِشَكلِ المَسارِ بِحَرفِه — الجِسمُ القَديمُ هُوَ
     /// <c>Services.Ux.StoreUrl.PathForm</c> نَفسُه، وتَوصيفُه <c>StoreLinkCharacterizationTests</c>. مِلَفٌّ واحِدٌ يَتَغَيَّرُ ومَواضِعُ استِدعائِه تَتبَعُه.</para></summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ورابِطُ تَطبيقٍ آخَرَ مِن المَتجَرِ نَفسِه</b> (دَورٌ
+    /// غَيرُ دَورِ المُضيف) يُسَمّي مُضيفَ ذلكَ التَطبيقِ مُطلَقاً — <c>Services.Ux.StoreUrl.Link</c>؛ وفي وَضعِ المَسارِ بِحَرفِه.</remarks>
     public static string LinkFor(string tenantSlug, string? role, string path)
-        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(HttpAccessor?.HttpContext), tenantSlug, role, path);
+        => Services.Ux.StoreUrl.Link(Services.Ux.StoreUrl.ViewOf(HttpAccessor?.HttpContext), tenantSlug, role, path);
 }

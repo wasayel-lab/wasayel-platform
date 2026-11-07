@@ -111,6 +111,10 @@ public static class TenantConfigCodes
     public const string TagLineTooLong = Incubator.StudioStoreCreate.TagLineTooLong;
     public const string CityTooLong = Incubator.StudioStoreCreate.CityTooLong;
 
+    /// <summary><b>دَورٌ يَدخُلُ المَتجَرَ ومُضيفُه (<c>{slug}-{rolehost}</c>) اسمُ مَتجَرٍ قائِم</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — <see cref="RoleHostCollision"/>).
+    /// يَقولُه السَطحانِ مِن القامُوس (<c>roles.save.err_role_host_taken</c>).</summary>
+    public const string RoleHostTaken = "role_host_taken";
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
@@ -119,5 +123,6 @@ public static class TenantConfigCodes
         CartModeUnknown,   // ‏2026-10-29، قَرارُ المالِك د2
         CategoryKindUnknown,   // ‏2026-10-29، قَرارُ المالِك د25
         NameTooLong, TagLineTooLong, CityTooLong,   // ‏2026-11-07، W13-1·SEC2-C1-2
+        RoleHostTaken,   // ‏2026-11-07، W13-4·C2b·4
     };
 }

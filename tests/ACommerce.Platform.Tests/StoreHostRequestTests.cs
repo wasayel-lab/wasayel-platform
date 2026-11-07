@@ -40,7 +40,7 @@ public class StoreHostRequestTests(ITestOutputHelper output)
     [InlineData("ashare.example.test", "GET", "/ejar/listings", "Rewrite|ashare|/ashare/ejar/listings")]         // 10
     [InlineData("ashare.example.test", "GET", "/r/vendor/me", "Rewrite|ashare|/ashare/r/vendor/me")]             // 11
     [InlineData("ashare.example.test", "GET", "/_framework/blazor.web.js", "Pass|ashare|")]                      // 12
-    [InlineData("ashare-vendor.example.test", "GET", "/me/listings", "NotFound||")]                              // 13 — مُضيفُ دَورٍ لا يُحَلُّ في المَرحَلَةِ الأُولى
+    [InlineData("ashare-vendor.example.test", "GET", "/me/listings", "Rewrite|ashare|/ashare/me/listings")]      // 13 — كانَ 404 في المَرحَلَةِ الأُولى؛ مُضيفُ دَورٍ مُنذُ W13-4·C2b·4 (والدَورُ بِالقَوالِب — RoleHostTests)
     [InlineData("vendor.ashare.example.test", "GET", "/", "NotFound||")]                                         // 14 — كانَ صَفحَةَ المَنَصَّة
     [InlineData("tenant_admin.example.test", "GET", "/", "NotFound||")]                                          // 15
     [InlineData("www.example.test", "GET", "/", "Pass||")]                                                       // 16
@@ -67,7 +67,7 @@ public class StoreHostRequestTests(ITestOutputHelper output)
     [InlineData("ashare.example.test", "GET", "/uploads/2026/x.png", "Pass|ashare|")]
     [InlineData("xn--mgbh0fb.example.test", "GET", "/", "NotFound||")]
     [InlineData("ab--cd.example.test", "GET", "/", "NotFound||")]
-    [InlineData("best-admin.example.test", "GET", "/", "NotFound||")]
+    [InlineData("best-admin.example.test", "GET", "/", "Rewrite|best|/best")]   // كانَ 404؛ مُضيفُ دَورِ الإدارَةِ لِمَتجَرِ best مُنذُ W13-4·C2b·4 — ووُجودُ الدَورِ في الحالّ
     [InlineData("shop-.example.test", "GET", "/", "NotFound||")]
     [InlineData("mail.example.test", "GET", "/", "Pass||")]
     [InlineData("ashare.evil.test", "GET", "/studio", "Pass||")]

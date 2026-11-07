@@ -113,6 +113,12 @@ public static class RolesSaveService
         var t = await session.LoadAsync<Tenant>(slug, ct);
         if (t is null) return TenantConfigResult.TenantMissing;
 
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) دَورٌ يَدخُلُ ومُضيفُه اسمُ مَتجَرٍ قائِمٍ يُرَدُّ ولا يُكتَبُ شَيء — والأَدوارُ القائِمَةُ لا تُسأَل.
+        var held = t.Roles.Select(x => x.CatalogSlug).ToHashSet(StringComparer.Ordinal);
+        var added = RoleCatalog.All.Where(x => r.SelectedCatalogSlugs.Contains(x.Slug) && !held.Contains(x.Slug)).Select(x => x.Slug);
+        if (await RoleHostCollision.FirstTakenAsync(session, slug, added, ct) is not null)
+            return TenantConfigResult.Reject(TenantConfigCodes.RoleHostTaken);
+
         t.Roles = Compose(t.Roles, r.SelectedCatalogSlugs, r.DefaultCatalogSlug);
         session.Store(t);
         return TenantConfigResult.Saved;

@@ -212,6 +212,7 @@
     string FormatError(string err) => err switch
     {
         TenantConfigCodes.RolesEmptySelection => L["roles.save.err_empty_selection"],
+        TenantConfigCodes.RoleHostTaken => L["roles.save.err_role_host_taken"],
         _ => err
     };
 }

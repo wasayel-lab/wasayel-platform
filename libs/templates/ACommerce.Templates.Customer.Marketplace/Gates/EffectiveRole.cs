@@ -35,7 +35,10 @@ public static class EffectiveRole
                                   string? urlRole, string? activeRole)
     {
         if (!string.IsNullOrEmpty(formAs) && ownsFormAs) return formAs;
-        if (!string.IsNullOrEmpty(urlRole)) return urlRole;
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — G7، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) دَورُ الرابِطِ (أَو مُضيفِ الدَورِ الَّذي يَضَعُه الحاقِنُ في المَسار) دَعوى لا مِنحَة:
+        // يَتَقَدَّمُ ما دامَ دَوراً يَأخُذُه العُضوُ بِنَفسِه، **والإداريُّ (`tenant_admin`، لا يُمنَحُ ذاتِيّاً — ADR-028) لِمَن دَورُه المُخَزَّنُ هُوَ وَحدَه** — كانَ
+        // عُضوٌ عَلى `/{slug}/r/tenant_admin/manage` أَو `{slug}-admin.R/manage` يُقَيَّمُ مُديراً.
+        if (!string.IsNullOrEmpty(urlRole) && (!SelfGrantPolicy.IsAdminSlug(urlRole) || urlRole == activeRole)) return urlRole;
         return string.IsNullOrEmpty(activeRole) ? null : activeRole;
     }
 

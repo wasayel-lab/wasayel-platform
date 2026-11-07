@@ -41,4 +41,10 @@ public static class RoleHostNames
 
     /// <summary>طولُ أَطوَلِ قيمَة — مِنه يُشتَقُّ سَقفُ مُعَرِّفِ المَتجَر.</summary>
     public static int LongestLength => Values.Max(v => v.Length);
+
+    /// <summary><b>دَورُ الكَتالوجِ لِمِلصَقِ مُضيفِ دَور</b> — عَكسُ <see cref="ByCatalogSlug"/> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4): <c>admin</c> ←
+    /// <c>tenant_admin</c>، والتِسعَةُ بِأَسمائِها؛ و<c>null</c> لِما لَيسَ في المُعجَم. يَسأَلُه تَحليلُ المُضيفِ (<c>RoleFromHost</c>) — مُستَهلِكُه الَّذي وَعَدَ بِه
+    /// هذا المِلَفُّ في المَرحَلَةِ الثالِثَة.</summary>
+    public static string? CatalogSlugOf(string? hostLabel)
+        => hostLabel is null ? null : ByCatalogSlug.FirstOrDefault(kv => string.Equals(kv.Value, hostLabel, StringComparison.Ordinal)).Key;
 }

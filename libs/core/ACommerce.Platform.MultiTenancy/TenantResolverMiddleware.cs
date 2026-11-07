@@ -182,6 +182,25 @@ public sealed class TenantResolverMiddleware
         => SlugFromHost(host, baseDomain) is { } label && StoreHostName.IsValid(label) ? label : null;
 
     /// <summary>
+    /// <para><b>مُضيفُ الدَور — <c>{slug}-{rolehost}.R</c> ← (المَتجَر، دَورُ الكَتالوج)</b> (‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4). قَرارٌ
+    /// نَقِيّ: المِلصَقُ يَنتَهي بِـ<c>-{قيمَةٍ مِن RoleHostNames}</c> وما قَبلَها اسمُ مُضيفِ مَتجَرٍ صالِح (<see cref="StoreHostName"/>). <b>ولا لَبس</b>: اسمُ
+    /// مَتجَرٍ صالِحٌ لا يَنتَهي بِاسمِ دَور (رَمزُ <c>host_name_role_suffix</c>)، فَالمِلصَقُ إمّا مَتجَرٌ وإمّا دَورُ مَتجَر. ووُجودُ الدَورِ في المَتجَرِ حالَةٌ
+    /// مَخزونَة — يَسأَلُها <see cref="TenantResolverMiddleware"/> لا هذِه (القاعِدَة ٧).</para>
+    /// </summary>
+    public static (string Slug, string CatalogRole)? RoleFromHost(string? host, string? baseDomain)
+    {
+        if (SlugFromHost(host, baseDomain) is not { } label || StoreHostName.IsValid(label)) return null;
+        foreach (var value in ACommerce.Kit.Roles.RoleHostNames.Values)
+        {
+            if (label.Length <= value.Length + 1 || !label.EndsWith("-" + value, StringComparison.Ordinal)) continue;
+            var store = label[..^(value.Length + 1)];
+            if (StoreHostName.IsValid(store) && ACommerce.Kit.Roles.RoleHostNames.CatalogSlugOf(value) is { } catalog)
+                return (store, catalog);
+        }
+        return null;
+    }
+
+    /// <summary>
     /// <para><b>ما يُفعَلُ بِطَلَبٍ عَلى مُضيفِه — قَرارٌ نَقِيٌّ يَقرَؤُه الحاقِن</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). لا يَقرَأُ حالَةً مَخزونَة
     /// (القاعِدَة ٧): وُجودُ المَتجَرِ يَسأَلُه <see cref="TenantResolverMiddleware"/> بَعدَ التَوجيه.</para>
     /// <list type="bullet">
@@ -195,6 +214,17 @@ public sealed class TenantResolverMiddleware
     /// <see cref="ReservedTenantSlugs.PlatformApiSegments"/> — وما سِواهُما 404.</para>
     /// </summary>
     public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
+        => AnswerStoreHost(host, baseDomain, method, path, query, scheme, rolePages: null);
+
+    /// <summary>
+    /// <para>‏(‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>ومُضيفُ الدَور</b> (<see cref="RoleFromHost"/>)
+    /// يُجابُ كَمُضيفِ مَتجَرِه بِقَواعِدِه كُلِّها (مَناطِقُ المَنَصَّة، وسَطحُ الـAPI، وجُذورُ البِنيَةِ التَحتِيَّة)، ودَورُه في <see cref="StoreHostAnswer.Role"/> —
+    /// <b>ويوضَعُ <c>/r/{role}</c> في المَسارِ لِـGET/HEAD الَّذي يُطابِقُ قالِبَ صَفحَةِ دَورٍ وَحدَه</b> (<paramref name="rolePages"/>): <c>/me/listings</c> ←
+    /// <c>/{slug}/r/{role}/me/listings</c>، و<c>/{slug}/me</c> ← <c>/{slug}/r/{role}/me</c>. وما سِواه — كُلُّ كِتابَة، وAPI، و<c>/me/data/download</c>،
+    /// ومَسارٌ يَحمِلُ <c>/r/…</c> سَلَفاً — يُحقَنُ فيه <c>/{slug}</c> وَحدَه: فَالدَعوى لا تَبلُغُ تَخويلَ كِتابَةٍ أَبَداً (G7). وبِلا قَوالِبَ لا يُحقَنُ دَور.</para>
+    /// </summary>
+    public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme,
+        RolePageTemplates? rolePages)
     {
         var apex = NormaliseHost(baseDomain);
         var name = NormaliseHost(host);
@@ -206,8 +236,21 @@ public sealed class TenantResolverMiddleware
         if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label)) return StoreHostAnswer.Through;
 
         var slug = StoreSlugFromHost(host, baseDomain);
-        if (slug is null) return StoreHostAnswer.NotFound;
+        string? role = null;
+        if (slug is null)
+        {
+            if (RoleFromHost(host, baseDomain) is not { } roleHost) return StoreHostAnswer.NotFound;
+            (slug, role) = roleHost;
+        }
+        return WithRole(AnswerOnStoreHost(slug, role, host, apex, method, path, query, scheme, rolePages), role);
+    }
 
+    private static StoreHostAnswer WithRole(StoreHostAnswer answer, string? role)
+        => role is null || answer.Slug is null ? answer : answer with { Role = role };
+
+    private static StoreHostAnswer AnswerOnStoreHost(string slug, string? role, string? host, string apex, string? method, string? path, string? query,
+        string? scheme, RolePageTemplates? rolePages)
+    {
         path = string.IsNullOrEmpty(path) ? "/" : path[0] == '/' ? path : "/" + path;
         var segments = path.Split('/', 4);
         var first = segments.Length > 1 ? segments[1] : "";
@@ -237,9 +280,25 @@ public sealed class TenantResolverMiddleware
                 : StoreHostAnswer.NotFound;
         }
 
+        if (role is not null && rolePages is not null && (HttpMethods.IsGet(method ?? "") || HttpMethods.IsHead(method ?? ""))
+            && RoleRest(path, slug) is { } rest && rolePages.Matches(rest))
+            return new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, $"/{slug}/r/{role}{(rest == "/" ? "" : rest)}", null);
+
         return PathWithSlug(path, slug) is { } rewritten
             ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
             : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+    }
+
+    /// <summary>المَسارُ بَعدَ <c>/{slug}</c> إن حَمَلَه (وإلّا كَما هُوَ) — و<c>null</c> لِما يَحمِلُ <c>/r/…</c> سَلَفاً أَو جَذراً مَخدوماً: لا يُحقَنُ فيه دَورُ المُضيف.</summary>
+    private static string? RoleRest(string path, string slug)
+    {
+        var rest = path;
+        var firstSlash = path.IndexOf('/', 1);
+        var first = firstSlash > 0 ? path[1..firstSlash] : path[1..];
+        if (string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) rest = firstSlash > 0 ? path[firstSlash..] : "/";
+        var segments = rest.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length > 0 && (string.Equals(segments[0], "r", StringComparison.OrdinalIgnoreCase) || ServedAtRoot(segments[0]))) return null;
+        return rest;
     }
 
     /// <summary>
@@ -368,6 +427,10 @@ public sealed class TenantResolverMiddleware
         // لا وُجودَ لَه عَلى مُضيفِه 404** — كانَ يُرسَمُ بِـ200 (القاعِدَة ١٢: مَدخَلٌ لا يَفتَحُ لا يُعرَض). وهُنا لا في الحاقِن: الحاقِنُ لا يَقرَأُ
         // حالَةً مَخزونَة (القاعِدَة ٧)، وهذا الوَسيطُ يُحَمِّلُ وَثيقَةَ المَتجَرِ أَصلاً.
         var hostSlug = StoreSlugFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain);
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُضيفُ الدَورِ مُضيفُ مَتجَرِه، و**مَتجَرٌ لا يَملِكُ ذلكَ الدَورَ 404 عَلى مُضيفِه**
+        // (القاعِدَة ١٢): الدَورُ بِاسمِه في الكَتالوجِ وفي المَتجَرِ مَعاً، فَالحاقِنُ وَضَعَ `/r/{catalog}` في المَسارِ ولا يُدَّعى دَورٌ لَيسَ في المَتجَر.
+        var roleHost = hostSlug is null ? RoleFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain) : null;
+        hostSlug ??= roleHost?.Slug;
         var slug = hostSlug ?? SlugFromPath(ctx.Request.Path.Value);
         if (slug is null) { await _next(ctx); return; }
 
@@ -382,6 +445,14 @@ public sealed class TenantResolverMiddleware
 
         // ‏(‏2026-11-07، C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مَنطِقَةُ المَنَصَّةِ عَلى مُضيفِ المَتجَرِ (إدارَتُه وَحدَها تَبلُغُ هُنا) بِلا سِياقِ مَتجَرٍ كَالجَذر؛
         // والمَتجَرُ المَجهولُ عَلى مُضيفِه يَبقى 404.
+        if (entity is not null && roleHost is { } rh
+            && !entity.Roles.Any(r => string.Equals(r.CatalogSlug, rh.CatalogRole, StringComparison.Ordinal)
+                                      && string.Equals(r.Slug, rh.CatalogRole, StringComparison.Ordinal)))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
         if (entity is not null)
         {
             if (hostSlug is null || CarriesStoreContext(ctx.Request.Path.Value))
@@ -473,10 +544,12 @@ public sealed class SubdomainTenantPathMiddleware
 
     private readonly RequestDelegate _next;
     private readonly SubdomainTenancyOptions _options;
+    private readonly RolePageTemplates? _rolePages;
 
-    public SubdomainTenantPathMiddleware(RequestDelegate next, SubdomainTenancyOptions options)
+    // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) قَوالِبُ صَفَحاتِ الدَورِ مِن الحاوِيَةِ إن سَجَّلَها القالِب — وبِدونِها لا يُحقَنُ دَور.
+    public SubdomainTenantPathMiddleware(RequestDelegate next, SubdomainTenancyOptions options, IServiceProvider services)
     {
-        _next = next; _options = options;
+        _next = next; _options = options; _rolePages = services.GetService<RolePageTemplates>();
     }
 
     public async Task InvokeAsync(HttpContext ctx)
@@ -488,7 +561,7 @@ public sealed class SubdomainTenantPathMiddleware
         // «افتَح المَتجَر» مِن الجَذرِ يَبني عُنوانَ مُضيفِه المُطلَق. وبِلا نِطاقٍ لا يُكتَبُ شَيء.
         if (_options.Apex is { } apex) ctx.Items[StoreHostItems.Apex] = apex;
         var answer = TenantResolverMiddleware.AnswerStoreHost(
-            req.Host.Value, _options.BaseDomain, req.Method, req.Path.Value, req.QueryString.Value, req.Scheme);
+            req.Host.Value, _options.BaseDomain, req.Method, req.Path.Value, req.QueryString.Value, req.Scheme, _rolePages);
 
         switch (answer.Verdict)
         {
@@ -505,6 +578,7 @@ public sealed class SubdomainTenantPathMiddleware
         {
             ctx.Items[HostSlugItem] = answer.Slug;
             ctx.Items[OriginalPathItem] = req.Path.Value;
+            if (answer.Role is { } hostRole) ctx.Items[StoreHostItems.Role] = hostRole;
             if (answer.Verdict == StoreHostVerdict.Rewrite) req.Path = answer.Path;
         }
 
@@ -518,6 +592,9 @@ public enum StoreHostVerdict { Pass, Rewrite, Redirect, NotFound }
 /// <summary>الجَوابُ: الحُكم، ومَتجَرُ المُضيفِ إن كانَ مُضيفَ مَتجَر، والمَسارُ بَعدَ الحَقن، والوِجهَةُ لِلتَحويل.</summary>
 public sealed record StoreHostAnswer(StoreHostVerdict Verdict, string? Slug, string? Path, string? Location)
 {
+    /// <summary>دَورُ الكَتالوجِ عَلى مُضيفِ الدَور (<c>{slug}-{rolehost}.R</c>) — <c>null</c> عَلى مُضيفِ المَتجَرِ وما سِواه (‏2026-11-07، W13-4·C2b·4).</summary>
+    public string? Role { get; init; }
+
     /// <summary>بِلا مَتجَرٍ ولا مَساسٍ — الجَذرُ أَو مُضيفٌ خارِجَه أَو مِلصَقٌ مَحجوز أَو نِطاقٌ فارِغ.</summary>
     public static readonly StoreHostAnswer Through = new(StoreHostVerdict.Pass, null, null, null);
     public static readonly StoreHostAnswer NotFound = new(StoreHostVerdict.NotFound, null, null, null);
