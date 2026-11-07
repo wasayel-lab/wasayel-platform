@@ -58,7 +58,9 @@ public static class StoreHostName
         if (slug.Contains("--", StringComparison.Ordinal))
             found.Add(new(DoubleHyphen, "لا شَرطَتانِ مُتَتالِيَتانِ في مُعَرِّفِ المَتجَر (ومِنها البادِئَةُ xn-- لِلأَسماءِ الدَولِيَّة)."));
 
-        if (ReservedTenantSlugs.Contains(slug))
+        // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومَقاطِعُ API المَنَصَّةِ الحَرفِيَّة (`push`، `v1`، `billing`)
+        // مَحجوزَةٌ هُنا لا في `ReservedTenantSlugs.All`: مَتجَرٌ بِها يُخدَمُ سَطحُه عَلى مُضيفاتِ غَيرِه أَو يَبلُغُ API المَنَصَّةِ عَلى مُضيفِه، والقائِمَةُ يَقرَؤُها حَلُّ المَسار.
+        if (ReservedTenantSlugs.Contains(slug) || ReservedTenantSlugs.IsPlatformApiSegment(slug))
             found.Add(new(Reserved, "هذا المُعَرِّفُ مَحجوزٌ لِلمَنَصَّة."));
 
         if (RoleSuffixOf(slug) is { } role)

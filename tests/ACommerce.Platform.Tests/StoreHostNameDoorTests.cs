@@ -47,6 +47,10 @@ public class StoreHostNameDoorTests(ITestOutputHelper output)
     [InlineData("best-vendor", TenantFromAnalysisFactory.SlugReserved)]
     [InlineData("shop-admin", TenantFromAnalysisFactory.SlugReserved)]
     [InlineData("x-organizer", TenantFromAnalysisFactory.SlugReserved)]
+    [InlineData("push", TenantFromAnalysisFactory.SlugReserved)]   // ‏(‏2026-11-07، SEC-C2a-R2-1) مَقاطِعُ API المَنَصَّةِ الحَرفِيَّة
+    [InlineData("v1", TenantFromAnalysisFactory.SlugReserved)]
+    [InlineData("Push", TenantFromAnalysisFactory.SlugReserved)]
+    [InlineData("V1", TenantFromAnalysisFactory.SlugReserved)]
     public void The_host_rules_refuse_what_the_old_shape_let_through(string slug, string code)
     {
         output.WriteLine($"«{slug}» ⇒ {TenantFromAnalysisFactory.SlugRefusal(slug)} ({string.Join(" · ", StoreHostName.Validate(slug).Select(v => v.Code))})");
@@ -152,5 +156,35 @@ public class LiveStoreHostNameDoorProofTests(ITestOutputHelper output)
             Assert.Equal(0, await StoresBuiltAsync(host, a));
         }
         finally { await CleanAsync(host, [a, admin], [.. rows.Select(r => r.Slug)]); }
+    }
+
+    /// <summary><b>مَقاطِعُ API المَنَصَّةِ لا يولَدُ بِها مَتجَرٌ في الأَبوابِ الثَلاثَة</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1): كانَ المُشرِفُ
+    /// يُنشِئُ <c>push</c> و<c>v1</c> (‏302 /admin) — والآن <c>slug_reserved</c> في الاستوديو والمُشرِف، و«slug غَير صالِح.» عِندَ الوَكيل. ولا يُحذَفُ مَتجَرٌ بِهذا
+    /// الاسمِ في التَنظيف — فَقاعِدَةٌ فيها مَتجَرٌ قائِمٌ بِه (وُلِدَ قَبلَ الإصلاح) لا يَمَسُّه الاختِبار؛ والمَقيسُ أَنّ وَثيقَتَه قَبلُ وبَعدُ واحِدَة.</summary>
+    [Fact]
+    public async Task The_three_doors_refuse_a_platform_api_segment_on_Postgres()
+    {
+        if (!Enabled) return;
+        await using var host = HostWithPhone();
+        var a = await UserAsync(host);
+        var admin = await UserAsync(host, consented: false, platformAdmin: true);
+        var exec = new AgentToolExecutor(host.Store, new TenantRoleService(host.Store));
+        try
+        {
+            foreach (var slug in new[] { "push", "v1" })
+            {
+                var before = (await TenantAsync(host, slug))?.OwnerUserId;
+                var studio = await StudioCreateAsync(host, a, slug, "مَتجَر");
+                var byAdmin = await AdminCreateAsync(host, admin, slug, "مَتجَر");
+                var byAgent = await exec.ExecuteAsync("create_tenant", AgentPayload(slug, "مَتجَر"), a.User.Id);
+                output.WriteLine($"[live] «{slug}» ⇒ الاستوديو {studio.Location.Split('&')[0]} · المُشرِف {byAdmin.Location.Split('&')[0]} · الوَكيل {byAgent}");
+                Assert.Equal((302, StudioStoreCreate.Refused(TenantFromAnalysisFactory.SlugReserved, new StudioStoreCreate.Form(slug, "مَتجَر", StudioStoreCreate.DefaultColor, ""))), studio);
+                Assert.StartsWith($"/admin/tenants/new?err={TenantFromAnalysisFactory.SlugReserved}&slug={slug}&", byAdmin.Location, StringComparison.Ordinal);
+                Assert.Equal((false, "slug غَير صالِح."), byAgent);
+                Assert.Equal(before, (await TenantAsync(host, slug))?.OwnerUserId);
+            }
+            Assert.Equal(0, await StoresBuiltAsync(host, a));
+        }
+        finally { await CleanAsync(host, [a, admin]); }
     }
 }

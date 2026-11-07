@@ -190,6 +190,9 @@ public sealed class TenantResolverMiddleware
     ///   <item>عَلى <c>{slug}.R</c>: جُذورُ البِنيَةِ التَحتِيَّةِ كَما هي؛ مَناطِقُ المَنَصَّةِ ← 301 إلى <c>R</c> لِـGET/HEAD و404 لِما سِواهُما؛ <c>/api/{slug}/…</c>
     ///   و<c>/api/push/…</c> كَما هُما و<c>/api/{غَيرِه}/…</c> ← 404؛ مَسارٌ يَحمِلُ المَتجَرَ كَما هُوَ؛ وما سِواه يُحقَنُ فيه <c>/{slug}</c>.</item>
     /// </list>
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«<c>/api/push/…</c> كَما هو» صارَ
+    /// <c>GET</c>/<c>HEAD</c> <c>/api/push/vapid-key</c> وَحدَه</b>، و<c>/api/{slug}/…</c> لِمَتجَرِ المُضيفِ ما لَم يَكُن اسمُه في
+    /// <see cref="ReservedTenantSlugs.PlatformApiSegments"/> — وما سِواهُما 404.</para>
     /// </summary>
     public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
     {
@@ -225,9 +228,11 @@ public sealed class TenantResolverMiddleware
 
         if (string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase))
         {
-            var second = segments.Length > 2 ? segments[2] : "";
-            return string.Equals(second, slug, StringComparison.OrdinalIgnoreCase)
-                   || string.Equals(second, ReservedTenantSlugs.ApiPushSegment, StringComparison.OrdinalIgnoreCase)
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ كُلُّ `/api/push/…` يَمُرّ، فَسَطحُ مَتجَرٍ اسمُه
+            // `push` (‏`/api/{slug}/manifest.json`… والاشتِراك) يُخدَمُ عَلى مُضيفِ كُلِّ مَتجَرٍ آخَرَ بِسِياقِه؛ وكانَ `second == slug` وَحدَه، فَعَلى `v1.R` يَبلُغُ
+            // `/api/v1/*` API المَنَصَّة. الآن: مِن `/api/push/` طَرَفُ المَنَصَّةِ الواحِدُ بِعَينِه (`GET`/`HEAD`)، وسَطحُ المَتجَرِ لِمَتجَرِ المُضيفِ ما لَم يَكُن اسمُه
+            // مَقطَعاً حَرفِيّاً لِـAPI المَنَصَّة — وما سِواهُما 404 (`StoreApiServed`).
+            return StoreApiServed(method, path, slug)
                 ? new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null)
                 : StoreHostAnswer.NotFound;
         }
@@ -235,6 +240,28 @@ public sealed class TenantResolverMiddleware
         return PathWithSlug(path, slug) is { } rewritten
             ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
             : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+    }
+
+    /// <summary>
+    /// <para><b>أَيُخدَمُ طَلَبُ <c>/api/…</c> هذا عَلى مُضيفِ المَتجَرِ <paramref name="slug"/>؟ — قَرارٌ نَقِيٌّ يَسأَلُه <see cref="AnswerStoreHost"/></b> (‏2026-11-07،
+    /// مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1). نَعَم لِاثنَينِ وَحدَهُما: <c>GET</c>/<c>HEAD</c> <c>/api/push/vapid-key</c> بِلا مَقطَعٍ بَعدَه (مِفتاحُ الإشعارِ
+    /// العامّ)، و<c>/api/{slug}</c> وما تَحتَه لِمَتجَرِ المُضيفِ <b>ما لَم يَكُن اسمُه مَقطَعاً حَرفِيّاً لِـAPI المَنَصَّة</b>
+    /// (<see cref="ReservedTenantSlugs.PlatformApiSegments"/>). والمُقارَنَةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه.</para>
+    /// <para><b>والشَرطُ الأَخيرُ حاجِزٌ ثانٍ مَقيسٌ وَحدَه</b>: <see cref="StoreHostName"/> يَرُدُّ تِلكَ الأَسماءَ فَلا تَصيرُ مُضيفاً أَصلاً — وهذِه الدالَّةُ لا تَعتَمِدُ
+    /// عَلَيه، فَمَتجَرٌ قائِمٌ بِها يَبقى بِلا API المَنَصَّةِ عَلى أَيِّ مُضيفٍ ولَو اتَّسَعَ المُصادِقُ يَوماً.</para>
+    /// </summary>
+    public static bool StoreApiServed(string? method, string? path, string slug)
+    {
+        var segments = (string.IsNullOrEmpty(path) ? "/" : path).Split('/', 4);
+        if (segments.Length < 3 || !string.Equals(segments[1], ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase)) return false;
+
+        if ((HttpMethods.IsGet(method ?? "") || HttpMethods.IsHead(method ?? ""))
+            && segments.Length == 4
+            && string.Equals(segments[2], ReservedTenantSlugs.ApiPushSegment, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[3], ReservedTenantSlugs.ApiPushVapidKey, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(segments[2], slug, StringComparison.OrdinalIgnoreCase) && !ReservedTenantSlugs.IsPlatformApiSegment(segments[2]);
     }
 
     /// <summary><b>صَفَحاتُ إدارَةِ مَتجَرِ المُضيف</b> — <c>/admin/tenants/{slug}</c> أَو <c>/admin/tenants/{slug}/…</c> ومُعَرِّفُها مَتجَرُ المُضيفِ بِعَينِه

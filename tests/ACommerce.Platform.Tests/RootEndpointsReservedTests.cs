@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.MultiTenancy;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -60,6 +61,67 @@ public class RootEndpointsReservedTests(ITestOutputHelper output)
             Add(Path.GetFileName(entry), "apps/V1.App/wwwroot");
         foreach (var root in FrameworkRoots) Add(root, "Blazor");
         return found;
+    }
+
+    // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المَقطَعُ الثاني الحَرفِيُّ مِن كُلِّ نُقطَةِ `/api/…`**: الماسِحُ
+    // أَعلاه يَقرَأُ المَقطَعَ الأَوَّلَ وَحدَه (`api`)، فَلَم يَرَ أَنّ `/api/push/vapid-key` و`/api/v1/*` و`/api/billing/*` تُطابِقُ قالَبَ `/api/{slug}/…` شَكلاً —
+    // والمُشرِفُ أَنشَأَ `push` و`v1` فَخُدِمَ سَطحُ `push` عَلى كُلِّ مُضيفٍ آخَر، وبَلَغَ `v1.R` ‏API المَنَصَّة.
+    private static readonly Regex ApiMapRoute = new(@"\.Map(?:Get|Post|Put|Delete|Patch|Methods|Group)?(?:<[^>]+>)?\(\s*""/api/(?<s>[^""/?{]+)", RegexOptions.Compiled);
+    private static readonly Regex ApiWolverineRoute = new(@"\[Wolverine(?:Get|Post|Put|Delete|Patch)\(\s*""/api/(?<s>[^""/?{]+)", RegexOptions.Compiled);
+
+    /// <summary>المَقطَعُ الثاني الحَرفِيُّ مِن كُلِّ <c>Map*("/api/…")</c> و<c>[Wolverine*("/api/…")]</c> → مَواضِعُه (والمُعامِلُ <c>{slug}</c> لا يُعَدّ).</summary>
+    internal static SortedDictionary<string, List<string>> ApiSecondSegments()
+    {
+        var found = new SortedDictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var dir in new[] { "libs", "apps" })
+        foreach (var file in Directory.EnumerateFiles(Path.Combine(RepoRoot, dir), "*.cs", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+            if (rel.Contains("/bin/") || rel.Contains("/obj/")) continue;
+            var code = WriteEndpointGuardTests.StripComments(File.ReadAllText(file));
+            foreach (var m in ApiMapRoute.Matches(code).Concat(ApiWolverineRoute.Matches(code)))
+            {
+                var seg = m.Groups["s"].Value;
+                if (!found.TryGetValue(seg, out var list)) found[seg] = list = [];
+                list.Add(rel);
+            }
+        }
+        return found;
+    }
+
+    /// <summary><b>كُلُّ مَقطَعٍ ثانٍ حَرفِيٍّ لِـAPI المَنَصَّةِ مُصَنَّفٌ ولا يولَدُ بِه مَتجَر</b>: في <see cref="ReservedTenantSlugs.PlatformApiSegments"/>، ويَرُدُّه
+    /// <see cref="StoreHostName"/> بِرَمزِ الحَجزِ وبابُ الإنشاءِ الواحِدِ <c>slug_reserved</c> — والعَدَدُ يُطبَع ويَفشَلُ الماسِحُ عَلى الصِفر.</summary>
+    [Fact]
+    public void Every_literal_api_second_segment_is_refused_at_creation()
+    {
+        var segments = ApiSecondSegments();
+        foreach (var (seg, where) in segments)
+            output.WriteLine($"{(ReservedTenantSlugs.IsPlatformApiSegment(seg) && TenantFromAnalysisFactory.SlugRefusal(seg) is not null ? "✓" : "✗")} /api/{seg}  ← {string.Join(" · ", where.Distinct().Take(3))}");
+        output.WriteLine($"المَقاطِعُ الثانِيَةُ المَفحوصَة: {segments.Count} · المُصَنَّفَة: {ReservedTenantSlugs.PlatformApiSegments.Count}");
+        Assert.True(segments.Count >= 3, $"أَداةٌ عَمياء: {segments.Count} مَقطَعاً.");
+        foreach (var seg in segments.Keys)
+        {
+            Assert.True(ReservedTenantSlugs.IsPlatformApiSegment(seg), $"/api/{seg} خارِجَ PlatformApiSegments — عَلى مُضيفِ مَتجَرٍ اسمُه «{seg}» يُخدَمُ سَطحُ المَنَصَّة");
+            Assert.Contains(StoreHostName.Validate(seg), v => v.Code == StoreHostName.Reserved);
+            Assert.Equal(TenantFromAnalysisFactory.SlugReserved,
+                         TenantFromAnalysisFactory.SlugRefusal(seg));
+        }
+        // والمُصَنَّفُ لا يَزيدُ عَلى ما يُخدَم — قائِمَةٌ تَكبُرُ بِلا نُقطَةٍ تَحجُزُ اسماً بِلا سَبَب.
+        Assert.Equal(segments.Keys.Order(StringComparer.OrdinalIgnoreCase), ReservedTenantSlugs.PlatformApiSegments.Order(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>والماسِحُ يُقاسُ قَبلَ أَن يُوثَقَ بِه (القاعِدَة ١٠): يَرى المَقاطِعَ الثَلاثَةَ بِمَواضِعِها، ولا يَعُدُّ المُعامِل.</summary>
+    [Theory]
+    [InlineData("push", "MarketplaceTemplateExtensions.cs")]
+    [InlineData("v1", "ApiV1Endpoints.cs")]
+    [InlineData("billing", "PayPalEndpoints.cs")]
+    [InlineData("billing", "PaddleEndpoints.cs")]
+    public void The_api_scanner_sees_each_platform_segment(string segment, string source)
+    {
+        var found = ApiSecondSegments();
+        Assert.True(found.TryGetValue(segment, out var where), $"/api/{segment} لَم يُرَ");
+        Assert.Contains(where!, w => w.EndsWith(source, StringComparison.Ordinal));
+        Assert.DoesNotContain(found.Keys, k => k.StartsWith('{'));
     }
 
     [Fact]

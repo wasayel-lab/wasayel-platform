@@ -105,6 +105,11 @@ row GET  "$S" "/studio/%3F%3Fx"         301 "$SCHEME://$R/studio/%3F%3Fx"
 echo "٤) ما لا يَخُصُّ المَتجَرَ لا يُبلَغُ مِن مُضيفِه"
 row GET  "$S" "/api/$OTHER/unread-counts" 404
 row GET  "$S" "/api/v1/deals"           404
+# ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1) سَطحُ مَتجَرٍ اسمُه push لا يُخدَمُ عَلى مُضيفِ غَيرِه (كانَ 200 بِبَيانِه)، ولا مُضيفَ لِـpush وv1
+# (كانَ v1.R/api/v1/deals يَبلُغُ API المَنَصَّة) — والثَلاثَةُ تَصدُقُ بِمَتجَرٍ بِذلك الاسمِ وبِدونِه
+row GET  "$S" "/api/push/manifest.json" 404
+row GET  "$(hp "push.$DOMAIN")" "/api/push/manifest.json" 404
+row GET  "$(hp "v1.$DOMAIN")" "/api/v1/deals" 404
 row GET  "$(hp "$STORE-vendor.$DOMAIN")" "/"   404
 row GET  "$(hp "x.$STORE.$DOMAIN")" "/"   404
 row GET  "$(hp "w13-no-such-store.$DOMAIN")" "/" 404

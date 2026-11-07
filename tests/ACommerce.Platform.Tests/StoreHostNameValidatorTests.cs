@@ -85,6 +85,25 @@ public class StoreHostNameValidatorTests(ITestOutputHelper output)
     public void Seed_and_plain_names_are_valid(string slug)
         => Assert.True(StoreHostName.IsValid(slug), string.Join(" · ", StoreHostName.Validate(slug).Select(v => v.Code)));
 
+    /// <summary><b>مَقاطِعُ API المَنَصَّةِ الحَرفِيَّةُ مَحجوزَةٌ اسمَ مُضيف</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1): بِرَمزِ الحَجزِ نَفسِه، وبِلا
+    /// حالَةِ أَحرُف — وهي خارِجَ <see cref="ReservedTenantSlugs.All"/> فَلا يَفقِدُ مَتجَرٌ قائِمٌ بِها مَسارَه. وجارُها يَمُرّ.</summary>
+    [Theory]
+    [InlineData("push", true)]
+    [InlineData("v1", true)]
+    [InlineData("billing", true)]
+    [InlineData("PUSH", true)]
+    [InlineData("pushes", false)]
+    [InlineData("v2", false)]
+    [InlineData("vapid-key", false)]
+    public void Platform_api_segments_are_reserved_host_names(string slug, bool reserved)
+    {
+        var codes = StoreHostName.Validate(slug).Select(v => v.Code).ToArray();
+        output.WriteLine($"«{slug}»: {string.Join(" · ", codes)} · في All: {ReservedTenantSlugs.Contains(slug)}");
+        Assert.Equal(reserved, codes.Contains(StoreHostName.Reserved));
+        Assert.Equal(reserved, ReservedTenantSlugs.IsPlatformApiSegment(slug));
+        if (slug is "push" or "v1") Assert.False(ReservedTenantSlugs.Contains(slug));
+    }
+
     /// <summary><b>السَقفُ مُشتَقٌّ ويُطبَعُ اشتِقاقُه</b>: ‏63 − 1 − أَطوَلُ اسمِ مُضيفِ دَور.</summary>
     [Fact]
     public void The_max_length_is_derived_from_the_longest_role_host_name()

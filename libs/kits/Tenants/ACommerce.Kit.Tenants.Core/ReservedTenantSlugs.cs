@@ -153,6 +153,28 @@ public static class ReservedTenantSlugs
     /// <summary>المَقطَعُ الثاني مِن <c>/api/…</c> الَّذي يُخدَمُ عَلى كُلِّ مُضيفِ مَتجَر.</summary>
     public const string ApiPushSegment = "push";
 
+    /// <summary><b>الطَرَفُ الوَحيدُ تَحتَ <see cref="ApiPushSegment"/> الَّذي يُخدَمُ عَلى مُضيفِ المَتجَر</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة ·
+    /// SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ‏<c>GET /api/push/vapid-key</c> — مِفتاحُ الإشعارِ العامّ. وما سِواه تَحتَ <c>/api/push/</c> هُوَ سَطحُ مَتجَرٍ
+    /// اسمُه <c>push</c> (‏<c>/api/{slug}/…</c>)، وكانَ يُخدَمُ عَلى كُلِّ مُضيفٍ آخَر.</summary>
+    public const string ApiPushVapidKey = "vapid-key";
+
+    /// <summary>
+    /// <para><b>المَقاطِعُ الحَرفِيَّةُ الثانِيَةُ لِـAPI المَنَصَّة</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه):
+    /// <c>/api/push/vapid-key</c> و<c>/api/v1/*</c> وخُطّافا <c>/api/billing/{paypal,paddle}</c> — كُلُّها تُطابِقُ قالَبَ <c>/api/{slug}/…</c> شَكلاً.
+    /// <b>والعِلَّةُ المَقيسَة</b> (عِندَ <c>b8bf5b1</c>): المُشرِفُ أَنشَأَ مَتجَرَينِ <c>push</c> و<c>v1</c>، فَكانَ سَطحُ <c>push</c> يُخدَمُ عَلى مُضيفِ كُلِّ مَتجَرٍ آخَرَ
+    /// بِسِياقِه، و<c>v1.R/api/v1/deals</c> يَبلُغُ API المَنَصَّةِ عَلى مُضيفِ مَتجَر.</para>
+    /// <para><b>ولِماذا لَيسَت في <see cref="All"/></b>: <c>SlugFromPath</c> يَقرَأُ تِلكَ القائِمَة، فَمَتجَرٌ قائِمٌ بِاسمٍ مِنها كانَ يَفقِدُ مَسارَه بِالنَشر (دَرسُ
+    /// <c>lang</c>، C2a-P-02). فَهي تُرَدُّ حَيثُ يُسأَلُ اسمُ المُضيفِ وَحدَه — <c>StoreHostName</c> (بابُ الإنشاءِ الواحِدُ وحَلُّ المُضيف) — فَلا يولَدُ بِها مَتجَرٌ
+    /// جَديد، والقائِمُ يَبقى بِمَسارِه بِلا مُضيفٍ كَكُلِّ مُعَرِّفٍ عَلى غَيرِ الشَكل. والحارِسُ <c>RootEndpointsReservedTests</c> يَجمَعُ المَقطَعَ الثانِيَ الحَرفِيَّ
+    /// مِن كُلِّ نُقطَةِ <c>/api/…</c> ويَحمَرُّ عَلى ما لَيسَ هُنا.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> PlatformApiSegments =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ApiPushSegment, "v1", "billing" };
+
+    /// <summary>أَهذا الاسمُ مَقطَعٌ حَرفِيٌّ لِـAPI المَنَصَّة؟ (<see cref="PlatformApiSegments"/>)</summary>
+    public static bool IsPlatformApiSegment(string? name)
+        => !string.IsNullOrWhiteSpace(name) && PlatformApiSegments.Contains(name.Trim());
+
     /// <summary>أَهذا الاسمُ مَحجوز؟ — <b>الفَراغُ لَيسَ مَحجوزاً بَل
     /// غائِب</b>، ويَرُدُّه فاحِصُ الشَكلِ لا هذا.</summary>
     public static bool Contains(string? slug)

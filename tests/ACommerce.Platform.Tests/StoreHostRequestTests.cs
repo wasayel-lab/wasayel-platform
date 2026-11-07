@@ -72,6 +72,23 @@ public class StoreHostRequestTests(ITestOutputHelper output)
     [InlineData("mail.example.test", "GET", "/", "Pass||")]
     [InlineData("ashare.evil.test", "GET", "/studio", "Pass||")]
     [InlineData("localhost:5050", "GET", "/studio", "Pass||")]
+    // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1) سَطحُ مَتجَرٍ اسمُه push لا يُخدَمُ عَلى مُضيفِ غَيرِه — كانَ 200 بِبَيانِه؛ ومِن /api/push/ مِفتاحُ
+    // الإشعارِ وَحدَه بِـGET/HEAD؛ ومُضيفا push وv1 لا يُحَلّانِ (StoreHostName) — كانَ v1.R/api/v1/deals يَبلُغُ API المَنَصَّة.
+    [InlineData("ashare.example.test", "GET", "/api/push/manifest.json", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push/icon.svg", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push/og.png", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push/unread-counts", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push/r/vendor/manifest.json", "NotFound||")]
+    [InlineData("ashare.example.test", "POST", "/api/push/push/subscribe", "NotFound||")]
+    [InlineData("ashare.example.test", "POST", "/api/push/vapid-key", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push/vapid-key/x", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/api/push", "NotFound||")]
+    [InlineData("ashare.example.test", "GET", "/API/PUSH/VAPID-KEY", "Pass|ashare|")]
+    [InlineData("v1.example.test", "GET", "/api/v1/deals", "NotFound||")]
+    [InlineData("v1.example.test", "GET", "/", "NotFound||")]
+    [InlineData("push.example.test", "GET", "/api/push/manifest.json", "NotFound||")]
+    [InlineData("push.example.test", "GET", "/", "NotFound||")]
+    [InlineData("billing.example.test", "GET", "/api/billing/paypal", "Pass||")]
     public void The_store_host_answer_matrix(string host, string method, string pathAndQuery, string expected)
     {
         var q = pathAndQuery.IndexOf('?');
@@ -79,6 +96,47 @@ public class StoreHostRequestTests(ITestOutputHelper output)
         var answer = TenantResolverMiddleware.AnswerStoreHost(host, Base, method, path, query, "https");
         output.WriteLine($"{method} {host}{pathAndQuery} ⇒ {Show(answer)}");
         Assert.Equal(expected, Show(answer));
+    }
+
+    /// <summary><b>G6 — سَطحُ الـAPI عَلى مُضيفِ المَتجَرِ بِالقَرارِ النَقِيِّ وَحدَه</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1): الحاجِزُ
+    /// الثاني لا يَعتَمِدُ عَلى المُصادِق — فَلَو كانَ <c>push</c> أَو <c>v1</c> أَو <c>billing</c> مَتجَرَ مُضيفٍ لَما خُدِمَ لَه <c>/api/{اسمِه}/…</c>، ومِفتاحُ الإشعارِ يُخدَمُ
+    /// بِطَرَفِه وطَريقَتَيه وَحدَها.</summary>
+    [Theory]
+    [InlineData("GET", "/api/push/manifest.json", "push", false)]
+    [InlineData("GET", "/api/push/vapid-key", "push", true)]
+    [InlineData("GET", "/api/v1/deals", "v1", false)]
+    [InlineData("GET", "/API/V1/deals", "v1", false)]
+    [InlineData("POST", "/api/v1/deals/x/advance", "v1", false)]
+    [InlineData("POST", "/api/billing/paypal", "billing", false)]
+    [InlineData("GET", "/api/ashare/manifest.json", "ashare", true)]
+    [InlineData("GET", "/api/ashare", "ashare", true)]
+    [InlineData("POST", "/api/ashare/push/subscribe", "ashare", true)]
+    [InlineData("GET", "/api/ejar/manifest.json", "ashare", false)]
+    [InlineData("GET", "/api/push/vapid-key", "ashare", true)]
+    [InlineData("HEAD", "/api/push/vapid-key", "ashare", true)]
+    [InlineData("GET", "/Api/Push/Vapid-Key", "ashare", true)]
+    [InlineData("POST", "/api/push/vapid-key", "ashare", false)]
+    [InlineData("GET", "/api/push/vapid-key/", "ashare", false)]
+    [InlineData("GET", "/api/push/manifest.json", "ashare", false)]
+    [InlineData("GET", "/api", "ashare", false)]
+    [InlineData("GET", "/api/", "ashare", false)]
+    [InlineData("GET", "/ashare/api/me/unread", "ashare", false)]
+    [InlineData("GET", null, "ashare", false)]
+    public void The_store_api_surface_is_its_own_and_the_public_push_key_only(string method, string? path, string slug, bool served)
+    {
+        output.WriteLine($"{method} {path} عَلى {slug}.R ⇒ {(TenantResolverMiddleware.StoreApiServed(method, path, slug) ? "يُخدَم" : "404")}");
+        Assert.Equal(served, TenantResolverMiddleware.StoreApiServed(method, path, slug));
+    }
+
+    /// <summary><b>G6 — المُضيفُ وَحدَه</b>: مَقاطِعُ API المَنَصَّةِ لا تُحَلُّ مُضيفَ مَتجَرٍ (‏<see cref="StoreHostName"/>)، ويَبقى مَسارُها — والحاجِزانِ مُستَقِلّان.</summary>
+    [Theory]
+    [InlineData("push")]
+    [InlineData("v1")]
+    public void A_platform_api_segment_is_not_a_store_host_and_keeps_its_path(string name)
+    {
+        Assert.Null(TenantResolverMiddleware.StoreSlugFromHost($"{name}.example.test", Base));
+        Assert.Equal(name, TenantResolverMiddleware.SlugFromHost($"{name}.example.test", Base));
+        Assert.Equal(name, TenantResolverMiddleware.SlugFromPath($"/{name}/explore"));
     }
 
     /// <summary><b>G6 — المَسارُ المُرَمَّز</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2/C2a-P-03): الدالَّةُ تَتَلَقّى المَسارَ كَما يَفُكُّه Kestrel
@@ -311,6 +369,40 @@ public class StoreHostPipelineTests(ITestOutputHelper output)
             ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 301, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
             ("GET",  "nosuch.example.test", "/admin/tenants/nosuch/categories", 404, "", ""),
             ("GET",  "ashare.example.test", "/explore", 200, "", "/ashare/explore|/explore|ashare"),
+        };
+        foreach (var r in rows)
+        {
+            var (status, location, body) = await p.SendAsync(r.Method, r.Host, r.Path);
+            output.WriteLine($"{r.Method} {r.Host}{r.Path} ⇒ {status} {location}{body}");
+            Assert.Equal((r.Status, r.Location, r.Body), (status, location, body));
+        }
+        output.WriteLine($"الصُفوف: {rows.Length}");
+    }
+
+    /// <summary><b>سَطحُ الـAPI بِالوَسيطَينِ الحَقيقِيَّين</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1) — والمَخزَنُ فيه مَتجَرانِ اسمُهُما
+    /// <c>push</c> و<c>v1</c> كَما أَنشَأَهُما المُشرِفُ قَبلَ الإصلاح: سَطحُ <c>push</c> لا يُبلَغُ مِن مُضيفِ <c>ashare</c> (كانَ 200 بِسِياقِ <c>ashare</c>)، ولا
+    /// <c>/api/v1</c> مِن <c>v1.R</c>، ولا مُضيفَ لَهُما؛ ومِفتاحُ الإشعارِ يُخدَم، ومَسارُ <c>push</c> و<c>v1</c> عَلى الجَذرِ بِسِياقِهِما.</summary>
+    [Fact]
+    public async Task The_store_host_does_not_serve_another_store_api_or_the_platform_api_on_the_wire()
+    {
+        var world = new DocWorld()
+            .Put(new Tenant { Id = "ashare", Name = "عَشير" })
+            .Put(new Tenant { Id = "push", Name = "push" })
+            .Put(new Tenant { Id = "v1", Name = "v1" });
+        await using var p = await StoreHostPipeline.StartAsync("example.test", world.Store);
+        var rows = new (string Method, string Host, string Path, int Status, string Location, string Body)[]
+        {
+            ("GET",  "ashare.example.test", "/api/push/manifest.json", 404, "", ""),
+            ("GET",  "ashare.example.test", "/api/push/icon.svg", 404, "", ""),
+            ("GET",  "ashare.example.test", "/api/push/unread-counts", 404, "", ""),
+            ("POST", "ashare.example.test", "/api/push/push/subscribe", 404, "", ""),
+            ("GET",  "ashare.example.test", "/api/push/vapid-key", 200, "", "/api/push/vapid-key|/api/push/vapid-key|ashare"),
+            ("GET",  "v1.example.test", "/api/v1/deals", 404, "", ""),
+            ("GET",  "v1.example.test", "/", 404, "", ""),
+            ("GET",  "push.example.test", "/api/push/manifest.json", 404, "", ""),
+            ("GET",  "example.test", "/push/explore", 200, "", "/push/explore||push"),
+            ("GET",  "example.test", "/v1", 200, "", "/v1||v1"),
+            ("GET",  "example.test", "/api/push/manifest.json", 200, "", "/api/push/manifest.json||"),
         };
         foreach (var r in rows)
         {
