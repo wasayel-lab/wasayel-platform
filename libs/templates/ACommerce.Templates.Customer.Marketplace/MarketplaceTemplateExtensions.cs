@@ -4153,6 +4153,46 @@ public static class MarketplaceTemplateExtensions
             return TenantConfigSurface.Outcome(result, page, page, "/studio");
         }).RequireFormBody().DisableAntiforgery();
 
+        // ─── إنشاءُ مَتجَرٍ بِاليَد (‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049 §٤) ─────────────────────────────────
+        // البابُ الوَحيدُ الَّذي كانَ يَملِكُ مِنه رائِدُ الأَعمالِ مَتجَراً هُوَ `/build` أَدناه، ويَشتَرِطُ تَحليلاً `Completed` لا يَكتُبُه إلّا نِداءُ
+        // نَموذَجٍ ناجِح — فَبِلا مِفتاحٍ لا مَتجَر. هُنا الحَرَسُ المُشتَرَكُ بِتَرتيبِه (‏`StudioStoreBirthCharacterizationTests`) وبَينَ الهُوِيَّةِ
+        // والحِصَّةِ المُوافَقَةُ الرابِعَة (كانَت تُسأَلُ في الاستِئنافِ وَحدَه)؛ ثُمَّ المَصنَعُ نَفسُه بِنَمَطٍ وقِطاعٍ فارِغَين وبِلا مَصدَر — المَتجَرُ
+        // الَّذي كانَ `/build` يَكتُبُه لِجَلسَةٍ بِالوَصفِ وَحدَه بايتاً. ولا `IDocumentStore` في التَوقيع: المُوافَقَةُ مِن `StudioQueries`.
+        // والمَسارُ حَرفِيٌّ لا ثابِتاً: ماسِحاتُ النِقاطِ (الحَرَس، والنَزيف، والمَخزَن) تَقرَأُ الحَرفِيَّ — والثابِتُ `StudioStoreCreate.Endpoint` يُطابِقُه في اختِبار.
+        app.MapPost("/studio/apps/create", async (
+            HttpRequest req, HttpContext http,
+            Services.Incubator.StudioAuth auth,
+            Services.Queries.StudioQueries studio,
+            Services.Incubator.StudioTierService tier,
+            Services.Incubator.TenantFromAnalysisFactory factory) =>
+        {
+            auth.Load();
+            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+            var ownerId = auth.UserId!.Value;
+            if (!await studio.HasConsentedAsync(ownerId, Services.Incubator.ConsentPolicy.CurrentVersion))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.ConsentPage);
+            var gate = await tier.CheckBuildAsync(ownerId);
+            if (!gate.Allowed)
+                return Results.Redirect($"{Services.Incubator.StudioStoreCreate.Page}?upgrade={gate.BreachCode}");
+
+            var form = Services.Incubator.StudioStoreCreate.Read(req.Form);
+            if (await factory.ValidateSlugAsync(form.Slug) is { } slugRefused)
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(slugRefused, form));
+            if (string.IsNullOrEmpty(form.Name))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.NameRequired, form));
+            if (!Services.Incubator.StudioStoreCreate.ColorValid(form.Color))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.ColorInvalid, form));
+            var channel = Services.Incubator.TenantAuthChannelDoor.Default(
+                Services.Incubator.TenantAuthChannelDoor.OfferedIn(http.RequestServices));
+            if (channel is null)
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantAuthChannelDoor.NoChannel, form));
+
+            await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
+                pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null);
+            await tier.RecordStoreBuiltAsync(ownerId);
+            return Results.Redirect($"/studio/apps/{form.Slug}?built=1");
+        }).RequireFormBody().DisableAntiforgery();
+
         // بِناء Tenant فِعليّ مِن جَلسَة تَحليل (الجِسر بَين الفِكرَة والتَّطبيق).
         app.MapPost("/studio/s/{id:guid}/build", async (
             Guid id, HttpRequest req, HttpContext http,

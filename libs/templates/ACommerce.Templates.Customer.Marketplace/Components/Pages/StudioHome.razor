@@ -37,12 +37,10 @@
            الجَولَة 2؛ تَوصيفُه e38c08f؛ القاعِدَة ١٢). والحالَتانِ الفارِغَتانِ تَقولانِ النَصَّ المُغلَقَ مَكانَ الزِرّ.
            و`@((MarkupString)"…")` المُلاصِقُ لِكُلِّ عُنصُرٍ هُوَ الفَراغُ الَّذي كانَ قَبلَه بِحَرفِه: Razor يُسقِطُ الفَراغَ عَلى حَدِّ الكُتلَة، فَبِه تَبقى
            الصَفحَةُ بِالمِفتاحِ بايتاً كَما كانَت (مَقيسٌ؛ نَفسُ حيلَةِ تَرحيلِ القامُوس). *@
-        @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-        {
-        @((MarkupString)"\n        ")<a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
+        @* ‏(‏2026-11-07، W13-1·٣ — ADR-049) الروابِطُ السِتَّةُ إلى `/studio/new` تُرسَمُ بِلا باب: الصَفحَةُ صارَت استِمارَةَ إنشاءٍ لا تَحتاجُ مِفتاحاً. *@
+        <a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
             <AcIcon Name="lightbulb" Size="14" /> @L.Markup("studio.home.new_idea")@((MarkupString)"\n        ")
         </a>
-        }
     </TopBarActions>
     <ChildContent>
         <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" RenewsOn="@renewsOn" />
@@ -57,8 +55,6 @@
         {
             @* بِطاقَتان واضِحَتان لِمَساعِدَي الذَّكاء — كُلّ واحِدَة بِغَرَض مُختَلِف. *@
             <div class="studio-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px;">
-                @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-                {
                 <a class="studio-list-row" href="/studio/new" style="align-items:flex-start;">
                     <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;">
                         <AcIcon Name="lightbulb" Size="18" />
@@ -69,7 +65,6 @@
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
-                }
                 @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
                 {
                 @((MarkupString)"\n                ")<a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
@@ -108,10 +103,7 @@
                    مَقيسٌ بِالطَبَقَة السادِسَة. والأَخضَرُ الغامِق
                    مَوجودٌ في اللَوحَة سَلَفاً لِهذا بِعَينِه، فَلا لَونَ
                    جَديد يُخترَع. *@
-                @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-                {
-                @((MarkupString)"\n                ")<a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
-                }
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
             </div>
             @if (myApps is null)
             {
@@ -123,14 +115,7 @@
                     <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="package" Size="48" /></div>
                     <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_apps")</h3>
                     <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_apps_body")</p>
-                    @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-                    {
-                    @((MarkupString)"\n                    ")<a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_idea")</a>
-                    }
-                    else
-                    {
-                    <p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p>
-                    }
+                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_idea")</a>
                 </div>
             }
             else
@@ -273,14 +258,7 @@
                 <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="lightbulb" Size="48" /></div>
                 <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_ideas")</h3>
                 <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_ideas_body")</p>
-                @if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))
-                {
-                @((MarkupString)"\n                ")<a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.describe_idea")</a>
-                }
-                else
-                {
-                <p style="margin:0;">@L.Markup(StudioAnalysisDoor.ClosedMessageKey)</p>
-                }
+                <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.describe_idea")</a>
             </div>
         }
         else

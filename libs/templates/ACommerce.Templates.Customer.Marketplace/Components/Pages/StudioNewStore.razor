@@ -1,0 +1,89 @@
+@page "/studio/new"
+@inject Services.Incubator.StudioAuth Auth
+@inject Services.Queries.StudioQueries Studio
+@using ACommerce.Templates.Customer.Marketplace.Services.Incubator
+@inject L L
+
+@*
+    ‏(‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049 §٤) استِمارَةُ إنشاءِ المَتجَرِ بِاليَد — كانَت هذِه الصَفحَةُ «فِكرَة جَديدَة» تُرسِلُ إلى
+    `/studio/begin` (تَحليلٌ بِنَموذَجِ لُغَة)، والتَحليلُ هُوَ البابُ الوَحيدُ الَّذي يَملِكُ مِنه رائِدُ الأَعمالِ مَتجَراً؛ فَبِلا مِفتاحٍ لا مَتجَر.
+    صارَت تُرسِلُ إلى `StudioStoreCreate.Endpoint` بِالحُقولِ الَّتي كانَت استِمارَةُ البِناءِ تَطلُبُها (الاسم، المُعَرِّف، اللَون، سَطرُ الوَصف).
+    والمُوافَقَةُ قَبلَها: مَن لَم يَقبَل الإصدارَ القائِمَ يُرسَلُ إلى صَفحَتِها ويَعودُ إلى هُنا (البابُ يَسأَلُها ثانِيَةً).
+*@
+
+<StudioShell Title="@(L["studio.create.head_title"])" Active="new">
+    <ChildContent>
+        @if (Auth.IsAuthenticated && !consented)
+        {
+            <script>location.replace('@StudioStoreCreate.ConsentPage');</script>
+        }
+        else
+        {
+            @* نافِذَةُ التَرقِيَةِ لِرَفضِ الحِصَّة (`?upgrade=build`) — وحَدُّ المَتاجِرِ ثابِتٌ لا يَتَجَدَّد، فَلا تاريخَ تَجديد (`UpgradePrompt` لا يَرسُمُه إلّا لِلتَحاليل). *@
+            <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+
+            <div class="studio-page-head">
+                <h1>@L.Markup("studio.create.title")</h1>
+                <p>@L.Markup("studio.create.subtitle")</p>
+            </div>
+
+            <div class="st-card">
+                @if (Err is not null && StudioStoreCreate.Refusals.Contains(Err))
+                {
+                    <div class="st-chip st-chip-danger" style="margin-bottom:10px;">@L.Markup(StudioStoreCreate.MessageKey(Err))</div>
+                }
+                <form method="post" action="@StudioStoreCreate.Endpoint"
+                      style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="st-field" style="margin:0;grid-column:1/-1;">
+                        <label class="st-label">@L.Markup("studio.create.field_name")</label>
+                        <input class="st-input" name="name" required maxlength="60" value="@Name" />
+                    </div>
+                    <div class="st-field" style="margin:0;">
+                        <label class="st-label">@L.Markup("studio.create.field_slug")</label>
+                        <input class="st-input" name="slug" required dir="ltr" pattern="^[a-z0-9_-]+$"
+                               placeholder="my-store" value="@Slug" />
+                    </div>
+                    <div class="st-field" style="margin:0;">
+                        <label class="st-label">@L.Markup("studio.create.field_color")</label>
+                        <input class="st-input" type="color" name="color" required
+                               value="@(StudioStoreCreate.ColorValid(Color ?? "") ? Color : StudioStoreCreate.DefaultColor)" style="padding:4px;height:46px;" />
+                    </div>
+                    <div class="st-field" style="margin:0;grid-column:1/-1;">
+                        <label class="st-label">@L.Markup("studio.create.field_tagline")</label>
+                        <input class="st-input" name="tagline" maxlength="120" value="@TagLine" />
+                    </div>
+                    <div style="display:flex;gap:8px;grid-column:1/-1;">
+                        <a class="st-btn st-btn-ghost" href="/studio">@L.Markup("admin.new.cancel")</a>
+                        <button type="submit" class="st-btn st-btn-primary st-btn-block">@L.Markup("studio.create.submit")</button>
+                    </div>
+                </form>
+                <p style="margin:10px 0 0;font-size:12px;color:var(--st-muted);">@L.Markup("studio.create.hint")</p>
+            </div>
+        }
+    </ChildContent>
+</StudioShell>
+
+@code {
+    [SupplyParameterFromQuery] public string? Upgrade { get; set; }
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    [SupplyParameterFromQuery(Name = "slug")] public string? Slug { get; set; }
+    [SupplyParameterFromQuery(Name = "name")] public string? Name { get; set; }
+    [SupplyParameterFromQuery(Name = "color")] public string? Color { get; set; }
+    [SupplyParameterFromQuery(Name = "tagline")] public string? TagLine { get; set; }
+
+    [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
+
+    bool consented;
+    string? currentTier;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Load();
+        if (!Auth.IsAuthenticated) return;
+        var uid = Auth.UserId!.Value;
+        // السُؤالُ نَفسُه الَّذي يَسأَلُه البابُ وصَفحَةُ المُوافَقَة (`ConsentPolicy.AcceptedBy`) — مُسنَدٌ واحِد (القاعِدَة ٨).
+        consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);
+        if (!consented) return;
+        currentTier = (await TierSvc.GetUserAsync(uid))?.Tier ?? "spark";
+    }
+}

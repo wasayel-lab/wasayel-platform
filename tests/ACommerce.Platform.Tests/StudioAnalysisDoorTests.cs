@@ -71,7 +71,9 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
     [Fact]
     public void Every_studio_entry_asks_the_one_analysis_door()
     {
-        var pages = new[] { "Landing.razor", "StudioNewIdea.razor", "StudioStudy.razor" };
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `StudioNewIdea.razor` خَرَجَ مِن القائِمَة: `/studio/new` صارَت
+        // استِمارَةَ إنشاءٍ بِلا تَحليل (`StudioNewStore.razor`)، فَلا بابَ تَسأَلُه. والصَفحَتانِ الباقِيَتانِ تَخرُجانِ في W13-1·٥.
+        var pages = new[] { "Landing.razor", "StudioStudy.razor" };
         foreach (var p in pages)
         {
             var text = Page(p);
@@ -159,7 +161,8 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
     /// <summary>كُلُّ استِمارَةٍ إلى التَحليلِ بَعدَ سُؤالِ البابِ وقَبلَ <c>else</c>ـه، و<c>else</c> يَرسُمُ مِفتاحَ القامُوسِ لا استِمارَة.</summary>
     [Theory]
     [InlineData("Landing.razor", "action=\"/studio/begin\"")]
-    [InlineData("StudioNewIdea.razor", "action=\"/studio/begin\"")]
+    // ‏(‏2026-11-07، W13-1·٣) صَفُّ `StudioNewIdea.razor` خَرَجَ مَعَ استِمارَتِه — `/studio/new` استِمارَةُ إنشاءٍ تُرسِلُ إلى `/studio/apps/create`
+    // (`StudioStoreCreateTests.The_form_posts_to_the_door_and_the_page_route_is_the_one_constant`).
     [InlineData("StudioStudy.razor", "/studio/s/{session.Id}/analyze")]
     public void The_page_draws_the_form_only_inside_the_open_branch(string page, string form)
     {
@@ -531,39 +534,36 @@ public class StudioAnalysisDoorTests(ITestOutputHelper output)
         Assert.Equal(1, oldLiteral);
     }
 
-    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2)</b> — كانَ
-    /// <c>Today_six_links_to_the_idea_page_are_drawn_without_asking_its_door</c> (‏<c>e38c08f</c>): «روابِطُ /studio/new: 6 · داخِلَ بابٍ: 0».
-    /// والآن كُلُّ رابِطٍ إلى صَفحَةِ الفِكرَةِ داخِلَ كُتلَةِ <c>@if (StudioAnalysisDoor.Opens(Incubator.IsConfigured))</c> — بِالماسِحِ لا بِقائِمَة،
-    /// فَرابِطٌ يُضافُ غَداً خارِجَ البابِ يُحمِرُّ هُنا بِمِلَفِّه. ويَطبَعُ ما عَدَّه ويَفشَلُ عَلى ما دونَ المَقيس (القاعِدَة ١٠).</summary>
+    /// <summary><b>قُلِبَ ثانِيَةً بِاسمِه (‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049)</b> — كانَ <c>Every_link_to_the_idea_page_sits_inside_an_open_analysis_door</c>:
+    /// «روابِطُ /studio/new: 6 · داخِلَ بابٍ: 6». والصَفحَةُ صارَت استِمارَةَ إنشاءٍ لا تَحتاجُ مِفتاحاً، فَالروابِطُ السِتَّةُ تُرسَمُ بِلا باب — بِالماسِحِ نَفسِه
+    /// (‏<see cref="NewIdeaLinks"/>): لا رابِطَ داخِلَ بابِ التَحليل. والقاعِدَةُ ١٢ لِكُلِّ بابٍ في <c>StudioStoreCreateTests.Every_link_to_the_create_page_is_drawn_without_a_door</c>.</summary>
     [Fact]
-    public void Every_link_to_the_idea_page_sits_inside_an_open_analysis_door()
+    public void No_link_to_the_create_page_sits_inside_the_analysis_door()
     {
         var links = NewIdeaLinks();
-        var outside = links.Where(l => !l.InsideDoor).ToList();
-        output.WriteLine($"روابِطُ /studio/new: {links.Count} · داخِلَ بابٍ: {links.Count - outside.Count} · خارِجَه: {outside.Count} ("
+        var inside = links.Where(l => l.InsideDoor).ToList();
+        output.WriteLine($"روابِطُ /studio/new: {links.Count} · داخِلَ بابِ التَحليل: {inside.Count} ("
             + string.Join(" · ", links.GroupBy(l => l.File).Select(g => $"{g.Key}: {g.Count()}")) + ")");
 
         Assert.True(links.Count >= 6, $"أَداةٌ عَمياء: {links.Count} رابِطاً — والمَقيسُ 6.");
-        Assert.Empty(outside);
-        Assert.Contains("@inject Services.Incubator.FeasibilityAnalysisService Incubator",
-            Read($"{TemplateRoot}/Components/StudioShell.razor"), StringComparison.Ordinal);
+        Assert.Empty(inside);
+        Assert.DoesNotContain("FeasibilityAnalysisService", Read($"{TemplateRoot}/Components/StudioShell.razor"), StringComparison.Ordinal);
     }
 
-    /// <summary>الحالَتانِ الفارِغَتانِ في <c>StudioHome</c> («لا تَطبيقات بَعد» و«لا أَفكار بَعد») نَصُّهُما يَدعو إلى تَحليلِ فِكرَة — فَبِلا بابٍ
-    /// يَرسُمُ <c>else</c>ـهُما مِفتاحَ القامُوسِ المُغلَقَ مَكانَ الزِرِّ لا رابِطاً، والكُتَلُ الثَلاثُ الأُخرى تَختَفي بِلا بَديل.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049)</b> — كانَ <c>The_home_empty_state_draws_the_closed_text_where_its_link_was</c>:
+    /// الحالَتانِ الفارِغَتانِ تَرسُمانِ نَصَّ البابِ المُغلَقِ مَكانَ الزِرِّ بِلا مِفتاح. والزِرُّ صارَ يَبلُغُ استِمارَةَ إنشاءٍ بِلا مِفتاح، فَيُرسَمُ دائِماً
+    /// ولا نَصَّ مُغلَقَ بَعدَه.</summary>
     [Theory]
     [InlineData("studio.home.start_idea")]
     [InlineData("studio.home.describe_idea")]
-    public void The_home_empty_state_draws_the_closed_text_where_its_link_was(string buttonKey)
+    public void The_home_empty_state_draws_its_create_link_and_no_closed_text(string buttonKey)
     {
         var text = WriteEndpointGuardTests.StripMarkupComments(Page("StudioHome.razor"));
         var button = At(text, $"@L.Markup(\"{buttonKey}\")");
         Assert.Equal(button, text.LastIndexOf($"@L.Markup(\"{buttonKey}\")", StringComparison.Ordinal));
-        var (_, close) = Assert.Single(DoorBlocks(text), b => b.Open < button && button < b.Close);
-        var after = text[(close + 1)..].TrimStart();
-        Assert.StartsWith("else", after, StringComparison.Ordinal);
-        var key = after.IndexOf("StudioAnalysisDoor.ClosedMessageKey", StringComparison.Ordinal);
-        Assert.True(key > 0 && key < 200, $"{buttonKey}: فَرعُ البابِ المُغلَقِ لا يَرسُمُ نَصَّ القامُوس.");
-        Assert.DoesNotContain("href=", after[..key], StringComparison.Ordinal);
+        Assert.DoesNotContain(DoorBlocks(text), b => b.Open < button && button < b.Close);
+        var line = text[text.LastIndexOf('\n', button)..button];
+        Assert.Contains("href=\"/studio/new\"", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("StudioAnalysisDoor.ClosedMessageKey", text, StringComparison.Ordinal);
     }
 }
