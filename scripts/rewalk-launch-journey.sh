@@ -79,6 +79,17 @@
 #  دَوالِّ `walk-after-the-key.sh` لا نُسخَتُها بِحَرفِها (هُنا تُرسِلُ
 #  الاستِمارَةُ نَوعَ مُحتَواها دائِماً كَالمُتَصَفِّح). مُستَهلِكانِ لا ثَلاثَة؛
 #  فَإن احتاجَها سكربتٌ ثالِثٌ استُخرِجَت إلى `scripts/journey-common.sh`.
+#
+#  **‏(‏2026-11-07، الموجَة ١٣ W13-1·٩ — ADR-049 §١٠؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بِلا مِفتاح، وFLGAP-04 كُلَّ تَشغيل.**
+#  خَرَجَ التَحليلُ مِن الرِحلَة (·٥)، فَسَقَطَ كُلُّ ما فَوقَه عَنه: «الجِدارُ» ونافِذَةُ `ANALYZE_TRIES` وسَقفُ الخادِمِ مِن `AgentBackends.cs`
+#  و`StaleAfter`، ومَسارُ التَطويرِ بِجَلسَةِ `IncubatorSampleSeeder`، و«مَبنِيٌّ سَلَفاً». الخُطوَتانِ ١ و٢ صارَتا ما يَنقُرُه رائِدُ الأَعمال:
+#  دَعوَةُ الصَفحَةِ الأُولى «أَنشِئ مَتجَرَك» ← `/studio/new` ← الدُخول (‏`StudioStoreCreate.AfterSignIn` يُعيدُه إلى الاستِمارَة) ← المُوافَقَة
+#  (‏`returnUrl` مِن استِمارَتِها) ← الاستِمارَةُ وحُقولُها مِن الصَفحَة (`form_dump`) ← `POST` بابِها ← `/studio/apps/{slug}?built=1`.
+#  والمالِكُ في كُلِّ تَشغيلٍ رائِدُ الأَعمالِ نَفسُه، والمَتجَرُ `rewalk-$MARK` جَديدٌ دائِماً — و`MARK` مُكَرَّرٌ يَقِفُ عِندَ الدُخولِ بِسَبَبِه: هاتِفُ رائِدِ الأَعمالِ مِنه، ويَملِكُ مَتجَرَ الجَولَةِ السابِقَة
+#  فَيَعودُ إلى `/studio` لا إلى الاستِمارَة (مَقيسٌ بِتَشغيلٍ ثانٍ بِالعَلامَةِ نَفسِها).
+#  **وFLGAP-04 فَحصٌ لا سَطرُ مَعلومَة**: كُلُّ مَتجَرٍ مِن الاستوديو يولَدُ بِنَمَطٍ وقِطاعٍ فارِغَين ← `marketplace` ← فَرعُ `ecommerce`،
+#  فَالخُطوَةُ ٢ تَفحَصُ الفَرعَ وكِندَه الفارِغَ في كُلِّ تَشغيلٍ بِكُتلَةِ `branch_of` (يُشَغِّلُها `RewalkKeylessTests` بِـbash).
+#  و`walk-after-the-key.sh` تَقاعَد — لا مِفتاحَ يُنتَظَرُ بَعدَه — فَالدَوالُّ أَعلاه بِلا أُختٍ، وشَرطُ الاستِخراجِ يَبقى كَما كُتِب.
 # ═══════════════════════════════════════════════════════════════════════
 set -uo pipefail
 
@@ -88,14 +99,11 @@ ADMIN_PHONE="${ADMIN_PHONE:-}"
 MARK="${MARK:-$(date +%H%M%S)}"
 DEV_CODE="${DEV_CODE:-123456}"     # ‏`MockSmsChannel.FixedCode` — Development وَحدَه
 T="${T:-25}"                       # مُهلَةُ كُلِّ نِداء (ثانِيَة)
-ANALYZE_TRIES="${ANALYZE_TRIES:-}"     # فارِغٌ ← يُحسَبُ مِن سَقفِ الخادِمِ أَدناه (انظُر «الاستِعمال»)
+# ‏(‏2026-11-07، W13-1·٩) `ANALYZE_TRIES` تَقاعَدَ مَعَ التَحليل — لا انتِظارَ في الرِحلَة.
 
 AR="$ROOT/libs/core/ACommerce.Platform.I18n/Locales/ar.json"
 CATALOG="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/DealPatternCatalog.cs"
-SAMPLE_SEEDER="$ROOT/apps/V1.App/Seed/IncubatorSampleSeeder.cs"
 FACTORY="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/TenantFromAnalysisFactory.cs"
-ANALYSIS_SVC="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/FeasibilityAnalysisService.cs"
-BACKENDS="$ROOT/libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentBackends.cs"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -226,53 +234,21 @@ store_login() { # store_login <jar> <slug> <phone>
 [[ "$MARK" =~ ^[0-9]{6}$ ]] || { echo "✗ MARK سِتَّةُ أَرقامٍ لا «$MARK»." >&2; exit 2; }
 command -v jq >/dev/null || { echo "✗ jq غائِب — بِه يُقرَأُ القامُوس." >&2; exit 2; }
 
-# ‏سَقفُ الخادِمِ لِلتَحليلِ مِن مَصدَرِه لا مِن ذاكِرَةِ السكربت: مُحاوَلاتُ الحَلقَةِ في `RunAnalysisAsync` × أَطوَلُ
-# ‏`HttpClient.Timeout` في الخَلفِيّاتِ الثَلاث (‏`SendAsync`/`PostAsJsonAsync` تَقرَأُ الجِسمَ داخِلَ المُهلَة، و`CallAsync`
-# تَبتَلِعُ استِثناءَها خَطَأً فَتَمضي الحَلقَة). وبَعدَه كِتاباتُ القاعِدَةِ وَحدَها — والنافِذَةُ الافتِراضِيَّةُ نِصفُه سُؤالاً
-# وسُؤالانِ فَوقَه (لِماذا اثنانِ: «الاستِعمال» أَعلاه).
-CALLS="$(awk '/RunAnalysisAsync\(Guid/{f=1} f' "$ANALYSIS_SVC" | grep -m1 -o 'attempt < [0-9]*' | grep -o '[0-9]*$')"
-# ‏(‏2026-10-24، S15 K): مُهلَةُ نِداءِ التَحليلِ `AgentCallBound.Background` لا `HttpClient.Timeout` — العَميلُ بِلا حَدّ.
-# ‏(‏2026-10-24، S15 H(4)(5) — ولا يُعادُ حَرفٌ فَوقَه: **والقِراءَةُ مُغلَقَةٌ عِندَ الشَكّ**. كانَت تَأخُذُ أَكبَرَ رَقَمٍ يُطابِقُ هِجاءً واحِداً —
-# فَإسنادُ «Timeout =» بِهِجاءٍ آخَرَ عَلى عَميلٍ (مُهلَةٌ تَقطَعُ النِداءَ قَبلَ الطَلَب) لا يُرى، والنافِذَةُ تُحسَبُ مِن رَقَمٍ لا يَحكُم.
-# صارَ يُعَدُّ كُلُّ إسناد، ويُخرَجُ بِـ2 ما لَم يَكُن كُلُّه «بِلا حَدّ» وسَطرُ الخَلفِيَّةِ واحِداً. و`StaleAfter` يُقرَأُ مِن مَصدَرِه
-# لِلحُكمِ عَلى «جارٍ» فَوقَ السَقف. والكُتلَةُ يُشَغِّلُها `RewalkAnalysisBoundParseTests` عَلى المُستَودَعِ وعَلى نُسَخٍ مَحقونَة.)
-# ─── بِدايَةُ analysis_bounds ───
-# analysis_call_bound <AgentBackends.cs> ← «ثَوانٍ عَدَدُ-الإسنادات»، أَو 2 بِسَطرِ سَبَب.
-analysis_call_bound() {
-    local f="$1" all open bg n
-    all="$(grep -c 'Timeout[[:space:]]*=' "$f")"
-    open="$(grep -c 'Timeout = System\.Threading\.Timeout\.InfiniteTimeSpan' "$f")"
-    if [ "$all" -eq 0 ] || [ "$all" != "$open" ]; then
-        echo "✗ مُهلَةُ العَميلِ لا تُقرَأ: $all إسنادَ «Timeout =» في AgentBackends.cs، مِنها $open «بِلا حَدّ» (System.Threading.Timeout.InfiniteTimeSpan) — إسنادٌ بِغَيرِه يَقطَعُ النِداءَ قَبلَ مُهلَةِ الطَلَبِ ولا يَحسُبُه السكربت" >&2
-        return 2
+# ‏(‏2026-11-07، W13-1·٩): كانَت هُنا كُتلَةُ `analysis_bounds` (سَقفُ نِداءاتِ التَحليلِ و`StaleAfter` مِن مَصدَرَيهِما) — خَرَجَت مَعَ التَحليل،
+# ومَكانُها كُتلَةُ `branch_of` أَدناه: حُكمُ فَرعِ المَصنَعِ مِن فِئاتِ المَتجَرِ المَنشَإ، يُشَغِّلُها `RewalkKeylessTests` عَلى عَيِّناتٍ مَعلومَة.
+# ─── بِدايَةُ branch_of ───
+# branch_of <سُطورُ «slug:'kind'»> <فِئاتُ فَرعِ ecommerce مُرَتَّبَةً بِمَسافَة> ← «ecommerce <عَدَدُ الكِندِ غَيرِ الفارِغ>» أَو «other <الفِئات>».
+branch_of() {
+    local cats="$1" ecom="$2" slugs nonempty
+    slugs="$(printf '%s\n' "$cats" | sed "s/:'.*//" | grep . | sort | tr '\n' ' ')"; slugs="${slugs% }"
+    if [ -n "$slugs" ] && [ -n "$ecom" ] && [ "$slugs" = "$ecom" ]; then
+        nonempty="$(printf '%s\n' "$cats" | grep . | grep -vc ":''$")"
+        echo "ecommerce $nonempty"
+    else
+        echo "other ${slugs:-؟}"
     fi
-    bg="$(grep -o 'Background = TimeSpan\.FromSeconds([0-9][0-9]*)' "$f")"; n="$(printf '%s' "$bg" | grep -c .)"
-    if [ "$n" != 1 ]; then
-        echo "✗ «Background = TimeSpan.FromSeconds(N)» في AgentBackends.cs: $n سَطر — المُتَوَقَّعُ واحِد (‏AgentCallBound)" >&2
-        return 2
-    fi
-    bg="${bg#*(}"; echo "${bg%)} $all"
 }
-# stale_after_secs <FeasibilityAnalysisService.cs> ← ثَوانٍ، أَو 2 بِسَطرِ سَبَب.
-stale_after_secs() {
-    local m n
-    m="$(grep -o 'StaleAfter = TimeSpan\.FromMinutes([0-9][0-9]*)' "$1")"; n="$(printf '%s' "$m" | grep -c .)"
-    if [ "$n" != 1 ]; then
-        echo "✗ «StaleAfter = TimeSpan.FromMinutes(N)» في FeasibilityAnalysisService.cs: $n سَطر — المُتَوَقَّعُ واحِد" >&2
-        return 2
-    fi
-    m="${m#*(}"; m="${m%)}"; echo $((m * 60))
-}
-# ─── نِهايَةُ analysis_bounds ───
-BOUND_OUT="$(analysis_call_bound "$BACKENDS")" || exit 2
-CALL_SECS="${BOUND_OUT% *}"; CLIENT_TIMEOUTS="${BOUND_OUT#* }"
-STALE_SECS="$(stale_after_secs "$ANALYSIS_SVC")" || exit 2
-[ -n "$CALLS" ] && [ -n "$CALL_SECS" ] || {
-    echo "✗ سَقفُ التَحليلِ غائِب: «attempt < N» في FeasibilityAnalysisService.cs أَو «Background = TimeSpan.FromSeconds(N)» في AgentBackends.cs" >&2; exit 2; }
-SERVER_BOUND=$((CALLS * CALL_SECS))
-DEFAULT_TRIES=$((SERVER_BOUND / 2 + 2))
-ANALYZE_TRIES="${ANALYZE_TRIES:-$DEFAULT_TRIES}"
-[[ "$ANALYZE_TRIES" =~ ^[1-9][0-9]*$ ]] || { echo "✗ ANALYZE_TRIES عَدَدٌ مُوجَبٌ لا «$ANALYZE_TRIES»." >&2; exit 2; }
+# ─── نِهايَةُ branch_of ───
 
 SLUG="rewalk-$MARK"
 P_ENT="05${MARK}00"; P_VEN="05${MARK}01"; P_BUY="05${MARK}02"; P_ROL="05${MARK}03"
@@ -290,141 +266,71 @@ get - /health/ready "$F"
 check "$([ "$CODE" = 200 ] && grep -q '"ready":true' "$F" && echo 1 || echo 0)" "GET /health/ready → $CODE $(cat "$F")"
 [ "$CODE" = 200 ] || die "الخادِمُ لا يُجيب"
 
-# ═══ ١) رائِدُ أَعمالٍ جَديد — المَسارُ الحَقيقيُّ حَتّى التَحليل ═════════
-STEP="١ — /studio/begin حَتّى التَحليل"
-say "١ · رائِدُ أَعمالٍ جَديد: فِكرَة ← دُخول ← شُروط ← تَحليل"
-# ‏(‏2026-10-25، brief-P1b-2): الصَفحَةُ الأولى قَبلَ أَيِّ POST — الاستِمارَةُ وحَقلُها مِنها. وبِلا استِمارَةٍ يُرسَلُ الطَلَبُ نَفسُه
-# مِجَسّاً (لا تَرسُمُه الصَفحَة) لِيُثبَتَ أَنّ النُقطَةَ تَرُدُّه — والفَرعُ أَدناه كَما كان.
+# ═══ ١) رائِدُ أَعمالٍ جَديد — مِن دَعوَةِ الصَفحَةِ الأُولى إلى استِمارَةِ الإنشاء ═════════
+# ‏(‏2026-11-07، الموجَة ١٣ W13-1·٩ — ADR-049 §١٠): كانَت الخُطوَةُ ١ «‏/studio/begin حَتّى التَحليل» بِجِدارِها ونافِذَتِها ومَسارِ التَطوير،
+# والخُطوَةُ ٢ تَبني مِن جَلسَةِ تَحليلٍ مُكتَمِلَةٍ أَو مِن جَلسَةِ العَيِّنَة. صارَتا ما يَنقُرُه رائِدُ الأَعمالِ بِلا مِفتاح — والتالي مِن الصَفحَةِ الَّتي قَبلَه.
+STEP="١ — مِن الصَفحَةِ الأُولى إلى استِمارَةِ الإنشاء"
+CREATE_CTA="$(ar landing.cta.create)"
+say "١ · رائِدُ أَعمالٍ جَديد: «$CREATE_CTA» ← دُخول ← شُروط ← استِمارَةُ الإنشاء"
 get "$J_ENT" / "$F"
 NBEGIN="$(count "$F" 'action="/studio/begin"')"
-BEGIN_DUMP="$(form_dump "$F" 'action="/studio/begin"')"
-BEGIN_ACTION="$(fd_action "$BEGIN_DUMP")"; PROMPT_FIELD="$(fd_kind "$BEGIN_DUMP" FIELD | head -1)"
-check "$([ "$CODE" = 200 ] && { [ "$NBEGIN" = 0 ] || { [ "$NBEGIN" = 1 ] && [ -n "$PROMPT_FIELD" ]; }; } && echo 1 || echo 0)" \
-    "GET / → $CODE · استِمارَةُ /studio/begin = $NBEGIN${PROMPT_FIELD:+ · حَقلُها المَطلوب «$PROMPT_FIELD»}"
-post "$J_ENT" "${BEGIN_ACTION:-/studio/begin}" --data-urlencode "${PROMPT_FIELD:-prompt}=مَتجَرٌ يَجمَعُ بائِعي التُمورِ والعَسَلِ في مَوقِعٍ واحِد — جَولَةُ $MARK"
-# ‏(‏2026-10-24، تَيّارُ S15 البَند A — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **بابُ التَحليلِ يُسأَلُ قَبلَ الدُخول** — `StudioAnalysisDoor`.
-# بِلا مُزَوِّدٍ مَضبوطٍ يَرُدُّ `/studio/begin` إلى `/` قَبلَ الكَعكَةِ والدُخولِ والشُروط، و`/` لا تَرسُمُ الاستِمارَةَ وتَقولُ
-# `studio.analysis.unavailable`. فَذلكَ هو الجِدارُ الأَوَّلُ بِلا مِفتاح — كانَ «فَشِلَ التَّحليل» و401 بَعدَ الدُخولِ والشُروط —
-# ويُسقَطُ إلى مَسارِ التَطويرِ مِنه؛ والمَسارُ الحَقيقيُّ أَدناه لِلبابِ المَفتوحِ وَحدَه، ولَم يُعَد تَنسيقُه.)
-if [ "$NBEGIN" = 0 ] && [ "$CODE" = 302 ] && [ "$LOC" = / ]; then
-    get - / "$F"
-    check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/begin"')" = 0 ] && has "$F" "$(ar studio.analysis.unavailable)" && echo 1 || echo 0)" \
-        "POST /studio/begin → 302 / · GET / → $CODE · صِفرُ استِمارَةٍ و«$(ar studio.analysis.unavailable)» (‏StudioAnalysisDoor)"
-    block "الجِدارُ الأَوَّل: بابُ التَحليلِ مُغلَقٌ قَبلَ الدُخول — لا مُزَوِّدَ تَحليلٍ مَضبوطٌ في الخادِم (analysis_unavailable، ‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير"
-    ANALYSIS=closed
-else
-check "$([ "$CODE" = 302 ] && [ "$LOC" = /studio/auth ] && echo 1 || echo 0)" "POST /studio/begin → $CODE $LOC"
+CTA="$(grep -o 'href="/studio/new"' "$F" | head -1 | sed 's/^href="//; s/"$//')"
+check "$([ "$CODE" = 200 ] && [ -n "$CTA" ] && [ "$NBEGIN" = 0 ] && has "$F" "$CREATE_CTA" && echo 1 || echo 0)" \
+    "GET / → $CODE · دَعوَةُ «$CREATE_CTA» إلى ${CTA:-غائِب} · استِمارَةُ /studio/begin = $NBEGIN"
+[ -n "$CTA" ] || die "لا دَعوَةَ إلى /studio/new في الصَفحَةِ الأُولى"
+get "$J_ENT" "$CTA" "$F"
+check "$([ "$CODE" = 200 ] && grep -q "location.replace('/studio/auth')" "$F" && echo 1 || echo 0)" \
+    "GET $CTA (بِلا جَلسَة) → $CODE · إلى /studio/auth"
 post "$J_ENT" /studio/auth/login --data-urlencode "phone=$P_ENT"
 check "$([ "$CODE" = 302 ] && [[ "$LOC" == *stage=verify* ]] && echo 1 || echo 0)" "POST /studio/auth/login → $CODE $LOC"
 get "$J_ENT" "/studio/auth?stage=verify&method=phone&phone=$P_ENT" "$F"
 check "$([ "$CODE" = 200 ] && has "$F" "$(ar studio.auth.dev_hint)" && echo 1 || echo 0)" \
     "GET /studio/auth?stage=verify → $CODE · «$(ar studio.auth.dev_hint)»"
 post "$J_ENT" /studio/auth/verify --data-urlencode method=phone --data-urlencode "phone=$P_ENT" --data-urlencode "code=$DEV_CODE"
-check "$([ "$CODE" = 302 ] && [[ "$LOC" == /studio/consent* ]] && echo 1 || echo 0)" \
-    "POST /studio/auth/verify → $CODE $LOC  (‏ConsentPolicy.AcceptedBy في الاستِئناف: لا قَبولَ بَعد)"
+check "$([ "$CODE" = 302 ] && [ "$LOC" = "$CTA" ] && echo 1 || echo 0)" \
+    "POST /studio/auth/verify → $CODE $LOC  (‏StudioStoreCreate.AfterSignIn: لا مَتجَرَ ← الاستِمارَة)"
+[ "$LOC" = "$CTA" ] || die "الدُخولُ لَم يُعِد إلى $CTA بَل إلى «$LOC» — ‏MARK=$MARK مُكَرَّرٌ عَلى هذِه القاعِدَة؟ هاتِفُ رائِدِ الأَعمالِ ($P_ENT) يَملِكُ مَتجَراً فَيَعودُ إلى لَوحَتِه؛ أَعِد بِعَلامَةٍ أُخرى"
 
-# ‏ذَهابُ الشُروطِ وإيابُها: المُسنَدُ نَفسُه يَقرَؤُه بابُ الصَفحَةِ والاستِئناف.
-get "$J_ENT" "/studio/consent?returnUrl=/studio" "$F"
-check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/consent/accept"')" = 1 ] \
+# ‏ذَهابُ الشُروطِ وإيابُها: الاستِمارَةُ تُرسِلُ غَيرَ المُوافِقِ إلى صَفحَتِها، و`returnUrl` مِن استِمارَةِ القَبولِ يُعيدُه.
+get "$J_ENT" "$CTA" "$F"
+CONSENT_AT="$(grep -o "location.replace('/studio/consent[^']*')" "$F" | head -1 | sed "s/^location.replace('//; s/')\$//")"
+check "$([ "$CODE" = 200 ] && [ -n "$CONSENT_AT" ] && echo 1 || echo 0)" \
+    "GET $CTA (لا قَبولَ بَعد) → $CODE · إلى ${CONSENT_AT:-غائِب} (‏HasConsentedAsync = false)"
+[ -n "$CONSENT_AT" ] || die "الاستِمارَةُ لا تُرسِلُ غَيرَ المُوافِقِ إلى المُوافَقَة"
+get "$J_ENT" "$CONSENT_AT" "$F"
+CONSENT_DUMP="$(form_dump "$F" 'consent/accept')"
+CONSENT_ACT="$(fd_action "$CONSENT_DUMP")"; RETURN_TO="$(fd_get "$CONSENT_DUMP" HIDDEN returnUrl)"
+check "$([ "$CODE" = 200 ] && [ "$CONSENT_ACT" = /studio/consent/accept ] && [ "$RETURN_TO" = "$CTA" ] \
         && has "$F" "$(ar studio.consent.version)" && echo 1 || echo 0)" \
-    "GET /studio/consent → $CODE · الاستِمارَةُ مَرسومَة (HasConsentedAsync = false) · «$(ar studio.consent.version) …»"
-post "$J_ENT" /studio/consent/accept --data-urlencode returnUrl=/studio
-check "$([ "$CODE" = 302 ] && [[ "$LOC" == /studio/s/* ]] && echo 1 || echo 0)" \
-    "POST /studio/consent/accept → $CODE $LOC  (المُطالَبَةُ استُؤنِفَت)"
-ENT_SID="${LOC##*/}"
-get "$J_ENT" "/studio/consent?returnUrl=/studio" "$F"
-check "$([ "$CODE" = 200 ] && [ "$(count "$F" 'action="/studio/consent/accept"')" = 0 ] \
-        && grep -q "location.replace('/studio')" "$F" && echo 1 || echo 0)" \
-    "GET /studio/consent → $CODE · بِلا استِمارَة (HasConsentedAsync = true)"
+    "GET $CONSENT_AT → $CODE · الاستِمارَةُ إلى ${CONSENT_ACT:-غائِبَة} بِـreturnUrl=${RETURN_TO:-غائِب} · «$(ar studio.consent.version) …»"
+post "$J_ENT" "${CONSENT_ACT:-/studio/consent/accept}" --data-urlencode "returnUrl=$RETURN_TO"
+check "$([ "$CODE" = 302 ] && [ "$LOC" = "$CTA" ] && echo 1 || echo 0)" "POST ${CONSENT_ACT:-غائِب} → $CODE $LOC  (عادَ إلى الاستِمارَة)"
+get "$J_ENT" "$CTA" "$F"
+CREATE_DUMP="$(form_dump "$F" 'name="slug"')"
+CREATE_ACT="$(fd_action "$CREATE_DUMP")"; COLOR="$(fd_get "$CREATE_DUMP" VALUE color)"
+UNKNOWN_REQ="$(fd_kind "$CREATE_DUMP" FIELD | grep -vxE 'name|slug|color' | tr '\n' ' ')"
+check "$([ "$CODE" = 200 ] && [ -n "$CREATE_ACT" ] && [ -n "$COLOR" ] && [ -z "$UNKNOWN_REQ" ] && has "$F" "$(ar studio.create.title)" && echo 1 || echo 0)" \
+    "GET $CTA (مُوافِق) → $CODE · «$(ar studio.create.title)» · الاستِمارَةُ إلى ${CREATE_ACT:-غائِبَة} · اللَونُ المُعَبَّأ ${COLOR:-غائِب} · مَطلوبٌ لا يَعرِفُه السكربت: ${UNKNOWN_REQ:-لا شَيء}"
+[ -n "$CREATE_ACT" ] || die "لا استِمارَةَ إنشاءٍ في $CTA"
 
-# ‏الحالاتُ الثَلاثُ تُعرَفُ بِنُصوصِها لا بِغِيابِ غَيرِها: «جارٍ» يُعادُ سُؤالُه، و«فَشِلَ» و«استِمارَةُ البِناء» تُنهِيانِه،
-# وصَفحَةٌ لا تَقولُ أَيّاً مِنها حالَةٌ أُخرى تُقالُ فَوراً. والنافِذَةُ تُطبَعُ قَبلَ الانتِظار، وما انتُظِرَ يُقاسُ بِالساعَة
-# (‏`SECONDS`) لا يُحسَبُ مِن العَدَد. ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ ما لَيسَ «اكتَمَلَ» يَسقُطُ إلى مَسارِ التَطوير.)
-ANALYZING="$(ar admin.study.analyzing_title)"; FAILED_TITLE="$(ar studio.study.failed_title)"
-info "يُنتَظَرُ التَحليلُ $ANALYZE_TRIES سُؤال، بَينَ كُلِّ اثنَينِ ثانِيَتان (آخِرُها بَعدَ ≥ $(((ANALYZE_TRIES - 1) * 2)) ثانِيَة) — وسَقفُ نِداءاتِ الخادِم $SERVER_BOUND ثانِيَة: $CALLS مُحاوَلَة × ${CALL_SECS}ث (‏RunAnalysisAsync · AgentCallBound.Background؛ وإسناداتُ «Timeout =» عَلى العَميلِ $CLIENT_TIMEOUTS، كُلُّها بِلا حَدّ) — وتَتَقادَمُ الجَلسَةُ بَعدَ ${STALE_SECS}ث (StaleAfter)"
-ANALYSIS=""; T0=$SECONDS; WAITED=0
-for i in $(seq 1 "$ANALYZE_TRIES"); do
-    get "$J_ENT" "/studio/s/$ENT_SID" "$F"; WAITED=$((SECONDS - T0))   # ‏لَحظَةُ آخِرِ ما رُئِي، لا ما بَعدَ نَومٍ لا يُرى فيه شَيء
-    if has "$F" "$FAILED_TITLE"; then ANALYSIS=failed; break; fi
-    if grep -q "action=\"/studio/s/$ENT_SID/build\"" "$F"; then ANALYSIS=done; break; fi
-    if [ "$CODE" = 200 ] && has "$F" "$ANALYZING"; then ANALYSIS=analyzing; else ANALYSIS=other; break; fi
-    [ "$i" -lt "$ANALYZE_TRIES" ] && sleep 2
-done
-case "$ANALYSIS" in
-  done)   check 1 "GET /studio/s/$ENT_SID → التَحليلُ اكتَمَلَ بَعدَ $WAITED ثانِيَة، واستِمارَةُ البِناءِ مَرسومَة" ;;
-  failed) # الرِسالَةُ بِشَكلِ `AgentErrorText`: «تَسميَة (عُنوان) رَمز: جِسم» أَو «تَسميَة (عُنوان) exception: رِسالَة» — يُطبَعُ
-          # صَدرُها: الرَمزُ وَحدَه، أَو رِسالَةُ الاستِثناءِ كامِلَةً (مُهلَةُ النِداءِ تَقولُ نَفسَها: «HttpClient.Timeout»).
-          # ‏(‏2026-10-24، S15 K): ومُهلَةُ النِداءِ صارَت «timeout: … (AgentCallBound.Background, AgentBackends.cs)».
-          # ‏(‏2026-10-24، S15 H(6)): ورَدٌّ بِرَمزٍ يُطبَعُ صَدرُ جِسمِه (‏120 مِحرَفاً) لا الرَمزُ وَحدَه — جِسمُ الخادِمِ هُوَ السَبَب.
-          WHERE="$(dec "$F" | grep -oE '[A-Za-z0-9_-]+ \(https?://[^)]*\) ([0-9]{3}(: [^<]{0,120})?|exception: [^<]*|timeout: [^<]*)' | head -1)"
-          check 1 "GET /studio/s/$ENT_SID → «$FAILED_TITLE» بَعدَ $WAITED ثانِيَة — ${WHERE:-بِلا تَسميَة}"
-          # ‏«المِفتاح» سَبَبٌ يُسَمّى عَلى رَدِّ 401 وَحدَه؛ وما سِواه — مُهلَةٌ، 5xx، رَدٌّ لا يُقرَأ — يُقالُ أَنّه غَيرُه.
-          if [[ "$WHERE" =~ \)\ 401(:|$) ]]; then
-              block "الجِدارُ الأَوَّل: المُزَوِّدُ رَدَّ 401 — مِفتاحُ وَكيلِ التَحليلِ غائِبٌ أَو مَرفوض (‏DEPLOY.md §٤·ب) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير"
-          else
-              # ‏(‏2026-10-24، S15 H(6)): كانَ «سَبَبُه في السَطرِ أَعلاه» — والسَطرُ كانَ الرَمزَ بِلا جِسم.
-              block "لَيسَ 401 فَلَيسَ جِدارَ المِفتاح — اقرَأ الجِسمَ في السَطرِ أَعلاه (و«timeout:» فيه مُهلَةُ النِداءِ ${CALL_SECS}ث) — يُبنى المَتجَرُ مِن المَسارِ المُوَثَّقِ لِلتَطوير، ولا يُبَرهَنُ مَسارُ العَميل"
-          fi ;;
-  analyzing)
-          check 0 "GET /studio/s/$ENT_SID → «$ANALYZING» ما زالَ مَرسوماً بَعدَ $WAITED ثانِيَة"
-          # ‏(‏2026-10-24، S15 H(5) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: **ثَلاثُ نَوافِذَ لا اثنَتان**، والحَدُّ الثاني `StaleAfter` مِن مَصدَرِه.)
-          if [ "$WAITED" -lt "$SERVER_BOUND" ]; then
-              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، دونَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) — أَعِد بِـANALYZE_TRIES أَكبَر (افتِراضُه $DEFAULT_TRIES)"
-          elif [ "$WAITED" -lt "$STALE_SECS" ]; then
-              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة: فَوقَ سَقفِ نِداءاتِ الخادِم ($SERVER_BOUND ثانِيَة) ولَم تَتَقادَم الجَلسَةُ بَعد (StaleAfter ${STALE_SECS}ث) — عالِقَةٌ لا بَطيئَة، وزِرُّ «إعادَة» لا يَحجِزُها قَبلَ ${STALE_SECS}ث"
-          else
-              die "التَحليلُ ما زالَ جارِياً بَعدَ $WAITED ثانِيَة، فَوقَ StaleAfter (${STALE_SECS}ث) — وسَبَبانِ يُبقِيانِها «جارِيَة»: استِثناءٌ خارِجَ النِداءِ حَولَ RunAnalysisAsync (سَطرُه في سِجِلِّ الخادِم «[studio] analysis_run_failed»)، أَو عَمَلِيَّةٌ ماتَت في مُنتَصَفِه (إعادَةُ إقلاع — بِلا سَطر)؛ وزِرُّ «إعادَة» يَحجِزُها الآن"
-          fi ;;
-  *)      check 0 "GET /studio/s/$ENT_SID → $CODE · لا «$ANALYZING» ولا «$FAILED_TITLE» ولا استِمارَةُ بِناء"
-          die "حالَةُ جَلسَةِ التَحليلِ لا يَعرِفُها السكربت بَعدَ $WAITED ثانِيَة — ولا يُسقَطُ إلى مَسارِ التَطويرِ إلّا عَلى «$FAILED_TITLE»" ;;
-esac
-fi   # ← بابُ التَحليلِ مَفتوح (‏2026-10-24، S15 A)
+# ═══ ٢) إنشاءُ المَتجَر — والفَرعُ يُفحَصُ كُلَّ تَشغيل ═══════════════════
+STEP="٢ — إنشاءُ المَتجَر"
+say "٢ · إنشاءُ المَتجَرِ بِاليَد"
+# ‏المالِكُ رائِدُ الأَعمالِ نَفسُه في كُلِّ تَشغيل — وجَلسَتُه وهاتِفُه يَمشِيانِ الخُطوَتَينِ ٨ و٩. والقِيَمُ المَكتوبَةُ ما يَكتُبُه في الحُقول،
+# واللَونُ قيمَةُ الاستِمارَةِ كَما رُسِمَت.
+OWNER_JAR="$J_ENT"; OWNER_PHONE="$P_ENT"
+post "$J_ENT" "$CREATE_ACT" --data-urlencode "slug=$SLUG" --data-urlencode "name=سوقُ الجَولَة $MARK" \
+    --data-urlencode "color=$COLOR" --data-urlencode "tagline=مَتجَرٌ يَجمَعُ بائِعين"
+check "$([ "$CODE" = 302 ] && [ "$LOC" = "/studio/apps/$SLUG?built=1" ] && echo 1 || echo 0)" \
+    "POST $CREATE_ACT → $CODE $LOC"
+[ "$LOC" = "/studio/apps/$SLUG?built=1" ] || die "لَم يُنشَأ المَتجَر ($LOC) — ‏MARK مُكَرَّرٌ يُرَدُّ بِـslug_taken، فَأَعِد بِعَلامَةٍ أُخرى"
 
-# ═══ ٢) بِناءُ المَتجَر ═══════════════════════════════════════════════
-STEP="٢ — بِناءُ المَتجَر"
-say "٢ · بِناءُ المَتجَرِ مِن الاستوديو"
-# ‏صاحِبُ المَتجَرِ مَن بَنى: رائِدُ الأَعمالِ في المَسارِ الحَقيقيّ، ومُشرِفُ المَنَصَّةِ في مَسارِ
-# التَطوير — وجَلسَتُه وهاتِفُه يَمشِيانِ الخُطوَتَينِ ٨ و٩. ‏(‏2026-10-13: كانَ المُشرِفُ مَكتوباً
-# مالِكاً في الخُطوَتَين؛ فَالمَسارُ الحَقيقيُّ لَم يُمشَ قَطّ — مَقيسٌ بِبَديلٍ مَحَلِّيٍّ لِلمُزَوِّد.)
-if [ "$ANALYSIS" = done ]; then
-    OWNER_JAR="$J_ENT"; OWNER_PHONE="$P_ENT"; SID="$ENT_SID"
-    # ‏السكربتُ لا يَرى المُزَوِّدَ خَلفَ الخادِم: سَطرُ `[agent] Analysis:` في سِجِلِّ الإقلاعِ يُسَمّيه.
-    info "المَصدَر: جَلسَةُ الخُطوَة ١ نَفسُها — اكتَمَلَ تَحليلُها عِندَ المُزَوِّدِ المَضبوطِ في الخادِم (سَطرُ «[agent] Analysis:» في سِجِلِّ الإقلاعِ يُسَمّيه)"
-else
-    OWNER_JAR="$J_ADM"; OWNER_PHONE="$ADMIN_PHONE"
-    SID="$(grep -o 'Guid.Parse("[0-9a-f-]*")' "$SAMPLE_SEEDER" | head -1 | sed 's/.*("//; s/")//')"
-    info "المَصدَر: المَسارُ المُوَثَّقُ لِلتَطوير — جَلسَةُ IncubatorSampleSeeder ($SID) لِحِسابِ $ADMIN_PHONE"
-    post "$J_ADM" /studio/auth/login --data-urlencode "phone=$ADMIN_PHONE"
-    check "$([ "$CODE" = 302 ] && echo 1 || echo 0)" "POST /studio/auth/login (المُشرِف) → $CODE $LOC"
-    post "$J_ADM" /studio/auth/verify --data-urlencode method=phone --data-urlencode "phone=$ADMIN_PHONE" --data-urlencode "code=$DEV_CODE"
-    check "$([ "$CODE" = 302 ] && [[ "$LOC" != *err=* ]] && echo 1 || echo 0)" "POST /studio/auth/verify (المُشرِف) → $CODE $LOC"
-fi
-get "$OWNER_JAR" "/studio/s/$SID" "$F"
-if grep -q "action=\"/studio/s/$SID/build\"" "$F"; then
-    check 1 "GET /studio/s/$SID → $CODE · استِمارَةُ البِناءِ مَرسومَة"
-    post "$OWNER_JAR" "/studio/s/$SID/build" --data-urlencode "slug=$SLUG" \
-        --data-urlencode "name=سوقُ الجَولَة $MARK" --data-urlencode "color=#2563eb" \
-        --data-urlencode "tagline=مَتجَرٌ يَجمَعُ بائِعين" --data-urlencode "city=الرِياض"
-    check "$([ "$CODE" = 302 ] && [ "$LOC" = "/studio/apps/$SLUG?built=1" ] && echo 1 || echo 0)" \
-        "POST /studio/s/$SID/build → $CODE $LOC"
-    [ "$LOC" = "/studio/apps/$SLUG?built=1" ] || die "لَم يُبنَ المَتجَر"
-else
-    # ‏الجَلسَةُ تَبني مَتجَراً واحِداً بِالشاشَة: بَعدَه تَرسُمُ `StudioStudy` «افتَح التَطبيق»
-    # (`FindBySourceAnalysisAsync`) بَدَلَ الاستِمارَة. فَإعادَةُ الجَولَةِ تَمشي عَلى ذلكَ المَتجَرِ
-    # ولا تَبني ثانِياً بِطَلَبٍ لا تَعرِضُه الشاشَة.
-    BUILT="$(grep -o 'href="/studio/apps/[a-z0-9_-]*"' "$F" | head -1 | sed 's#.*/studio/apps/##; s/"$//')"
-    # ‏(‏2026-10-13، المُراجَعَةُ الثانِيَة: كانَ النَصُّ «بِلا مِفتاحٍ يَلزَمُ …» — وهُنا يُبلَغُ بِأَيِّ فَشَلٍ لا بِغِيابِ المِفتاحِ وَحدَه.)
-    [ -n "$BUILT" ] \
-        || die "لا استِمارَةَ بِناءٍ ولا مَتجَرَ مَبنِيّاً في /studio/s/$SID ($CODE) — مَسارُ التَطويرِ (التَحليلُ لَم يَكتَمِل في الخُطوَة ١ بِسَبَبِه المَطبوع) يَلزَمُه INCUBATOR_SAMPLE_SEED=1 مَعَ PLATFORM_ADMIN_PHONE في إقلاعِ الخادِم"
-    SLUG="$BUILT"
-    check 1 "GET /studio/s/$SID → $CODE · مَبنِيٌّ مِنها سَلَفاً: /studio/apps/$SLUG — تَمشي الجَولَةُ عَلَيه"
-fi
-
-# ‏فِئاتُ المَتجَرِ المَبنِيِّ وفَرعُها مِن المَصنَع — مِن مُحَرِّرِ الفِئاتِ لِلمالِك (‏`StudioAppCategories.razor`: نَصٌّ
+# ‏فِئاتُ المَتجَرِ المَنشَإ وفَرعُها مِن المَصنَع — مِن مُحَرِّرِ الفِئاتِ لِلمالِك (‏`StudioAppCategories.razor`: نَصٌّ
 # مَخفِيٌّ سَطرُه «slug | الاسم | أَيقونَة | تَجميع»). ‏(‏2026-10-13، مُراجَعَةُ S12: كانَت نَقرَةُ الخُطوَة ٥ تُسَمّى «FLGAP-04
 # بِحَرفِه» عَلى مَتجَرِ العَيِّنَة — فَرعُ السُقوط `general` بِكِندٍ فارِغٍ قَبلَ ADR-034 أَيضاً (`git show c4278c0^`)،
-# فَهي خَضراءُ عَلى الكاتِبِ القَديمِ والجَديدِ مَعاً — ولا يُطبَعُ الفَرع.)
-printf '\nالمَتجَر: %s/%s%s\n' "$BASE" "$SLUG" "$([ "$SLUG" = "rewalk-$MARK" ] || printf ' — مَبنِيٌّ سَلَفاً، لا rewalk-%s' "$MARK")"
+# فَهي خَضراءُ عَلى الكاتِبِ القَديمِ والجَديدِ مَعاً — ولا يُطبَعُ الفَرع.) ‏(‏2026-11-07، W13-1·٩): ولا مَتجَرَ عَيِّنَةٍ بَعدَ اليَوم —
+# الإنشاءُ بِاليَدِ يُعطي فَرعَ `ecommerce` دائِماً، فَالحُكمُ فَحصٌ في كُلِّ تَشغيل.
+printf '\nالمَتجَر: %s/%s\n' "$BASE" "$SLUG"
 ECOM="$(ecommerce_slugs)"
 get "$OWNER_JAR" "/studio/apps/$SLUG/categories" "$F"
 CATS="$(dec "$F" | perl -0777 -ne 'if (m{<textarea name="categories"[^>]*>(.*?)</textarea>}s) { for (split /\n/, $1) {
@@ -433,21 +339,10 @@ NCATS="$(printf '%s' "$CATS" | grep -c .)"
 CATS_LINE="$(printf '%s' "$CATS" | tr '\n' ' ')"; CATS_LINE="${CATS_LINE% }"
 check "$([ "$CODE" = 200 ] && [ "$NCATS" -gt 0 ] && echo 1 || echo 0)" \
     "GET /studio/apps/$SLUG/categories (المالِك) → $CODE · $NCATS فِئَة: ${CATS_LINE:-—}"
-SLUGS="$(printf '%s\n' "$CATS" | sed "s/:'.*//" | grep . | sort | tr '\n' ' ')"; SLUGS="${SLUGS% }"
-if [ -n "$SLUGS" ] && [ "$SLUGS" = "$ECOM" ]; then
-    BRANCH=ecommerce; FLGAP="يُمَيِّزُ FLGAP-04"
-    info "فَرعُ المَصنَع: ecommerce ($ECOM) — الوَحيدُ الَّذي غَيَّرَه ADR-034 (كانَ كِندُه \"commercial\" فَيُرسَمُ المَتجَرُ إيجاراً بِلا سَلَّة): نَقرَةُ الخُطوَة ٥ تُمَيِّزُ FLGAP-04"
-    NONEMPTY="$(printf '%s\n' "$CATS" | grep . | grep -vc ":''$")"
-    check "$([ "$NONEMPTY" = 0 ] && echo 1 || echo 0)" "فِئاتُ فَرعِ ecommerce بِكِندٍ فارِغ (‏ADR-034 §٢‑١) — غَيرُ الفارِغِ: $NONEMPTY"
-else
-    BRANCH="${SLUGS:-؟}"; FLGAP="لا يُمَيِّزُ FLGAP-04"
-    info "فَرعُ المَصنَع: لَيسَ ecommerce ($BRANCH) — لَم يَمَسَّه ADR-034 وكِندُه قَبلَه كَبَعدَه: نَقرَةُ الخُطوَة ٥ تَقيسُ القارِئَ والسَلَّةَ ولا تُمَيِّزُ FLGAP-04 (وفَرعُ ecommerce في LiveStudioStorePatternProofTests)"
-fi
-if [ "$ANALYSIS" = done ]; then
-    # ‏مَسارُ العَميلِ يَحفَظُ الوَصفَ وَحدَه: القِطاعُ `""` والنَمَطُ `""` ← `marketplace` ← `ecommerce` (‏ADR-034 §١(أ)).
-    check "$([ "$BRANCH" = ecommerce ] && echo 1 || echo 0)" \
-        "مَسارُ العَميلِ ← فَرعُ ecommerce (‏ADR-034 §١(أ)) — فَهذِه الجَولَةُ تُمَيِّزُ FLGAP-04"
-fi
+BRANCH_OUT="$(branch_of "$CATS" "$ECOM")"; BRANCH="${BRANCH_OUT%% *}"; BRANCH_REST="${BRANCH_OUT#* }"
+if [ "$BRANCH" = ecommerce ]; then FLGAP="يُمَيِّزُ FLGAP-04"; else FLGAP="لا يُمَيِّزُ FLGAP-04"; fi
+check "$([ "$BRANCH" = ecommerce ] && [ "$BRANCH_REST" = 0 ] && echo 1 || echo 0)" \
+    "FLGAP-04 (‏ADR-034 §١(أ)، كُلَّ تَشغيل): الإنشاءُ بِاليَد ← فَرعُ ${BRANCH} (المُتَوَقَّع ecommerce: $ECOM) · كِندٌ غَيرُ فارِغ/الفِئات: $BRANCH_REST — نَقرَةُ الخُطوَة ٥ $FLGAP"
 
 # ═══ ٣) الزائِرُ بِلا جَلسَة ══════════════════════════════════════════
 STEP="٣ — الزائِر"
