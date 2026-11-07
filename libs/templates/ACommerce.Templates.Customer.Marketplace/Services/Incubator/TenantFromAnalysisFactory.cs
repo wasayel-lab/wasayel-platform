@@ -49,15 +49,47 @@ public sealed class TenantFromAnalysisFactory
     /// </summary>
     public async Task<string?> ValidateSlugAsync(string slug, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(slug)) return SlugRequired;
-        if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
-            return SlugFormat;
-        if (ReservedTenantSlugs.Contains(slug)) return SlugReserved;
+        if (SlugRefusal(slug) is { } refused) return refused;
 
         await using var s = _store.QuerySession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
         return existing is null ? null : SlugTaken;
     }
+
+    /// <summary>
+    /// <para><b>شَكلُ مُعَرِّفِ المَتجَرِ الواحِد</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): يَبدَأُ بِحَرفٍ
+    /// لاتينيٍّ صَغيرٍ أَو رَقَم، ثُمَّ حُروفٌ وأَرقامٌ وشَرطَة، وطولُه 63 عَلى الأَكثَر — حَدُّ مِلصَقِ المُضيفِ في DNS (‏RFC 1035)، وهو ما يَلزَمُ
+    /// <c>{slug}.R</c> في W13-4. وهُوَ شَكلُ بابِ التَصديرِ (<c>TenantExportAuthorization</c>) بِحَدِّ طول.</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b>: كانَ <c>^[a-z0-9_-]+$</c> بِلا حَدّ، والمَحجوزُ <c>_admin</c> وَحدَه مِن أَقسامِ القاعِدَة — فَحِسابُ استوديو
+    /// مُوافِقٌ أَنشَأَ <c>_studio</c> و<c>_incubator</c> و<c>_platform</c> و<c>-</c>، كُلٌّ بِـ<c>302 …?built=1</c>: وَثائِقُ مَتجَرِ <c>_studio</c>
+    /// تُشارِكُ قِسمَ حِساباتِ الاستوديو، وعَميلٌ يَدخُلُه يَحمِلُ رَمزاً قَبِلَه الاستوديو جَلسَةً؛ ومالِكُ <c>_platform</c> كَتَبَ سَطرَ تَدقيقٍ في نِطاقِ
+    /// المَنَصَّة؛ وبابُ التَصديرِ يَرُدُّ هذِه المَتاجِرَ نَفسَها <c>slug_reserved</c>. والآن بابٌ واحِدٌ لِلأَبوابِ الثَلاثَة (الاستوديو والمُشرِفُ وأَداةُ
+    /// الوَكيل)، وأَقسامُ القاعِدَةِ الداخِلِيَّةُ مَحجوزَةٌ بِأَسمائِها في الكود (<see cref="InternalPartitions"/>) لا بِنُسَخٍ مِنها.</para>
+    /// </summary>
+    /// <remarks>والمَحجوزُ قَبلَ الشَكل: <c>_studio</c> و<c>_admin</c> يُقالُ لِصاحِبِهِما «مَحجوزٌ لِلمَنَصَّة» لا «حُروفٌ وأَرقامٌ وشَرطَة» — الرَدُّ
+    /// هُوَ هُوَ، والرِسالَةُ تَصدُقُ في سَبَبِه؛ وتَرتيبُ الفَحصِ القائِمُ (‏<c>ReservedTenantSlugTests</c>: كُلُّ اسمٍ مَحجوزٍ بِلا نُقطَةٍ يُجابُ
+    /// <c>slug_reserved</c>) باقٍ.</remarks>
+    public static string? SlugRefusal(string? slug)
+    {
+        if (string.IsNullOrEmpty(slug)) return SlugRequired;
+        if (ReservedTenantSlugs.Contains(slug) || InternalPartitions.Contains(slug, StringComparer.OrdinalIgnoreCase)) return SlugReserved;
+        if (!SlugShape.IsMatch(slug)) return SlugFormat;
+        return null;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex SlugShape =
+        new("^[a-z0-9][a-z0-9-]{0,62}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>أَقسامُ Marten الداخِلِيَّةُ الَّتي لا وَثيقَةَ مُستَأجِرٍ لَها — بِثَوابِتِها لا بِنُسَخِها، فَقِسمٌ يُعادُ تَسمِيَتُه يَبقى مَحجوزاً. والشَكلُ
+    /// أَعلاه يَرُدُّها اليَومَ (تَبدَأُ بِـ<c>_</c>)، والقائِمَةُ تَحجُزُها ولَو اتَّسَعَ الشَكلُ يَوماً.</summary>
+    public static readonly IReadOnlyList<string> InternalPartitions =
+    [
+        StudioAuth.Tenant,
+        FeasibilityAnalysisService.IncubatorTenant,
+        Audit.AuditWriter.PlatformScope,
+        AgentService.AdminTenant,
+    ];
 
     // ─── النَمَط: مَعجَمٌ مُغلَقٌ وسُقوطٌ مَكتوبٌ صَراحَةً ──────────────
 

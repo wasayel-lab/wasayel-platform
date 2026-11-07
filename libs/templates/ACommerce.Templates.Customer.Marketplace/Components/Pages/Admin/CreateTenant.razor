@@ -33,7 +33,7 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <AcField Label="@(L["admin.new.slug"])" Required="true">
                         <input type="text" name="slug" required maxlength="32"
-                               pattern="[a-z0-9_-]+" class="ac-input"
+                               pattern="[a-z0-9][a-z0-9-]*" class="ac-input"
                                placeholder="ashare" dir="ltr"
                                value="@Form?["slug"]" />
                     </AcField>
@@ -189,6 +189,8 @@
     {
         "slug_required" => L["admin.new.err_slug_required"],
         "slug_taken"    => L["admin.new.err_slug_taken"],
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2) بِنَصِّ استِمارَةِ الاستوديو لِلرَمزِ نَفسِه — مَعناهُ واحِد.
+        Services.Incubator.TenantFromAnalysisFactory.SlugReserved => L[Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugReserved)],
         "name_required" => L["admin.new.err_name_required"],
         "color_invalid" => L["admin.new.err_color"],
         // ‏رَمزا الفِئاتِ رَمزا المُحَلِّلِ المُشتَرَكِ (`TenantConfigCodes`) مُنذُ ‏2026-10-29 (قَرارُ المالِك د25) — وكانا

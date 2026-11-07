@@ -43,7 +43,7 @@ public sealed class AgentService
     private readonly IAgentBackend _backend;
     private readonly string _model;
     private readonly IDocumentStore _store;
-    private const string AdminTenant = "_admin";
+    public const string AdminTenant = "_admin";
 
     // مِلَفّ «Studio» — مُزَوِّدُه ومِفتاحُه ونَموذَجُه مُستَقِلَّة عَن وَكيل
     // التَحليل. بِلا تَهيئَة مُسَمّاة يَسقُط إلى Agent:* القَديم فَيَبقى
@@ -881,7 +881,9 @@ public sealed class AgentToolExecutor
         var tagline = Str(root, "tagline");
         var city    = Str(root, "city");
         var channel = ACommerce.Kit.Auth.AuthChannels.NormalizeOrDefault(Str(root, "channel"));
-        if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) شَكلُ المُعَرِّفِ الواحِدُ ومَحجوزُه: كانَ هُنا `^[a-z0-9_-]+$`
+        // بِلا قائِمَةِ مَحجوز، فَالأَداةُ تُنشِئُ `_studio` و`pricing`. والرَدُّ نَصُّه القائِم.
+        if (Services.Incubator.TenantFromAnalysisFactory.SlugRefusal(slug) is not null)
             return (false, "slug غَير صالِح.");
         if (string.IsNullOrEmpty(name)) return (false, "الاسم مَطلوب.");
         if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))

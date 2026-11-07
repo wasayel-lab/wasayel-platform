@@ -118,6 +118,9 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
     [InlineData("Bad Slug!", TenantFromAnalysisFactory.SlugFormat)]
     [InlineData("pricing", TenantFromAnalysisFactory.SlugReserved)]
     [InlineData("taken-store", TenantFromAnalysisFactory.SlugTaken)]
+    // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «a_1» كانَ صَفّاً موجَباً في الاختِبارِ التالي: الشَكلُ
+    // `^[a-z0-9_-]+$` يَقبَلُ «_» وهُوَ لَيسَ مِلصَقَ مُضيف. والشَكلُ الواحِدُ لِلأَبوابِ الثَلاثَةِ يَرُدُّه — فَانتَقَلَ إلى هُنا بِرَمزِه.
+    [InlineData("a_1", TenantFromAnalysisFactory.SlugFormat)]
     public async Task A_slug_breach_is_refused_with_its_code(string slug, string code)
         => Assert.Equal(code, await FactoryWithTaken("taken-store").ValidateSlugAsync(slug));
 
@@ -125,7 +128,7 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
     [InlineData("my-store")]
     [InlineData("pricing-house")]
     [InlineData("taken-store-2")]
-    [InlineData("a_1")]
+    [InlineData("a-1")]
     public async Task A_valid_free_slug_passes_the_one_slug_door(string slug)
         => Assert.Null(await FactoryWithTaken("taken-store").ValidateSlugAsync(slug));
 

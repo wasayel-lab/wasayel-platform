@@ -2315,9 +2315,10 @@ public static class MarketplaceTemplateExtensions
                 + "&categories=" + Uri.EscapeDataString(catsRaw);
 
             // ── فَلتَرَة ──
-            if (string.IsNullOrEmpty(slug) ||
-                !System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
-                return Results.Redirect(Back("slug_required"));
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بِشَكلِ المُعَرِّفِ الواحِد (`SlugRefusal`): كانَ
+            // `^[a-z0-9_-]+$` بِلا قائِمَةِ مَحجوز، فَيَقبَلُ `_studio` و`_platform` (أَقسامَ القاعِدَة) و`pricing`. والفارِغُ والشَكلُ رَمزُهُما القائِمُ هُنا.
+            if (Services.Incubator.TenantFromAnalysisFactory.SlugRefusal(slug) is { } slugRefused)
+                return Results.Redirect(Back(slugRefused == Services.Incubator.TenantFromAnalysisFactory.SlugReserved ? slugRefused : "slug_required"));
             if (string.IsNullOrEmpty(name))   return Results.Redirect(Back("name_required"));
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
                 return Results.Redirect(Back("color_invalid"));
