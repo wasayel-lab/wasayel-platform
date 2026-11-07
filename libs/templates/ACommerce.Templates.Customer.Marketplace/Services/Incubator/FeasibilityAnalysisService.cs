@@ -63,6 +63,17 @@ public sealed class FeasibilityAnalysisService
         return await session.LoadAsync<IncubatorSession>(id, ct);
     }
 
+    /// <summary>
+    /// <para><b>جَلسَةُ المَنَصَّةِ وَحدَها — ما يَبلُغُه مُشرِفُ المَنَصَّةِ في حاضِنَتِه</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ
+    /// فَوقَه؛ تَوصيفُه <c>d48cec4</c>): جَلسَةٌ مالِكُها <c>Guid.Empty</c> أَو <c>null</c>.</para>
+    /// <para><b>العِلَّةُ المَقيسَة</b>: كانَ بابا <c>/admin/incubator/{id}/answer</c> و<c>/analyze</c> وصَفحَتا المُعالِجِ والدِراسَةِ يَقرَأنَ بِـ<see cref="LoadAsync"/>
+    /// أَيَّ جَلسَة — فَكَتَبَ المُشرِفُ <c>Answers.sector</c> في دِراسَةِ عَميل، ورَسَمَت الدِراسَةُ زِرَّ «أَعِد» يُرسِلُ وَصفَ العَميلِ إلى مُزَوِّدِ التَحليل.
+    /// وFLOWS-INVENTORY يَقولُ إنّ دِراساتِ العُمَلاءِ القَديمَةَ «تُقرَأُ ولا تُكتَب»، والخُصوصِيَّةُ أَسقَطَت مُزَوِّدَ التَحليلِ عَلى أَنّه لا يَبلُغُه إلّا نَصُّ
+    /// المُشرِفِ نَفسِه — فَصَدَقا الآن بِهذا السُؤال.</para>
+    /// </summary>
+    public async Task<IncubatorSession?> LoadPlatformAsync(Guid id, CancellationToken ct = default)
+        => await LoadAsync(id, ct) is { } s && s.OwnerUserId == Guid.Empty ? s : null;
+
     public async Task<List<IncubatorSession>> ListForUserAsync(Guid userId, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession(IncubatorTenant);

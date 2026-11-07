@@ -196,7 +196,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        session = await Incubator.LoadAsync(Id);
+        session = await Incubator.LoadPlatformAsync(Id);   // ‏(‏2026-11-07، W13-1·DD-3) جَلسَةُ المَنَصَّةِ وَحدَها — دِراسَةُ العَميلِ «لا توجَد» هُنا
         if (session?.AnalysisJson is not null)
         {
             try { root = JsonDocument.Parse(session.AnalysisJson).RootElement.Clone(); }

@@ -4125,6 +4125,8 @@ public static class MarketplaceTemplateExtensions
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) جَلسَةُ المَنَصَّةِ وَحدَها: كانَ المُعَرِّفُ يَقبَلُ دِراسَةَ عَميلٍ فَيَكتُبُ فيها.
+            if (await svc.LoadPlatformAsync(id) is null) return Results.NotFound();
             var qid = req.Form["questionId"].ToString().Trim();
             var answer = req.Form["answer"].ToString().Trim();
             if (!string.IsNullOrEmpty(qid))
@@ -4139,6 +4141,9 @@ public static class MarketplaceTemplateExtensions
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) جَلسَةُ المَنَصَّةِ وَحدَها، قَبلَ الحَجز: كانَ المُعَرِّفُ يَقبَلُ دِراسَةَ
+            // عَميلٍ فَيُرسِلُ وَصفَه إلى مُزَوِّدِ التَحليل — والخُصوصِيَّةُ لا تُسَمّيه لِأَنّه لا يَبلُغُه إلّا نَصُّ المُشرِف.
+            if (await svc.LoadPlatformAsync(id) is null) return Results.NotFound();
 
             // الحَجزُ يَقلِبُ الحالَةَ فَوراً (مُتَزامِناً) لِتَعرِضَ
             // صَفحَةُ الدِراسَةِ المُؤَشِّر، ثُمَّ يُشَغَّلُ التَحليلُ
