@@ -84,17 +84,21 @@ public sealed class TenantFromAnalysisFactory
     /// </summary>
     /// <remarks>والمَحجوزُ قَبلَ الشَكل: <c>_studio</c> و<c>_admin</c> يُقالُ لِصاحِبِهِما «مَحجوزٌ لِلمَنَصَّة» لا «حُروفٌ وأَرقامٌ وشَرطَة» — الرَدُّ
     /// هُوَ هُوَ، والرِسالَةُ تَصدُقُ في سَبَبِه؛ وتَرتيبُ الفَحصِ القائِمُ (‏<c>ReservedTenantSlugTests</c>: كُلُّ اسمٍ مَحجوزٍ بِلا نُقطَةٍ يُجابُ
-    /// <c>slug_reserved</c>) باقٍ.</remarks>
+    /// <c>slug_reserved</c>) باقٍ.
+    /// <para><b>ويَسأَلُ مُصادِقَ اسمِ المُضيف</b> (‏2026-11-07، ADR-050 §٣ · W13-4·C2a·3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): الشَكلُ
+    /// <c>^[a-z0-9][a-z0-9-]{0,62}$</c> كانَ يَقبَلُ <c>shop-</c> و<c>ab--cd</c> و<c>xn--…</c> وطولاً بَينَ 54 و63 و<c>best-vendor</c> — والمَتجَرُ
+    /// <c>{slug}.R</c> ودَورُه <c>{slug}-{rolehost}.R</c> مِلصَقانِ لا يَصلُحُ لَهُما أَيٌّ مِنها. فَصارَ الشَكلُ <see cref="StoreHostName"/> نَفسَه،
+    /// وخُروقُه تُترجَمُ إلى رُموزِ الواجِهَةِ القائِمَة: المَحجوزُ ولاحِقَةُ اسمِ الدَورِ <see cref="SlugReserved"/> (اسمٌ تَملِكُه المَنَصَّةُ لِمُضيفِ
+    /// دَورِ مَتجَرٍ آخَر)، وما سِواهُما <see cref="SlugFormat"/>. والمَحجوزُ قَبلَ الشَكلِ كَما كان، وأَقسامُ القاعِدَةِ قَبلَ الكُلّ. تَوصيفُه قَبلَ التَبديل
+    /// <c>SlugDoorHostShapeCharacterizationTests</c> (‏5a70efa) بِبَصمَتِه.</para></remarks>
     public static string? SlugRefusal(string? slug)
     {
         if (string.IsNullOrEmpty(slug)) return SlugRequired;
-        if (ReservedTenantSlugs.Contains(slug) || InternalPartitions.Contains(slug, StringComparer.OrdinalIgnoreCase)) return SlugReserved;
-        if (!SlugShape.IsMatch(slug)) return SlugFormat;
-        return null;
+        if (InternalPartitions.Contains(slug, StringComparer.OrdinalIgnoreCase)) return SlugReserved;
+        var violations = StoreHostName.Validate(slug);
+        if (violations.Count == 0) return null;
+        return violations.Any(v => v.Code is StoreHostName.Reserved or StoreHostName.RoleSuffix) ? SlugReserved : SlugFormat;
     }
-
-    private static readonly System.Text.RegularExpressions.Regex SlugShape =
-        new("^[a-z0-9][a-z0-9-]{0,62}$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     /// <summary>أَقسامُ Marten الداخِلِيَّةُ الَّتي لا وَثيقَةَ مُستَأجِرٍ لَها — بِثَوابِتِها لا بِنُسَخِها، فَقِسمٌ يُعادُ تَسمِيَتُه يَبقى مَحجوزاً. والشَكلُ
     /// أَعلاه يَرُدُّها اليَومَ (تَبدَأُ بِـ<c>_</c>)، والقائِمَةُ تَحجُزُها ولَو اتَّسَعَ الشَكلُ يَوماً.</summary>

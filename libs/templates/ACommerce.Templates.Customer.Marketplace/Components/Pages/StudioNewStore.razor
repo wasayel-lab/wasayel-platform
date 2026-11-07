@@ -41,7 +41,7 @@
                     </div>
                     <div class="st-field" style="margin:0;">
                         <label class="st-label">@L.Markup("studio.create.field_slug")</label>
-                        <input class="st-input" name="slug" required maxlength="63" dir="ltr" pattern="[a-z0-9][a-z0-9\-]{0,62}"
+                        <input class="st-input" name="slug" required maxlength="53" dir="ltr" pattern="[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,52}"
                                placeholder="my-store" value="@Slug" />
                     </div>
                     <div class="st-field" style="margin:0;">

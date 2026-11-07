@@ -49,6 +49,7 @@ public class SlugShapeTests(ITestOutputHelper output)
     [InlineData("_store", TenantFromAnalysisFactory.SlugFormat)]
     [InlineData("my_store", TenantFromAnalysisFactory.SlugFormat)]
     [InlineData("My-Store", TenantFromAnalysisFactory.SlugFormat)]
+    [InlineData("store-", TenantFromAnalysisFactory.SlugFormat)]   // ‏(‏2026-11-07، ADR-050 · W13-4·C2a·3) كانَ يَمُرّ — شَرطَةٌ في الآخِرِ لَيسَت مِلصَقَ مُضيف
     [InlineData("pricing", TenantFromAnalysisFactory.SlugReserved)]
     [InlineData("", TenantFromAnalysisFactory.SlugRequired)]
     public void A_slug_off_the_one_shape_or_reserved_is_refused_with_its_code(string slug, string code)
@@ -58,14 +59,16 @@ public class SlugShapeTests(ITestOutputHelper output)
     [InlineData("a")]
     [InlineData("0")]
     [InlineData("my-store")]
-    [InlineData("store-")]
     [InlineData("studio-store")]
     public void A_slug_on_the_one_shape_and_not_reserved_passes(string slug)
         => Assert.Null(TenantFromAnalysisFactory.SlugRefusal(slug));
 
-    /// <summary>الطولُ: ‏63 حَدُّ مِلصَقِ المُضيفِ في DNS — ‏63 يَمُرّ و64 يُرَدّ.</summary>
+    /// <summary>الطولُ: ‏63 حَدُّ مِلصَقِ المُضيفِ في DNS — ‏63 يَمُرّ و64 يُرَدّ. ‏(‏2026-11-07، ADR-050 · W13-4·C2a·3) والسَقفُ الآنَ 53 = 63 − 1 − أَطوَلُ
+    /// اسمِ مُضيفِ دَور (<c>StoreHostName.MaxLength</c>) فَيَتَّسِعُ <c>{slug}-{rolehost}</c> لِمِلصَقٍ واحِد: ‏53 يَمُرّ، و54 و63 و64 تُرَدّ.</summary>
     [Theory]
-    [InlineData(63, null)]
+    [InlineData(53, null)]
+    [InlineData(54, TenantFromAnalysisFactory.SlugFormat)]
+    [InlineData(63, TenantFromAnalysisFactory.SlugFormat)]
     [InlineData(64, TenantFromAnalysisFactory.SlugFormat)]
     public void The_slug_is_one_host_label_long_at_most(int length, string? code)
         => Assert.Equal(code, TenantFromAnalysisFactory.SlugRefusal(new string('a', length)));

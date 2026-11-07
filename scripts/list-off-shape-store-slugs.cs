@@ -14,6 +14,10 @@
 //  بِحُضورِه — والافتِراضُ إلى أَن يَقول: يُترَكُ كَما هُوَ ويُعرَف. ويُطبَعُ المُعَرِّفُ ورَمزُ الرَدِّ ووُجودُ مالِكٍ وَحدَها — لا جَوّالَ ولا بَريدَ
 //  ولا اسم.
 //
+//  **و‏2026-11-07 (ADR-050 §٣، W13-4·C2a·3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)**: البابُ صارَ يَسأَلُ مُصادِقَ اسمِ المُضيف (`StoreHostName`) — فَالمَتجَرُ
+//  الَّذي يَسرُدُه هذا السكربتُ الآنَ هُوَ أَيضاً المَتجَرُ الَّذي **لا مُضيفَ لَه** (`{slug}.R`): شَرطَةٌ في الآخِر، أَو شَرطَتان، أَو أَطوَلُ مِن 53، أَو
+//  يَنتَهي بِاسمِ مُضيفِ دَور. يَبقى بِمَسارِه كَما هُوَ ولا يُعادُ تَسمِيَتُه («ب» في سِجِلِّ المالِك)، ويُطبَعُ بِجانِبِ رَمزِ البابِ رُموزُ المُصادِق.
+//
 // ─── الاستِعمال ────────────────────────────────────────────────────────
 //   export ConnectionStrings__Postgres="…"        # ولا تُطبَع أَبَداً
 //   dotnet run scripts/list-off-shape-store-slugs.cs
@@ -62,9 +66,9 @@ if (tenants.Count == 0)
 }
 
 var off = tenants.Select(t => (Tenant: t, Code: TenantFromAnalysisFactory.SlugRefusal(t.Id))).Where(x => x.Code is not null).ToList();
-Console.WriteLine($"عَلى غَيرِ الشَكل: {off.Count}");
+Console.WriteLine($"عَلى غَيرِ الشَكل (ولا مُضيفَ لَه): {off.Count}");
 foreach (var (t, code) in off)
-    Console.WriteLine($"  # {t.Id}  ← {code} · مالِك {(t.OwnerUserId == Guid.Empty ? "لا" : "نَعَم")} · مُعَلَّق {(t.IsSuspended ? "نَعَم" : "لا")}");
+    Console.WriteLine($"  # {t.Id}  ← {code} [{string.Join(" ", StoreHostName.Validate(t.Id).Select(v => v.Code))}] · مالِك {(t.OwnerUserId == Guid.Empty ? "لا" : "نَعَم")} · مُعَلَّق {(t.IsSuspended ? "نَعَم" : "لا")}");
 if (off.Count == 0)
 {
     Console.WriteLine("كُلُّ مَتجَرٍ عَلى الشَكل.");
