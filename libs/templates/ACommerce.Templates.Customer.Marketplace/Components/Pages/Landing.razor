@@ -1,6 +1,5 @@
 @page "/"
-@inject Services.Queries.TenantDirectory Tenants
-@inject Services.Queries.PlatformStatsQueries PlatformStats
+@inject Services.Queries.TenantShowcase Showcase
 @inject Services.Incubator.StudioAuth StudioAuthSvc
 @inject L L
 
@@ -132,7 +131,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        tenants = await Tenants.ListAsync();
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واجِهَةُ المَنَصَّةِ لا كُلُّ مُستَأجِر: كانَت `Tenants.ListAsync()`
+        // فَدَخَلَ القائِمَةَ والإحصاءاتِ كُلُّ مَتجَرٍ تُنشِئُه الاستِمارَةُ بِصِفرِ إعلانٍ («مَتاجِر مُطلَقَة 4»). والإحصاءاتُ تُعَدُّ عَلى المَعروضِ نَفسِه.
+        (tenants, var listings) = await Showcase.ListAsync();
         totalRoles = tenants.Sum(t => t.Roles.Count);
         var allCities = new HashSet<string>(
             tenants.Where(t => !string.IsNullOrEmpty(t.City)).Select(t => t.City!));
@@ -140,7 +141,7 @@
         // العَدُّ جَلسَةً لِكُلّ سلاج — `Listing` مُقتَرِنَة الإيجار،
         // فَلا استِعلامَ واحِداً يَعُدُّ كُلّ المَتاجِر. نَفسُ ما كانَت
         // الصَفحَةُ تَفعَلُه بِيَدِها، في مَوضِعِه الصَحيح.
-        listingsByTenant = await PlatformStats.ListingCountsAsync(tenants.Select(t => t.Slug));
+        listingsByTenant = tenants.ToDictionary(t => t.Slug, t => listings.GetValueOrDefault(t.Slug, 0), StringComparer.Ordinal);
         totalListings = listingsByTenant.Values.Sum();
         cityCount = allCities.Count;
     }

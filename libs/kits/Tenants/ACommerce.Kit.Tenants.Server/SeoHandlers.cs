@@ -45,8 +45,12 @@ public static class SeoHandlers
         // وَثيقَة Tenant مُسَجَّلَة SingleTenanted (عامَّة) — جَلسَة بِلا
         // مُستَأجِر هي الصَحيحَة هُنا، كَما في TenantResolverMiddleware.
         await using var session = store.QuerySession();
-        var tenants = await session.Query<Tenant>()
+        IReadOnlyList<Tenant> tenants = await session.Query<Tenant>()
             .Take(5000).ToListAsync(context.RequestAborted);
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واجِهَةُ المَنَصَّةِ لا كُلُّ مُستَأجِر: كانَ كُلُّ مَتجَرٍ يُنشِئُه
+        // حِسابٌ بِالاستِمارَةِ — بِصِفرِ إعلانٍ وبِاسمٍ يَختارُه — يَدخُلُ الخَريطَةَ لِلزاحِف (مَتجَرانِ ⇒ ثَمانِيَةُ مُدخَلات). والمُسنَدُ لِلقالِب (`ITenantShowcase`).
+        if (context.RequestServices.GetService(typeof(ITenantShowcase)) is ITenantShowcase showcase)
+            tenants = await showcase.ShowcaseAsync(tenants, context.RequestAborted);
 
         var entries = SeoDocuments.TenantEntries(tenants, BaseUrlOf(context));
         var body = SeoDocuments.BuildSitemapXml(entries);

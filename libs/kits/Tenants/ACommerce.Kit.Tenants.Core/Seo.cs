@@ -30,6 +30,16 @@ public sealed record SitemapEntry(
 /// <c>ACommerce.Kit.Tenants.Server.SeoHandlers</c> — نَفس تَقسيم
 /// Core/Server في بَقيَّة العُدَد (META-MODEL §2).</para>
 /// </summary>
+/// <summary>
+/// <para><b>أَيُّ مَتجَرٍ تَعرِضُه المَنَصَّةُ واجِهَةً لَها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3): خَريطَةُ المَوقِعِ في هذِه العُدَّةِ تَسأَلُه إن
+/// سُجِّل، والقالِبُ يُجيبُه (‏<c>TenantShowcase</c>: إعلانٌ عَلى الأَقَلّ، وباقَةٌ لا في السَماحِ ولا مُعَلَّقَة) — العُدَّةُ لا تَعرِفُ الإعلاناتِ ولا الباقات.
+/// ومُستَهلِكاه في وَقتِ التَشغيلِ ثَلاثَة: الخَريطَةُ هُنا، وقائِمَةُ الصَفحَةِ الأُولى وإحصاءاتُها في القالِب (القاعِدَة ١).</para>
+/// </summary>
+public interface ITenantShowcase
+{
+    Task<IReadOnlyList<Tenant>> ShowcaseAsync(IReadOnlyList<Tenant> tenants, CancellationToken ct = default);
+}
+
 public static class SeoDocuments
 {
     /// <summary>مَسارات المَنصَّة الَّتي لا يُسمَح لِلزاحِف بِها: لَوحَة

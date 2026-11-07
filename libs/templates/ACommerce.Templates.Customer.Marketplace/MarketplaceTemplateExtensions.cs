@@ -48,6 +48,9 @@ public static class MarketplaceTemplateExtensions
         // `IDocumentStore`. وهذا بِعَينِه شَرطُ تَشغيلِها في MAUI
         // Blazor Hybrid حَيثُ لا قاعِدَةَ بَيانات على الهاتِف.
         services.AddScoped<Services.Queries.TenantDirectory>();
+        // ‏(‏2026-11-07، W13-1·C1D-3) واجِهَةُ المَنَصَّة — الصَفحَةُ الأُولى تَقرَؤُها بِاسمِها، وخَريطَةُ المَوقِعِ في العُدَّةِ بِواجِهَتِها.
+        services.AddScoped<Services.Queries.TenantShowcase>();
+        services.AddScoped<ACommerce.Kit.Tenants.ITenantShowcase>(sp => sp.GetRequiredService<Services.Queries.TenantShowcase>());
         services.AddScoped<Services.Queries.AuditLogQueries>();
         services.AddScoped<Services.Queries.ShellQueries>();
         services.AddScoped<Services.Queries.AccountQueries>();
