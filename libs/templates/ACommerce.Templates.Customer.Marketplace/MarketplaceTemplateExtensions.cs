@@ -1935,13 +1935,15 @@ public static class MarketplaceTemplateExtensions
         // مُلائِمَة. الـ scope يُحدِّد حَدّ الـ PWA — تَنَقُّل المُستَخدِم
         // خارِجَه يَفتَحه المُتَصَفِّح كَ صَفحَة عاديَّة. لِمَتاجِر بِلا
         // أَدوار (ashare/ejar) نَعرِض manifest عَلى /{slug} بِلا role.
+        // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والبَيانُ يَتبَعُ المُضيفَ الَّذي يُطلَبُ عَلَيه —
+        // `PwaManifestDecision.AppBase`: عَلى مُضيفِ المَتجَرِ `/` و`/r/{role}/`، وفي وَضعِ المَسارِ كَما كان (`LivePwaManifestCharacterizationTests`).
         app.MapGet("/api/{slug}/manifest.json", async (
-            string slug, IDocumentStore store) =>
-            await BuildManifestAsync(slug, role: null, store));
+            string slug, HttpRequest req, IDocumentStore store) =>
+            await BuildManifestAsync(slug, role: null, store, Services.Ux.StoreUrl.ViewOf(req.HttpContext)));
 
         app.MapGet("/api/{slug}/r/{role}/manifest.json", async (
-            string slug, string role, IDocumentStore store) =>
-            await BuildManifestAsync(slug, role, store));
+            string slug, string role, HttpRequest req, IDocumentStore store) =>
+            await BuildManifestAsync(slug, role, store, Services.Ux.StoreUrl.ViewOf(req.HttpContext)));
 
         // أَيقونَة تِلقائيَّة SVG — تَستَخدِم لَون المَتجَر + الحَرف الأَوَّل
         // مِن اسم الدَور (أَو إيموجي الدَور إن كانَ مَضبوطاً). إذا كانَ
@@ -4443,7 +4445,7 @@ public static class MarketplaceTemplateExtensions
 
     // ─── PWA — manifest builder ──────────────────────────────────────
     private static async Task<IResult> BuildManifestAsync(
-        string slug, string? role, IDocumentStore store)
+        string slug, string? role, IDocumentStore store, Services.Ux.HostView view)
     {
         // مَوضِع الالتِقاط: الأَدوار مُجَسَّدَة واللَقطَة مَعَها. دَور
         // مُعَرَّف وَقتَ التَّشغيل (وَثيقَة Marten) لا يوجَد في
@@ -4456,7 +4458,8 @@ public static class MarketplaceTemplateExtensions
         if (!string.IsNullOrEmpty(role))
             r = tenant.Roles.FirstOrDefault(x => x.Slug == role);
 
-        var prefix    = string.IsNullOrEmpty(role) ? $"/{slug}" : $"/{slug}/r/{role}";
+        // ‏(‏2026-11-07، W13-4·C2b·2) جَذرُ التَطبيقِ عَلى المُضيفِ الَّذي يَطلُبُ البَيان — كانَ `/{slug}[/r/{role}]` دائِماً.
+        var prefix    = Services.Ux.PwaManifestDecision.AppBase(view, slug, role);
         // الـ icon endpoint مُسَجَّل تَحت /api/… لا تَحت scope الـ PWA،
         // فَنُشير إليه بِالمَسار المُطلَق الصَحيح. تَركه تَحت prefix يُسَبِّب
         // 404 وَيُفشِل installability check (لا أَيقونات صالِحَة).
@@ -4467,7 +4470,7 @@ public static class MarketplaceTemplateExtensions
                       : r is not null            ? $"{tenant.Name} — {r.Label}"
                                                  : tenant.Name;
         var shortName = r?.Label ?? tenant.Name;
-        var shortcuts = BuildShortcuts(slug, role, r, iconUrl, roleSet);
+        var shortcuts = BuildShortcuts(prefix, r, iconUrl, roleSet);
 
         return Results.Json(new
         {
@@ -4507,13 +4510,12 @@ public static class MarketplaceTemplateExtensions
         }, contentType: "application/manifest+json");
     }
 
-    private static object[] BuildShortcuts(string slug, string? role,
+    private static object[] BuildShortcuts(string prefix,
         ACommerce.Kit.Roles.Role? r, string iconUrl,
         ACommerce.Kit.Roles.TenantRoleSet roleSet)
     {
         // shortcuts حَسَب الدَور — مُختَصَرَات تَظهَر في long-press عَلى
-        // الأَيقونَة (Android + Edge).
-        var prefix = string.IsNullOrEmpty(role) ? $"/{slug}" : $"/{slug}/r/{role}";
+        // الأَيقونَة (Android + Edge). والبادِئَةُ جَذرُ التَطبيقِ نَفسُه (‏W13-4·C2b·2).
         var icons  = new[] { new { src = iconUrl, sizes = "any", type = "image/svg+xml" } };
 
         // المُختَصَرات مِرآة الـ nav لا مَعجَم ثالِث: كُلّ مُختَصَر أَساسيّ

@@ -96,7 +96,8 @@ row GET  "$S" "/offline.html"           200
 row GET  "$S" "/robots.txt"             200 - "Sitemap: $SCHEME://$S/sitemap.xml"
 row GET  "$S" "/sitemap.xml"            200 - "<loc>$SCHEME://$S/</loc>" "<loc>$SCHEME://$S/explore</loc>" "!/$OTHER" "!/$STORE/"
 row GET  "$S" "/_content/ACommerce.Templates.Customer.Marketplace/css/app.css" 200
-row GET  "$S" "/api/$STORE/manifest.json" 200
+row GET  "$S" "/api/$STORE/manifest.json" 200 - '"id":"/"' '"start_url":"/"' '"scope":"/"' '"url":"/explore"'   # W13-4·C2b·2 — كانَ /$STORE/
+row GET  "$R" "/api/$STORE/manifest.json" 200 - "\"scope\":\"/$STORE/\""
 row GET  "$S" "/api/push/vapid-key"     200
 
 echo "٣) مَناطِقُ المَنَصَّةِ تَعودُ إلى الجَذر، والكِتابَةُ إلَيها لا تُقبَل"
