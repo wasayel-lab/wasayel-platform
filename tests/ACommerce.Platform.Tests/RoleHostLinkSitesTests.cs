@@ -1,0 +1,153 @@
+using System.Text;
+using System.Text.RegularExpressions;
+using ACommerce.Templates.Customer.Marketplace.Services.Ux;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ كُلُّ مَوضِعِ «LinkFor» بِلا دَورٍ أَو بِدَورِ الصَفحَةِ يَبقى عَلى مُضيفِ الدَور (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) ═══
+//
+// **المَقيسُ قَبل** (عِندَ 220982d): 23 مَوضِعَ `LinkFor(x, null, …)` في 20 مِلَفّاً (16 مِنها مِن هذا المَدى) تُجيبُ عَلى مُضيفِ الدَورِ بِمُضيفِ المَتجَرِ مُطلَقاً —
+// الجَرَسُ في كُلِّ صَفحَة، وتَنزيلُ بَياناتي، ومُرَشِّحاتُ الاستِكشاف، ورَقائِقُ التَصنيف، و«إلغاء»/«رُجوع»؛ والكَعكَةُ مَقصورَةٌ عَلى مُضيفِ الدَور. **والحارِس**: ماسِحٌ
+// يَجِدُ كُلَّ مَوضِعِ استِدعاءٍ في القالِب (Razor وC#، بِلا التَعليقات)، ويَقرَأُ وَسيطَي الدَورِ والمَسار، ويَبني الرابِطَ بِـ`StoreUrl.Link` عَلى مُضيفِ الدَور
+// (`ashare-vendor`) — الدَورُ `null` كَما هُوَ، ودَورُ الصَفحَةِ (`Role`/`urlRole`/`role`) دَورَ المُضيفِ كَما يَحقِنُه الحاقِن — ويَحمَرُّ إن خَرَجَ واحِدٌ عَن المُضيف
+// سِوى العابِرِ المُعلَنِ بِاسمِه (بِطاقاتُ الأَدوار). يَطبَعُ ما عَدَّه، ويَحمَرُّ إن كانَ صِفراً.
+
+public class RoleHostLinkSitesTests(ITestOutputHelper output)
+{
+    private static readonly HostView VendorHost = new("example.test", "ashare", "https", "") { HostRole = "vendor" };
+
+    /// <summary>العابِرُ المُعلَن: مِلَفٌّ ونَصُّ مَسارِه — رابِطٌ إلى تَطبيقِ دَورٍ آخَرَ عَمداً.</summary>
+    private static readonly (string File, string Path)[] DeclaredCrossApp = [("RoleLanding.razor", "$\"r/{r.Slug}/login\"")];
+
+    internal sealed record Site(string File, int Line, string Role, string Path);
+
+    private static string TemplateRoot()
+    {
+        var d = new DirectoryInfo(AppContext.BaseDirectory);
+        while (d is not null && !File.Exists(Path.Combine(d.FullName, "PlatformV1.slnx"))) d = d.Parent;
+        return Path.Combine(d?.FullName ?? throw new InvalidOperationException("جَذرُ المُستَودَعِ غَيرُ مَوجود — الأَداةُ عَمياء."),
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace");
+    }
+
+    /// <summary>النَصُّ بِلا تَعليقاتِ Razor (<c>@* *@</c>) ولا أَسطُرِ <c>//</c> — وأَسطُرُه في مَواضِعِها (يُفرَغُ المَحذوفُ ولا يُزال)، فَالنِداءُ المُمتَدُّ عَلى سَطرَينِ يُقرَأ.</summary>
+    private static string CodeText(string file)
+    {
+        var text = File.ReadAllText(file);
+        if (file.EndsWith(".razor", StringComparison.Ordinal))
+            text = Regex.Replace(text, @"@\*.*?\*@", m => new string('\n', m.Value.Count(c => c == '\n')), RegexOptions.Singleline);
+        return string.Join('\n', text.Split('\n').Select(l => l.TrimStart().StartsWith("//", StringComparison.Ordinal) ? "" : l));
+    }
+
+    /// <summary>وَسائِطُ النِداءِ بَعدَ القَوسِ المَفتوح — فَواصِلُ المُستَوى الأَعلى وَحدَها، والنُصوصُ لا تُقَسَّم.</summary>
+    internal static List<string>? Arguments(string text, int open)
+    {
+        var args = new List<string>();
+        var cur = new StringBuilder();
+        var depth = 0;
+        for (var i = open + 1; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '"')
+            {
+                var start = i;
+                for (i++; i < text.Length && text[i] != '"'; i++) if (text[i] == '\\') i++;
+                cur.Append(text, start, Math.Min(i, text.Length - 1) - start + 1);
+                continue;
+            }
+            if (c is '(' or '[' or '{') depth++;
+            if (c is ')' or ']' or '}')
+            {
+                if (depth == 0) { args.Add(cur.ToString().Trim()); return args; }
+                depth--;
+            }
+            if (c == ',' && depth == 0) { args.Add(cur.ToString().Trim()); cur.Clear(); continue; }
+            cur.Append(c);
+        }
+        return null;
+    }
+
+    internal static List<Site> Sites()
+    {
+        var root = TemplateRoot();
+        var sites = new List<Site>();
+        foreach (var file in Directory.GetFiles(root, "*.*", SearchOption.AllDirectories)
+                     .Where(f => (f.EndsWith(".razor", StringComparison.Ordinal) || f.EndsWith(".cs", StringComparison.Ordinal))
+                                 && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                                 && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
+        {
+            var text = CodeText(file);
+            for (var at = text.IndexOf("LinkFor(", StringComparison.Ordinal); at >= 0; at = text.IndexOf("LinkFor(", at + 1, StringComparison.Ordinal))
+            {
+                var lineStart = text.LastIndexOf('\n', at) + 1;
+                var lineEnd = text.IndexOf('\n', at);
+                if (text[lineStart..(lineEnd < 0 ? text.Length : lineEnd)].Contains("public static string LinkFor(", StringComparison.Ordinal)) continue;
+                var args = Arguments(text, at + "LinkFor".Length);
+                if (args is not { Count: 3 }) continue;
+                sites.Add(new Site(Path.GetRelativePath(root, file), text.Take(at).Count(c => c == '\n') + 1, args[1], Regex.Replace(args[2], @"\s+", " ")));
+            }
+        }
+        return sites;
+    }
+
+    /// <summary>المَسارُ الَّذي يَبنيه المَوضِع: نَصٌّ حَرفِيٌّ كَما هُوَ، ومُقحَمٌ بِقِيَمٍ عَيِّنَة (<c>{…}</c> ← <c>x</c>)، وتَعبيرٌ ← أَوَّلُ نَصٍّ فيه أَو <c>explore</c>.</summary>
+    internal static string SamplePath(string arg)
+    {
+        var literal = Regex.Match(arg, @"(\$?)""((?:[^""\\]|\\.)*)""");
+        if (!literal.Success) return "explore";
+        var body = literal.Groups[2].Value;
+        return literal.Groups[1].Value == "$" ? Regex.Replace(body, @"\{[^}]*\}", "x") : body;
+    }
+
+    [Fact]
+    public void Every_roleless_or_page_role_link_site_stays_on_the_role_host()
+    {
+        var sites = Sites();
+        var (roleless, pageRole, named, kept, declared) = (0, 0, 0, 0, new List<string>());
+        var leaving = new List<string>();
+        foreach (var s in sites)
+        {
+            string? role = s.Role switch
+            {
+                "null" => null,
+                "Role" or "urlRole" or "role" => VendorHost.HostRole,
+                _ => "—",
+            };
+            if (role == "—") { named++; continue; }
+            if (role is null) roleless++; else pageRole++;
+            var link = StoreUrl.Link(VendorHost, "ashare", role, SamplePath(s.Path));
+            var stays = link.StartsWith('/') && !link.StartsWith("//", StringComparison.Ordinal);
+            if (DeclaredCrossApp.Any(d => s.File.EndsWith(d.File, StringComparison.Ordinal) && s.Path == d.Path))
+            {
+                declared.Add($"{s.File}:{s.Line} ⇒ {link}");
+                continue;
+            }
+            if (stays) kept++;
+            else leaving.Add($"{s.File}:{s.Line} LinkFor(…, {s.Role}, {s.Path}) ⇒ {link}");
+        }
+        output.WriteLine($"مَواضِعُ LinkFor: {sites.Count} · بِلا دَور: {roleless} · بِدَورِ الصَفحَة: {pageRole} · بِدَورٍ مُسَمّىً آخَر (لا تُفحَص هُنا): {named}");
+        output.WriteLine($"عَلى مُضيفِ الدَورِ تَبقى: {kept} · عابِرٌ مُعلَن: {declared.Count} · تُغادِر: {leaving.Count}");
+        foreach (var d in declared) output.WriteLine("  ↗ " + d);
+        foreach (var l in leaving) output.WriteLine("  ✗ " + l);
+        Assert.True(sites.Count >= 150, $"فَحصٌ أَعمى: {sites.Count} مَوضِعاً");
+        Assert.True(roleless >= 20, $"فَحصٌ أَعمى: {roleless} مَوضِعاً بِلا دَور");
+        Assert.Equal(DeclaredCrossApp.Length, declared.Count);
+        Assert.Empty(leaving);
+    }
+
+    [Theory]
+    [InlineData("\"explore\"", "explore")]
+    [InlineData("$\"r/{r.Slug}/login\"", "r/x/login")]
+    [InlineData("Via is null ? $\"login\" : $\"login?via={Via}\"", "login")]
+    [InlineData("activeRole.HomeRoute", "explore")]
+    public void The_sample_path_is_read_from_the_argument(string arg, string expected) => Assert.Equal(expected, SamplePath(arg));
+
+    [Fact]
+    public void The_argument_reader_keeps_strings_and_nested_calls_whole()
+    {
+        var text = "AuthSession.LinkFor(Slug, Role, $\"create-listing?category={Uri.EscapeDataString(c.Slug)}\") + x";
+        var args = Arguments(text, text.IndexOf('('));
+        Assert.Equal(["Slug", "Role", "$\"create-listing?category={Uri.EscapeDataString(c.Slug)}\""], args);
+    }
+}

@@ -825,7 +825,10 @@ public static class MarketplaceTemplateExtensions
             // فَعّال، أَو دَورُه المُخَزَّنُ لَيسَ مِن أَدوارِ المَتجَر) ← 500 بَعدَ الكِتابَة. والجَوابُ الآنَ جَوابُ الأَساسِ 50d6293 بِحَرفِه: جَذرُ المَتجَر.
             // والمُتَرجِمُ يَحرُسُه: CS8602 خَطَأٌ في هذا المِلَفّ (`.editorconfig` القالِب).
             if (active is null) return Results.Redirect(Home(req, slug));
-            return Results.Redirect(RoleHome(req, slug, active.Slug, active.HomeRoute ?? ""));
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) وبَيتُ الدَورِ عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة (`Home` ← `StoreUrl.For`) لا مُضيفِ الدَور:
+            // كانَ `RoleHome` — عُضوٌ دَخَلَ بِـ`as=vendor` عَلى مُضيفِ المَتجَرِ يُحَوَّلُ إلى `{slug}-vendor.R/me/listings` فَيُرسَمُ بِلا جَلسَة (لا `Domain=`).
+            // والإعدادُ لَيسَ تَبديلاً لِلدَور — المُنتَقي (`/me/role/save`) هُوَ العابِرُ المُعلَن. وفي وَضعِ المَسارِ `/{slug}{home}` بِحَرفِه.
+            return Results.Redirect(Home(req, slug, active.HomeRoute ?? ""));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
@@ -4405,7 +4408,9 @@ public static class MarketplaceTemplateExtensions
         => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path);
 
     /// <summary><b>بَيتُ الدَورِ بَعدَ اختِيارِه أَو إعدادِه</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — مُنتَقي الدَور): عَلى مُضيفٍ لِهذا المَتجَرِ والدَورُ لَه
-    /// مُضيف ← مُضيفُ ذلكَ الدَور (<c>StoreUrl.Link</c>)؛ وما سِوى ذلك <see cref="Home"/> بِحَرفِها — في وَضعِ المَسارِ <c>/{slug}{home}</c> بِلا دَورٍ كَما كان.</summary>
+    /// مُضيف ← مُضيفُ ذلكَ الدَور (<c>StoreUrl.Link</c>)؛ وما سِوى ذلك <see cref="Home"/> بِحَرفِها — في وَضعِ المَسارِ <c>/{slug}{home}</c> بِلا دَورٍ كَما كان.
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>بَعدَ الاختِيارِ وَحدَه</b>: «حِفظُ بَياناتِ الدَورِ» يُحَوِّلُ بِـ
+    /// <see cref="Home"/> عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة — كانَ هذا فَيُغادِرُ المُضيفَ الَّذي كَتَبَ الكَعكَة.</para></summary>
     private static string RoleHome(HttpRequest req, string slug, string role, string? homeRoute)
     {
         var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);

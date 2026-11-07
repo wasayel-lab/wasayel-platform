@@ -133,8 +133,15 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
             _ => "",
         }))));
 
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) طَلَبُ استِمارَةٍ عَلى مُضيفٍ كَما يَترُكُه الحاقِن: <paramref name="arrange"/> يَضَعُ الرَأسَ
+    /// <c>Host</c> وعَناصِرَ <c>StoreHostItems</c> قَبلَ البابِ — والطَلَبُ فيما سِوى ذلكَ بِحَرفِ <see cref="PostFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostFormOnHostAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
+        Action<HttpContext> arrange, params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route, cookie, form, files: null, arrange);
+
     private async Task<(int Status, string Location)> PostFormWithCookieAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
-        (string Key, string Value)[] form, (string Name, string FileName, string ContentType, byte[] Bytes)[]? files = null)
+        (string Key, string Value)[] form, (string Name, string FileName, string ContentType, byte[] Bytes)[]? files = null,
+        Action<HttpContext>? arrange = null)
     {
         var door = Door(pattern);
         await using var scope = _app.Services.CreateAsyncScope();
@@ -163,6 +170,7 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
             ctx.Request.Form = new FormCollection(fields, parts);
         }
         if (cookie is not null) ctx.Request.Headers.Cookie = cookie;
+        arrange?.Invoke(ctx);
         ctx.Response.Body = new MemoryStream();
         ctx.SetEndpoint(door);
         await door.RequestDelegate!(ctx);

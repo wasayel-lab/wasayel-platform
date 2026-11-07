@@ -96,8 +96,10 @@ public class StoreUrlRoundTripTests(ITestOutputHelper output)
     [Theory]
     [InlineData("store", "vendor", "terms", "https://ashare-vendor.example.test/ashare/r/vendor/terms")]
     [InlineData("store", "vendor", "me", "https://ashare-vendor.example.test/me")]
-    [InlineData("role", null, "terms", "https://ashare.example.test/ashare/terms")]
-    [InlineData("role", null, "explore", "https://ashare.example.test/explore")]
+    // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) كانا «https://ashare.example.test/ashare/terms» و«https://ashare.example.test/explore»: رابِطٌ بِلا دَورٍ
+    // عَلى مُضيفِ الدَورِ لَيسَ تَطبيقاً آخَر — يَبقى عَلى المُضيفِ بِالقاعِدَةِ نَفسِها (ما لا يَحقِنُه الحاقِنُ بِشَكلِ المَسار).
+    [InlineData("role", null, "terms", "/ashare/terms")]
+    [InlineData("role", null, "explore", "/explore")]
     [InlineData("role", "customer", "terms", "https://ashare-customer.example.test/ashare/r/customer/terms")]
     public void A_link_to_another_app_of_the_store_keeps_the_same_rule(string where, string? role, string path, string expected)
     {

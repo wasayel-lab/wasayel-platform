@@ -140,7 +140,8 @@ public class RoleHostTests(ITestOutputHelper output)
     [InlineData("store", "ashare", "mandoob", "me", "/r/mandoob/me")]
     [InlineData("vendor", "ashare", "vendor", "me/listings", "/me/listings")]
     [InlineData("vendor", "ashare", "vendor", "", "/")]
-    [InlineData("vendor", "ashare", null, "explore", "https://ashare.example.test/explore")]
+    // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) كانَ «https://ashare.example.test/explore» — رابِطٌ بِلا دَورٍ يُغادِرُ مُضيفَ الدَورِ إلى مُضيفٍ لا جَلسَةَ فيه.
+    [InlineData("vendor", "ashare", null, "explore", "/explore")]
     [InlineData("vendor", "ashare", "customer", "", "https://ashare-customer.example.test/")]
     [InlineData("vendor", "ashare", "mandoob", "me", "https://ashare.example.test/r/mandoob/me")]
     [InlineData("vendor", "ejar", "vendor", "me", "/ejar/r/vendor/me")]
