@@ -198,6 +198,17 @@ public sealed class TenantResolverMiddleware
         return null;
     }
 
+    /// <summary><b>أَيَحمِلُ المَتجَرُ دَورَ الكَتالوجِ هذا بِاسمِه؟</b> — نُسخَةُ دَورٍ <c>CatalogSlug</c> و<c>Slug</c> كِلاهُما اسمُه (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ
+    /// الثانِيَة · SEC-C2b-R2-2 — جِسمُ شَرطِ الـ404 لِمُضيفِ الدَورِ بِحَرفِه، W13-4·C2b·4). فَدَورٌ مُؤَلَّفٌ بِاسمٍ آخَرَ لا مُضيفَ لَه.</summary>
+    public static bool HoldsRoleHost(Tenant tenant, string catalogRole)
+        => tenant.Roles.Any(r => string.Equals(r.CatalogSlug, catalogRole, StringComparison.Ordinal)
+                                 && string.Equals(r.Slug, catalogRole, StringComparison.Ordinal));
+
+    /// <summary><b>أَدوارُ المَتجَرِ الَّتي لَها مُضيف</b> — مِن <see cref="ACommerce.Kit.Roles.RoleHostNames"/> ما يَحمِلُه المَتجَرُ (<see cref="HoldsRoleHost"/>)، مُرَتَّبَةً
+    /// تَرتيباً ثابِتاً (‏2026-11-07، SEC-C2b-R2-2). يَكتُبُها الوَسيطُ في <see cref="StoreHostItems.HostedRoles"/>.</summary>
+    public static IReadOnlyList<string> HostedRoles(Tenant tenant)
+        => ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.Keys.Where(c => HoldsRoleHost(tenant, c)).Order(StringComparer.Ordinal).ToArray();
+
     /// <summary>
     /// <para><b>ما يُفعَلُ بِطَلَبٍ عَلى مُضيفِه — قَرارٌ نَقِيٌّ يَقرَؤُه الحاقِن</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). لا يَقرَأُ حالَةً مَخزونَة
     /// (القاعِدَة ٧): وُجودُ المَتجَرِ يَسأَلُه <see cref="TenantResolverMiddleware"/> بَعدَ التَوجيه.</para>
@@ -443,13 +454,16 @@ public sealed class TenantResolverMiddleware
 
         // ‏(‏2026-11-07، C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مَنطِقَةُ المَنَصَّةِ عَلى مُضيفِ المَتجَرِ (إدارَتُه وَحدَها تَبلُغُ هُنا) بِلا سِياقِ مَتجَرٍ كَالجَذر؛
         // والمَتجَرُ المَجهولُ عَلى مُضيفِه يَبقى 404.
-        if (entity is not null && roleHost is { } rh
-            && !entity.Roles.Any(r => string.Equals(r.CatalogSlug, rh.CatalogRole, StringComparison.Ordinal)
-                                      && string.Equals(r.Slug, rh.CatalogRole, StringComparison.Ordinal)))
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الشَرطُ في `HoldsRoleHost` بِحَرفِه — تَسأَلُه أَيضاً قائِمَةُ
+        // مُضيفاتِ المَتجَرِ الَّتي يَمُرُّ بِها الخُروج، فَلا تَنجَرِفُ عَن هذا الـ404.
+        if (entity is not null && roleHost is { } rh && !HoldsRoleHost(entity, rh.CatalogRole))
         {
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
+
+        // ‏(‏2026-11-07، SEC-C2b-R2-2) ومُضيفاتُ المَتجَرِ عَلى طَلَبٍ يَخدِمُه مُضيفٌ لَه — يَقرَؤُها الخُروجُ لِيَمُرَّ بِها كُلِّها (الكَعكاتُ مَقصورَةٌ عَلى مُضيفِها).
+        if (entity is not null && hostSlug is not null) ctx.Items[StoreHostItems.HostedRoles] = HostedRoles(entity);
 
         if (entity is not null)
         {

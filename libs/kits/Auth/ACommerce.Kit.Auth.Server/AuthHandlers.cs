@@ -707,6 +707,44 @@ public static class AuthHandlers
         return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(payload)));
     }
 
+    // ── تَذكِرَةُ مُرورِ الخُروجِ بَينَ مُضيفاتِ المَتجَر (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2؛ ADR-050 §٥) ─────
+    /// <summary>عُمرُ تَذكِرَةِ المُرور — تَكفي سِلسِلَةَ تَحويلاتٍ بِعَدَدِ أَدوارِ الكَتالوج، ولا تُصلِحُ إعادَةً بَعدَها.</summary>
+    public static readonly TimeSpan LogoutHopLife = TimeSpan.FromMinutes(2);
+
+    private const string LogoutHopPurpose = "logout-hop";
+
+    /// <summary>
+    /// <para><b>تَذكِرَةُ مُرورِ الخُروج</b>: الكَعكاتُ مَقصورَةٌ عَلى مُضيفِها، فَخُروجٌ عَلى مُضيفٍ لِلمَتجَرِ يَمُرُّ بِمُضيفاتِه الأُخرى بِتَحويلاتِ <c>GET</c> يَمحو كُلٌّ
+    /// مِنها جَرَّتَه. والتَذكِرَةُ تَربِطُ المُرورَ بِالحِسابِ الَّذي خَرَجَ وبِالمَتجَرِ وبِمُضيفِ البِدايَة (<paramref name="origin"/>) ولِدَقيقَتَين — فَرابِطُ
+    /// <c>GET</c> لا يَصيرُ بابَ «أَخرِجْ أَيَّ أَحَد»: مُضيفٌ يَحمِلُ جَلسَةَ حِسابٍ آخَرَ لا يُمحى. <c>base64url({purpose}|{userId}|{slug}|{origin}|{exp}|{sig})</c>
+    /// والتَوقيعُ بِـ<see cref="TokenSecret"/> فَوقَ ما قَبلَه؛ والغَرَضُ أَوَّلَ الحُقولِ فَلا تُقرَأُ رَمزَ جَلسَة (ولا رَمزُ الجَلسَةِ تَذكِرَة).</para>
+    /// </summary>
+    public static string MakeLogoutHop(Guid userId, string tenantSlug, string origin, DateTimeOffset now)
+    {
+        var payload = $"{LogoutHopPurpose}|{userId:D}|{tenantSlug}|{origin}|{now.Add(LogoutHopLife).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture)}";
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"{payload}|{Sign(payload)}")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    /// <summary>الحِسابُ ومُضيفُ البِدايَةِ في تَذكِرَةٍ صالِحَةٍ لِهذا المَتجَرِ لَم تَنتَهِ — وإلّا <c>null</c> (مَفقودَة، مُشَوَّهَة، مُعَدَّلَة، لِمَتجَرٍ آخَر، مُنتَهِيَة).</summary>
+    public static (Guid UserId, string Origin)? ReadLogoutHop(string? ticket, string tenantSlug, DateTimeOffset now)
+    {
+        // أَبجَدِيَّةُ base64url وَحدَها — فَالتَذكِرَةُ تُعادُ في `Location` بِحَرفِها (فَكُّ base64 يَتَجاهَلُ المَسافاتِ وفَواصِلَ الأَسطُر).
+        if (string.IsNullOrEmpty(ticket) || ticket.Length > 512 || !ticket.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')) return null;
+        try
+        {
+            var b64 = ticket.Replace('-', '+').Replace('_', '/');
+            b64 = b64.PadRight(b64.Length + (4 - b64.Length % 4) % 4, '=');
+            var parts = Encoding.UTF8.GetString(Convert.FromBase64String(b64)).Split('|');
+            if (parts.Length != 6 || parts[0] != LogoutHopPurpose || parts[2] != tenantSlug) return null;
+            var payload = string.Join('|', parts[..^1]);
+            if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(parts[^1]), Encoding.UTF8.GetBytes(Sign(payload)))) return null;
+            if (!long.TryParse(parts[4], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var exp)
+                || DateTimeOffset.FromUnixTimeSeconds(exp) < now) return null;
+            return Guid.TryParse(parts[1], out var userId) && parts[3].Length > 0 ? (userId, parts[3]) : null;
+        }
+        catch (FormatException) { return null; }
+    }
+
     private static string Hash(string s)
     {
         using var sha = SHA256.Create();

@@ -247,6 +247,81 @@ else
   echo "  – لَم تُفحَص: ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
 fi
 
+# ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **الخُروجُ عَلى مُضيفٍ يُخرِجُ مِن مُضيفاتِ المَتجَرِ كُلِّها**: جَرَّةٌ
+# واحِدَةٌ تَعرِفُ النِطاقاتِ (مُتَصَفِّح) — كُلُّ طَلَبٍ إلى المُضيفِ بِاسمِه (و`--resolve` إلى 127.0.0.1 ما لَم يَكُن DIRECT)، فَالكَعكَةُ مَقصورَةٌ عَلى مُضيفِها كَما في
+# المُتَصَفِّح. العُضوُ يَدخُلُ عَلى المُضيفَين، ثُمَّ يَخرُجُ عَلى أَحَدِهِما وتُتبَعُ التَحويلاتُ واحِدَةً واحِدَة (كُلُّ وِجهَةٍ مُضيفٌ لِهذا المَتجَرِ تَحتَ النِطاق)،
+# فَيَجِبُ أَن تَنتَهي في جَذرِ مُضيفِ البِدايَةِ وأَن يَطلُبَ المُضيفانِ الدُخولَ بَعدَها، ولا كَعكَةَ جَلسَةٍ لِلمَتجَرِ في الجَرَّة. كانَ: مُضيفُ الدَورِ داخِلاً بَعدَ الخُروجِ
+# عَلى مُضيفِ المَتجَر (4 كَعكاتٍ باقِيَة). ومَحَطَّةُ مُرورٍ بِتَذكِرَةٍ مُختَلَقَةٍ لا تُخرِجُ أَحَداً. **تَكتُبُ دُخولاً** فَلا تَجري إلّا بِـ`ROLE_PHONE`.
+echo "١١) الخُروجُ عَلى مُضيفٍ يُخرِجُ مِن مُضيفاتِ المَتجَرِ كُلِّها، ويَنتَهي حَيثُ بَدَأ (C2b-R2)"
+if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
+  B="$TMP/browser"
+  # ‏go <method> <host[:port]> <path> [curl…] — طَلَبٌ بِجَرَّةِ المُتَصَفِّحِ إلى المُضيفِ بِاسمِه؛ يَطبَعُ «الرَمز|الوِجهَة» (Location كَما هو)
+  go() {
+    local method="$1" hostport="$2" path="$3"; shift 3
+    local name="${hostport%%:*}" port="${hostport##*:}" res=()
+    [ "$port" = "$hostport" ] && port="$([ "$SCHEME" = https ] && echo 443 || echo 80)"
+    [ "$DIRECT" = 1 ] || res=(--resolve "$name:$port:127.0.0.1")
+    curl -s -m 20 -o "$TMP/gobody" -D "$TMP/gohead" -w '%{http_code}' -X "$method" -c "$B" -b "$B" "${res[@]}" "$@" "$SCHEME://$hostport$path" || echo 000
+    printf '|%s' "$(tr -d '\r' < "$TMP/gohead" | sed -n 's/^[Ll]ocation: //p' | head -1)"
+  }
+  mark() { # mark <ok:0|1> <label> <detail>
+    checked=$((checked + 1))
+    if [ "$1" = 1 ]; then printf '  ✓ %-60s %s\n' "$2" "$3"; else failed=$((failed + 1)); printf '  ✗ %-60s %s\n' "$2" "$3"; fi
+  }
+  signin_b() { # signin_b <host>
+    local g1 g2
+    g1="$(go POST "$1" "/auth/phone/login" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE")"
+    g2="$(go POST "$1" "/auth/phone/verify" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE")"
+    mark "$([ "${g1%%|*}" = 302 ] && [ "${g2%%|*}" = 302 ] && echo 1 || echo 0)" "دُخولٌ بِـ$ROLE عَلى $1" "${g1%%|*} ← ${g2%%|*}"
+  }
+  # ‏state <host> → in (صَفحَةُ /me لِهذا المَتجَرِ بِجَلسَة) · out (صَفحَتُه تَطلُبُ الدُخول، أَو تَحويلٌ إلى دُخول) · وما سِواهُما رَمزُه — فَصَفحَةٌ لَيسَت لِلمَتجَرِ
+  # (404، أَو قِشرَةُ المَنَصَّة) لا تُقرَأُ «داخِلاً» ولا «خارِجاً» (مَقيس: بِلا نِطاقٍ كانَت قِشرَةُ المَنَصَّةِ تُقرَأُ «بِجَلسَة»).
+  state() {
+    local g code; g="$(go GET "$1" "/me")"; code="${g%%|*}"
+    if [ "$code" = 200 ] && grep -qF "\"slug\":\"$STORE\"" "$TMP/gobody"; then
+      if grep -qE 'href="[^"]*/login(\?[^"]*)?"' "$TMP/gobody"; then echo out; else echo in; fi
+    elif [ "$code" = 302 ] && [[ "${g#*|}" == */login* ]]; then echo out
+    else echo "$code"; fi
+  }
+  inside() { [ "$(state "$1")" = in ] && echo 1 || echo 0; }
+  outside() { [ "$(state "$1")" = out ] && echo 1 || echo 0; }
+  ours() { # ours <host[:port]> → 1 إن كانَ مُضيفاً لِهذا المَتجَرِ تَحتَ النِطاق
+    local n="${1%%:*}"
+    case "$n" in "$STORE.$DOMAIN"|"$STORE"-*."$DOMAIN") echo 1 ;; *) echo 0 ;; esac
+  }
+  # حَدُّ التَحَقُّقِ في المُنتَجِ خَمسٌ في الدَقيقَةِ لِكُلِّ جَوّالٍ ومَتجَر (`AuthHandlers.MaxVerifyPerMinute`)، والمَجموعَةُ ١٠ تَحَقَّقَت مَرَّتَين: فَالجَولَةُ الثانِيَةُ
+  # تَنتَظِرُ النافِذَةَ — وإلّا رُدَّ دُخولُها بِحَدِّ المُنتَجِ لا بِعَيبٍ فيه (مَقيس: «قَبلَ الخُروج … بِجَلسَة ✗» في الدُخولِ السادِس).
+  for START in "$S" "$RH"; do
+    rm -f "$B"
+    [ "$START" = "$RH" ] && { echo "  … انتِظارُ نافِذَةِ حَدِّ التَحَقُّق (61 ثانِيَة)"; sleep 61; }
+    signin_b "$RH"; signin_b "$S"
+    mark "$(inside "$RH")" "قَبلَ الخُروج: $RH/me بِجَلسَة" ""
+    mark "$(inside "$S")"  "قَبلَ الخُروج: $S/me بِجَلسَة" ""
+    if [ "$START" = "$RH" ]; then
+      # ومَحَطَّةُ مُرورٍ بِتَذكِرَةٍ مُختَلَقَةٍ لا تُخرِجُ أَحَداً — والجَلسَةُ قائِمَةٌ قَبلَها وبَعدَها
+      g="$(go GET "$RH" "/$STORE/auth/logout/continue?t=bG9nb3V0LWhvcHx4")"
+      mark "$([ "${g%%|*}" = 302 ] && [ "${g#*|}" = "/" ] && [ "$(inside "$RH")" = 1 ] && echo 1 || echo 0)" \
+           "تَذكِرَةٌ مُختَلَقَةٌ عَلى $RH لا تُخرِجُ أَحَداً" "${g%%|*} → ${g#*|}"
+    fi
+    g="$(go POST "$START" "/$STORE/auth/logout" -H 'Content-Type: application/x-www-form-urlencoded' --data '')"
+    hops=0; bad=""; final="$SCHEME://$START/"
+    while [ "${g%%|*}" = 302 ] && [ "${g#*|}" != "$final" ] && [ "$hops" -lt 15 ]; do
+      loc="${g#*|}"; rest="${loc#*://}"; hp_="${rest%%/*}"; p_="/${rest#*/}"
+      [ "$(ours "$hp_")" = 1 ] || { bad="وِجهَةٌ خارِجَ مُضيفاتِ المَتجَر: $loc"; break; }
+      hops=$((hops + 1)); g="$(go GET "$hp_" "$p_")"
+    done
+    mark "$([ -z "$bad" ] && [ "${g%%|*}" = 302 ] && [ "${g#*|}" = "$final" ] && [ "$hops" -ge 1 ] && echo 1 || echo 0)" \
+         "الخُروجُ عَلى $START ← يَنتَهي في $final" "مَحَطّاتُ المُرور: $hops ${bad:-· آخِرُها ${g%%|*} → ${g#*|}}"
+    mark "$(outside "$RH")" "بَعدَ الخُروج: $RH/me يَطلُبُ الدُخول" ""
+    mark "$(outside "$S")"  "بَعدَ الخُروج: $S/me يَطلُبُ الدُخول" ""
+    left="$(grep -c "acommerce\.auth\.$STORE" "$B" || true)"
+    mark "$([ "$left" = 0 ] && echo 1 || echo 0)" "بَعدَ الخُروج: كَعكاتُ جَلسَةِ $STORE في الجَرَّة" "$left"
+  done
+  rm -f "$B"
+else
+  echo "  – لَم تُفحَص: ROLE أَو ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

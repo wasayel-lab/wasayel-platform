@@ -25,4 +25,9 @@ public static class StoreHostItems
     /// عَلى <c>{slug}-{rolehost}.R</c> وَحدَه، ومَعَه <see cref="Slug"/> مَتجَرُه. <b>دَعوى لا مِنحَة</b>: لا يَقرَؤُه بابُ تَخويل — قُرّاؤُه بِناءُ الرَوابِطِ وسِياقُ
     /// العَميل، و<c>TenantResolverMiddleware</c> يُجيبُ 404 إن لَم يَكُن لِلمَتجَرِ ذلكَ الدَور.</summary>
     public const string Role = "acommerce.tenant.host-role";
+
+    /// <summary><b>أَدوارُ المَتجَرِ الَّتي لَها مُضيف</b> — <c>IReadOnlyList&lt;string&gt;</c> بِأَسماءِ الكَتالوجِ مُرَتَّبَةً (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة ·
+    /// SEC-C2b-R2-2). يَكتُبُه <c>TenantResolverMiddleware</c> — الَّذي يُحَمِّلُ وَثيقَةَ المَتجَرِ أَصلاً ويُجيبُ 404 لِمُضيفِ دَورٍ لا يَحمِلُه بِالقاعِدَةِ نَفسِها — عَلى
+    /// كُلِّ طَلَبٍ يَخدِمُه مُضيفٌ لِلمَتجَر، ولا يَكتُبُه في وَضعِ المَسار. قارِئُه سِلسِلَةُ الخُروجِ بَينَ مُضيفاتِ المَتجَر: تُحسَبُ مِن أَدوارِه لا مِن وَسيطٍ في الطَلَب.</summary>
+    public const string HostedRoles = "acommerce.tenant.hosted-roles";
 }

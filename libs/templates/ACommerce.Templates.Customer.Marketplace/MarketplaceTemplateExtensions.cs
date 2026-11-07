@@ -528,8 +528,21 @@ public static class MarketplaceTemplateExtensions
             // ‏(‏2026-11-05، G2 · ٢) والأَدوارُ مِن كوكيّاتِ هذا المُتَصَفِّحِ نَفسِها (`AuthSession.RoleCookiesIn`) لا مِن وَثيقَةِ المَتجَر: تُمحى بِتَهجِئَتِها الَّتي يَحمِلُها
             // (والمُتَصَفِّحُ يُفَرِّقُ بَينَ الحالات)، ودَورٌ حُذِفَ مِن المَتجَرِ لا يُبقي كوكيَّه، والقاعِدَةُ الغائِبَةُ لا تُبقي الجَلسَة. والكوكيّاتُ كُلُّها بِـ`Path=/` فَيَحمِلُها الطَلَب.
             AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والكَعكاتُ مَقصورَةٌ عَلى مُضيفِها، فَعَلى مُضيفٍ لِلمَتجَرِ
+            // يَمُرُّ الخُروجُ بِمُضيفاتِه الأُخرى (`LogoutHops`) — كانَ عُضوٌ يَخرُجُ عَلى مُضيفِ المَتجَرِ يَبقى داخِلاً عَلى مُضيفِ دَورِه. وفي وَضعِ المَسارِ كَما كان.
+            if (Services.Ux.LogoutHops.Begin(http, slug, token, DateTimeOffset.UtcNow) is { } hop) return Results.Redirect(hop);
             return Results.Redirect(Home(http.Request, slug));
         }).DisableAntiforgery();
+
+        // ─── مَحَطَّةُ مُرورِ الخُروجِ عَلى مُضيفٍ آخَرَ لِلمَتجَر (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2؛ ADR-050 §١٤) ─────
+        // `GET` بِتَذكِرَةٍ مُوَقَّعَةٍ لِلحِسابِ الَّذي خَرَج: يَمحو جَرَّةَ هذا المُضيفِ لِلمَتجَر (إلّا جَلسَةَ حِسابٍ آخَر) ويُحَوِّلُ إلى المَحَطَّةِ التالِيَةِ مِن أَدوارِ
+        // المَتجَرِ لا مِن الطَلَب. ولا يَقرَأُ القاعِدَةَ ولا يَكتُبُها؛ وبِلا تَذكِرَةٍ صالِحَةٍ لا يَمحو شَيئاً.
+        app.MapGet("/{slug}/auth/logout/continue", (string slug, HttpContext http) =>
+        {
+            var (clear, next) = Services.Ux.LogoutHops.Continue(http, slug, DateTimeOffset.UtcNow);
+            if (clear) AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
+            return Results.Redirect(next ?? Home(http.Request, slug));
+        });
 
         // ─── اخرج من كل الأجهزة (‏2026-10-28، قَرارُ المالِك د28) ──────────
         // يَرفَعُ إصدارَ جَلسَةِ الحِسابِ فَيَسقُطُ كُلُّ رَمزٍ صَدَرَ لَه — عَلى هذا الجِهازِ وغَيرِه — عِندَ `SessionVersionGate`. والخُروجُ أَعلاه
