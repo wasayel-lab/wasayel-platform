@@ -33,6 +33,8 @@ OTHER="${OTHER:-ejar}"
 DIRECT="${DIRECT:-0}"             # 1 = يُطلَبُ كُلُّ مُضيفٍ بِاسمِه (DNS)، لا 127.0.0.1 بِرَأسِ Host
 MANAGER_PHONE="${MANAGER_PHONE:-}" # هاتِفُ مُديرٍ لِـSTORE — يُشَغِّلُ المَجموعَةَ ٦ (دُخولٌ بِرَمزِ المُحاكي)
 DEV_CODE="${DEV_CODE:-123456}"
+ROLE="${ROLE-vendor}"              # دَورٌ في STORE مِن الكَتالوج — مُضيفُه STORE-ROLE (W13-4·C2b·5)؛ فارِغاً لا تُفحَصُ المَجموعَةُ ٩
+ROLE_ABSENT="${ROLE_ABSENT:-driver}" # دَورٌ مِن الكَتالوجِ لا يَحمِلُه STORE — مُضيفُه 404
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
@@ -119,7 +121,9 @@ row GET  "$S" "/api/v1/deals"           404
 row GET  "$S" "/api/push/manifest.json" 404
 row GET  "$(hp "push.$DOMAIN")" "/api/push/manifest.json" 404
 row GET  "$(hp "v1.$DOMAIN")" "/api/v1/deals" 404
-row GET  "$(hp "$STORE-vendor.$DOMAIN")" "/"   404
+# ‏(‏2026-11-07، W13-4·C2b·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ «$STORE-vendor ← 404» (مُضيفُ الدَورِ لا يُحَلُّ في المَرحَلَةِ الأُولى)؛ صارَ يُحَلُّ لِدَورٍ في المَتجَر
+# (المَجموعَةُ ٩) — ودَورٌ لَيسَ في المَتجَرِ 404 هُنا: ROLE_ABSENT (افتِراضاً driver، لا يَحمِلُه ashare).
+row GET  "$(hp "$STORE-$ROLE_ABSENT.$DOMAIN")" "/"   404
 row GET  "$(hp "x.$STORE.$DOMAIN")" "/"   404
 row GET  "$(hp "w13-no-such-store.$DOMAIN")" "/" 404
 
@@ -165,6 +169,29 @@ echo "٨) رَوابِطُ الصَفحَةِ نَظيفَةٌ عَلى مُضي
 row GET  "$S" "/"                       200 - 'href="/explore"' "!href=\"/$STORE/explore\""
 row GET  "$S" "/explore"                200 - 'href="/explore"' 'ac-topnav-link-active' "!href=\"/$STORE/"
 row GET  "$R" "/$STORE/explore"         200 - "href=\"/$STORE/explore\"" 'ac-topnav-link-active'
+
+# ‏(‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مُضيفُ الدَورِ {store}-{role}.{domain}: صَفَحاتُ GET بِدَورِه، والبَيانُ بِنِطاقِ /،
+# والكِتابَةُ ومَناطِقُ المَنَصَّةِ كَمُضيفِ المَتجَر، ودَورٌ لا يَحمِلُه المَتجَرُ 404، وبِطاقاتُ الأَدوارِ عَلى مُضيفِ المَتجَرِ رَوابِطُ إلى مُضيفاتِها.
+RH="$(hp "$STORE-$ROLE.$DOMAIN")"
+if [ -n "$ROLE" ]; then
+echo "٩) مُضيفُ الدَور $RH — دَعوى في صَفَحاتِ GET وَحدَها"
+row GET  "$RH" "/"                       200 - "<link rel=\"canonical\" href=\"$SCHEME://$RH/\" />" '"hostMode":true' "\"slug\":\"$STORE\"" '"role":""' "/api/$STORE/r/$ROLE/manifest.json"
+row GET  "$RH" "/explore"                200 - "<link rel=\"canonical\" href=\"$SCHEME://$RH/explore\" />" 'href="/explore"' "!href=\"/$STORE/"
+row GET  "$RH" "/api/$STORE/r/$ROLE/manifest.json" 200 - '"id":"/"' '"start_url":"/"' '"scope":"/"'
+row GET  "$RH" "/sw.js"                  200 - "self.addEventListener"
+row GET  "$RH" "/studio"                 301 "$SCHEME://$R/studio"
+row POST "$RH" "/studio/apps/create"     404
+row GET  "$RH" "/api/$OTHER/unread-counts" 404
+row GET  "$(hp "$STORE-$ROLE_ABSENT.$DOMAIN")" "/explore" 404
+row GET  "$(hp "x-$STORE-$ROLE.$DOMAIN")" "/" 404
+REF="$SCHEME://$RH/login";                         row POST "$RH" "/auth/phone/login" 302 "/login?*"
+REF="$SCHEME://$S/login";                          row POST "$RH" "/auth/phone/login" 302 "/login?*"
+REF=""
+row GET  "$S" "/"                        200 - "$SCHEME://$RH/login"
+row GET  "$R" "/$STORE/r/$ROLE"          200 - "<link rel=\"canonical\" href=\"$SCHEME://$R/$STORE/r/$ROLE\" />" '"hostMode":false' "\"role\":\"$ROLE\""
+else
+  echo "٩) – لَم تُفحَص: ROLE فارِغ (دَورٌ مِن الكَتالوجِ يَحمِلُه $STORE — مُضيفُه $STORE-{role})"
+fi
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
