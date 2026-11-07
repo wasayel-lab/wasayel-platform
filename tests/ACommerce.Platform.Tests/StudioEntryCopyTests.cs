@@ -39,10 +39,16 @@ public class StudioEntryCopyTests(ITestOutputHelper output)
     internal static IReadOnlyList<string> KeysDrawnBy(string page)
         => KeyUse.Matches(WriteEndpointGuardTests.StripMarkupComments(page)).Select(m => m.Groups["k"].Value).Distinct().ToList();
 
+    // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **و`StudioHome` في المَسح** — البَندُ ٤ والقَرارُ §٨ أَعادا كِتابَةَ شَريطِه
+    // وبِطاقاتِه ورابِطِه وحالاتِه الفارِغَة، والوَعدُ أَعلاه «يَدخُلُ المَسحَ في W13-1·٥» لَم يُنَفَّذ: حَقنُ «مَدعومٌ بِالذَكاءِ الاصطِناعِيّ» في
+    // `studio.home.create_body` (لا تَرسُمُه إلّا `StudioHome`) أَبقى المَسحَ أَخضَرَ. ومَعَها صَفحَتا رائِدِ الأَعمالِ الأُخرَيان: المُوافَقَةُ والباقَة.
     [Theory]
     [InlineData("Components/Pages/Landing.razor")]
     [InlineData("Components/StudioShell.razor")]
     [InlineData("Components/Pages/StudioNewStore.razor")]
+    [InlineData("Components/Pages/StudioHome.razor")]
+    [InlineData("Components/Pages/StudioConsent.razor")]
+    [InlineData("Components/Pages/StudioBilling.razor")]
     public void No_text_an_entry_page_draws_carries_a_banned_or_unmeasured_claim(string page)
     {
         using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
@@ -57,6 +63,21 @@ public class StudioEntryCopyTests(ITestOutputHelper output)
         output.WriteLine($"{page}: مَفاتيحُ مَفحوصَة {keys.Count} · عِباراتٌ مَحظورَة {Banned.Length} · إصابات {hits.Count}");
         Assert.True(keys.Count >= 5, $"أَداةٌ عَمياء: {keys.Count} مِفتاحاً في {page}.");
         Assert.True(hits.Count == 0, string.Join("، ", hits));
+    }
+
+    /// <summary>‏(‏2026-11-07، F6) <b>ما يَمسَحُه الماسِحُ يُعَدُّ ويُطبَع</b> (القاعِدَة ١٠): صُفوفُ الصَفَحاتِ أَعلاه مَقروءَةً مِن الاختِبارِ نَفسِه، وكُلُّ صَفحَةٍ
+    /// مَوجودَة، والثَلاثُ الَّتي لَم تَكُن فيه — <c>StudioHome</c> و<c>StudioConsent</c> و<c>StudioBilling</c> — فيه.</summary>
+    [Fact]
+    public void The_banned_phrase_scanner_counts_the_entry_pages_it_reads()
+    {
+        var rows = typeof(StudioEntryCopyTests).GetMethod(nameof(No_text_an_entry_page_draws_carries_a_banned_or_unmeasured_claim))!
+            .GetCustomAttributes(typeof(InlineDataAttribute), false).Cast<InlineDataAttribute>()
+            .Select(a => (string)a.GetData(null!).Single()[0]).ToList();
+        output.WriteLine($"صَفَحاتُ رائِدِ الأَعمالِ المَمسوحَة: {rows.Count} — {string.Join("، ", rows.Select(Path.GetFileNameWithoutExtension))}");
+        Assert.True(rows.Count >= 6, $"أَداةٌ عَمياء: {rows.Count} صَفحَة.");
+        Assert.All(rows, r => Assert.True(File.Exists(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, Template, r)), r));
+        foreach (var page in new[] { "StudioHome", "StudioConsent", "StudioBilling" })
+            Assert.Contains($"Components/Pages/{page}.razor", rows);
     }
 
     /// <summary>والماسِحُ يُقاسُ: نَصٌّ بِتَشكيلٍ كامِلٍ وأَلِفٍ مَهموزَةٍ يُصابُ كَما يُصابُ عارِياً، ونَصٌّ قَريبٌ لا يُصاب.</summary>
