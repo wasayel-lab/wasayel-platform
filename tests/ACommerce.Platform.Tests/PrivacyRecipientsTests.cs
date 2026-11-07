@@ -255,7 +255,55 @@ public class PrivacyRecipientsTests(ITestOutputHelper output)
         Assert.DoesNotContain("platform.doc.updated", page, StringComparison.Ordinal);
         var date = Regex.Match(Ar("platform.privacy.updated"), @"\d{4}-\d{2}-\d{2}").Value;
         // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1 وB-PRIV-5) §6 (سَحبُ الإعلانات) و§5 (جِهَتا الخَطِّ والمَكتَبَة) تَبَدَّلا — فَالتاريخُ مَعَهُما؛ كانَ «2026-10-29».
-        Assert.Equal("2026-10-30", date);
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وكانَ «2026-10-30» بَعدَ تَغييرَين لَم يَتبَعهُما: سَطرُ `share_otp` في `c28aa0f`
+        // (‏2026-11-04)، وسَطرُ `share_llm` في `76fcc5f` (صِياغَتُه وصارَ خَلفَ مِفتاحِ الوَكيل) — فَالتاريخُ تاريخُ هذا الإيداع، والصَفُّ أَدناه يَربِطُ النَصَّ بِه.
+        Assert.Equal(PrivacyEditions[^1].Date, date);
         Assert.Contains(date, En("platform.privacy.updated"), StringComparison.Ordinal);
+    }
+
+    // ─── النَصُّ والتاريخُ مَربوطان (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F4) ─────────────────────────────────────────────
+    //
+    // **المَقيسُ قَبل**: §9 يَعِدُ «يُنشَرُ أَيُّ تَغييرٍ في هذِه الصَفحَةِ مَع تاريخِه»، والتاريخُ لَم يَتبَع تَغييرَين مُتَتالِيَين (`c28aa0f` و`76fcc5f`) —
+    // لِأَنّ صَفَّ التاريخِ أَعلاه يَقرَأُ التاريخَ وَحدَه، فَتَغييرُ النَصِّ لا يُحمِرُّ شَيئاً (القاعِدَة ٢). **والآن**: بَصمَةُ ما تَقولُه الصَفحَة — قيَمُ
+    // `platform.privacy.*` بِالعَرَبِيَّةِ والإنجليزِيَّةِ (عَدا سَطرِ التاريخِ نَفسِه) ونَصُّ `PlatformPrivacy.razor` — مَربوطَةٌ بِطَبعَةٍ مُؤَرَّخَة. تَغييرُ النَصِّ أَو
+    // ما تَرسُمُه الصَفحَةُ يُحمِرُّ هذا الصَفَّ حَتّى تُضافَ طَبعَةٌ بِتاريخٍ أَحدَثَ ويَتبَعَها `platform.privacy.updated` في اللُغَتَين.
+
+    /// <summary>طَبَعاتُ سِياسَةِ الخُصوصِيَّة — تاريخٌ وبَصمَة (أَوَّلُ ‏16 مِن SHA-256). <b>تَنمو ولا تُعَدَّل</b>: طَبعَةٌ جَديدَةٌ لِكُلِّ تَغيير، بِتاريخٍ أَحدَث.</summary>
+    internal static readonly (string Date, string Fingerprint)[] PrivacyEditions =
+    [
+        ("2026-11-07", "117dbdc0be1c4494"),
+    ];
+
+    internal static string PrivacyFingerprint()
+    {
+        var parts = new List<string>();
+        foreach (var lang in new[] { "ar", "en" })
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "core",
+                "ACommerce.Platform.I18n", "Locales", $"{lang}.json")));
+            foreach (var p in doc.RootElement.EnumerateObject()
+                         .Where(p => p.Name.StartsWith("platform.privacy.", StringComparison.Ordinal) && p.Name != "platform.privacy.updated")
+                         .OrderBy(p => p.Name, StringComparer.Ordinal))
+                parts.Add($"{lang}|{p.Name}|{p.Value.GetString()}");
+        }
+        parts.Add("page|" + PrivacyShareInventoryTests.PrivacyPage().Replace("\r\n", "\n"));
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n§\n", parts))))[..16].ToLowerInvariant();
+    }
+
+    [Fact]
+    public void Every_change_to_the_privacy_text_carries_a_new_dated_edition()
+    {
+        var fingerprint = PrivacyFingerprint();
+        var keys = Regex.Matches(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "core", "ACommerce.Platform.I18n", "Locales", "ar.json")),
+            "\"platform\\.privacy\\.[a-z0-9_.]+\"").Count;
+        output.WriteLine($"طَبَعاتُ الخُصوصِيَّة: {PrivacyEditions.Length} · الأَخيرَة {PrivacyEditions[^1].Date} · بَصمَةُ النَصِّ اليَوم {fingerprint} · مَفاتيحُ ar {keys}");
+        Assert.True(keys >= 40, $"أَداةٌ عَمياء: {keys} مِفتاحاً.");
+        Assert.True(PrivacyEditions[^1].Fingerprint == fingerprint,
+            $"نَصُّ سِياسَةِ الخُصوصِيَّةِ تَغَيَّرَ ({PrivacyEditions[^1].Fingerprint} ← {fingerprint}) بِلا طَبعَة: أَضِف («{DateTime.UtcNow:yyyy-MM-dd}», «{fingerprint}») "
+            + "وحَدِّث platform.privacy.updated في ar.json وen.json — §9 يَعِدُ بِأَن يُنشَرَ كُلُّ تَغييرٍ مَع تاريخِه.");
+        Assert.True(PrivacyEditions.Zip(PrivacyEditions.Skip(1)).All(p => string.CompareOrdinal(p.First.Date, p.Second.Date) < 0), "الطَبَعاتُ لا تَتَقَدَّمُ تاريخاً.");
+        Assert.Equal(PrivacyEditions.Length, PrivacyEditions.Select(e => e.Fingerprint).Distinct().Count());
+        Assert.Contains(PrivacyEditions[^1].Date, Ar("platform.privacy.updated"), StringComparison.Ordinal);
+        Assert.Contains(PrivacyEditions[^1].Date, En("platform.privacy.updated"), StringComparison.Ordinal);
     }
 }
