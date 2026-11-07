@@ -2,6 +2,7 @@
 @rendermode RenderMode.InteractiveServer
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components.Web
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject Services.Incubator.StudioAuth StudioAuth
 @inject Marten.IDocumentStore Store
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -56,6 +57,13 @@
             <div class="st-card">
                 <p>@L.Markup("studio.agent.need_login")</p>
                 <a class="st-btn st-btn-primary" href="/studio/auth">@L.Markup("studio.agent.login")</a>
+            </div>
+        }
+        else if (!AgentSwitch.Enabled)
+        {
+            @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) المِفتاحُ مُطفَأٌ ⇐ النَصُّ المُغلَقُ نَفسُه، لا مُحادَثَةَ ولا زِرّ — قَبلَ سُؤالِ البابِ لا بَعدَه. *@
+            <div class="st-card">
+                <p>@L.Markup(StudioAgentDoor.ClosedMessageKey)</p>
             </div>
         }
         else if (StudioAgentDoor.Opens(Agent.IsConfigured, _platformAdmin))

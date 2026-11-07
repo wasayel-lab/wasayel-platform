@@ -1,5 +1,7 @@
 @page "/admin/agent"
 @using Microsoft.AspNetCore.Components.Web
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
+@inject L L
 @inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth StudioAuth
 
 @*
@@ -21,8 +23,17 @@
     Protection، فَلا يُبَدِّلُه عَميل.
 *@
 
+@* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) والمِفتاحُ مُطفَأٌ ⇐ لا جَزيرَةَ تَفاعُلِيَّة (فَلا مُعالِجَ يُبلَغ) بَل النَصُّ المُغلَقُ نَفسُه الَّذي
+   تَرسُمُه `/studio/agent`. وبَعدَ حارِسِ المُشرِفِ لا قَبلَه — غَيرُ المُشرِفِ لا يَعرِفُ حالَ الوَكيل. *@
 <RequirePlatformAdmin>
+    @if (AgentSwitch.Enabled)
+    {
     <AgentChatPanel @rendermode="RenderMode.InteractiveServer" AdminUserId="@_adminUserId" />
+    }
+    else
+    {
+    <p>@L.Markup(ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentDoor.ClosedMessageKey)</p>
+    }
 </RequirePlatformAdmin>
 
 @code {

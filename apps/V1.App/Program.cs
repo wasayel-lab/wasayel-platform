@@ -445,6 +445,13 @@ try
 
     // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049) خَرَجَ مِن هُنا سَطرُ `[studio] analysis_door=` — التَحليلُ لَيسَ في رِحلَةِ رائِدِ الأَعمال،
     // والمَتجَرُ يُنشَأُ بِلا مِفتاح؛ وسَطرُ `[agent] Analysis:` أَعلاه يَقولُ حالَ مِفتاحِ حاضِنَةِ المُشرِف.
+    // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) وحالُ وَكيلِ التَصميمِ بِرَمزِه: `hidden` (المِفتاحُ `Studio:Agent:Enabled` مُطفَأ — الافتِراض)، أَو
+    // `open`، أَو `agent_unavailable` (مُضاءٌ بِلا خَلفِيَّة). القَرارُ نَفسُه الَّذي تَسأَلُه الصَفَحات، وتَقرَؤُه بَوّابَةُ الإقلاعِ إعلاماً (الكُتلَة `agent_door`).
+    app.Logger.LogInformation(
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.BootLogPrefix + "{Door}",
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.BootLogValue(
+            app.Services.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch>().Enabled,
+            agentBackends.For(ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Studio).IsConfigured));
 }
 catch (Exception ex)
 {

@@ -1,4 +1,5 @@
 @page "/admin/incubator/{id:guid}/study"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.FeasibilityAnalysisService Incubator
 @inject L L
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
@@ -164,10 +165,13 @@
                         <strong>@L.Markup("study.field.time")</strong> @Str(rp,"timeToLaunch")<br/>
                         <span style="color:var(--ac-text-muted);font-size:13px;">@Str(rp,"reasoning")</span>
                     </p>
+                    @if (AgentSwitch.Enabled)
+                    {
                     <a class="ac-btn ac-btn-primary" style="margin-top:12px;"
                        href="/admin/agent">
                         <AcIcon Name="message" Size="16" /> @L.Markup("admin.study.build_with_agent")@((MarkupString)"\n                    ")
                     </a>
+                    }
                 </ChildContent></AcCard>
             }
 

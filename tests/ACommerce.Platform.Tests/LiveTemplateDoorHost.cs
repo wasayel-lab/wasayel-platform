@@ -43,6 +43,10 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         });
         builder.Configuration["ConnectionStrings:Postgres"] = LiveDealConcurrencyProofTests.ConnectionString!.TrimEnd(';') + ";Timeout=60;Command Timeout=120";
         builder.Host.UseDefaultServiceProvider(o => { o.ValidateOnBuild = false; o.ValidateScopes = false; });
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) مِفتاحُ وَكيلِ التَصميمِ مُضاءٌ في هذا المُضيف: بَراهينُ الوَكيلِ الحَيَّةُ (دائِرَتا `/studio/agent`
+        // و`/admin/agent`) تَقيسُ البابَ المَفتوحَ ولا يُعَدَّلُ مِلَفُّها. والافتِراضُ المُطفَأُ مُثَبَّتٌ في `StudioAgentSwitchTests`، ومَن يَحتاجُه هُنا
+        // يُسَجِّلُ `new StudioAgentSwitch(false)` بِوَسيطِ `services` (آخِرُ مُسَجَّلٍ هُوَ ما يُحقَن).
+        builder.Configuration[ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.Setting] = "true";
         ACommerce.Platform.Hosting.HostingExtensions.AddPlatformHost(builder);
         ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions.AddCustomerMarketplaceTemplate(builder.Services);
         // ما يُرَكِّبُه `Program.cs` حَولَ المُضيفَينِ ويَطلُبُه تَوقيعُ نُقطَةٍ ما — بِلا أَيِّ قَناةٍ تُرسِل: لا SMS ولا بَريد ولا نَفاذ، والدَفعُ مُزَوِّدُ نُسخَةٍ مُسَجِّل.

@@ -1,4 +1,5 @@
 @page "/admin/monitor"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StudioQueries Studio
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
@@ -31,9 +32,13 @@
                 <a class="studio-nav-item" href="/admin/fixtures">
                     <AcIcon Name="check-circle" Size="18" /> Fixtures
                 </a>
+                @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) رابِطُ الوَكيلِ لا يُرسَمُ والمِفتاحُ مُطفَأ (القاعِدَة ١٢). *@
+                @if (AgentSwitch.Enabled)
+                {
                 <a class="studio-nav-item" href="/admin/agent">
                     <AcIcon Name="message" Size="18" /> @L.Markup("admin.nav.agent")@((MarkupString)"\n                ")
                 </a>
+                }
             </nav>
             <div class="studio-sidebar-footer">
                 <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>

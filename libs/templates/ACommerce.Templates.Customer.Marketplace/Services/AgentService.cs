@@ -48,12 +48,19 @@ public sealed class AgentService
     // مِلَفّ «Studio» — مُزَوِّدُه ومِفتاحُه ونَموذَجُه مُستَقِلَّة عَن وَكيل
     // التَحليل. بِلا تَهيئَة مُسَمّاة يَسقُط إلى Agent:* القَديم فَيَبقى
     // السُلوك كَما كان.
-    public AgentService(IDocumentStore store, IAgentBackendProvider agents)
+    public AgentService(IDocumentStore store, IAgentBackendProvider agents,
+        Services.Incubator.StudioAgentSwitch? agentSwitch = null)
     {
         _backend = agents.For(AgentNames.Studio);
         _model   = agents.ModelFor(AgentNames.Studio);
         _store   = store;
+        _switch  = agentSwitch;
     }
+
+    // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) مِفتاحُ الوَكيل — والغائِبُ مُطفَأ (البِناءُ بِلا حاقِنٍ لا يُضيئُه).
+    // `IsConfigured` باقٍ بِمَعناه (خَلفِيَّةٌ مَضبوطَة) يَقرَؤُه البابُ؛ وهذا يُسأَلُ قَبلَ أَيِّ نِداءٍ أَو كِتابَة.
+    private readonly Services.Incubator.StudioAgentSwitch? _switch;
+    public bool Enabled => _switch?.Enabled ?? false;
 
     public string ProviderName => _backend.ProviderName;
     public string ModelName    => _model;
@@ -101,6 +108,8 @@ public sealed class AgentService
 
     public async Task<AgentSession> AskAsync(string userMessage, string? scopeId = null, CancellationToken ct = default)
     {
+        // المِفتاحُ مُطفَأ ⇐ لا كِتابَةَ ولا نِداء: الجَلسَةُ كَما هي (W13-1·٦).
+        if (!Enabled) return await LoadSessionAsync(scopeId, ct);
         await using var sess = _store.LightweightSession(AdminTenant);
         var id = SessionIdFor(scopeId);
         var session = await sess.LoadAsync<AgentSession>(id, ct)
@@ -115,6 +124,7 @@ public sealed class AgentService
 
     public async Task<AgentSession> ContinueAfterToolAsync(string? scopeId = null, CancellationToken ct = default)
     {
+        if (!Enabled) return await LoadSessionAsync(scopeId, ct);
         await using var sess = _store.LightweightSession(AdminTenant);
         var session = await sess.LoadAsync<AgentSession>(SessionIdFor(scopeId), ct);
         if (session is null) return new AgentSession { Id = SessionIdFor(scopeId) };
@@ -143,6 +153,7 @@ public sealed class AgentService
     // ───────────────────────── نِداء الـ Backend ─────────────────────
     private async Task CallBackendAsync(AgentSession session, CancellationToken ct)
     {
+        if (!Enabled) return;   // ‏W13-1·٦ — لا نِداءَ نَموذَجٍ والمِفتاحُ مُطفَأ، أَيّاً كانَ المُنادي.
         if (!_backend.IsConfigured)
         {
             session.Turns.Add(new AgentTurn

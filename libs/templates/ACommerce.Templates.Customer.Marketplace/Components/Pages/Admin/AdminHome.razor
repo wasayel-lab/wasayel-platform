@@ -1,4 +1,5 @@
 @page "/admin"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject NavigationManager Nav
 @inject L L
@@ -57,9 +58,13 @@
             <a class="ac-btn ac-btn-primary" href="/admin/tenants/new">
                 <AcIcon Name="plus" Size="18" /> @L.Markup("admin.home.new_tenant")@((MarkupString)"\n            ")
             </a>
+            @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) لا رابِطَ إلى الوَكيلِ والمِفتاحُ مُطفَأ. *@
+            @if (AgentSwitch.Enabled)
+            {
             <a class="ac-btn ac-btn-ghost" href="/admin/agent">
                 <AcIcon Name="message" Size="18" /> @L.Markup("admin.home.agent_cta")@((MarkupString)"\n            ")
             </a>
+            }
             @* سِجِلُّ التَدقيق — مَدخَلٌ كانَ مَفقوداً. الشاشَةُ قائِمَةٌ
                وتَرُدُّ ‏200 مُذ بُنِيَت، ولا يَربِطُ إلَيها إلّا سَطرُ
                تَنَقُّلِها هي نَفسِها؛ فَمَن لَم يَحفَظ العُنوانَ لَم

@@ -1,5 +1,6 @@
 @page "/admin/audit"
 @page "/admin/audit/{scope}"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AuditLogQueries AuditLog
@@ -33,9 +34,13 @@
                 <a class="studio-nav-item active" href="/admin/audit">
                     <AcIcon Name="list" Size="18" /> @L.Markup("admin.nav.audit")@((MarkupString)"\n                ")
                 </a>
+                @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) رابِطُ الوَكيلِ لا يُرسَمُ والمِفتاحُ مُطفَأ (القاعِدَة ١٢). *@
+                @if (AgentSwitch.Enabled)
+                {
                 <a class="studio-nav-item" href="/admin/agent">
                     <AcIcon Name="message" Size="18" /> @L.Markup("admin.nav.agent")@((MarkupString)"\n                ")
                 </a>
+                }
             </nav>
             <div class="studio-sidebar-footer">
                 <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>

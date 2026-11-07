@@ -1,4 +1,5 @@
 @page "/studio"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject Services.Incubator.StudioAuth Auth
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
@@ -27,11 +28,15 @@
         @* رابِطا `/studio/agent` (هُنا وبِطاقَتُه أَسفَلَ) لا يُرسَمانِ لِمَن لا يَفتَحُ لَه بابُ الوَكيل — `StudioAgentDoor.Opens` نَفسُه الَّذي
            تَسأَلُه الصَفحَة (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3، lens-security-2؛ القاعِدَة ١٢). وأَوَّلُ الشَريطِ بِلا فَراغٍ قَبلَه أَصلاً
            (Razor يَقُصُّه)، والبِطاقَةُ بِحيلَةِ الفَراغِ أَدناه — فَلِلمُشرِفِ الصَفحَةُ بايتاً كَما كانَت (مَقيس). *@
+        @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) ومِفتاحُ الوَكيلِ أَمامَ بابِه: مُطفَأٌ ⇐ لا رابِط، ولَو فُتِحَ البابُ لِمُشرِفٍ بِمِفتاحِ نَموذَج. *@
+        @if (AgentSwitch.Enabled)
+        {
         @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
         {
         <a class="st-btn st-btn-ghost" href="/studio/agent">
             <AcIcon Name="message" Size="14" /> @L.Markup("studio.home.agent_cta")@((MarkupString)"\n        ")
         </a>
+        }
         }
         @* روابِطُ صَفحَةِ الفِكرَةِ السِتَّةُ (هُنا خَمسَة، وفي `StudioShell` السادِس) لا تُرسَمُ بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens`
            نَفسُه الَّذي تَرسُمُ بِه `/studio/new` استِمارَتَها؛ وكانَت تُرسَمُ فَتَبلُغُ كُلُّ نَقرَةٍ «غَيرُ مُتاح» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15
@@ -65,6 +70,8 @@
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                @if (AgentSwitch.Enabled)
+                {
                 @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
                 {
                 @((MarkupString)"\n                ")<a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
@@ -77,6 +84,7 @@
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                }
                 }
             </div>
 

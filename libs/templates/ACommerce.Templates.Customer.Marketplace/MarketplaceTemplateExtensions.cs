@@ -64,6 +64,9 @@ public static class MarketplaceTemplateExtensions
         services.AddSingleton<
             ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider,
             ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
+        // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) مِفتاحُ وَكيلِ التَصميم — مُطفَأٌ ما لَم يُضَأ `Studio:Agent:Enabled`؛ ويَسأَلُه الوَكيلُ قَبلَ أَيِّ نِداء.
+        services.AddSingleton(sp => Services.Incubator.StudioAgentSwitch.From(
+            sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
 
@@ -2740,13 +2743,17 @@ public static class MarketplaceTemplateExtensions
         }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: Agent — ask ─────────────────────────────────────────
+        // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) النِقاطُ الأَربَعُ تَسأَلُ مِفتاحَ الوَكيلِ بَعدَ حارِسِ المُشرِفِ وقَبلَ أَيِّ قِراءَةٍ أَو نِداء:
+        // مُطفَأٌ ⇐ إلى الصَفحَةِ وهي تَقولُ النَصَّ المُغلَق.
         app.MapPost("/admin/agent/ask",
             async (HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             var msg = req.Form["message"].ToString().Trim();
             if (string.IsNullOrEmpty(msg))
                 return Results.Redirect("/admin/agent?err=empty#composer");
@@ -2758,12 +2765,14 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/agent/tool/{toolId}/apply",
             async (string toolId, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor exec) =>
         {
             var admin = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
             if (!admin.Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             var session = await agent.LoadSessionAsync();
             var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
             if (turn?.Tool is null)
@@ -2780,10 +2789,12 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/agent/tool/{toolId}/reject",
             async (string toolId, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             await agent.UpdateToolStatusAsync(toolId, "rejected", null);
             await agent.ContinueAfterToolAsync();
             return Results.Redirect("/admin/agent#latest");
@@ -2792,10 +2803,12 @@ public static class MarketplaceTemplateExtensions
         // ─── Admin: Agent — reset conversation ──────────────────────────
         app.MapPost("/admin/agent/reset",
             async (IDocumentStore store, Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             await agent.ResetAsync();
             return Results.Redirect("/admin/agent");
         }).DisableAntiforgery();
