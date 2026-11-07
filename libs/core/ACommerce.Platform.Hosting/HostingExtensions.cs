@@ -249,7 +249,9 @@ public static class HostingExtensions
         // مَسارَ الأُصولِ مُحَوَّلاً. وبِلا نِطاقٍ أَساسٍ مُهَيَّأٍ
         // — وهُوَ الافتِراضيُّ اليَوم — **هذا السَطرُ عَبورٌ خالِص**.
         // التَفصيلُ في ADR-022.
-        app.UseSubdomainTenantPath();
+        // ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) صارَ سَطراً واحِداً بِاسمٍ (`UsePlatformRequestFront`) يَسأَلُه
+        // المُضيفُ المُصَغَّرُ في الاختِبارِ كَما يَسأَلُه هذا المُضيف — فَما يُرَكَّبُ في أَوَّلِ الأُنبوبِ يُقاسُ بِتَركيبِه لا بِنُسخَةٍ مِنه.
+        app.UsePlatformRequestFront();
 
         // UseStaticFiles بدلاً من MapStaticAssets لأنّ الأَخير يُعلِن
         // Content-Encoding: gzip ثُمّ يُرسِل صِفر بايتات حينَ لا يَكون
@@ -301,6 +303,20 @@ public static class HostingExtensions
             opts.TenantId.AssertExists();
         });
 
+        return app;
+    }
+
+    /// <summary>
+    /// <para><b>أَوَّلُ الأُنبوبِ بَعدَ سِجِلِّ الطَلَب — ما يَقرَأُ رَأسَ الطَلَبِ وَحدَه ولا حالَةً مَخزونَة</b> (القاعِدَة ٧): الحاقِنُ
+    /// (<c>UseSubdomainTenantPath</c>، ‏ADR-022 و‏ADR-050). <b>قَبلَ <c>UseStaticFiles</c> و<c>UseRouting</c></b> كَما يُرَكِّبُه
+    /// <see cref="UsePlatformHost"/>.</para>
+    /// <para><b>ولِماذا دالَّةٌ بِاسمِها</b> (‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1): فَحصُ <c>Origin</c> لِطَلَباتِ الكِتابَةِ يُرَكَّبُ هُنا
+    /// بِجِوارِ الحاقِن، وتَوصيفُه يَقيسُ الأُنبوبَ بِهذا الاسمِ عَلى مُضيفٍ مُصَغَّرٍ حَيٍّ — فَيَبقى مِلَفُّ التَوصيفِ بِبَصمَتِه قَبلَ الفَحصِ
+    /// وبَعدَه، ولا يُقاسُ تَركيبٌ مَنسوخٌ يَنجَرِفُ عَن هذا.</para>
+    /// </summary>
+    public static IApplicationBuilder UsePlatformRequestFront(this IApplicationBuilder app)
+    {
+        app.UseSubdomainTenantPath();
         return app;
     }
 }
