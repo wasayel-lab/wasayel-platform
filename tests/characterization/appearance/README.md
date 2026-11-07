@@ -1185,3 +1185,183 @@ roleless»؛ واللَقطَةُ (‏39073 بايتاً) فيها استِما�
 |---|---|---|
 | `studio-new-form` | R2D-1 (`db2574e`) — سِمَةُ المُعَرِّف `^[a-z0-9][a-z0-9-]*$` ← `[a-z0-9][a-z0-9\-]{0,62}`: القَديمَةُ «Invalid character class» بِالعَلَمِ v فَيَتَجاهَلُها المُتَصَفِّح | 43–43 |
 | `admin-tenant-new` | R2D-1 — كَذلك في استِمارَةِ المُشرِف: `[a-z0-9][a-z0-9-]*` ← `[a-z0-9][a-z0-9\-]{0,62}` | 25–25 |
+
+### ‏2026-11-07 — تَيّارُ C2a (مُضيفُ المَتجَر، ADR-050): كُلُّ لَقطَةٍ تَتَبَدَّلُ بِكُتلَةِ السكربتِ نَفسِها، ولَقطَتا الاستِمارَتَينِ بِسِمَةِ النَمَطِ مَعَها (الموجَة ١٣ — W13-4·C2a·3/·6؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)
+
+**لِماذا**: البَندُ ٦ (`822a6b2`) جَعَلَ الخادِمَ يُرسِلُ سِياقَ المُستَأجِرِ `window.acTenant = {slug, role, hostMode, home}` في كُتلَةِ السكربتِ الَّتي تَحمِلُها
+كُلُّ صَفحَة (`App.razor`)، والكُتَلَ الثَلاثَ تَقرَؤُه بَدَلَ أَن تَستَخرِجَ السلاجَ مِن `location.pathname` — فَكُلُّ لَقطَةٍ تَتَغَيَّرُ في تِلكَ الكُتلَةِ وَحدَها. والبَندُ
+٣ (`3994952`) غَيَّرَ سِمَةَ نَمَطِ المُعَرِّفِ (وحَدَّ حَقلِ الاستوديو 63 ← 53) في الاستِمارَتَين. **والـcanonical وog:url بِلا حَرفٍ في وَضعِ المَسار** — مَقيسٌ أَدناه.
+
+**البيئَةُ مُعلَنَة** (لا Neon): قاعِدَةٌ مَحَلِّيَّةٌ جَديدَة `wasayel_w13_appear_c2tpl` بِإقلاعَينِ بِبِناءِ الرَأس `201cf7a` (البَذّاراتُ لَم يَمَسَّها التَيّار)،
+والبيئَةُ والمِلَفّاتُ الثَمانِيَةُ والمُزَوِّدُ البَديلُ كَما في القِسمِ السابِقِ حَرفاً (`drive.sh`)، وكُلُّ التِقاطٍ عَلى نُسخَةٍ مِنها (`createdb -T`)؛ ومِفتاحُ الوَكيلِ
+غَيرُ مَضبوط، **و`MultiTenancy:BaseDomain` فارِغ** (الافتِراضيّ) — فَهذا وَضعُ المَسارِ الَّذي يَجِبُ أَلّا يَتَغَيَّرَ مِنه إلّا ما قالَه البَندان.
+
+**والأَداةُ مَقيسَةٌ قَبلَ الحُكم**: «الصَفَحاتُ المُلتَقَطَة: 141» في كُلِّ جَولَة؛ والتِقاطا الرَأسِ عَلى نُسخَتَينِ **‏0 / 141 تَختَلِف** (والأَوراقُ الثَمانِ مُطابِقَة).
+**والنِسبَةُ بِشَجَرَتَينِ عَلى قاعِدَةٍ واحِدَة** (القاعِدَة ١٣): `f81840c` (آخِرُ إيداعٍ قَبلَ التَيّار، `git archive` مَبنِيّاً عَلى حِدَة) والرَأس، بِسكربتِ الرَأسِ نَفسِه ⇒
+**‏0 / 141 مُطابِقَة — وكُلُّ فَرقٍ مِن جِنسَينِ لا ثالِثَ لَهُما**: (١) في الـ141 كُلِّها الأَسطُرُ نَفسُها مِن كُتلَةِ السكربت — 21 سَطراً تَغيبُ (استِخراجُ السلاجِ
+بِـ`location.pathname.match`/`.split('/')` في الكُتَلِ الثَلاث) و18 سَطراً تَحُلُّ مَحَلَّها (`window.acTenant = {…}` وقِراءَتُه ثَلاثاً، والنِطاقُ و`logoutPath`
+ومِرشَحُ الاشتِراكاتِ ومِفتاحُ التَثبيتِ مِنه)؛ (٢) سَطرٌ واحِدٌ في `studio-new-form` (`maxlength="63"` و`[a-z0-9][a-z0-9\-]{0,62}` ← `maxlength="53"`
+و`[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,52}`) وسَطرٌ واحِدٌ في `admin-tenant-new` (النَمَطُ نَفسُه). **وصِفرُ سَطرٍ يَمَسُّ `canonical` أَو `og:url` أَو JSON-LD.**
+وقِيَمُ السِياقِ في الـ141: ‏66 بِلا مَتجَر (صَفَحاتُ المَنَصَّة)، و75 لِمَتجَرٍ بِمَسارِه (`hostMode:false`) مِنها 8 جُذور (`home:true`)، ثَلاثَةٌ مِنها بِدَور (`customer`، `host`، `vendor`).
+
+**والتَثبيتُ يَحمِلُ فَرقَ الكودِ وَحدَه** (`c2a-patch.py`): لِكُلِّ صَفحَةٍ قِطَعُ الفَرقِ بَينَ الشَجَرَتَينِ (بِسَطرَي سِياق) تُطَبَّقُ عَلى المُودَعِ نَفسِه، والقِطعَةُ الَّتي
+لا يوجَدُ سِياقُها فيه مَرَّةً واحِدَةً بِالضَبطِ تُرَدُّ ولا تُخَمَّن ⇒ «‏141 ثُبِّتَت · 126 المُودَعُ فيها = الشَجَرَةُ القَديمَة (فَصارَت الرَأسَ بايتاً) · 15 صُفوفُ «ب»
+حُمِلَ عَلَيها الفَرقُ وبَقِيَت قِيَمُ بيئَتِها · صِفرُ رَدّ». والمُودَعُ الجَديدُ ← الرَأس: **‏126 مُطابِقَة، و15 تَختَلِفُ وكُلُّها صِفرٌ بَعدَ التَطبيع** (GUID و`HH:MM`
+والتاريخ) — صُفوفُ «ب» الخَمسَ عَشرَةَ نَفسُها كَما قَبلَ التَيّار. و`compare-appearance.sh` عَلى المُودَعِ الجَديدِ والتِقاطٍ حَيٍّ عَلى نُسخَةٍ ثالِثَة: **‏141 مُقارَنَة،
+126 خَضراء، والخَمسَ عَشرَةَ صُفوفُ «ب»** (`ashare-explore-filters`، `ashare-explore`، `ashare-portal`، `ashare-role-customer`، `member-chats`، `member-deal-active`،
+`member-deal-done`، `member-deals`، `member-listings`، `member-notifications`، `member2-store-root`، `owner-app-console`، `owner-app-deals`، `owner-app-listings`،
+`studio-home-with-apps`)؛ وحَقنُ `<base href="/x">` في `landing.html` عَلى نُسخَةٍ مِن المُودَع ⇐ «✗ landing.html» زِيادَةً و125 خَضراء.
+
+**ومِفتاحُ الأَسباب**:
+
+| الرَمز | السَبَب |
+|---|---|
+| `822a6b2` | ·٦ — سِياقُ المُستَأجِرِ مِن الخادِمِ في كُتلَةِ السكربت، والكُتَلُ الثَلاثُ تَقرَؤُه (G11) |
+| `3994952` | ·٣ — نَمَطُ المُعَرِّفِ بِشَكلِ اسمِ المُضيف (`StoreHostName`) وحَدُّ الحَقلِ 53 |
+| ب | صُفوفُ البيئَةِ الخَمسَ عَشرَة: الفَرقُ مَحمولٌ عَلى المُودَعِ وقِيَمُ بيئَتِه باقِيَة |
+
+**ولِكُلِّ لَقطَةٍ سَبَبُها ومُربَّعُ فَرقِها** (أَسطُرُ المُودَعِ الجَديدِ الَّتي تَختَلِفُ عَن السابِق، أَوَّلُها–آخِرُها) — ‏141 صَفّاً:
+
+| اللَقطَة | السَبَب | مُربَّعُ الفَرق (أَسطُر) |
+|---|---|---|
+| `admin-anon` | `822a6b2` | 62–318 |
+| `admin-audit` | `822a6b2` | 80–336 |
+| `admin-fixtures` | `822a6b2` | 206–462 |
+| `admin-forbidden` | `822a6b2` | 62–318 |
+| `admin-home` | `822a6b2` | 121–377 |
+| `admin-incubator-study` | `822a6b2` | 60–316 |
+| `admin-incubator-wizard` | `822a6b2` | 59–315 |
+| `admin-incubator` | `822a6b2` | 71–327 |
+| `admin-monitor` | `822a6b2` | 109–365 |
+| `admin-tenant-anon` | `822a6b2` | 62–318 |
+| `admin-tenant-attributes` | `822a6b2` | 71–327 |
+| `admin-tenant-branding` | `822a6b2` | 88–344 |
+| `admin-tenant-categories` | `822a6b2` | 89–345 |
+| `admin-tenant-edit` | `822a6b2` | 106–362 |
+| `admin-tenant-new` | `822a6b2` · `3994952` | 25–369 |
+| `admin-tenant-pwa` | `822a6b2` | 100–356 |
+| `admin-tenant-regions` | `822a6b2` | 85–341 |
+| `admin-tenant-roles` | `822a6b2` | 155–411 |
+| `admin-tenant-theme` | `822a6b2` | 122–378 |
+| `admin-tenant-users` | `822a6b2` | 68–324 |
+| `adwar-demo-portal` | `822a6b2` | 59–315 |
+| `ashare-explore-empty` | `822a6b2` | 91–347 |
+| `ashare-explore-filters` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 153–409 |
+| `ashare-explore` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 138–394 |
+| `ashare-legal-privacy` | `822a6b2` | 86–342 |
+| `ashare-legal-returns` | `822a6b2` | 84–340 |
+| `ashare-legal-terms` | `822a6b2` | 85–341 |
+| `ashare-plans` | `822a6b2` | 76–332 |
+| `ashare-portal` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 131–387 |
+| `ashare-role-customer` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 137–393 |
+| `ashare-role-host` | `822a6b2` | 88–344 |
+| `ashare-role-vendor` | `822a6b2` | 88–344 |
+| `ejar-area-anon` | `822a6b2` | 81–337 |
+| `ejar-cart-anon` | `822a6b2` | 74–330 |
+| `ejar-chats-anon` | `822a6b2` | 74–330 |
+| `ejar-checkout-anon` | `822a6b2` | 74–330 |
+| `ejar-create-listing-anon` | `822a6b2` | 74–330 |
+| `ejar-deal-anon` | `822a6b2` | 74–330 |
+| `ejar-deals-anon` | `822a6b2` | 74–330 |
+| `ejar-drivers` | `822a6b2` | 77–333 |
+| `ejar-favorites-anon` | `822a6b2` | 74–330 |
+| `ejar-listing` | `822a6b2` | 148–404 |
+| `ejar-listings-anon` | `822a6b2` | 74–330 |
+| `ejar-login-err-approve` | `822a6b2` | 64–320 |
+| `ejar-login-err-code` | `822a6b2` | 64–320 |
+| `ejar-login-err-email-bad` | `822a6b2` | 64–320 |
+| `ejar-login-err-email-req` | `822a6b2` | 64–320 |
+| `ejar-login-err-nid` | `822a6b2` | 64–320 |
+| `ejar-login-err-phone` | `822a6b2` | 64–320 |
+| `ejar-login-err-send` | `822a6b2` | 64–320 |
+| `ejar-login-verify` | `822a6b2` | 71–327 |
+| `ejar-login` | `822a6b2` | 64–320 |
+| `ejar-offers-anon` | `822a6b2` | 74–330 |
+| `ejar-onboarding-anon` | `822a6b2` | 74–330 |
+| `ejar-role-anon` | `822a6b2` | 74–330 |
+| `ejar-vendor-missing` | `822a6b2` | 74–330 |
+| `ejar-vendor` | `822a6b2` | 78–334 |
+| `landing` | `822a6b2` | 95–351 |
+| `login-unknown` | `822a6b2` | 59–315 |
+| `member-area` | `822a6b2` | 92–348 |
+| `member-cart` | `822a6b2` | 94–350 |
+| `member-chat` | `822a6b2` | 86–342 |
+| `member-chats` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 82–338 |
+| `member-checkout-confirm-card` | `822a6b2` | 94–350 |
+| `member-checkout-confirm-cash` | `822a6b2` | 94–350 |
+| `member-checkout-pay` | `822a6b2` | 87–343 |
+| `member-checkout` | `822a6b2` | 87–343 |
+| `member-create-listing-cat` | `822a6b2` | 103–359 |
+| `member-create-listing-invalid` | `822a6b2` | 98–354 |
+| `member-create-listing` | `822a6b2` | 98–354 |
+| `member-deal-active` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 121–377 |
+| `member-deal-done` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 128–384 |
+| `member-deal-missing` | `822a6b2` | 78–334 |
+| `member-deal-waiting` | `822a6b2` | 123–379 |
+| `member-deals` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 95–351 |
+| `member-favorites` | `822a6b2` | 78–334 |
+| `member-listings` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 81–337 |
+| `member-login` | `822a6b2` | 72–328 |
+| `member-manage` | `822a6b2` | 78–334 |
+| `member-notifications` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 102–358 |
+| `member-offers` | `822a6b2` | 78–334 |
+| `member-onboarding` | `822a6b2` | 78–334 |
+| `member-role` | `822a6b2` | 88–344 |
+| `member2-checkout-empty` | `822a6b2` | 78–334 |
+| `member2-store-root` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 88–344 |
+| `order-drivers` | `822a6b2` | 81–337 |
+| `owner-app-attributes` | `822a6b2` | 140–396 |
+| `owner-app-console` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 117–373 |
+| `owner-app-deal-detail` | `822a6b2` | 111–367 |
+| `owner-app-deals` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 102–358 |
+| `owner-app-home` | `822a6b2` | 151–407 |
+| `owner-app-listings` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 182–438 |
+| `owner-app-pwa` | `822a6b2` | 108–364 |
+| `platform-contact` | `822a6b2` | 73–329 |
+| `platform-pricing` | `822a6b2` | 65–321 |
+| `platform-privacy-en` | `822a6b2` | 124–380 |
+| `platform-privacy` | `822a6b2` | 124–380 |
+| `platform-refunds-en` | `822a6b2` | 94–350 |
+| `platform-refunds` | `822a6b2` | 94–350 |
+| `platform-terms-en` | `822a6b2` | 119–375 |
+| `platform-terms-unknown-lang` | `822a6b2` | 59–315 |
+| `platform-terms` | `822a6b2` | 119–375 |
+| `roleless-store-root` | `822a6b2` | 90–346 |
+| `studio-app-attributes` | `822a6b2` | 116–372 |
+| `studio-app-branding` | `822a6b2` | 99–355 |
+| `studio-app-categories` | `822a6b2` | 102–358 |
+| `studio-app-console` | `822a6b2` | 100–356 |
+| `studio-app-deals` | `822a6b2` | 88–344 |
+| `studio-app-listings` | `822a6b2` | 88–344 |
+| `studio-app-pwa` | `822a6b2` | 116–372 |
+| `studio-app-regions` | `822a6b2` | 99–355 |
+| `studio-app-roles` | `822a6b2` | 109–365 |
+| `studio-app-ticket-missing` | `822a6b2` | 78–334 |
+| `studio-app-ticket` | `822a6b2` | 88–344 |
+| `studio-app-tickets` | `822a6b2` | 89–345 |
+| `studio-app` | `822a6b2` | 151–407 |
+| `studio-auth-verify` | `822a6b2` | 64–320 |
+| `studio-auth` | `822a6b2` | 62–318 |
+| `studio-billing` | `822a6b2` | 90–346 |
+| `studio-consent` | `822a6b2` | 78–334 |
+| `studio-home-with-apps` | `822a6b2` · ب (الفَرقُ مَحمولٌ عَلى المُودَع) | 130–386 |
+| `studio-home` | `822a6b2` | 95–351 |
+| `studio-new-form` | `822a6b2` · `3994952` | 43–343 |
+| `studio-study-print` | `822a6b2` | 115–371 |
+| `studio-study` | `822a6b2` | 110–366 |
+| `studio-upgrade-analyze` | `822a6b2` | 95–351 |
+| `studio-upgrade-build` | `822a6b2` | 97–353 |
+| `studio-upgrade-export` | `822a6b2` | 95–351 |
+| `studio-upgrade-feature` | `822a6b2` | 97–353 |
+| `studio-upgrade-refine` | `822a6b2` | 95–351 |
+| `theme-demo-city` | `822a6b2` | 88–344 |
+| `theme-demo-listing-offers` | `822a6b2` | 132–388 |
+| `theme-demo-login-verify` | `822a6b2` | 74–330 |
+| `theme-demo-login` | `822a6b2` | 64–320 |
+| `theme-demo-manage-anon` | `822a6b2` | 74–330 |
+| `theme-demo-portal` | `822a6b2` | 100–356 |
+| `user-listing-offers` | `822a6b2` | 155–411 |
+| `user-listing-own` | `822a6b2` | 138–394 |
+| `user-manage` | `822a6b2` | 78–334 |
+| `user-notifications` | `822a6b2` | 96–352 |
+| `user-searches` | `822a6b2` | 90–346 |

@@ -61,13 +61,13 @@
             );
         };
 
+        window.acTenant = {"slug":"ejar","role":"","hostMode":false,"home":false};
+
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
         (function () {
-            var match = location.pathname.match(/^\/([^\/]+)/);
-            if (!match) return;
-            var slug = match[1];
-            if (slug === 'admin' || slug === 'api') return;
+            var slug = (window.acTenant || {}).slug;
+            if (!slug) return;
 
             async function refresh() {
                 try {
@@ -117,22 +117,19 @@
         // /{slug}/r/{role}/. تَجاهَل مَسارات /admin و /api.
         (function () {
             if (!('serviceWorker' in navigator)) return;
-            var path = location.pathname;
-            if (path.startsWith('/admin') || path.startsWith('/api')) return;
-            var seg = path.split('/').filter(Boolean);
-            if (seg.length === 0) return;   // home page — no PWA
-            var slug = seg[0];
-            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ لِـ legacy.
-            var scope = '/' + slug + '/';
-            if (seg.length >= 3 && seg[1] === 'r') {
-                scope = '/' + slug + '/r/' + seg[2] + '/';
-            }
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة — لا PWA
+            var slug = t.slug;
+            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
+            var store = t.hostMode ? '' : '/' + slug;
+            var scope = store + (t.role ? '/r/' + t.role : '') + '/';
             // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
             // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
             // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
             // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
             // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
-            var logoutPath = new RegExp('^/' + slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/auth/logout$');
+            var esc = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var logoutPath = new RegExp('^' + (t.hostMode ? '(?:/' + esc + ')?' : '/' + esc) + '/auth/logout$');
             document.addEventListener('submit', function (e) {
                 var form = e.target;
                 if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
@@ -166,7 +163,7 @@
                 navigator.serviceWorker.getRegistrations()
                     .then(function (regs) {
                         var mine = regs.filter(function (r) {
-                            try { return new URL(r.scope).pathname.indexOf('/' + slug + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                            try { return new URL(r.scope).pathname.indexOf(store + '/') === 0 && r.pushManager; } catch (_) { return false; }
                         });
                         return Promise.all(mine.map(function (r) {
                             return r.pushManager.getSubscription().then(function (sub) {
@@ -296,13 +293,14 @@
             // launcher بِلا /r/. لَو السيرفر رَكَّب pwaPath = null لَن
             // يَكون عُنصُر #ac-install-banner مَوجوداً — هذا فَحص ثانوي
             // لِلسَلامَة.
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة
             var p = location.pathname;
             var isTransient = /\/(login|verify|terms|logout|auth)(\/|$|\?)/.test(p)
                            || p.startsWith('/admin');
             if (isTransient) return;
-            var segs = p.split('/').filter(Boolean);
-            var hasRole = segs.length >= 3 && segs[1] === 'r';
-            if (segs.length <= 1 && !hasRole) return;   // launcher أَو جَذر
+            var hasRole = !!t.role;
+            if (t.home && !hasRole) return;   // launcher أَو جَذر
 
             // Chrome لا يَعرِض «تَثبيت» إلّا عَلى https أَو localhost.
             var isLocalhost = /^(localhost|127\.|\[::1\])/.test(location.hostname)
@@ -319,8 +317,7 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = hasRole ? '/' + segs[0] + '/r/' + segs[2] + '/'
-                                   : '/' + segs[0] + '/';
+            var scopeKey = (t.hostMode ? '' : '/' + t.slug) + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }
