@@ -3002,7 +3002,6 @@ public static class MarketplaceTemplateExtensions
             Guid id,
             Services.Incubator.StudioAuth auth,
             Services.Queries.StudioQueries studio,
-            Services.Incubator.StudioTierService tier,
             Services.Incubator.FeasibilityExcelExporter exporter) =>
         {
             auth.Load();
@@ -3013,13 +3012,8 @@ public static class MarketplaceTemplateExtensions
             if (session.AnalysisJson is null)
                 return Results.Redirect($"/studio/s/{id}");
 
-            // ‏`Export` لا `refine`: هذا **حَجبُ ميزَةٍ لا خَرقُ حِصَّة**،
-            // وكانَت الشاشَةُ تَقول «بَلَغتَ حَدَّ التَحسينات» لِمَن لَم
-            // يَبلُغه — سَطرٌ يَكذِب.
-            var (_, limits) = await tier.ReadWithLimitsAsync(auth.UserId!.Value);
-            if (!limits.AllowExport)
-                return Results.Redirect(
-                    $"/studio/s/{id}?upgrade={Services.Incubator.StudioUpgradeReason.Export}");
+            // ‏(‏2026-11-07، W13-1·٧ — ADR-049 §٢ و§٧) كانَ هُنا حَجبُ «ميزَةِ التَصدير» بِـ`AllowExport`. والدِراسَةُ القَديمَةُ بَياناتُ صاحِبِها،
+            // تُصَدَّرُ لَه قِراءَةً بِلا باقَة — والرَمزُ `export` لا تَكتُبُه بَوّابَةٌ بَعدَ اليَوم، والحَقلُ يَتيمٌ حَتّى ADR التَسعير.
 
             var bytes = exporter.Export(session);
             return Results.File(bytes,

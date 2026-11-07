@@ -100,10 +100,10 @@
        كُلِّ حَدٍّ في `StudioTier.cs`. *@
     IEnumerable<string> BenefitsFor(TierLimits t)
     {
-        yield return L.Format("upgrade.benefit.analyses", t.AnalysesPerMonth);
-        yield return L.Format("upgrade.benefit.refines", t.RefinesPerMonth);
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٧ — ADR-049 §٧؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) المَتاجِرُ وَحدَها تُعرَضُ مِيزَة: التَحاليلُ والتَحسيناتُ لا بابَ لَها
+        // في الرِحلَة، وتَصديرُ الدِراسَةِ القَديمَةِ بَياناتُ صاحِبِها لا ميزَةُ باقَة. والحُقولُ يَتيمَةٌ حَتّى ADR التَسعير (W13-2) — `TierOrphanFieldsTests`.
+        // ورَسائِلُ الأَسبابِ الثَلاثَةِ أَدناه في `TitleFor`/`MessageFor` باقِيَةٌ في المُعجَمِ ولا تَكتُبُها بَوّابَةٌ بَعدَ اليَوم — مُثَبَّتَةٌ يَتيمَةً هُناك.
         yield return L.Format("upgrade.benefit.stores", t.StoresMax);
-        if (t.AllowExport)         yield return L["upgrade.benefit.export"];
         // «أَنماط مُخَصَّصَة» سُحِبَت — لا مَسار لَها. التَفصيل في StudioTier.cs.
     }
 }

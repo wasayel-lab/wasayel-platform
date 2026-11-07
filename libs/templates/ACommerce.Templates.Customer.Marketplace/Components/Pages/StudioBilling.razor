@@ -49,9 +49,8 @@
                 {
                     var l = TierCatalog.For(currentTier);
                     <span style="color:var(--st-muted);font-size:13px;display:block;margin-top:6px;">
+                        @* ‏W13-1·٧ (ADR-049 §٧): المَتاجِرُ وَحدَها — التَحاليلُ والتَحسيناتُ خَرَجَت مِن الرِحلَة. *@
                         @((MarkupString)"\n                        ")@L.Markup("studio.billing.consumed")
-                        @user.AnalysesUsed / @l.AnalysesPerMonth @L.Markup("studio.billing.unit_analyses") ·
-                        @user.RefinesUsed / @l.RefinesPerMonth @L.Markup("studio.billing.unit_refines") ·
                         @user.StoresBuilt / @l.StoresMax @L.Markup("studio.billing.unit_apps")@((MarkupString)"\n                    ")
                     </span>
                 }
@@ -84,10 +83,7 @@
                         }
                     </div>
                     <ul style="margin:0 0 16px;padding-inline-start:18px;font-size:14px;line-height:1.9;color:var(--st-ink-700);">
-                        <li>@t.AnalysesPerMonth @L.Markup("studio.billing.per_analyses")</li>
-                        <li>@t.RefinesPerMonth @L.Markup("studio.billing.per_refines")</li>
                         <li>@t.StoresMax @L.Markup("studio.billing.per_apps")</li>
-                        @if (t.AllowExport)        { <li>@L.Markup("studio.billing.export")</li> }
                         @* «أَنماط مُخَصَّصَة» سُحِبَت مِن البَيع: لا مَسار
                            يَختار فيه المُستَخدِم نَمَط تَطبيقِه أَصلاً — النَمَط
                            تَستَنبِطُه قَواعِد PatternMatcher مِن إجابات الاكتِشاف

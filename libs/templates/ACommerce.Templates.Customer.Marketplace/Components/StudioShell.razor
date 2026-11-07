@@ -118,7 +118,8 @@
         {
             var (user, l) = await Tier.ReadWithLimitsAsync(Auth.UserId!.Value);
             limits = l;
-            usageSummary = L.Format("studio.usage.summary", user.AnalysesUsed, Cap(l.AnalysesPerMonth), user.StoresBuilt, Cap(l.StoresMax));
+            // ‏W13-1·٧ (ADR-049 §٧): سَطرُ الاستِهلاكِ مَتاجِرُ فَقَط — لا تَحاليلَ في الرِحلَة.
+            usageSummary = L.Format("studio.usage.stores", user.StoresBuilt, Cap(l.StoresMax));
         }
         catch { /* مُستَخدِم لَم يُحَمَّل بَعد — تَجاهَل */ }
     }
