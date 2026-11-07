@@ -17,6 +17,7 @@
 #   DIRECT=1 SCHEME=https PORT= DOMAIN=<R> STORE=<مَتجَر> OTHER=<آخَر> ./scripts/prove-store-hosts.sh   # بَعدَ النَشر: كُلُّ مُضيفٍ بِـDNS لا بِرَأسِ Host
 #   STORE=<مَتجَر> MANAGER_PHONE=<هاتِفُ مُديرِه> ./scripts/prove-store-hosts.sh   # ومَعَه المَجموعَةُ ٦: مُديرُ المَتجَرِ يَدخُلُ عَلى مُضيفِه ويَفتَحُ بِطاقَةَ /manage
 #   STORE=<مَتجَر> ROLE=vendor ROLE_PHONE=<هاتِف> ./scripts/prove-store-hosts.sh    # ومَعَه المَجموعَةُ ١٠: جَلسَةُ الدَورِ لا تُغادِرُ مُضيفَها (‏C2b-R1، تَكتُبُ دُخولاً)
+#   ALLOWED=1 ./scripts/prove-store-hosts.sh   # خادِمٌ شُغِّلَ بِـAllowedHosts="<domain>;*.<domain>" — ومَعَه المَجموعَةُ ١٤ (C2c، ‏ADR-050 §١٥)
 #
 #  ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المَجموعَةُ ٦ تَكتُبُ دُخولاً** (تَحَدّي الرَمزِ وجَلسَتُه) فَلا تَجري إلّا
 #  بِـ`MANAGER_PHONE` — هاتِفُ مُستَخدِمٍ لَه `tenant.manage` في `STORE` — وبِرَمزِ المُحاكي `DEV_CODE` (Development وَحدَه)؛ وبِلا هاتِفٍ تُطبَعُ «لَم تُفحَص» ولا تُعَدّ.
@@ -39,6 +40,8 @@ ROLE_ABSENT="${ROLE_ABSENT:-driver}" # دَورٌ مِن الكَتالوجِ ل
 ROLE_PHONE="${ROLE_PHONE:-}"       # هاتِفٌ يَدخُلُ بِدَورِ ROLE (بِرَمزِ المُحاكي) — يُشَغِّلُ المَجموعَةَ ١٠؛ يَكتُبُ دُخولاً ومُستَخدِماً إن لَم يَكُن (C2b-R1)
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
+ORIGIN=""                         # رَأسُ Origin يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ١٢ وَحدَها (W13-4·C2c·1)
+ALLOWED="${ALLOWED:-0}"           # 1 = الخادِمُ بِـAllowedHosts="$DOMAIN;*.$DOMAIN" — يُشَغِّلُ المَجموعَةَ ١٤ (W13-4·C2c·3)
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
 ADDR="$SCHEME://$(hp 127.0.0.1)"
 S="$(hp "$STORE.$DOMAIN")"        # مُضيفُ المَتجَر
@@ -57,6 +60,7 @@ row() {
   local args=(-s -m 20 -o "$out" -w '%{http_code}|%{redirect_url}' "${verb[@]}" -H "Host: $host")
   local jar=(); [ -n "$JAR" ] && jar=(-b "$JAR"); args+=("${jar[@]}")
   [ -n "$REF" ] && args+=(-H "Referer: $REF")
+  [ -n "$ORIGIN" ] && args+=(-H "Origin: $ORIGIN")
   [ "$method" = POST ] && args+=(-H 'Content-Type: application/x-www-form-urlencoded' --data '')
   # ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن رُؤوسِ الجَوابِ نَفسِه (`-D`) لا مِن طَلَبٍ ثانٍ: الطَلَبُ
   # الثاني كانَ بِلا جِسمِ الـPOST ولا Referer، فَلا يَقيسُ وِجهَةَ ما أُرسِل. ووِجهَةٌ تَنتَهي بِـ* تُقارَنُ بادِئَةً (لِما بَعدَ ? مِن رَمزِ رَفضٍ يَختَلِفُ بِقَناةِ المَتجَر).
@@ -320,6 +324,72 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
   rm -f "$B"
 else
   echo "  – لَم تُفحَص: ROLE أَو ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
+fi
+
+# ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **طَلَبُ الكِتابَةِ مِن أَصلٍ آخَرَ يُرَدُّ 403** (`CrossOriginWriteGate`): بابُ دُخولِ الجَوّالِ بِجَوّالٍ
+# فارِغٍ يُحَوِّلُ قَبلَ أَيِّ كِتابَة (المَجموعَةُ ٧)، فَالـ302 يَعني أَنّ الطَلَبَ بَلَغَ البابَ والـ403 أَنّ الفَحصَ رَدَّه. ونُقطَةُ إشعارِ البَوّابَةِ مُستَثناةٌ بِاسمِها: تَبلُغُ
+# مُعالِجَها (404 «لا سِرَّ لِهذا المَتجَر» — لا يُقرَأُ جِسمٌ ولا يُكتَبُ شَيء) بِأَصلِ مُزَوِّد. **لا يَكتُبُ شَيئاً.**
+echo "١٢) طَلَبُ الكِتابَةِ مِن أَصلٍ آخَرَ يُرَدّ، ومِن أَصلِه يَبلُغُ بابَه (C2c·1)"
+ORIGIN="$SCHEME://$S";                             row POST "$S" "/auth/phone/login" 302 "/login?*"
+ORIGIN="";                                         row POST "$S" "/auth/phone/login" 302 "/login?*"
+ORIGIN="$SCHEME://$(hp "$OTHER.$DOMAIN")";         row POST "$S" "/auth/phone/login" 403
+ORIGIN="$SCHEME://$R";                             row POST "$S" "/auth/phone/login" 403
+ORIGIN="null";                                     row POST "$S" "/auth/phone/login" 403
+ORIGIN="$SCHEME://$R";                             row POST "$R" "/$STORE/auth/phone/login" 302 "/$STORE/login?*"
+ORIGIN="https://evil.example";                     row POST "$R" "/$STORE/auth/phone/login" 403
+ORIGIN="$SCHEME://$S";                             row POST "$R" "/$STORE/auth/phone/login" 403
+ORIGIN="https://api.moyasar.com";                  row POST "$R" "/$STORE/payments/notify" 404
+if [ -n "$ROLE" ]; then
+ORIGIN="$SCHEME://$S";                             row POST "$RH" "/auth/phone/login" 403
+ORIGIN="$SCHEME://$RH";                            row POST "$RH" "/auth/phone/login" 302 "/login?*"
+fi
+ORIGIN=""
+
+# ‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **كَعكاتُ الجَلسَةِ عَلى HTTPS بِالبادِئَةِ `__Host-`**: مَحَلِّيّاً يُقالُ HTTPS بِرَأسِ
+# `X-Forwarded-Proto: https` — والوَسيطُ يُصَدِّقُه مِن أَيِّ نِدٍّ (`KnownProxies` فارِغ؛ وهي عَينُ ما يُرسِلُه Cloudflare وFly، ولِذلك يُقفَلُ الأَصلُ عَلى Cloudflare — DEPLOY
+# §٢·ي). العُضوُ يَدخُلُ بِدَورِه عَلى مُضيفِ المَتجَر: كُلُّ `Set-Cookie` لِلمَتجَرِ `__Host-` بِـ`Secure` و`Path=/` وبِلا `Domain`؛ وصَفحَةُ `/me` بِتِلكَ الكَعكاتِ داخِلَة،
+# وبِالقيَمِ نَفسِها تَحتَ الاسمِ القَديمِ (ما يَزرَعُه شَقيقٌ بِـ`Domain=R`) خارِجَة. **تَكتُبُ دُخولاً** فَلا تَجري إلّا بِـ`ROLE_PHONE`.
+echo "١٣) كَعكاتُ الجَلسَةِ عَلى HTTPS بِالبادِئَةِ __Host-، والاسمُ القَديمُ لا يُقرَأ (C2c·2)"
+if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
+  hs() { # hs <path> <out-headers> [curl…] — طَلَبٌ عَلى مُضيفِ المَتجَرِ بِـHTTPS المُمَرَّر؛ يَطبَعُ الرَمز
+    local path="$1" head="$2"; shift 2
+    curl -s -m 20 -o "$TMP/hsbody" -D "$head" -w '%{http_code}' -H "Host: $S" -H 'X-Forwarded-Proto: https' "$@" "$(url "$S" "$path")" || echo 000
+  }
+  tick() { # tick <ok:0|1> <label> <detail>
+    checked=$((checked + 1))
+    if [ "$1" = 1 ]; then printf '  ✓ %-60s %s\n' "$2" "$3"; else failed=$((failed + 1)); printf '  ✗ %-60s %s\n' "$2" "$3"; fi
+  }
+  c1="$(hs /auth/phone/login "$TMP/h1" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE")"
+  c2="$(hs /auth/phone/verify "$TMP/h2" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE")"
+  setc="$(tr -d '\r' < "$TMP/h2" | sed -n 's/^[Ss]et-[Cc]ookie: //p' | grep -E "acommerce\.auth\.$STORE" || true)"
+  total="$(printf '%s\n' "$setc" | grep -c . || true)"
+  good="$(printf '%s\n' "$setc" | grep -E "^__Host-\.acommerce\.auth\.$STORE[^=]*=" | grep -i '; secure' | grep -i '; path=/' | grep -vic '; domain=' || true)"
+  tick "$([ "$c1" = 302 ] && [ "$c2" = 302 ] && [ "$total" -ge 2 ] && [ "$good" = "$total" ] && echo 1 || echo 0)" \
+       "دُخولٌ بِـ$ROLE عَلى $S بِـHTTPS: كُلُّ Set-Cookie __Host- بِشُروطِها" "$c1 ← $c2 · $good مِن $total"
+  pairs="$(printf '%s\n' "$setc" | sed 's/;.*//' | paste -sd';' - | sed 's/;/; /g')"
+  legacy="$(printf '%s' "$pairs" | sed 's/__Host-//g')"
+  for v in "with:$pairs" "legacy:$legacy"; do
+    kind="${v%%:*}" cookie="${v#*:}"
+    code="$(hs /me "$TMP/h3" -H "Cookie: $cookie")"
+    if [ "$code" = 200 ] && grep -qF "\"slug\":\"$STORE\"" "$TMP/hsbody" && ! grep -qE 'href="[^"]*/login(\?[^"]*)?"' "$TMP/hsbody"; then st=in; else st=out; fi
+    if [ "$kind" = with ]; then tick "$([ "$st" = in ] && echo 1 || echo 0)" "/me بِكَعكاتِ __Host- عَلى HTTPS ← داخِل" "$code · $st"
+    else tick "$([ "$st" = out ] && echo 1 || echo 0)" "/me بِالقيَمِ نَفسِها تَحتَ الاسمِ القَديم ← خارِج" "$code · $st"; fi
+  done
+else
+  echo "  – لَم تُفحَص: ROLE أَو ROLE_PHONE غائِب (هاتِفٌ يَدخُلُ بِدَورِ ROLE، وDevelopment لِرَمزِ المُحاكي)"
+fi
+
+# ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الرابِعَة · W13-4·C2c·3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **`AllowedHosts=R;*.R` يُقاسُ قَبلَ أَن يُضبَط** (A2 W18 — دَعمُ
+# الـwildcard لَم يَكُن في النَصِّ المَجلوب): خادِمٌ شُغِّلَ بِـ`AllowedHosts="$DOMAIN;*.$DOMAIN"` يُجيبُ الجَذرَ ومُضيفَ المَتجَرِ ومُضيفَ الدَور، ويَرُدُّ 400 لِمُضيفٍ
+# خارِجَ النِطاقِ ولِعُنوانِ IP — **ومِنه فَحصُ صِحَّةٍ يُنادي بِعُنوانِ IP** (يُقالُ في DEPLOY). لا يَكتُبُ شَيئاً.
+if [ "$ALLOWED" = 1 ]; then
+echo "١٤) AllowedHosts=$DOMAIN;*.$DOMAIN — النِطاقُ ومُضيفاتُه تُجاب، وما سِواها 400 (C2c·3)"
+row GET  "$R" "/health"                  200
+row GET  "$S" "/"                        200 - "\"slug\":\"$STORE\""
+[ -n "$ROLE" ] && row GET "$RH" "/"      200 - "\"slug\":\"$STORE\""
+row GET  "$(hp "evil.example")" "/health" 400
+row GET  "$(hp "127.0.0.1")" "/health"   400
+row GET  "$(hp "$DOMAIN.evil.example")" "/health" 400
 fi
 
 echo
