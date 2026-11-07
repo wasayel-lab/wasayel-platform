@@ -19,11 +19,13 @@ public class TierOrphanFieldsTests(ITestOutputHelper output)
     private const string Template = "libs/templates/ACommerce.Templates.Customer.Marketplace";
 
     /// <summary>اليَتامى — اسمٌ ومَوضِعُ تَعريفِه. <b>شَرطُ رَفعِ القائِمَةِ كُلِّها: ADR التَسعير (W13-2)</b>، يُعيدُ تَشكيلَ الدَرَجاتِ بِرَوافِعِ المالِك.</summary>
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) خَرَجَ مِنها ثَلاثَة: <c>AnalysesPerMonth</c> و<c>RefinesPerMonth</c>
+    /// و<c>AllowExport</c> — لَيسَت بِلا قارِئٍ في وَقتِ التَشغيل: <c>TierCatalog.Exceeds</c> يَقرَؤُها، ويُناديه <c>NextAbove</c> (سُلَّمُ نافِذَةِ التَرقِيَةِ في كُلِّ
+    /// رَسم) و<c>StudioTierRepair.IsStuck</c> (مَن يُعيدُه <c>scripts/repair-studio-tier.cs</c> إلى المَجّانِيَّة). والماسِحُ لا يَراهُما: يَستَثني مِلَفَّ الدَرَجاتِ
+    /// ولا يَقرَأُ <c>scripts/</c>. مَقيسٌ بِالحَقنِ في تَقريرِ العَدَسَة: <c>growth.AnalysesPerMonth</c> 10 ← 50 أَحمَرَ صَفَّينِ في <c>StudioTierRepairTests</c> و<c>UpgradeLadderTests</c>
+    /// وبَقِيَت هذِه القائِمَةُ خَضراء. فَصارَت مُدخَلاتِ السُلَّمِ والإصلاحِ بِأَسمائِها في <see cref="LadderAndRepairInputsUntilThePricingAdr"/> — والقائِمَةُ تَقَلَّصَت.</remarks>
     internal static readonly (string Member, string DeclaredIn)[] OrphanedUntilThePricingAdr =
     [
-        ("AnalysesPerMonth", "StudioTier.cs"),
-        ("RefinesPerMonth", "StudioTier.cs"),
-        ("AllowExport", "StudioTier.cs"),
         ("AnalysesUsed", "StudioUser.cs"),
         ("RefinesUsed", "StudioUser.cs"),
         ("CheckAnalyzeAsync", "StudioTier.cs"),
@@ -85,8 +87,46 @@ public class TierOrphanFieldsTests(ITestOutputHelper output)
     {
         output.WriteLine($"يَتامى الدَرَجاتِ حَتّى ADR التَسعير (W13-2): {OrphanedUntilThePricingAdr.Length} — "
             + string.Join("، ", OrphanedUntilThePricingAdr.Select(o => o.Member)));
-        Assert.True(OrphanedUntilThePricingAdr.Length <= 12, "القائِمَةُ نَمَت — يَتيمٌ جَديدٌ يُقَرَّرُ في مُراجَعَةٍ لا يُضافُ صامِتاً.");
+        Assert.True(OrphanedUntilThePricingAdr.Length <= 9, "القائِمَةُ نَمَت — يَتيمٌ جَديدٌ يُقَرَّرُ في مُراجَعَةٍ لا يُضافُ صامِتاً.");
         Assert.Equal(OrphanedUntilThePricingAdr.Length, OrphanedUntilThePricingAdr.Select(o => o.Member).Distinct().Count());
+    }
+
+    // ─── حُقولٌ لا تُعرَضُ ولا تُفرَض، ويَقرَؤُها السُلَّمُ والإصلاح (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-1) ──────────────────────────────────────
+    //
+    // **شَرطُ رَفعِها ADR التَسعير (W13-2) — ومَعَه قَرارٌ في `Exceeds`/`IsStuck`**: يَومَ يُعادُ تَشكيلُ `TierLimits` يُقرَّرُ مَعَه ما يَقرَؤُه السُلَّمُ
+    // (أَيُّ دَرَجَةٍ تُعرَضُ تَرقِيَةً) وما يَقرَؤُه الإصلاحُ (مَن يُعادُ إلى المَجّانِيَّة) — وإلّا غَيَّرَ حَذفُ «يَتيمٍ» السُلَّمَ والإصلاحَ صامِتَين.
+
+    internal static readonly string[] LadderAndRepairInputsUntilThePricingAdr = ["AnalysesPerMonth", "RefinesPerMonth", "AllowExport"];
+
+    public static TheoryData<string> LadderInputs() => new(LadderAndRepairInputsUntilThePricingAdr);
+
+    private static string Code(params string[] path)
+        => WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine([ThemeZeroEquivalenceTests.RepoRoot, Template, .. path])));
+
+    private static string ExceedsBody()
+    {
+        var tier = Code("Services", "Incubator", "StudioTier.cs");
+        var exceeds = tier[tier.IndexOf("public static bool Exceeds(", StringComparison.Ordinal)..];
+        return exceeds[..exceeds.IndexOf(';')];
+    }
+
+    [Theory]
+    [MemberData(nameof(LadderInputs))]
+    public void A_tier_field_shown_by_no_page_is_read_by_Exceeds_until_the_pricing_adr(string field)
+    {
+        output.WriteLine($"{field} في Exceeds: {ExceedsBody().Contains("candidate." + field, StringComparison.Ordinal)}");
+        Assert.Contains("candidate." + field, ExceedsBody(), StringComparison.Ordinal);
+        Assert.DoesNotContain(field, OrphanedUntilThePricingAdr.Select(o => o.Member));
+    }
+
+    [Fact]
+    public void Exceeds_drives_the_upgrade_ladder_and_the_tier_repair()
+    {
+        var tier = Code("Services", "Incubator", "StudioTier.cs");
+        var nextAbove = tier[tier.IndexOf("public static TierLimits? NextAbove(", StringComparison.Ordinal)..];
+        Assert.Equal(3, LadderAndRepairInputsUntilThePricingAdr.Length);
+        Assert.Contains("Exceeds(t, current)", nextAbove, StringComparison.Ordinal);
+        Assert.Contains("TierCatalog.Exceeds(", Code("Services", "Incubator", "StudioTierRepair.cs"), StringComparison.Ordinal);
     }
 
     // ─── ونُصوصُ الأَسبابِ المُتَقاعِدَةِ في القامُوس — يَتيمَةٌ مُثَبَّتَةٌ بِشَرطِ الرَفعِ نَفسِه (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1) ──────────────────────
