@@ -1163,7 +1163,11 @@ public sealed class AgentToolExecutor
                 // سَقف ٢٥٦ كيلوبايت بَعد فَكّ base64 (نَحسِبُه تَقريباً بِـ length * 3/4).
                 if (iconUrl.Length > 350_000)
                     return (false, "الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.");
-                role.PwaIconDataUrl = iconUrl;
+                // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1) PNG أَو WebP بِبايتاتِهِما وَحدَهُما — كانَ أَيُّ data:image/… يُخزَن، ومِنه SVG بِسكربت.
+                // والنَصُّ نَصُّ رَمزِ النَوعِ في القاموسِ الَّذي تَقولُه صَفحَتا الحِفظ.
+                if (TenantConfig.PwaSaveService.RasterDataUrl(iconUrl) is not { } raster)
+                    return (false, LocaleCatalog.Text(LocaleCatalog.Arabic, "studio.app_pwa.err_icon_type"));
+                role.PwaIconDataUrl = raster;
                 changed.Add("الأَيقونَة");
             }
         }

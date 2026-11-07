@@ -1947,12 +1947,12 @@ public static class MarketplaceTemplateExtensions
         // مِن اسم الدَور (أَو إيموجي الدَور إن كانَ مَضبوطاً). إذا كانَ
         // المُصَمِّم رَفَعَ أَيقونَة مُخَصَّصَة (Role.PwaIconUrl) نُحَوِّل لَها.
         app.MapGet("/api/{slug}/icon.svg", async (
-            string slug, IDocumentStore store) =>
-            await BuildIconAsync(slug, role: null, store));
+            string slug, IDocumentStore store, HttpResponse res) =>
+            await BuildIconAsync(slug, role: null, store, res));
 
         app.MapGet("/api/{slug}/r/{role}/icon.svg", async (
-            string slug, string role, IDocumentStore store) =>
-            await BuildIconAsync(slug, role, store));
+            string slug, string role, IDocumentStore store, HttpResponse res) =>
+            await BuildIconAsync(slug, role, store, res));
 
         // ─── بِطاقَة المُشارَكَة — PNG نُقَطِيّ ──────────────────────────
         // أَيقونَة الـ PWA أَعلاه SVG، وأَكثَر مِنَصّات المُشارَكَة
@@ -4586,8 +4586,13 @@ public static class MarketplaceTemplateExtensions
 
     // ─── PWA — icon builder (SVG ديناميكيّ) ───────────────────────────
     private static async Task<IResult> BuildIconAsync(
-        string slug, string? role, IDocumentStore store)
+        string slug, string? role, IDocumentStore store, HttpResponse res)
     {
+        // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الأَيقونَةُ مِلَفٌّ لا مُستَنَد: تُفتَحُ وَحدَها بِلا سكربتٍ ولا
+        // مَوارِدَ ولا تَخمينِ نَوع — فَلَو بَلَغَها مُحتَوىً لَم يَقصِدهُ القالِبُ لَم يَجرِ عَلى أَصلِ الجَذرِ الَّذي يَسكُنُه /studio و/admin.
+        res.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        res.Headers.XContentTypeOptions = "nosniff";
+
         // نَفس مَوضِع الالتِقاط: الـ manifest يُشير إلى هذه النُقطَة في
         // icons، فَقِراءَة خام هُنا كانَت تُرَكِّب أَيقونَة المَتجَر
         // لِدَور مُعَرَّف وَقتَ التَّشغيل بَدَل أَيقونَتِه هو.
@@ -4599,19 +4604,10 @@ public static class MarketplaceTemplateExtensions
             r = tenant.Roles.FirstOrDefault(x => x.Slug == role);
 
         // أَيقونَة مُخَصَّصَة (data URL) → نَفُكّ الـ base64 وَنُقَدِّمها كَ صورَة.
-        var custom = r?.PwaIconDataUrl;
-        if (!string.IsNullOrEmpty(custom) && custom.StartsWith("data:"))
-        {
-            var comma = custom.IndexOf(',');
-            if (comma > 0)
-            {
-                var meta = custom.Substring(5, comma - 5);   // "image/png;base64"
-                var b64  = custom[(comma + 1)..];
-                var contentType = meta.Split(';')[0];
-                try { return Results.File(Convert.FromBase64String(b64), contentType); }
-                catch { /* fall through to generated */ }
-            }
-        }
+        // ‏(‏2026-11-07، SEC-C2a-1) PNG أَو WebP بِبَصمَةِ بايتاتِهِما وَحدَهُما (`PwaSaveService.StoredRaster`) — كانَ يُعيدُ المُخزَّنَ بِنَوعِه المُخزَّنِ أَيّاً كانَ،
+        // ومِنه image/svg+xml بِسكربت؛ وما سِوى ذلك (ومِنه SVG خُزِّنَت قَبلَ اليَوم) يَسقُطُ إلى المُوَلَّدَة.
+        if (PwaSaveService.StoredRaster(r?.PwaIconDataUrl) is { } raster)
+            return Results.File(raster.Bytes, raster.ContentType);
 
         // أَيقونَة مَولَّدَة: مُرَبَّع 512x512 بِلَون المَتجَر + الإيموجي/الحَرف.
         var color    = tenant.BrandColor;

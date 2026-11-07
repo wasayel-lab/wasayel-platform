@@ -307,15 +307,15 @@ public class TenantConfigDecisionTests
     [InlineData("image/gif")]
     [InlineData("text/html")]
     [InlineData("")]
+    [InlineData("image/svg+xml")]   // ‏(‏2026-11-07، SEC-C2a-1) كانَ مَقبولاً: SVG مُستَنَدٌ يَحمِلُ سكربتاً
     public void Pwa_rejects_a_content_type_outside_the_allowed_set(string type) =>
         Assert.Equal(TenantConfigCodes.IconBadType,
             PwaSaveService.WhyIconRejected(Icon(type, 1024)));
 
     [Theory]
     [InlineData("image/png")]
-    [InlineData("image/svg+xml")]
     [InlineData("IMAGE/WEBP")]   // الحالَةُ تُطَبَّع
-    public void Pwa_accepts_the_three_allowed_types(string type) =>
+    public void Pwa_accepts_the_two_allowed_raster_types(string type) =>
         Assert.Null(PwaSaveService.WhyIconRejected(Icon(type, 1024)));
 
     /// <summary>الحَجمُ يُفحَص قَبلَ النَوع — وذلك تَرتيبُ النُقطَتَين
