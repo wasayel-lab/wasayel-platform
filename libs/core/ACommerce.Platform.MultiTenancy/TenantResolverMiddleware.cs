@@ -160,11 +160,77 @@ public sealed class TenantResolverMiddleware
 
         if (first.Length > 0)
         {
-            if (ReservedPaths.Contains(first)) return null;
+            if (ServedAtRoot(first)) return null;
             if (string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) return null;
         }
 
         return path == "/" ? "/" + slug : "/" + slug + path;
+    }
+
+    /// <summary><b>ما يُخدَمُ مِن الجَذرِ نَفسِه</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): جُذورُ البِنيَةِ التَحتِيَّة
+    /// ومَناطِقُ المَنَصَّةِ وسَطحُ الـAPI. <b>وكانَ الامتِناعُ أَعلاه عَلى المَحجوزِ كُلِّه</b> — فَأَسماءُ مِحوَرِ المُضيفِ (<c>support</c>، <c>help</c>،
+    /// <c>app</c>…) لا تُحقَنُ وهي لَيسَت جُذوراً مَخدومَة: <c>ashare.R/support</c> كانَ <c>/support</c> ← 404، وصَفحَةُ <c>/{slug}/support</c> قائِمَة.
+    /// والمَحجوزُ يَبقى مَحجوزاً اسمَ مَتجَر؛ وما يُخدَمُ مِن الجَذرِ هُوَ ما لا يُحقَن.</summary>
+    internal static bool ServedAtRoot(string first)
+        => ReservedTenantSlugs.RootEndpoints.Contains(first)
+           || ReservedTenantSlugs.PlatformAreas.Contains(first)
+           || string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary><b>مُعَرِّفُ المَتجَرِ مِن المُضيف</b> (‏2026-11-07، ADR-050 §٣): مِلصَقُ <see cref="SlugFromHost"/> إن صَلَحَ اسمَ مُضيفِ مَتجَرٍ
+    /// (<see cref="StoreHostName"/>) — فَمَتجَرٌ قائِمٌ لا يَجتازُه لا مُضيفَ لَه ويَبقى بِمَسارِه، ومِلصَقٌ يَنتَهي بِاسمِ مُضيفِ دَورٍ لا يُقرَأُ مَتجَراً.</summary>
+    public static string? StoreSlugFromHost(string? host, string? baseDomain)
+        => SlugFromHost(host, baseDomain) is { } label && StoreHostName.IsValid(label) ? label : null;
+
+    /// <summary>
+    /// <para><b>ما يُفعَلُ بِطَلَبٍ عَلى مُضيفِه — قَرارٌ نَقِيٌّ يَقرَؤُه الحاقِن</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). لا يَقرَأُ حالَةً مَخزونَة
+    /// (القاعِدَة ٧): وُجودُ المَتجَرِ يَسأَلُه <see cref="TenantResolverMiddleware"/> بَعدَ التَوجيه.</para>
+    /// <list type="bullet">
+    ///   <item>نِطاقٌ فارِغ، أَو الجَذرُ <c>R</c>، أَو مُضيفٌ خارِجَه، أَو مِلصَقٌ مَحجوزٌ (<c>www</c>، <c>mail</c>…) ← يَمُرُّ بِلا مَتجَرٍ كَما اليَوم.</item>
+    ///   <item>مِلصَقٌ تَحتَ <c>R</c> لَيسَ اسمَ مُضيفِ مَتجَر (عُمقٌ ثانٍ، مِلصَقٌ باطِل، مُضيفُ دَورٍ في المَرحَلَةِ الأُولى) ← 404.</item>
+    ///   <item>عَلى <c>{slug}.R</c>: جُذورُ البِنيَةِ التَحتِيَّةِ كَما هي؛ مَناطِقُ المَنَصَّةِ ← 301 إلى <c>R</c> لِـGET/HEAD و404 لِما سِواهُما؛ <c>/api/{slug}/…</c>
+    ///   و<c>/api/push/…</c> كَما هُما و<c>/api/{غَيرِه}/…</c> ← 404؛ مَسارٌ يَحمِلُ المَتجَرَ كَما هُوَ؛ وما سِواه يُحقَنُ فيه <c>/{slug}</c>.</item>
+    /// </list>
+    /// </summary>
+    public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
+    {
+        var apex = NormaliseHost(baseDomain);
+        var name = NormaliseHost(host);
+        if (apex is null || name is null || name.Length == apex.Length) return StoreHostAnswer.Through;
+        if (name.Length < apex.Length + 2 || !name.EndsWith(apex, StringComparison.Ordinal) || name[name.Length - apex.Length - 1] != '.')
+            return StoreHostAnswer.Through;
+
+        var label = name[..(name.Length - apex.Length - 1)];
+        if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label)) return StoreHostAnswer.Through;
+
+        var slug = StoreSlugFromHost(host, baseDomain);
+        if (slug is null) return StoreHostAnswer.NotFound;
+
+        path = string.IsNullOrEmpty(path) ? "/" : path[0] == '/' ? path : "/" + path;
+        var segments = path.Split('/', 4);
+        var first = segments.Length > 1 ? segments[1] : "";
+
+        if (ReservedTenantSlugs.PlatformAreas.Contains(first))
+        {
+            if (!HttpMethods.IsGet(method ?? "") && !HttpMethods.IsHead(method ?? "")) return StoreHostAnswer.NotFound;
+            var raw = host!.Trim();
+            var colon = raw.IndexOf(':');
+            var port = colon >= 0 ? raw[colon..] : "";
+            return new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null,
+                $"{(string.IsNullOrEmpty(scheme) ? "https" : scheme)}://{apex}{port}{path}{query}");
+        }
+
+        if (string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            var second = segments.Length > 2 ? segments[2] : "";
+            return string.Equals(second, slug, StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(second, ReservedTenantSlugs.ApiPushSegment, StringComparison.OrdinalIgnoreCase)
+                ? new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null)
+                : StoreHostAnswer.NotFound;
+        }
+
+        return PathWithSlug(path, slug) is { } rewritten
+            ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
+            : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
     }
 
     /// <summary>يُطَبِّعُ مُضيفاً: حُروفٌ صَغيرَة، بِلا مَنفَذٍ ولا
@@ -217,8 +283,12 @@ public sealed class TenantResolverMiddleware
         // لِأَنَّ `SubdomainTenantPathMiddleware` حَقَنَ المَقطَعَ
         // قَبلَ التَوجيه. فَالسُقوطُ هُنا يَحرُسُ التَركيبَ الَّذي
         // لا يُرَكِّبُ ذاكَ الوَسيط.
-        var slug = SlugFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain)
-                   ?? SlugFromPath(ctx.Request.Path.Value);
+        //
+        // ‏(‏2026-11-07، ADR-050 · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والمُضيفُ مُضيفُ مَتجَرٍ إن صَلَحَ اسمُه (`StoreSlugFromHost`)، و**مَتجَرٌ
+        // لا وُجودَ لَه عَلى مُضيفِه 404** — كانَ يُرسَمُ بِـ200 (القاعِدَة ١٢: مَدخَلٌ لا يَفتَحُ لا يُعرَض). وهُنا لا في الحاقِن: الحاقِنُ لا يَقرَأُ
+        // حالَةً مَخزونَة (القاعِدَة ٧)، وهذا الوَسيطُ يُحَمِّلُ وَثيقَةَ المَتجَرِ أَصلاً.
+        var hostSlug = StoreSlugFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain);
+        var slug = hostSlug ?? SlugFromPath(ctx.Request.Path.Value);
         if (slug is null) { await _next(ctx); return; }
 
         var cacheKey = $"tenant:{slug.ToLowerInvariant()}";
@@ -234,6 +304,11 @@ public sealed class TenantResolverMiddleware
             ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
                           entity.TagLine, entity.City,
                           hasRoles: entity.Roles.Count > 0);
+        else if (hostSlug is not null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
 
         await _next(ctx);
     }
@@ -318,20 +393,43 @@ public sealed class SubdomainTenantPathMiddleware
 
     public async Task InvokeAsync(HttpContext ctx)
     {
-        var slug = TenantResolverMiddleware.SlugFromHost(
-            ctx.Request.Host.Value, _options.BaseDomain);
+        // ‏(‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) القَرارُ كُلُّه في `AnswerStoreHost` النَقِيَّة: كانَ هُنا حَقنٌ
+        // وَحدَه، فَمَناطِقُ المَنَصَّةِ و`/api/{مَتجَرٍ آخَر}` تُخدَمُ بِسِياقِ مَتجَرِ المُضيف، ومِلصَقٌ لَيسَ اسمَ مَتجَرٍ يُرسَمُ صَفحَةَ المَنَصَّة.
+        var req = ctx.Request;
+        var answer = TenantResolverMiddleware.AnswerStoreHost(
+            req.Host.Value, _options.BaseDomain, req.Method, req.Path.Value, req.QueryString.Value, req.Scheme);
 
-        if (slug is not null)
+        switch (answer.Verdict)
         {
-            ctx.Items[HostSlugItem] = slug;
-            ctx.Items[OriginalPathItem] = ctx.Request.Path.Value;
+            case StoreHostVerdict.NotFound:
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            case StoreHostVerdict.Redirect:
+                ctx.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                ctx.Response.Headers.Location = answer.Location;
+                return;
+        }
 
-            var rewritten = TenantResolverMiddleware.PathWithSlug(ctx.Request.Path.Value, slug);
-            if (rewritten is not null) ctx.Request.Path = rewritten;
+        if (answer.Slug is not null)
+        {
+            ctx.Items[HostSlugItem] = answer.Slug;
+            ctx.Items[OriginalPathItem] = req.Path.Value;
+            if (answer.Verdict == StoreHostVerdict.Rewrite) req.Path = answer.Path;
         }
 
         await _next(ctx);
     }
+}
+
+/// <summary>ما يُفعَلُ بِالطَلَبِ عَلى مُضيفِه (<see cref="TenantResolverMiddleware.AnswerStoreHost"/>).</summary>
+public enum StoreHostVerdict { Pass, Rewrite, Redirect, NotFound }
+
+/// <summary>الجَوابُ: الحُكم، ومَتجَرُ المُضيفِ إن كانَ مُضيفَ مَتجَر، والمَسارُ بَعدَ الحَقن، والوِجهَةُ لِلتَحويل.</summary>
+public sealed record StoreHostAnswer(StoreHostVerdict Verdict, string? Slug, string? Path, string? Location)
+{
+    /// <summary>بِلا مَتجَرٍ ولا مَساسٍ — الجَذرُ أَو مُضيفٌ خارِجَه أَو مِلصَقٌ مَحجوز أَو نِطاقٌ فارِغ.</summary>
+    public static readonly StoreHostAnswer Through = new(StoreHostVerdict.Pass, null, null, null);
+    public static readonly StoreHostAnswer NotFound = new(StoreHostVerdict.NotFound, null, null, null);
 }
 
 public static class MultiTenancyExtensions

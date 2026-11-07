@@ -121,6 +121,38 @@ public static class ReservedTenantSlugs
             "app", "dev", "staging", "test",
         };
 
+    /// <summary>
+    /// <para><b>جُذورُ البِنيَةِ التَحتِيَّة — تُخدَمُ كَما هي عَلى كُلِّ مُضيف</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). عَلى مُضيفِ المَتجَرِ
+    /// <c>{slug}.R</c> لا يُحقَنُ فيها السلاج: إطارُ Blazor ومِحوَرُه، والأَنماطُ والسكربتات، وصُوَرُ المَخزَنِ والعَلامَة، والصِحَّة، ومِحوَرُ
+    /// الإشعارات، ووَثيقَتا الزاحِف (وخَريطَةُ المَوقِعِ تَسرُدُ مَتجَرَ المُضيفِ وَحدَه)، وعامِلُ الخِدمَةِ وصَفحَتُه البَديلَة وزِرُّ اللُغَة.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> RootEndpoints =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "_blazor", "_framework", "_content", "css", "js", "lib", "favicon.ico",
+            "health", "realtime", "robots.txt", "sitemap.xml", "uploads", "branding",
+            "sw.js", "offline.html", "lang",
+        };
+
+    /// <summary>
+    /// <para><b>مَناطِقُ المَنَصَّة — لا تُخدَمُ عَلى مُضيفِ مَتجَر</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5): الاستوديو والإشرافُ وعَودَةُ الدَفعِ
+    /// والصَفَحاتُ الخَمسُ. عَلى <c>{slug}.R</c> يُحَوَّلُ <c>GET</c> إلَيها 301 إلى الجَذرِ <c>R</c> بِالمَسارِ والاستِعلامِ نَفسَيهِما، وما سِواه 404 —
+    /// <b>والعِلَّةُ المَقيسَة</b>: كانَت تُخدَمُ هُناكَ بِسِياقِ المَتجَرِ (‏<c>/studio</c> عَلى <c>ashare.R</c> مُستَأجِرُه <c>ashare</c>).</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> PlatformAreas =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "admin", "_admin", "studio", "billing",
+            "terms", "privacy", "refunds", "pricing", "contact",
+        };
+
+    /// <summary><b>سَطحُ الـAPI</b> — عَلى مُضيفِ المَتجَرِ يُخدَمُ <c>/api/{slug}/…</c> لِمَتجَرِ المُضيفِ و<c>/api/push/…</c> (مِفتاحُ الإشعارِ العامّ)، وما
+    /// سِواهُما 404: مَتجَرٌ آخَرُ لا يُبلَغُ مِن مُضيفِ غَيرِه، وAPI المَنَصَّةِ (<c>/api/v1</c>، خُطّافا <c>/api/billing</c>) عَلى الجَذر.</summary>
+    public const string ApiRoot = "api";
+
+    /// <summary>المَقطَعُ الثاني مِن <c>/api/…</c> الَّذي يُخدَمُ عَلى كُلِّ مُضيفِ مَتجَر.</summary>
+    public const string ApiPushSegment = "push";
+
     /// <summary>أَهذا الاسمُ مَحجوز؟ — <b>الفَراغُ لَيسَ مَحجوزاً بَل
     /// غائِب</b>، ويَرُدُّه فاحِصُ الشَكلِ لا هذا.</summary>
     public static bool Contains(string? slug)
