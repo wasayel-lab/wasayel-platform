@@ -320,7 +320,9 @@ GUARDED_PAGES=(
   # حَيثُ تُقارَن (‏`docs/RELEASE-READINESS.md`).
   "studio-home-with-apps:admin:/studio"
   "studio-billing:studio:/studio/billing"
-  "studio-new:studio:/studio/new"
+  # ‏2026-11-07 (مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1) — **خَرَجَ `studio-new`** (فَرعُ غَيرِ المُوافِق): صارَ تَحويلاً مِن الخادِم (‏302 إلى
+  # `/studio/consent?returnUrl=/studio/new`) لا صَفحَةً بِسكربت — فَلا جِسمَ يُلتَقَط. يَقيسُه `LiveStudioStoreCreateProofTests` (التَصيير)
+  # و`rewalk-launch-journey.sh` (‏302 ووِجهَتُه) و`verify-runtime.cs --click` (النَقرُ في مُتَصَفِّح). والاستِمارَةُ نَفسُها `studio-new-form` أَدناه.
   "studio-consent:studio:/studio/consent"
   # ‏2026-11-07 (مُراجَعَةُ C1، الموجَة ١٣ W13-1) — **استِمارَةُ الإنشاءِ نَفسُها**: `studio-new` أَعلاه فَرعُ غَيرِ المُوافِق (تَحويلٌ إلى المُوافَقَة)،
   # فَالصَفحَةُ الوَحيدَةُ الَّتي يولَدُ مِنها مَتجَرُ رائِدِ الأَعمالِ كانَت بِلا لَقطَةٍ بايتِيَّة. مِلَفُّها `consenter` (أَدناه) يَقبَلُ الإصدارَ القائِمَ
