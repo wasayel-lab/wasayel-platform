@@ -1778,7 +1778,6 @@
   "admin.study.stat_investment": "الاستِثمار المَطلوب",
   "admin.study.wizard_link": "المُعالِج",
 
-  "studio.study.analyzing_hint": "نَجمَع أَرقام السوق، نُقارِن بِالمنافِسين، ونَستَنبِط المَخاطِر.\n                    تُحَدَّث الصَفحَة تِلقائيّاً.",
   "studio.study.back_dashboard": "لوحَتي",
   "studio.study.build_title": "أُنشِئ تَطبيقكَ مِن هذه الفِكرَة",
   "studio.study.cat_financial": "ماليّ",
@@ -1794,6 +1793,7 @@
   "studio.study.impact_low": "أَثَر مُنخَفِض",
   "studio.study.impact_medium": "مُتَوَسِّط",
   "studio.study.no_analysis": "لا تَحليل بَعد لِهذه الجَلسَة.",
+  "studio.study.not_completed": "لَم يَكتَمِل تَحليلُ هذِه الدِراسَة، ولَن يَكتَمِل — لا تَحليلَ يَجري مِن الاستوديو. ومَتجَرُكَ يُنشَأُ مِن الاستِمارَةِ مُباشَرَةً.",
   "studio.study.not_found": "الجَلسَة غَير مَوجودَة.",
   "studio.study.open_app": "فَتح لوحَة التَّطبيق ←",
   "studio.study.risk_details": "تَفاصيل المَخاطِر",

@@ -37,11 +37,11 @@
         }
         else if (session.Status == IncubatorStatus.Analyzing)
         {
-            <div class="st-card" style="text-align:center;padding:48px;">
-                <div style="font-size:52px;margin-bottom:10px;"><AcIcon Name="clock" Size="48" /></div>
-                <h2 style="margin:0 0 6px;">@L.Markup("admin.study.analyzing_title")</h2>
-                <p style="color:var(--st-muted);margin:0;">@((MarkupString)"\n                    ")@L.Markup("studio.study.analyzing_hint")@((MarkupString)"\n                ")
-                </p>
+            @* ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا «جارٍ تَحليل فِكرَتِكَ… تُحَدَّث الصَفحَة تِلقائيّاً» — ولا تَحديثَ ولا
+               تَحليلَ يَجري ولا بابَ يُخرِجُ الجَلسَةَ مِن `Analyzing` بَعدَ `5ba4cac`؛ فَالصَفحَةُ تَقولُ إنّه لَن يَكتَمِل، وتَدُلُّ عَلى استِمارَةِ الإنشاء. *@
+            <div class="st-card">
+                <p style="margin:0 0 14px;color:var(--st-ink-700);">@L.Markup("studio.study.not_completed")</p>
+                <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_store")</a>
             </div>
         }
         else if (session.Status == IncubatorStatus.Failed)

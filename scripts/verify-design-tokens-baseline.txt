@@ -30,7 +30,9 @@
 font-size|22px|2
 font-size|42px|3
 font-size|46px|1
-font-size|52px|1
+# RETIRED 2026-11-07 (C1 review W13-1·F7): 52px was the clock icon wrapper of
+# the legacy study's "analysing" card; the card now says the analysis will not
+# complete and links to the create form, so the hero numeral is gone.
 
 # ── spacing (8 occurrences) ─────────────────────────────────────────────
 # Sub-4px values are optical nudges (`margin-top:2px` to align a checkbox
