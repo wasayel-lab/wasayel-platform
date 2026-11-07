@@ -104,6 +104,21 @@ public class StoreHostNameValidatorTests(ITestOutputHelper output)
         if (slug is "push" or "v1") Assert.False(ReservedTenantSlugs.Contains(slug));
     }
 
+    /// <summary><b>عَلامَةُ الدَورِ <c>r</c> مَحجوزَةٌ اسمَ مُضيف</b> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · C2b-P2-01): بِرَمزِ الحَجزِ نَفسِه، وبابُ الإنشاءِ
+    /// يَرُدُّها <c>slug_reserved</c> — وهي خارِجَ <see cref="ReservedTenantSlugs.All"/> فَلا يَفقِدُ مَتجَرٌ قائِمٌ بِها مَسارَه. وجيرانُها في تَوصيفِهِم
+    /// (<c>StoreNamedRCharacterizationTests</c>).</summary>
+    [Fact]
+    public void The_role_segment_is_a_reserved_host_name()
+    {
+        var codes = StoreHostName.Validate(ReservedTenantSlugs.RoleSegment).Select(v => v.Code).ToArray();
+        var refusal = ACommerce.Templates.Customer.Marketplace.Services.Incubator.TenantFromAnalysisFactory.SlugRefusal(ReservedTenantSlugs.RoleSegment);
+        output.WriteLine($"«{ReservedTenantSlugs.RoleSegment}»: {string.Join(" · ", codes)} · SlugRefusal={refusal} · في All: {ReservedTenantSlugs.Contains(ReservedTenantSlugs.RoleSegment)}");
+        Assert.Equal("r", ReservedTenantSlugs.RoleSegment);
+        Assert.Equal([StoreHostName.Reserved], codes);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Incubator.TenantFromAnalysisFactory.SlugReserved, refusal);
+        Assert.False(ReservedTenantSlugs.Contains(ReservedTenantSlugs.RoleSegment));
+    }
+
     /// <summary><b>السَقفُ مُشتَقٌّ ويُطبَعُ اشتِقاقُه</b>: ‏63 − 1 − أَطوَلُ اسمِ مُضيفِ دَور.</summary>
     [Fact]
     public void The_max_length_is_derived_from_the_longest_role_host_name()

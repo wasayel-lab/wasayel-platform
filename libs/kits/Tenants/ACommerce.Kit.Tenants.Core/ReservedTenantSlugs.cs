@@ -171,6 +171,15 @@ public static class ReservedTenantSlugs
     public static readonly IReadOnlySet<string> PlatformApiSegments =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ApiPushSegment, "v1", "billing" };
 
+    /// <summary>
+    /// <para><b>عَلامَةُ الدَورِ في المَسار</b> — <c>/{slug}/r/{role}/…</c>، وعَلى مُضيفِ المَتجَرِ <c>/r/{role}/…</c> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة ·
+    /// C2b-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق). <b>مَحجوزَةٌ اسمَ مُضيفٍ وَحدَه</b> (<c>StoreHostName</c>): عَلى مُضيفِ مَتجَرٍ اسمُه <c>r</c> يَصيرُ
+    /// <c>/r/{role}/…</c> مَساراً يَحمِلُ المَتجَرَ فَلا يُحقَن، ولا مَسارَ <c>/{slug}/{role}/…</c> ← 404 لِكُلِّ رابِطِ دَورٍ نَظيف (مَقيسٌ حَيّاً عِندَ <c>f8e02c1</c>).
+    /// <b>ولا في <see cref="All"/></b> — بِدَرسِ <see cref="PlatformApiSegments"/> نَفسِه: <c>SlugFromPath</c> يَقرَؤُها، فَمَتجَرٌ قائِمٌ اسمُه <c>r</c> يَبقى بِمَسارِه
+    /// بِلا مُضيفٍ كَكُلِّ مُعَرِّفٍ عَلى غَيرِ الشَكل.</para>
+    /// </summary>
+    public const string RoleSegment = "r";
+
     /// <summary>أَهذا الاسمُ مَقطَعٌ حَرفِيٌّ لِـAPI المَنَصَّة؟ (<see cref="PlatformApiSegments"/>)</summary>
     public static bool IsPlatformApiSegment(string? name)
         => !string.IsNullOrWhiteSpace(name) && PlatformApiSegments.Contains(name.Trim());

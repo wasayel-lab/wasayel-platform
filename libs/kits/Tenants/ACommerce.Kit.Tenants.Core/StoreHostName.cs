@@ -60,7 +60,10 @@ public static class StoreHostName
 
         // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومَقاطِعُ API المَنَصَّةِ الحَرفِيَّة (`push`، `v1`، `billing`)
         // مَحجوزَةٌ هُنا لا في `ReservedTenantSlugs.All`: مَتجَرٌ بِها يُخدَمُ سَطحُه عَلى مُضيفاتِ غَيرِه أَو يَبلُغُ API المَنَصَّةِ عَلى مُضيفِه، والقائِمَةُ يَقرَؤُها حَلُّ المَسار.
-        if (ReservedTenantSlugs.Contains(slug) || ReservedTenantSlugs.IsPlatformApiSegment(slug))
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · C2b-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وعَلامَةُ الدَورِ `r` (`ReservedTenantSlugs.RoleSegment`): عَلى مُضيفِ
+        // مَتجَرٍ بِها يَصيرُ `/r/{role}/…` مَساراً يَحمِلُ المَتجَرَ فَكُلُّ رابِطِ دَورٍ نَظيفٍ 404 — والمَسارُ لا يَقرَؤُها، فَالقائِمُ بِها يَبقى بِمَسارِه بِلا مُضيف.
+        if (ReservedTenantSlugs.Contains(slug) || ReservedTenantSlugs.IsPlatformApiSegment(slug)
+            || string.Equals(slug, ReservedTenantSlugs.RoleSegment, StringComparison.OrdinalIgnoreCase))
             found.Add(new(Reserved, "هذا المُعَرِّفُ مَحجوزٌ لِلمَنَصَّة."));
 
         if (RoleSuffixOf(slug) is { } role)

@@ -108,6 +108,54 @@ public class StoreUrlRoundTripTests(ITestOutputHelper output)
         Assert.Equal(expected, got);
     }
 
+    /// <summary>
+    /// <para><b>مَتجَرٌ اسمُه <c>r</c> بِلا مُضيفٍ وبِمَسارِه</b> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · C2b-P2-01). كانَ <c>r.R</c> يُحَلّ، وعَلَيه
+    /// <c>/r/{role}/…</c> — كُلُّ رابِطِ دَورٍ نَظيفٍ يَبنيه <see cref="StoreUrl"/> — مَساراً يَحمِلُ المَتجَرَ فَلا يُحقَنُ ← 404 (مَقيسٌ حَيّاً عِندَ f8e02c1). والآن مُضيفاه
+    /// 404 كَأَيِّ مُعَرِّفٍ عَلى غَيرِ الشَكل، و«افتَح المَتجَر» ورَوابِطُه مِن الجَذرِ بِشَكلِ المَسارِ الَّذي يَحِلُّه المَسار.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("r.example.test", "GET", "/r/vendor/me/listings")]
+    [InlineData("r.example.test", "GET", "/r/vendor/login")]
+    [InlineData("r.example.test", "GET", "/")]
+    [InlineData("r.example.test", "POST", "/auth/phone/login")]
+    [InlineData("r-vendor.example.test", "GET", "/me/listings")]
+    [InlineData("r-vendor.example.test", "GET", "/r/customer/explore")]
+    [InlineData("r-customer.example.test", "GET", "/")]
+    public void A_store_named_r_has_no_host(string host, string method, string path)
+    {
+        var a = TenantResolverMiddleware.AnswerStoreHost(host, Apex, method, path, "", "https", RoleHostPages.Templates);
+        output.WriteLine($"{host} {method} {path} ⇒ {a.Verdict}");
+        Assert.Equal(StoreHostVerdict.NotFound, a.Verdict);
+        Assert.Null(TenantResolverMiddleware.StoreSlugFromHost(host, Apex));
+        Assert.Null(TenantResolverMiddleware.RoleFromHost(host, Apex));
+    }
+
+    [Fact]
+    public void A_store_named_r_is_opened_and_linked_by_its_path()
+    {
+        var apexed = new HostView(Apex, null, "https", "");
+        Assert.Equal("/r", StoreUrl.Open(apexed, "r"));
+        foreach (var (role, tail, expected) in new[] { ("vendor", "me/listings", "/r/r/vendor/me/listings"), ("driver", "me/role/onboarding", "/r/r/driver/me/role/onboarding"), ((string?)null, "explore", "/r/explore") })
+        {
+            var link = StoreUrl.For(apexed, "r", role, tail);
+            Assert.Equal(expected, link);
+            Assert.Equal("r", TenantResolverMiddleware.SlugFromPath(link));
+        }
+    }
+
+    /// <summary><b>لا اسمَ مُضيفٍ صالِحٌ هُوَ مَقطَعٌ أَوَّلُ ذو مَعنىً عَلى المُضيف</b> (‏2026-11-07، C2b-P2-01): ما يُخدَمُ مِن الجَذرِ وعَلامَةُ الدَور — فَلا يَلتَبِسُ
+    /// عَلى مُضيفِ مَتجَرٍ مَسارٌ يَحمِلُ المَتجَرَ بِذَيلٍ لَه مَعنىً آخَر. يَطبَعُ ما عَدَّه.</summary>
+    [Fact]
+    public void No_valid_host_name_is_a_first_segment_with_a_meaning_on_the_host()
+    {
+        var names = ReservedTenantSlugs.RootEndpoints.Concat(ReservedTenantSlugs.PlatformAreas).Append(ReservedTenantSlugs.ApiRoot)
+            .Append(ReservedTenantSlugs.RoleSegment).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var valid = names.Where(StoreHostName.IsValid).ToArray();
+        output.WriteLine($"مَقاطِعُ ذاتُ مَعنىً عَلى المُضيف: {names.Length} · صالِحَةٌ اسمَ مُضيف: {valid.Length}{(valid.Length > 0 ? " — " + string.Join(" · ", valid) : "")}");
+        Assert.True(names.Length >= 20, $"فَحصٌ أَعمى: {names.Length}");
+        Assert.Empty(valid);
+    }
+
     /// <summary>القائِمَةُ الواحِدَة: ما يُخدَمُ مِن الجَذرِ هُوَ ما لا يَحقِنُه <c>PathWithSlug</c> — لِكُلِّ اسمٍ في القَوائِمِ الثَلاث.</summary>
     [Fact]
     public void Served_at_root_is_the_set_the_injector_refuses()
