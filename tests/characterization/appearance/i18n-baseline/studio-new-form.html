@@ -40,7 +40,7 @@
                 <p>مَتجَرٌ مُتَعَدِّدُ البائِعين: تُسَمّيه وتَختارُ رابِطَه ولَونَه، ثُمَّ تُهَيِّئُ فِئاتِه وأَدوارَه ومَظهَرَه مِن لَوحَتِه.</p></div><div class="st-card"><form method="post" action="/studio/apps/create" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div class="st-field" style="margin:0;grid-column:1/-1;"><label class="st-label">اسم المَتجَر</label>
                         <input class="st-input" name="name" required maxlength="60" /></div>
                     <div class="st-field" style="margin:0;"><label class="st-label">رابِطُ المَتجَر (حُروفٌ لاتينِيَّةٌ صَغيرَةٌ وأَرقامٌ وشَرطَة — لا يَتَغَيَّرُ بَعدَ الإنشاء)</label>
-                        <input class="st-input" name="slug" required maxlength="63" dir="ltr" pattern="^[a-z0-9][a-z0-9-]*$" placeholder="my-store" /></div>
+                        <input class="st-input" name="slug" required maxlength="63" dir="ltr" pattern="[a-z0-9][a-z0-9\-]{0,62}" placeholder="my-store" /></div>
                     <div class="st-field" style="margin:0;"><label class="st-label">لَونُ العَلامَة</label>
                         <input class="st-input" type="color" name="color" required value="#2563eb" style="padding:4px;height:46px;" /></div>
                     <div class="st-field" style="margin:0;grid-column:1/-1;"><label class="st-label">سَطرُ وَصفٍ (اختِياريّ)</label>
