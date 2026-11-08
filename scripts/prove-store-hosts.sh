@@ -346,6 +346,23 @@ ORIGIN="$SCHEME://$S";                             row POST "$RH" "/auth/phone/l
 ORIGIN="$SCHEME://$RH";                            row POST "$RH" "/auth/phone/login" 302 "/login?*"
 fi
 ORIGIN=""
+# ‏(‏2026-11-08، مُراجَعَةُ C2c الجَولَةُ الثانِيَة · C2c-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **قِراءَةُ المالِكِ بِحَرفِها** (DEPLOY §٢·ي، قِسمُ Cloudflare، الخُطوَةُ ٠):
+# صُفوفُ `row` تُضيفُ نَوعَ الاستِمارَةِ وجِسماً فارِغاً، والأَمرُ المَكتوبُ لِلمالِكِ كانَ `-X POST` بِلا جِسم — فَأَجابَ أَصلُه 415 لا 302، ولَم يُقَس قَطّ. فَهُنا
+# أَعلامُ الخُطوَةِ ٠ حَرفاً (`OWNER_READ`؛ ويَحمَرُّ `OwnerOriginReadTests` إن اختَلَفَت عَن أَعلامِ الدَليل)، ولا يُضافُ إلَيها إلّا ما يَبلُغُ بِه العُنوان: رَأسُ `Host`
+# مَحَلِّيّاً ومُهلَة. والأَمرُ القَديمُ (`OWNER_READ_BARE`) يَبلُغُ ما بَعدَ فَحصِ الأَصلِ ويُرَدُّ 415 مِن بَوّابَةِ الاستِمارَة — فَـ415 لا يَحكُمُ عَلى الفَحص. **لا يَكتُبُ شَيئاً.**
+OWNER_READ=(-s -o /dev/null -w '%{http_code}\n' -d '')
+OWNER_READ_BARE=(-s -o /dev/null -w '%{http_code}\n' -X POST)
+owner_read() { # owner_read <اسمُ مَصفوفَةِ الأَعلام> <origin> <want>
+  local -n flags="$1"; local origin="$2" want="$3" got reach=(-m 20)
+  [ "$DIRECT" = 1 ] || reach+=(-H "Host: $R")
+  got="$(curl "${flags[@]}" "${reach[@]}" -H "Origin: $origin" "$(url "$R" "/$STORE/auth/phone/login")")" || got="000"
+  checked=$((checked + 1))
+  if [ "$got" = "$want" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' "$1" "$R" "/$STORE/auth/phone/login · Origin: $origin" "$got"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا %s\n' "$1" "$R" "/$STORE/auth/phone/login · Origin: $origin" "$got" "$want"; fi
+}
+owner_read OWNER_READ      "https://evil.example" 403
+owner_read OWNER_READ      "$SCHEME://$R"         302
+owner_read OWNER_READ_BARE "$SCHEME://$R"         415
 
 # ‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **كَعكاتُ الجَلسَةِ عَلى HTTPS بِالبادِئَةِ `__Host-`**: مَحَلِّيّاً يُقالُ HTTPS بِرَأسِ
 # `X-Forwarded-Proto: https` — والوَسيطُ يُصَدِّقُه مِن أَيِّ نِدٍّ (`KnownProxies` فارِغ؛ وهي عَينُ ما يُرسِلُه Cloudflare وFly، ولِذلك يُقفَلُ الأَصلُ عَلى Cloudflare — DEPLOY
