@@ -495,7 +495,8 @@ app.UseSessionVersionGate();
 // القالَب — يُسَجِّل form endpoints (auth/login/logout/chat send/favorite/...)
 app.MapCustomerMarketplaceTemplate();
 
-app.MapHub<RealtimeHub>("/realtime");
+// ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-1) المَركَزانِ الحَيّانِ بِاسمِ تَركيبِهِما في `LiveConnections` — يَقيسُه تَوصيفُه بِالاسم.
+app.MapPlatformHub<RealtimeHub>("/realtime");
 
 // ═══ الثُنائِيُّ يَحمِلُ إيداعَه (‏ADR-019) ══════════════════════════
 // نُقطَةُ `/health` تُجيبُ «أَيُّ إيداعٍ يَخدِمُ الآن؟» مِن العَمَلِيَّةِ
@@ -511,6 +512,6 @@ app.MapBuildIdentity(buildVersion, processStartedAt);
 app.MapReadiness();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddPlatformInteractiveServer();
 
 app.Run();

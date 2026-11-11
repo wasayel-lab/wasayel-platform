@@ -19,7 +19,9 @@ public class RootEndpointsReservedTests(ITestOutputHelper output)
 {
     private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
 
-    private static readonly Regex MapRoute = new(@"\.Map(?:Get|Post|Put|Delete|Patch|Methods|Hub|Fallback)?(?:<[^>]+>)?\(\s*""/(?<s>[^""/?]*)", RegexOptions.Compiled);
+    // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `/realtime` صارَ يُرَكَّبُ بِـ`MapPlatformHub<…>` (`LiveConnections`)
+    // فَحَمَرَّ صَفُّ «realtime · Program.cs» أَدناه — الماسِحُ يَرى الفِعلَ الجَديدَ بِاسمِه ولا يَعمى عَنه.
+    private static readonly Regex MapRoute = new(@"\.Map(?:Get|Post|Put|Delete|Patch|Methods|Hub|PlatformHub|Fallback)?(?:<[^>]+>)?\(\s*""/(?<s>[^""/?]*)", RegexOptions.Compiled);
     private static readonly Regex WolverineRoute = new(@"\[Wolverine(?:Get|Post|Put|Delete|Patch)\(\s*""/(?<s>[^""/?]*)", RegexOptions.Compiled);
     private static readonly Regex PageRoute = new(@"^@page\s+""/(?<s>[^""/?]*)", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex RootAsset = new(@"\b(?:src|href)=""/?(?<s>_[a-z]+)/", RegexOptions.Compiled);
