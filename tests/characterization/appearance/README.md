@@ -1387,3 +1387,180 @@ roleless»؛ واللَقطَةُ (‏39073 بايتاً) فيها استِما�
 | `admin-tenant-pwa` | SEC-C2a-1 — `accept` بِلا SVG، والتَلميحُ «PNG أَو WebP» | 4 · 4 | 37–61 |
 | `owner-app-pwa` | SEC-C2a-1 — كَذلك | 3 · 3 | 53–69 |
 | `studio-app-pwa` | SEC-C2a-1 — كَذلك | 4 · 4 | 53–77 |
+
+### ‏2026-11-11 — مُراجَعَةُ إغلاقِ W13-4 (تَيّارُ C2z): كُلُّ لَقطَةٍ تَتَبَدَّلُ بِثَلاثَةِ أَسطُرٍ مِن كُتلَةِ السكربتِ وَحدَها — بادِئَةُ العُنوانِ الظاهِرِ ونِطاقُ عامِلِ الخِدمَةِ ومِفتاحُ التَثبيت (الموجَة ١٣ — W13-4·C2z·1، C2a-P3-01؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)
+
+**لِماذا**: `c7e5492` جَعَلَ الخادِمَ يُرسِلُ في `window.acTenant` حَقلاً خامِساً `base` — بادِئَةَ العُنوانِ الظاهِر (`StoreHostPage.VisibleBase`: `/{slug}` في وَضعِ
+المَسار، و`""` عَلى العُنوانِ النَظيف، و`""` لِصَفَحاتِ المَنَصَّة) — وصارَ نِطاقُ عامِلِ الخِدمَةِ ومِفتاحُ التَثبيتِ يُبنَيانِ مِنه: `var scope = store + …` ←
+`var scope = t.base + …`، و`var scopeKey = (t.hostMode ? '' : '/' + t.slug) + …` ← `var scopeKey = t.base + …`. كانَت صَفحَةُ دَورٍ بِشَكلِ المَسارِ عَلى المُضيفِ
+تُسَجِّلُ عامِلَها بِنِطاقِ `/r/{role}/` الَّذي لا يَحكُمُها. **وفي وَضعِ المَسارِ القيمَةُ هِيَ ما كانَ يُبنى** (`/{slug}`)، فَالنِطاقُ والمِفتاحُ بِحَرفِهِما عِندَ التَشغيل؛
+والفَرقُ في نَصِّ الصَفحَةِ وَحدَه. **ولا سَطرَ غَيرُها: صِفرُ سَطرٍ يَمَسُّ `canonical` أَو `og:url` أَو JSON-LD أَو أَيَّ عُنصُرٍ مَرسوم.**
+
+**البيئَةُ مُعلَنَة** (لا Neon): قاعِدَةٌ مَحَلِّيَّةٌ جَديدَة `wasayel_w13_c2z_tpl` بِإقلاعَينِ بِبِناءِ الرَأس `40968ca` (البَذّاراتُ لَم يَمَسَّها التَيّار)، والبيئَةُ
+والمِلَفّاتُ الثَمانِيَةُ والمُزَوِّدُ البَديلُ كَما في الأَقسامِ السابِقَةِ حَرفاً (`drive.sh`)، وكُلُّ التِقاطٍ عَلى نُسخَةٍ مِنها (`createdb -T`)، **و`MultiTenancy:BaseDomain`
+فارِغ** — وَضعُ المَسارِ الَّذي لا يَتَغَيَّرُ مِنه إلّا ما قالَه البَند.
+
+**والأَداةُ مَقيسَةٌ قَبلَ الحُكم**: «الصَفَحاتُ المُلتَقَطَة: 141» في كُلِّ جَولَة؛ والتِقاطا الرَأسِ عَلى نُسخَتَينِ **‏0 / 141 تَختَلِف**. **والنِسبَةُ بِشَجَرَتَينِ عَلى قاعِدَةٍ
+واحِدَة** (القاعِدَة ١٣): `7ce945e` (آخِرُ إيداعٍ قَبلَ التَيّار، `git archive` مَبنِيّاً عَلى حِدَة) والرَأسُ عَلى نُسخَتَينِ مِن القاعِدَةِ نَفسِها ← **‏141 / 141 تَختَلِف،
+وكُلُّ فَرقٍ في الأَسطُرِ الثَلاثَةِ نَفسِها لا رابِعَ لَها** (المُصَنِّفُ يَعُدُّ أَيَّ سَطرٍ آخَرَ بِاسمِه: صِفر). وقيمَةُ `base` في الـ141: ‏66 فارِغَةٌ مَعَ `"slug":""`
+(صَفَحاتُ المَنَصَّة)، والباقي `/{slug}` لِمَتجَرٍ بِمَسارِه.
+
+**والتَثبيتُ يَحمِلُ فَرقَ الكودِ وَحدَه** (`c2a-patch.py` نَفسُه): لِكُلِّ صَفحَةٍ قِطَعُ الفَرقِ بَينَ الشَجَرَتَينِ (بِسَطرَي سِياق) تُطَبَّقُ عَلى المُودَع، وقِطعَةٌ لا يوجَدُ
+سِياقُها فيه مَرَّةً واحِدَةً بِالضَبطِ تُرَدُّ ولا تُخَمَّن ⇒ «‏141 ثُبِّتَت · 126 المُودَعُ فيها = الشَجَرَةُ القَديمَة · 15 حُمِلَ عَلَيها الفَرقُ وبَقِيَت قِيَمُ بيئَتِها ·
+صِفرُ رَدّ»، وثَلاثُ قِطَعٍ في كُلِّ صَفحَة. و`compare-appearance.sh` عَلى المُودَعِ الجَديدِ والتِقاطٍ حَيٍّ عَلى نُسخَةٍ ثالِثَة: **«الصَفَحات المُقارَنَة: 141»، 126 خَضراء،
+والخَمسَ عَشرَةَ صُفوفُ «ب» نَفسُها** (`ashare-explore-filters`، `ashare-explore`، `ashare-portal`، `ashare-role-customer`، `member-chats`، `member-deal-active`،
+`member-deal-done`، `member-deals`، `member-listings`، `member-notifications`، `member2-store-root`، `owner-app-console`، `owner-app-deals`، `owner-app-listings`،
+`studio-home-with-apps`)؛ وحَقنُ `<base href="/x">` في `landing.html` عَلى نُسخَةٍ مِن المُودَع ⇐ «✗ landing.html» زِيادَةً و125 خَضراء.
+
+**ومِفتاحُ الأَسباب**:
+
+| الرَمز | السَبَب |
+|---|---|
+| `c7e5492` | C2z·1 — `base` في `acTenant`، ونِطاقُ عامِلِ الخِدمَةِ ومِفتاحُ التَثبيتِ مِنه (C2a-P3-01) |
+| ب | صُفوفُ البيئَةِ الخَمسَ عَشرَة: الفَرقُ مَحمولٌ عَلى المُودَعِ وقِيَمُ بيئَتِه باقِيَة |
+
+**ولِكُلِّ لَقطَةٍ سَبَبُها ومُربَّعُ فَرقِها** (أَسطُرُ المُودَعِ الجَديدِ الَّتي تَختَلِفُ عَن السابِق، أَوَّلُها–آخِرُها) — ‏141 صَفّاً:
+
+| اللَقطَة | السَبَب | مُربَّعُ الفَرق (أَسطُر) |
+|---|---|---|
+| `admin-anon` | `c7e5492` | 62–318 |
+| `admin-audit` | `c7e5492` | 80–336 |
+| `admin-fixtures` | `c7e5492` | 206–462 |
+| `admin-forbidden` | `c7e5492` | 62–318 |
+| `admin-home` | `c7e5492` | 121–377 |
+| `admin-incubator-study` | `c7e5492` | 60–316 |
+| `admin-incubator-wizard` | `c7e5492` | 59–315 |
+| `admin-incubator` | `c7e5492` | 71–327 |
+| `admin-monitor` | `c7e5492` | 109–365 |
+| `admin-tenant-anon` | `c7e5492` | 62–318 |
+| `admin-tenant-attributes` | `c7e5492` | 71–327 |
+| `admin-tenant-branding` | `c7e5492` | 88–344 |
+| `admin-tenant-categories` | `c7e5492` | 89–345 |
+| `admin-tenant-edit` | `c7e5492` | 106–362 |
+| `admin-tenant-new` | `c7e5492` | 113–369 |
+| `admin-tenant-pwa` | `c7e5492` | 100–356 |
+| `admin-tenant-regions` | `c7e5492` | 85–341 |
+| `admin-tenant-roles` | `c7e5492` | 155–411 |
+| `admin-tenant-theme` | `c7e5492` | 122–378 |
+| `admin-tenant-users` | `c7e5492` | 68–324 |
+| `adwar-demo-portal` | `c7e5492` | 59–315 |
+| `ashare-explore-empty` | `c7e5492` | 91–347 |
+| `ashare-explore-filters` | `c7e5492` · ب | 153–409 |
+| `ashare-explore` | `c7e5492` · ب | 138–394 |
+| `ashare-legal-privacy` | `c7e5492` | 86–342 |
+| `ashare-legal-returns` | `c7e5492` | 84–340 |
+| `ashare-legal-terms` | `c7e5492` | 85–341 |
+| `ashare-plans` | `c7e5492` | 76–332 |
+| `ashare-portal` | `c7e5492` · ب | 131–387 |
+| `ashare-role-customer` | `c7e5492` · ب | 137–393 |
+| `ashare-role-host` | `c7e5492` | 88–344 |
+| `ashare-role-vendor` | `c7e5492` | 88–344 |
+| `ejar-area-anon` | `c7e5492` | 81–337 |
+| `ejar-cart-anon` | `c7e5492` | 74–330 |
+| `ejar-chats-anon` | `c7e5492` | 74–330 |
+| `ejar-checkout-anon` | `c7e5492` | 74–330 |
+| `ejar-create-listing-anon` | `c7e5492` | 74–330 |
+| `ejar-deal-anon` | `c7e5492` | 74–330 |
+| `ejar-deals-anon` | `c7e5492` | 74–330 |
+| `ejar-drivers` | `c7e5492` | 77–333 |
+| `ejar-favorites-anon` | `c7e5492` | 74–330 |
+| `ejar-listing` | `c7e5492` | 148–404 |
+| `ejar-listings-anon` | `c7e5492` | 74–330 |
+| `ejar-login-err-approve` | `c7e5492` | 64–320 |
+| `ejar-login-err-code` | `c7e5492` | 64–320 |
+| `ejar-login-err-email-bad` | `c7e5492` | 64–320 |
+| `ejar-login-err-email-req` | `c7e5492` | 64–320 |
+| `ejar-login-err-nid` | `c7e5492` | 64–320 |
+| `ejar-login-err-phone` | `c7e5492` | 64–320 |
+| `ejar-login-err-send` | `c7e5492` | 64–320 |
+| `ejar-login-verify` | `c7e5492` | 71–327 |
+| `ejar-login` | `c7e5492` | 64–320 |
+| `ejar-offers-anon` | `c7e5492` | 74–330 |
+| `ejar-onboarding-anon` | `c7e5492` | 74–330 |
+| `ejar-role-anon` | `c7e5492` | 74–330 |
+| `ejar-vendor-missing` | `c7e5492` | 74–330 |
+| `ejar-vendor` | `c7e5492` | 78–334 |
+| `landing` | `c7e5492` | 95–351 |
+| `login-unknown` | `c7e5492` | 59–315 |
+| `member-area` | `c7e5492` | 92–348 |
+| `member-cart` | `c7e5492` | 94–350 |
+| `member-chat` | `c7e5492` | 86–342 |
+| `member-chats` | `c7e5492` · ب | 82–338 |
+| `member-checkout-confirm-card` | `c7e5492` | 94–350 |
+| `member-checkout-confirm-cash` | `c7e5492` | 94–350 |
+| `member-checkout-pay` | `c7e5492` | 87–343 |
+| `member-checkout` | `c7e5492` | 87–343 |
+| `member-create-listing-cat` | `c7e5492` | 103–359 |
+| `member-create-listing-invalid` | `c7e5492` | 98–354 |
+| `member-create-listing` | `c7e5492` | 98–354 |
+| `member-deal-active` | `c7e5492` · ب | 121–377 |
+| `member-deal-done` | `c7e5492` · ب | 128–384 |
+| `member-deal-missing` | `c7e5492` | 78–334 |
+| `member-deal-waiting` | `c7e5492` | 123–379 |
+| `member-deals` | `c7e5492` · ب | 95–351 |
+| `member-favorites` | `c7e5492` | 78–334 |
+| `member-listings` | `c7e5492` · ب | 81–337 |
+| `member-login` | `c7e5492` | 72–328 |
+| `member-manage` | `c7e5492` | 78–334 |
+| `member-notifications` | `c7e5492` · ب | 102–358 |
+| `member-offers` | `c7e5492` | 78–334 |
+| `member-onboarding` | `c7e5492` | 78–334 |
+| `member-role` | `c7e5492` | 88–344 |
+| `member2-checkout-empty` | `c7e5492` | 78–334 |
+| `member2-store-root` | `c7e5492` · ب | 88–344 |
+| `order-drivers` | `c7e5492` | 81–337 |
+| `owner-app-attributes` | `c7e5492` | 140–396 |
+| `owner-app-console` | `c7e5492` · ب | 117–373 |
+| `owner-app-deal-detail` | `c7e5492` | 111–367 |
+| `owner-app-deals` | `c7e5492` · ب | 102–358 |
+| `owner-app-home` | `c7e5492` | 151–407 |
+| `owner-app-listings` | `c7e5492` · ب | 182–438 |
+| `owner-app-pwa` | `c7e5492` | 108–364 |
+| `platform-contact` | `c7e5492` | 73–329 |
+| `platform-pricing` | `c7e5492` | 65–321 |
+| `platform-privacy-en` | `c7e5492` | 124–380 |
+| `platform-privacy` | `c7e5492` | 124–380 |
+| `platform-refunds-en` | `c7e5492` | 94–350 |
+| `platform-refunds` | `c7e5492` | 94–350 |
+| `platform-terms-en` | `c7e5492` | 119–375 |
+| `platform-terms-unknown-lang` | `c7e5492` | 59–315 |
+| `platform-terms` | `c7e5492` | 119–375 |
+| `roleless-store-root` | `c7e5492` | 90–346 |
+| `studio-app-attributes` | `c7e5492` | 116–372 |
+| `studio-app-branding` | `c7e5492` | 99–355 |
+| `studio-app-categories` | `c7e5492` | 102–358 |
+| `studio-app-console` | `c7e5492` | 100–356 |
+| `studio-app-deals` | `c7e5492` | 88–344 |
+| `studio-app-listings` | `c7e5492` | 88–344 |
+| `studio-app-pwa` | `c7e5492` | 116–372 |
+| `studio-app-regions` | `c7e5492` | 99–355 |
+| `studio-app-roles` | `c7e5492` | 109–365 |
+| `studio-app-ticket-missing` | `c7e5492` | 78–334 |
+| `studio-app-ticket` | `c7e5492` | 88–344 |
+| `studio-app-tickets` | `c7e5492` | 89–345 |
+| `studio-app` | `c7e5492` | 151–407 |
+| `studio-auth-verify` | `c7e5492` | 64–320 |
+| `studio-auth` | `c7e5492` | 62–318 |
+| `studio-billing` | `c7e5492` | 90–346 |
+| `studio-consent` | `c7e5492` | 78–334 |
+| `studio-home-with-apps` | `c7e5492` · ب | 130–386 |
+| `studio-home` | `c7e5492` | 95–351 |
+| `studio-new-form` | `c7e5492` | 87–343 |
+| `studio-study-print` | `c7e5492` | 115–371 |
+| `studio-study` | `c7e5492` | 110–366 |
+| `studio-upgrade-analyze` | `c7e5492` | 95–351 |
+| `studio-upgrade-build` | `c7e5492` | 97–353 |
+| `studio-upgrade-export` | `c7e5492` | 95–351 |
+| `studio-upgrade-feature` | `c7e5492` | 97–353 |
+| `studio-upgrade-refine` | `c7e5492` | 95–351 |
+| `theme-demo-city` | `c7e5492` | 88–344 |
+| `theme-demo-listing-offers` | `c7e5492` | 132–388 |
+| `theme-demo-login-verify` | `c7e5492` | 74–330 |
+| `theme-demo-login` | `c7e5492` | 64–320 |
+| `theme-demo-manage-anon` | `c7e5492` | 74–330 |
+| `theme-demo-portal` | `c7e5492` | 100–356 |
+| `user-listing-offers` | `c7e5492` | 155–411 |
+| `user-listing-own` | `c7e5492` | 138–394 |
+| `user-manage` | `c7e5492` | 78–334 |
+| `user-notifications` | `c7e5492` | 96–352 |
+| `user-searches` | `c7e5492` | 90–346 |
