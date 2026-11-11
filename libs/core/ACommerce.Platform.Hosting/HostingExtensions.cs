@@ -316,6 +316,9 @@ public static class HostingExtensions
     /// </summary>
     public static IApplicationBuilder UsePlatformRequestFront(this IApplicationBuilder app)
     {
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) رَأسُ `Host` لا يُقرَأُ ← 400 قَبلَ الحاقِنِ الَّذي يَقرَؤُه أَوَّلاً
+        // (كانَ 500 — `HostHeaderGuard`).
+        app.UseHostHeaderGuard();
         app.UseSubdomainTenantPath();
         // ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) طَلَبُ الكِتابَةِ مِن أَصلٍ آخَرَ يُرَدُّ 403 — بَعدَ الحاقِنِ فَيَرى
         // المَسارَ بِشَكلِ القالِبِ عَلى كُلِّ مُضيف (نِقاطُ المُزَوِّدينَ تُستَثنى بِه). التَعليلُ في `CrossOriginWriteGate`.

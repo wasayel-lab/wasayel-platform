@@ -65,7 +65,9 @@ public static class RoleDefinitionValidator
         if (!string.IsNullOrEmpty(d.HomeRoute) &&
             (!d.HomeRoute.StartsWith('/') ||
              d.HomeRoute.Any(char.IsWhiteSpace) ||
-             d.HomeRoute.Contains('?') || d.HomeRoute.Contains('#')))
+             d.HomeRoute.Contains('?') || d.HomeRoute.Contains('#') ||
+             // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R2-3 — يُلحَقُ) ولا مَسارَ يَصيرُ خارِجِيّاً عَلى المُضيف: `\` و`//` في أَوَّلِه ومَحارِفُ التَحَكُّم.
+             d.HomeRoute.StartsWith("//", StringComparison.Ordinal) || d.HomeRoute.Contains('\\') || d.HomeRoute.Any(char.IsControl)))
             v.Add(new("home_route_malformed",
                 $"مَسار الدَور «{d.Slug}» شاذّ: «{d.HomeRoute}»."));
 

@@ -111,15 +111,15 @@ row GET  "$R" "/api/$STORE/manifest.json" 200 - "\"scope\":\"/$STORE/\""
 row GET  "$S" "/api/push/vapid-key"     200
 
 echo "٣) مَناطِقُ المَنَصَّةِ تَعودُ إلى الجَذر، والكِتابَةُ إلَيها لا تُقبَل"
-row GET  "$S" "/studio?from=store"      301 "$SCHEME://$R/studio?from=store"
-row GET  "$S" "/admin"                  301 "$SCHEME://$R/admin"
-row GET  "$S" "/pricing"                301 "$SCHEME://$R/pricing"
-row HEAD "$S" "/privacy"                301 "$SCHEME://$R/privacy"
+row GET  "$S" "/studio?from=store"      302 "$SCHEME://$R/studio?from=store"
+row GET  "$S" "/admin"                  302 "$SCHEME://$R/admin"
+row GET  "$S" "/pricing"                302 "$SCHEME://$R/pricing"
+row HEAD "$S" "/privacy"                302 "$SCHEME://$R/privacy"
 row POST "$S" "/studio/apps/create"     404
 # ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2) المَسارُ المُرَمَّزُ يُحَوَّلُ بِوِجهَةٍ مُرَمَّزَة — كانَ 500 («م» حَرفاً في Location)، و%3F يَنقَلِبُ استِعلاماً
-row GET  "$S" "/studio/%D9%85"          301 "$SCHEME://$R/studio/%D9%85"
-row GET  "$S" "/admin/%0d%0aSet-Cookie:x=1" 301 "$SCHEME://$R/admin/%0D%0ASet-Cookie:x=1"
-row GET  "$S" "/studio/%3F%3Fx"         301 "$SCHEME://$R/studio/%3F%3Fx"
+row GET  "$S" "/studio/%D9%85"          302 "$SCHEME://$R/studio/%D9%85"
+row GET  "$S" "/admin/%0d%0aSet-Cookie:x=1" 302 "$SCHEME://$R/admin/%0D%0ASet-Cookie:x=1"
+row GET  "$S" "/studio/%3F%3Fx"         302 "$SCHEME://$R/studio/%3F%3Fx"
 
 echo "٤) ما لا يَخُصُّ المَتجَرَ لا يُبلَغُ مِن مُضيفِه"
 row GET  "$S" "/api/$OTHER/unread-counts" 404
@@ -156,7 +156,7 @@ if [ -n "$MANAGER_PHONE" ]; then
   signin "/auth/phone/verify" 302 --data-urlencode "phone=$MANAGER_PHONE" --data-urlencode "code=$DEV_CODE"
   row GET "$S" "/manage"                                   200 - "/admin/tenants/$STORE/categories?from=tenant"
   row GET "$S" "/admin/tenants/$STORE/categories?from=tenant" 200 - "acm-wizard-title" "!auth-title"
-  row GET "$S" "/admin/tenants/$OTHER/categories?from=tenant" 301 "$SCHEME://$R/admin/tenants/$OTHER/categories?from=tenant"
+  row GET "$S" "/admin/tenants/$OTHER/categories?from=tenant" 302 "$SCHEME://$R/admin/tenants/$OTHER/categories?from=tenant"
   JAR=""
 else
   echo "  – لَم تُفحَص: MANAGER_PHONE غائِب (هاتِفُ مُديرٍ لِـ$STORE، وDevelopment لِرَمزِ المُحاكي)"
@@ -187,7 +187,7 @@ row GET  "$RH" "/"                       200 - "<link rel=\"canonical\" href=\"$
 row GET  "$RH" "/explore"                200 - "<link rel=\"canonical\" href=\"$SCHEME://$RH/explore\" />" 'href="/explore"' "!href=\"/$STORE/"
 row GET  "$RH" "/api/$STORE/r/$ROLE/manifest.json" 200 - '"id":"/"' '"start_url":"/"' '"scope":"/"'
 row GET  "$RH" "/sw.js"                  200 - "self.addEventListener"
-row GET  "$RH" "/studio"                 301 "$SCHEME://$R/studio"
+row GET  "$RH" "/studio"                 302 "$SCHEME://$R/studio"
 row POST "$RH" "/studio/apps/create"     404
 row GET  "$RH" "/api/$OTHER/unread-counts" 404
 row GET  "$(hp "$STORE-$ROLE_ABSENT.$DOMAIN")" "/explore" 404
@@ -551,6 +551,29 @@ ws "$S" "/_blazor"              "$SCHEME://$(hp "$OTHER.$DOMAIN")" 403
 ws "$S" "/realtime?slug=$STORE" "$SCHEME://$S"                   101
 ws "$R" "/realtime?slug=$STORE" "$SCHEME://$R"                   101
 ws "$R" "/realtime?slug=$STORE" "$SCHEME://$S"                   403
+
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-5 وSEC-C2a-R3-1 وSEC-C2b-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **التَحويلُ مُؤَقَّتٌ ومُخَطَّطُه مِن قائِمَة، والمُضيفُ
+# المُختَلَقُ 400**: صُفوفُ مَناطِقِ المَنَصَّةِ أَعلاه صارَت 302 (كانَت 301 — يَحفَظُه المُتَصَفِّحُ بِلا انقِضاءٍ و`/terms` عَلى المُضيفِ سُؤالٌ مَفتوح)؛ و`X-Forwarded-Proto`
+# غَريبٌ لا يَصيرُ مُخَطَّطَ الوِجهَة؛ و`Host` بِـpunycode لا يُفَكُّ أَو بِمَنفَذٍ فَوقَ 65535 ← 400 لا 500 عَلى المُضيفِ وعَلى الجَذر. **لا يَكتُبُ شَيئاً.**
+echo "١٩) التَحويلُ مُؤَقَّتٌ ومُخَطَّطُه مِن {http, https}، والمُضيفُ المُختَلَقُ 400 (C2z·3)"
+if [ "$DIRECT" != 1 ]; then
+xfp() { # xfp <proto> <want-location>
+  local got loc; got="$(curl -s -m 20 -o /dev/null -D "$TMP/xfp" -w '%{http_code}' -H "Host: $S" -H "X-Forwarded-Proto: $1" "$(url "$S" /studio)")" || got=000
+  loc="$(tr -d '\r' < "$TMP/xfp" | sed -n 's/^[Ll]ocation: //p')"
+  checked=$((checked + 1))
+  if [ "$got" = 302 ] && [ "$loc" = "$2" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' GET "$S" "/studio · X-Forwarded-Proto: $1" "$got $loc"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s %s\n' GET "$S" "/studio · X-Forwarded-Proto: $1" "$got" "$loc"; fi
+}
+xfp javascript "https://$R/studio"
+xfp data       "https://$R/studio"
+row GET  "$(hp "xn--zz.$DOMAIN")"        "/"            400
+row GET  "$(hp "xn--mgbh0fb-vendor.$DOMAIN")" "/"       400
+row GET  "xn--zz"                        "/$STORE"      400
+row GET  "$DOMAIN:99999"                 "/$STORE"      400
+row GET  "$STORE.$DOMAIN:70000"          "/"            400
+else
+  echo "  – لَم تُفحَص: X-Forwarded-Proto يَكتُبُه Cloudflare، والمُضيفُ المُختَلَقُ لا يَحُلُّه DNS — مَحَلِّيّاً وَحدَه"
+fi
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"

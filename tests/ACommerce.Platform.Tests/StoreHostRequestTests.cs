@@ -337,7 +337,7 @@ public class StoreHostPipelineTests(ITestOutputHelper output)
         {
             ("GET", "ashare.example.test", "/listings", 200, "", "/ashare/listings|/listings|ashare"),
             ("GET", "ashare.example.test", "/", 200, "", "/ashare|/|ashare"),
-            ("GET", "ashare.example.test", "/studio?from=store", 301, "http://example.test/studio?from=store", ""),
+            ("GET", "ashare.example.test", "/studio?from=store", 302, "http://example.test/studio?from=store", ""),
             ("POST", "ashare.example.test", "/studio/apps/create", 404, "", ""),
             ("GET", "ashare.example.test", "/api/ejar/unread-counts", 404, "", ""),
             ("GET", "ashare-vendor.example.test", "/", 404, "", ""),
@@ -366,7 +366,7 @@ public class StoreHostPipelineTests(ITestOutputHelper output)
         {
             ("GET",  "ashare.example.test", "/admin/tenants/ashare/categories?from=tenant", 200, "", "/admin/tenants/ashare/categories|/admin/tenants/ashare/categories|"),
             ("POST", "ashare.example.test", "/admin/tenants/ashare/categories/save", 200, "", "/admin/tenants/ashare/categories/save|/admin/tenants/ashare/categories/save|"),
-            ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 301, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
+            ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 302, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
             ("GET",  "nosuch.example.test", "/admin/tenants/nosuch/categories", 404, "", ""),
             ("GET",  "ashare.example.test", "/explore", 200, "", "/ashare/explore|/explore|ashare"),
         };
@@ -436,7 +436,7 @@ public class StoreHostPipelineTests(ITestOutputHelper output)
         {
             var (status, location, _) = await p.SendAsync(r.Method, "ashare.example.test", r.Path);
             output.WriteLine($"{r.Method} ashare.example.test{r.Path} ⇒ {status} {location}");
-            Assert.Equal((301, r.Location), (status, location));
+            Assert.Equal((302, r.Location), (status, location));
         }
         output.WriteLine($"الصُفوف: {rows.Length}");
     }

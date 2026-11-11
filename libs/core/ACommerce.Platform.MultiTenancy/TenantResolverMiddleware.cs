@@ -281,8 +281,11 @@ public sealed class TenantResolverMiddleware
             // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2/C2a-P-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن المَسارِ **مُرَمَّزاً** لا مَفكوكاً:
             // `path` هُنا `req.Path.Value` المَفكوك، فَكانَ `/studio/%D9%85` يُكتَبُ «م» في `Location` ← 500 (Kestrel يَرفُضُ ما خارِجَ ASCII ومَحارِفَ
             // التَحَكُّم)، و`%3F` يَصيرُ `?` فَيَنقَلِبُ المَسارُ استِعلاماً، و`%25` يَصيرُ `%` باطِلاً. وتَطابُقُ المَقاطِعِ أَعلاه يَبقى عَلى المَفكوك.
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-3 وSEC-C2a-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمُخَطَّطُ مِن {http, https} وَحدَهُما**: كانَ
+            // `Request.Scheme` بِحَرفِه — و`X-Forwarded-Proto` يُصَدَّقُ مِن أَيِّ نِدٍّ (`KnownProxies` فارِغ) فَكَتَبَ `javascript://R/studio` و`data://…`. كَما `PortOf`
+            // لِلمَنفَذ: قائِمَةُ سَماحٍ لا تَنظيف — `http` يَبقى، وما سِواه `https`.
             return new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null,
-                $"{(string.IsNullOrEmpty(scheme) ? "https" : scheme)}://{apex}{PortOf(host)}{new PathString(path).ToUriComponent()}{AsciiOnly(query)}");
+                $"{SchemeOf(scheme)}://{apex}{PortOf(host)}{new PathString(path).ToUriComponent()}{AsciiOnly(query)}");
         }
 
         if (string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase))
@@ -362,6 +365,10 @@ public sealed class TenantResolverMiddleware
     }
 
     /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
+    /// <summary>مُخَطَّطُ وِجهَةِ التَحويل — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (‏2026-11-11، SEC-C2a-R3-1).</summary>
+    private static string SchemeOf(string? scheme)
+        => string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
+
     private static string PortOf(string? host)
     {
         var raw = host?.Trim() ?? "";
@@ -596,7 +603,10 @@ public sealed class SubdomainTenantPathMiddleware
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
                 return;
             case StoreHostVerdict.Redirect:
-                ctx.Response.StatusCode = StatusCodes.Status301MovedPermanently;
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-5 وC2a-P-04 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُؤَقَّتٌ لا دائِم**: كانَ 301 — والمُتَصَفِّحُ يَحفَظُه
+                // بِلا انقِضاء، و`/terms` عَلى المُضيفِ سُؤالٌ مَفتوحٌ لِلمالِك (ADR-050 §١٣) والتَراجُعُ نِطاقٌ فارِغ (§١١)؛ فَزائِرٌ فَتَحَ `{slug}.R/terms` مَرَّةً كانَ
+                // يُحَوِّلُه مُتَصَفِّحُه إلى `R/terms` بَعدَ أَيِّ قَرارٍ أَو تَراجُع. والـ301 لِلمَرحَلَةِ الخامِسَةِ حينَ تُحسَمُ القَرارات.
+                ctx.Response.StatusCode = StatusCodes.Status302Found;
                 ctx.Response.Headers.Location = answer.Location;
                 return;
         }

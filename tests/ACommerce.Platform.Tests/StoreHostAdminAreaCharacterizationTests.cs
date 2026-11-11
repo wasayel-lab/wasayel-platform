@@ -113,9 +113,9 @@ public class StoreHostAdminAreaCharacterizationTests(ITestOutputHelper output)
         await using var p = await AdminAreaProbe.StartAsync(Base, world.Store);
         var rows = new (string Method, string Host, string Path, int Status, string Location, string Body)[]
         {
-            ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 301, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
-            ("GET",  "ashare.example.test", "/admin/tenants/ashare-x/users", 301, "http://example.test/admin/tenants/ashare-x/users", ""),
-            ("GET",  "ashare.example.test", "/admin", 301, "http://example.test/admin", ""),
+            ("GET",  "ashare.example.test", "/admin/tenants/ejar/categories?from=tenant", 302, "http://example.test/admin/tenants/ejar/categories?from=tenant", ""),
+            ("GET",  "ashare.example.test", "/admin/tenants/ashare-x/users", 302, "http://example.test/admin/tenants/ashare-x/users", ""),
+            ("GET",  "ashare.example.test", "/admin", 302, "http://example.test/admin", ""),
             ("POST", "ashare.example.test", "/admin/tenants/ejar/categories/save", 404, "", ""),
             ("GET",  "example.test", "/admin/tenants/ashare/categories?from=tenant", 200, "", "/admin/tenants/ashare/categories?from=tenant|tenant="),
             ("POST", "example.test", "/admin/tenants/ashare/categories/save", 200, "", "/admin/tenants/ashare/categories/save|tenant="),

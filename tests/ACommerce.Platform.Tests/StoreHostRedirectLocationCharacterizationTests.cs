@@ -91,7 +91,7 @@ public class StoreHostRedirectLocationCharacterizationTests(ITestOutputHelper ou
         {
             var (status, location) = await p.SendAsync(r.Method, r.Host, r.PathAndQuery);
             output.WriteLine($"{r.Method} {r.Host}{r.PathAndQuery} ⇒ {status} {location}");
-            Assert.Equal((301, r.Location), (status, location));
+            Assert.Equal((302, r.Location), (status, location));
         }
         output.WriteLine($"الصُفوف: {rows.Length}");
     }
