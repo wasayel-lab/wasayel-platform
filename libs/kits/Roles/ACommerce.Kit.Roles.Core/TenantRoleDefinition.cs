@@ -229,7 +229,10 @@ public sealed class TenantRoleSet
                 continue;
             }
 
-            var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed);
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **حِزامُ القِراءَةِ بِقَواعِدِه هُوَ** لا بِبابِ
+            // الكِتابَة: كانَ `ValidateTenantDefinition` فَصارَ يُسقِطُ بِـ`slug_shadows_role_host` (‏97ba402) دَوراً اسمُه `admin` اعتُمِدَ قَبلَ القاعِدَة — عِندَ النَشرِ
+            // ولَو بِلا نِطاق، ومَعَه دَورُ أَعضائِه. والقاعِدَةُ تُسأَلُ حَيثُ يُقتَرَحُ الدَورُ ويُعتَمَد (ADR-050 §٣).
+            var violations = RoleDefinitionValidator.ValidateStoredTenantDefinition(parsed);
             if (violations.Count > 0)
             {
                 Console.Error.WriteLine(

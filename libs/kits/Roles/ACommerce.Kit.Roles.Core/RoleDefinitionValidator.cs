@@ -157,14 +157,13 @@ public static class RoleDefinitionValidator
     /// لَرَفَضَ كُلّ دَور كاتالوج نَفسَه. فَصلُ الدالَّتَين يَجعَل
     /// الاختِلاف مُعلَناً في التَّوقيع لا مَخفِيّاً في وَسيط.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>هذِه بَوّابَةُ الكِتابَة</b>:
+    /// يَسأَلُها اقتِراحُ الوَكيلِ (<c>AgentService.DefineRoleAsync</c>) واعتِمادُ المُشرِف (<c>TenantRoleService.ValidateBeforeApprove</c>)، وهي
+    /// <see cref="ValidateStoredTenantDefinition"/> وزِيادَةُ <see cref="SlugShadowsRoleHost"/>. وحِزامُ القِراءَةِ (<c>TenantRoleSet.FromDocuments</c>) يَسأَلُ تِلكَ
+    /// لا هذِه — كانَ يَسأَلُ هذِه فَيُسقِطُ دَوراً مُؤَلَّفاً اسمُه <c>admin</c> اعتُمِدَ قَبلَ القاعِدَة (‏97ba402) عِندَ النَشرِ ولَو بِلا نِطاق.</remarks>
     public static IReadOnlyList<RoleDefinitionViolation> ValidateTenantDefinition(RoleDefinition d)
     {
-        var v = new List<RoleDefinitionViolation>(Validate(d));
-
-        if (!string.IsNullOrWhiteSpace(d.Slug) && RoleCatalog.FindDefinition(d.Slug) is not null)
-            v.Add(new("slug_shadows_platform_catalog",
-                $"الـ slug «{d.Slug}» مَأخوذ في كاتالوج المَنصَّة — " +
-                "أَدوار المُستَأجِر تُضاف فَوقَه ولا تُظَلِّلُه. اِختَر اسماً آخَر."));
+        var v = new List<RoleDefinitionViolation>(ValidateStoredTenantDefinition(d));
 
         // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P3-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ولا يُظَلِّلُ اسمَ مُضيفِ دَور**: `RoleHostNames` يُسَمّي `tenant_admin`
         // بِـ`admin` — فَدَورٌ يُؤَلِّفُه مَتجَرٌ بِاسمِ `admin` كانَ يَجتازُ (لا يُطابِقُ اسمَ كَتالوج) فَيَصيرُ `{slug}-admin.R` اسماً لِدَورَين. وأَدوارُ المُستَأجِرِ تَبقى
@@ -174,6 +173,29 @@ public static class RoleDefinitionValidator
             v.Add(new(SlugShadowsRoleHost,
                 $"الـ slug «{d.Slug}» اسمُ مُضيفِ الدَورِ «{catalog}» في المَنَصَّة — " +
                 "دَورٌ بِه يَجعَلُ المُضيفَ الواحِدَ اسماً لِدَورَين. اِختَر اسماً آخَر."));
+
+        return v;
+    }
+
+    /// <summary>
+    /// <para><b>حِزامُ القِراءَة — ما يَبقى بِه تَعريفٌ مُعتَمَدٌ مُخَزَّنٌ حَيّاً</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01):
+    /// <see cref="Validate"/> بِحَرفِه وظِلُّ الكَتالوجِ (<c>slug_shadows_platform_catalog</c>) — قَواعِدُ <see cref="ValidateTenantDefinition"/> كَما كانَت عِندَ
+    /// <c>7ce945e</c>. يَسأَلُه <c>TenantRoleSet.FromDocuments</c> وَحدَه.</para>
+    /// <para><b>ولِماذا لا <see cref="SlugShadowsRoleHost"/> هُنا</b>: ADR-050 §٣ يَرُدُّه «عِندَ الاعتِماد» — قاعِدَةٌ جَديدَةٌ تُغلِقُ البابَ أَمامَ ما يَأتي ولا تَمحو
+    /// ما اعتُمِدَ قَبلَها؛ والتَصادُمُ الَّذي تَحرُسُه لا يَقَعُ بِدَورٍ قائِم: الدَورُ المُؤَلَّفُ لا مُضيفَ لَه (<c>HoldsRoleHost</c> يَطلُبُ اسمَ الكَتالوجِ وسلاجَه مَعاً،
+    /// ومَفاتيحُ <see cref="RoleHostNames.ByCatalogSlug"/> أَدوارُ الكَتالوج)، فَـ<c>{slug}-admin.R</c> لا يَعني إلّا <c>tenant_admin</c>. وكانَ إسقاطُه عِندَ القِراءَةِ
+    /// يَمحو دَوراً مُعتَمَداً ودَورَ أَعضائِه عِندَ النَشرِ ولَو بِلا نِطاق.</para>
+    /// <para><b>دالَّةٌ مُنفَصِلَةٌ لا عَلَمٌ</b> — بِمَبدَإِ الفَصلِ أَعلاه: الفَرقُ بَينَ البابِ والحِزامِ مُعلَنٌ في التَوقيع. ورَسائِلُها ورُموزُها وتَرتيبُها رَسائِلُ
+    /// <see cref="ValidateTenantDefinition"/> بِحَرفِها (<c>RoleReadBeltTests</c>).</para>
+    /// </summary>
+    public static IReadOnlyList<RoleDefinitionViolation> ValidateStoredTenantDefinition(RoleDefinition d)
+    {
+        var v = new List<RoleDefinitionViolation>(Validate(d));
+
+        if (!string.IsNullOrWhiteSpace(d.Slug) && RoleCatalog.FindDefinition(d.Slug) is not null)
+            v.Add(new("slug_shadows_platform_catalog",
+                $"الـ slug «{d.Slug}» مَأخوذ في كاتالوج المَنصَّة — " +
+                "أَدوار المُستَأجِر تُضاف فَوقَه ولا تُظَلِّلُه. اِختَر اسماً آخَر."));
 
         return v;
     }
