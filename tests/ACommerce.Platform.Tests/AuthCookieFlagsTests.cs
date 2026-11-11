@@ -134,7 +134,9 @@ public class AuthCookieFlagsTests(ITestOutputHelper output)
         var written = Written(http.Response);
         // ‏(‏2026-11-07، W13-4·C2c·2) الاسمُ بِقَرارِ الطَلَبِ نَفسِه (`StudioAuth.CookieNameFor`) — كانَ `StudioAuth.CookieName` حَرفاً عَلى الطَرَفَين.
         var studio = StudioAuth.CookieNameFor(https);
-        Assert.Equal(new[] { studio, studio + ".name" }, written.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        // ‏(‏2026-11-11، W13-4·C2z·6) وعَلى HTTPS يُمحى الاسمُ القَديمُ مَعَه — كَعكَةُ ما قَبلَ `__Host-` لا تَعودُ بِتَراجُع.
+        var expected = https ? new[] { studio, studio + ".name", StudioAuth.CookieName, StudioAuth.CookieName + ".name" } : new[] { studio, studio + ".name" };
+        Assert.Equal(expected.OrderBy(k => k, StringComparer.Ordinal), written.Keys.OrderBy(k => k, StringComparer.Ordinal));
         foreach (var (_, attrs) in written)
         {
             Assert.Contains(attrs, a => a.StartsWith("expires=thu, 01 jan 1970", StringComparison.Ordinal));

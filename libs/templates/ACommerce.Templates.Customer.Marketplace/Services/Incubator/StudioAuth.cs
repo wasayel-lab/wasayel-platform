@@ -169,5 +169,12 @@ public sealed class StudioAuth
         var name = CookieNameOn(res.HttpContext.Request);
         res.Cookies.Delete(name, opts);
         res.Cookies.Delete(name + ".name", opts);
+        // ‏(‏2026-11-11، SEC-C2c-R3-3 — يُلحَقُ) وعَلى HTTPS الاسمُ القَديمُ مَعَه — كَوكيُّ المَتجَرِ نَفسُه (`AuthSession.ClearCookie`): جَلسَةُ مُشرِفٍ قَبلَ `__Host-` لا تَعودُ بِتَراجُع.
+        if (opts.Secure)
+        {
+            var legacy = CookieNameFor(false);
+            res.Cookies.Delete(legacy, opts);
+            res.Cookies.Delete(legacy + ".name", opts);
+        }
     }
 }

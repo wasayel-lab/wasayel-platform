@@ -62,10 +62,11 @@ public class SessionCookieHostPrefixTests(ITestOutputHelper output)
     {
         var all = EverythingWritten(https: true);
         output.WriteLine($"https — {all.Count} Set-Cookie: {string.Join(" · ", all.Select(a => a.Name).Distinct())}");
-        Assert.Equal(14, all.Count);
+        Assert.Equal(20, all.Count);   // ‏(‏2026-11-11، W13-4·C2z·6) ومَحوُ الاسمِ القَديمِ عَلى HTTPS: أَربَعَةٌ لِلمَتجَرِ واثنانِ لِلاستوديو
         foreach (var (name, attrs) in all)
         {
-            Assert.StartsWith("__Host-", name, StringComparison.Ordinal);
+            // ما يُكتَبُ بِقيمَةٍ بِالبادِئَةِ دائِماً؛ والاسمُ القَديمُ لا يَظهَرُ إلّا مَمحُوّاً (‏2026-11-11، W13-4·C2z·6).
+            if (!name.StartsWith("__Host-", StringComparison.Ordinal)) Assert.Contains(attrs, a => a.StartsWith("expires=thu, 01 jan 1970", StringComparison.Ordinal));
             Assert.Contains("secure", attrs);                                            // شُروطُ البادِئَة — وإلّا رَدَّها المُتَصَفِّح
             Assert.Contains("path=/", attrs);
             Assert.DoesNotContain(attrs, a => a.StartsWith("domain", StringComparison.Ordinal));
@@ -188,8 +189,8 @@ public class SessionCookieHostPrefixTests(ITestOutputHelper output)
         var http = Request(true, "/theme-demo/auth/logout");
         AuthSession.ClearAllCookiesForTenant(http.Response, Slug, roles);
         var deleted = SetCookies(http.Response);
-        Assert.Equal(8, deleted.Count);
-        Assert.All(deleted, d => Assert.True(d.Name.StartsWith("__Host-", StringComparison.Ordinal) && d.Attrs.Contains("secure") && d.Attrs.Contains("path=/")));
+        Assert.Equal(16, deleted.Count);   // ‏(‏2026-11-11، W13-4·C2z·6) والاسمُ القَديمُ يُمحى مَعَ كُلِّ اسمٍ بِالبادِئَة — ثَمانِيَةٌ وثَمانِيَة
+        Assert.All(deleted, d => Assert.True((d.Name.StartsWith("__Host-", StringComparison.Ordinal) || d.Attrs.Any(a => a.StartsWith("expires=thu, 01 jan 1970", StringComparison.Ordinal))) && d.Attrs.Contains("secure") && d.Attrs.Contains("path=/")));
     }
 
     [Fact]

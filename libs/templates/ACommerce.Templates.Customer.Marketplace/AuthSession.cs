@@ -275,6 +275,15 @@ public sealed class AuthSession
         var name = CookieNameOn(res.HttpContext.Request, tenantSlug, role);
         res.Cookies.Delete(name, opts);
         res.Cookies.Delete(name + ".name", opts);
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2c-P2-02 وSEC-C2c-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وعَلى HTTPS يُمحى الاسمُ القَديمُ مَعَه**: كَعكَةُ ما قَبلَ
+        // `__Host-` تَحمِلُ رَمزاً صالِحاً ثَلاثينَ يَوماً بِإصدارِ الجَلسَةِ نَفسِه، ولا يَقرَؤُها هذا البِناءُ عَلى HTTPS — ويَقرَؤُها البِناءُ السابِقُ إن تُراجِعَ إلَيه،
+        // فَمَن خَرَجَ عَلى جِهازٍ مُشتَرَكٍ يَعودُ داخِلاً. مَحوُه آمِنٌ: الاسمُ لا يُقرَأُ عَلى HTTPS. وعَلى HTTP القائِمَةُ بِحُروفِها.
+        if (opts.Secure)
+        {
+            var legacy = CookieNameFor(false, tenantSlug, role);
+            res.Cookies.Delete(legacy, opts);
+            res.Cookies.Delete(legacy + ".name", opts);
+        }
     }
 
     /// <summary>يَمسَح كُلّ cookies المُستَخدِم لِكُلّ الأَدوار المُحتَمَلَة في

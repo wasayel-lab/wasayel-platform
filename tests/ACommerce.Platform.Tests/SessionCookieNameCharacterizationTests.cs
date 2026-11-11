@@ -180,7 +180,8 @@ public class SessionCookieNameCharacterizationTests(ITestOutputHelper output)
         StudioAuth.DeleteCookie(delete.Response);
         var deleted = SetCookies(delete.Response);
         output.WriteLine($"مَكتوبٌ {string.Join(" · ", written.Select(w => w.Name))} · مَمحُوٌّ {string.Join(" · ", deleted.Select(d => d.Name))}");
-        Assert.Equal(written.Select(w => w.Name), deleted.Select(d => d.Name));
+        // ‏(‏2026-11-11، W13-4·C2z·6) ومَعَها الاسمُ القَديمُ عَلى HTTPS — بِلا بادِئَة.
+        Assert.Equal(written.Select(w => w.Name).Concat(written.Select(w => w.Name[AuthSession.HostPrefix.Length..])), deleted.Select(d => d.Name));
         Assert.All(deleted, d => Assert.True(IsDelete(d.Attrs) && d.Attrs.Contains("secure")));
     }
 
@@ -203,7 +204,9 @@ public class SessionCookieNameCharacterizationTests(ITestOutputHelper output)
         AuthSession.ClearAllCookiesForTenant(http.Response, Slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, Slug));
         var deleted = SetCookies(http.Response);
         output.WriteLine($"مَكتوبٌ {string.Join(" · ", written.Select(w => w.Name))} · مَمحُوٌّ {string.Join(" · ", deleted.Select(d => d.Name))}");
-        Assert.Equal(written.Select(w => w.Name).OrderBy(n => n, StringComparer.Ordinal), deleted.Select(d => d.Name).OrderBy(n => n, StringComparer.Ordinal));
+        // ‏(‏2026-11-11، W13-4·C2z·6) ومَعَ كُلِّ اسمٍ بِالبادِئَةِ اسمُه القَديمُ عَلى HTTPS — والزِيادَةُ هِيَ هذِه وَحدَها.
+        Assert.Equal(written.Select(w => w.Name).Concat(written.Select(w => w.Name[AuthSession.HostPrefix.Length..])).OrderBy(n => n, StringComparer.Ordinal),
+                     deleted.Select(d => d.Name).OrderBy(n => n, StringComparer.Ordinal));
         Assert.All(deleted, d => Assert.True(IsDelete(d.Attrs)));
     }
 
