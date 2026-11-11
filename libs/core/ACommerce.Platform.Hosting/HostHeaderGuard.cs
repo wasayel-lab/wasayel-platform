@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ACommerce.Platform.Hosting;
 
@@ -51,17 +54,63 @@ public static class HostHeaderGuard
     /// السِياسَةُ الرَأسَ (<see cref="ForwardedHeadersPolicy.TrustsForwardedHost"/>) فَكُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ فيه تُقرَأُ بِـ<see cref="IsReadable"/> — وإلّا 400.
     /// وبِلا قائِمَةٍ لا يُقرَأُ الرَأسُ فَلا يُسأَل (الإطارُ لا يَلمِسُه). والحارِسُ في الأُنبوبِ باقٍ لِتَركيبٍ بِلا هذِه الواجِهَة.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · SEC-C2z-R2-6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والرَدُّ يَترُكُ سَطراً واحِداً في السِجِلّ</b>: هذِه
+    /// الواجِهَةُ قَبلَ <c>UseSerilogRequestLogging</c> (‏<see cref="HostingExtensions.UsePlatformHost"/>)، فَكانَت الـ400 بِلا أَثَرٍ — مَقيسٌ عِندَ المُراجِع: خَمسٌ
+    /// بِـ<c>Host</c> مُختَلَقٍ وإحدى عَشرَةَ خَلفَ العامِلِ بِصِفرِ سَطر، وكانَت قَبلَ <c>6271f4f</c> تُسَجَّلُ «responded 400» — فَسَبرُ المُضيفاتِ (ADR-050 §١٣)
+    /// لا يَراه المُشَغِّل. الآن تَحذيرٌ بِشَكلِ سَطرِ <c>[origin]</c> (<see cref="CrossOriginWriteMiddleware"/>): <c>[host] {الرَمز} {الفِعل} {المَسار} {الرَأس}
+    /// length=… values=… shape=…</c> — والقيمَةُ الخامُ لا تُكتَب (طولُها وعَدَدُ قيَمِها وصِنفٌ مِن مَعجَمٍ مُغلَق: <see cref="ShapeOf"/>)، لِأَنّها نَصٌّ يَختارُه
+    /// الزائِرُ ويَكتُبُه في سِجِلِّ غَيرِه.</remarks>
     public static IApplicationBuilder UsePlatformForwardedHeaders(this IApplicationBuilder app, ForwardedHeadersPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
+        var log = app.ApplicationServices.GetService<ILoggerFactory>()?.CreateLogger(typeof(HostHeaderGuard).FullName!) ?? NullLogger.Instance;
         app.Use(next => ctx =>
         {
             var headers = ctx.Request.Headers;
-            if (ForwardedReadable(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString())) return next(ctx);
+            if (ForwardedRefusal(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString()) is not { } refusal) return next(ctx);
+            log.LogWarning("[host] {Code} {Method} {Path} {Header} length={Length} values={Values} shape={Shape}",
+                refusal.Code, ctx.Request.Method, ctx.Request.Path.Value, refusal.Header, refusal.Length, refusal.Values, refusal.Shape);
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
             return Task.CompletedTask;
         });
         return app.UseForwardedHeaders();
+    }
+
+    /// <summary>رَدُّ الواجِهَةِ الأَمامِيَّة: رَمزُه، والرَأسُ الَّذي لا يُقرَأ، وطولُ قيمَتِه كُلِّها، وعَدَدُ قيَمِها، وصِنفُ أَوَّلِ قيمَةٍ لا تُقرَأ — بِلا القيمَةِ نَفسِها.</summary>
+    public sealed record ForwardedFrontRefusal(string Code, string Header, int Length, int Values, string Shape);
+
+    /// <summary>رَمزُ الرَدِّ لِـ<c>Host</c> لا يُقرَأ.</summary>
+    public const string HostUnreadable = "host_unreadable";
+    /// <summary>رَمزُ الرَدِّ لِقيمَةٍ في <c>X-Forwarded-Host</c> المُصَدَّقِ لا تُقرَأ.</summary>
+    public const string ForwardedHostUnreadable = "forwarded_host_unreadable";
+
+    /// <summary>القَرارُ نَفسُه الَّذي يُجيبُه <see cref="ForwardedReadable"/> — ومَعَه ما يُكتَبُ في السِجِلّ؛ <c>null</c> إن قُرِئَ كُلُّ شَيء.</summary>
+    public static ForwardedFrontRefusal? ForwardedRefusal(ForwardedHeadersPolicy policy, string? host, string? forwardedHost)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (!IsReadable(host)) return new(HostUnreadable, "Host", host?.Length ?? 0, 1, ShapeOf(host));
+        if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return null;
+        var values = forwardedHost.Split(',');
+        foreach (var value in values)
+            if (!IsReadable(value.Trim())) return new(ForwardedHostUnreadable, "X-Forwarded-Host", forwardedHost.Length, values.Length, ShapeOf(value.Trim()));
+        return null;
+    }
+
+    /// <summary><b>صِنفُ القيمَةِ الَّتي لا تُقرَأ — مَعجَمٌ مُغلَق</b>: <c>control</c> (مَحرَفُ تَحَكُّم)، <c>non_ascii</c>، <c>port</c> (مَنفَذٌ لَيسَ 0..65535)،
+    /// <c>idn</c> (<c>xn--</c> لا يُفَكّ)، <c>other</c>. يُكتَبُ في السِجِلِّ بَدَلَ القيمَة.</summary>
+    public static string ShapeOf(string? raw)
+    {
+        var v = raw ?? "";
+        if (v.Any(char.IsControl)) return "control";
+        if (v.Any(c => c > '\u007e')) return "non_ascii";
+        var colon = v.LastIndexOf(':');
+        if (colon > v.LastIndexOf(']'))
+        {
+            var digits = v[(colon + 1)..];
+            if (digits.Length is 0 or > 5 || !digits.All(char.IsAsciiDigit) || int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture) > 65535) return "port";
+        }
+        if (v.Contains("xn--", StringComparison.OrdinalIgnoreCase)) return "idn";
+        return "other";
     }
 
     /// <summary>
@@ -70,14 +119,7 @@ public static class HostHeaderGuard
     /// القَرارُ بِحَدِّ <c>ForwardLimit</c>).</para>
     /// </summary>
     public static bool ForwardedReadable(ForwardedHeadersPolicy policy, string? host, string? forwardedHost)
-    {
-        ArgumentNullException.ThrowIfNull(policy);
-        if (!IsReadable(host)) return false;
-        if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return true;
-        foreach (var value in forwardedHost.Split(','))
-            if (!IsReadable(value.Trim())) return false;
-        return true;
-    }
+        => ForwardedRefusal(policy, host, forwardedHost) is null;   // ‏(‏2026-11-11، SEC-C2z-R2-6 — يُلحَق) الجِسمُ في ForwardedRefusal بِحَرفِه
 
     /// <summary>الوَسيط: 400 لِرَأسٍ لا يُقرَأ، وما سِواه إلى ما بَعدَه.</summary>
     public static IApplicationBuilder UseHostHeaderGuard(this IApplicationBuilder app)
