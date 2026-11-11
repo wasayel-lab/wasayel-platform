@@ -390,7 +390,8 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ
 // Request.IsHttps / Scheme (الـ HTTPS redirect والكوكي والـ Auth).
-app.UseForwardedHeaders();
+// ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2) بِاسمِ تَركيبِه (`HostHeaderGuard.UsePlatformForwardedHeaders`) — يَقيسُه تَوصيفُه بِالاسم.
+app.UsePlatformForwardedHeaders(forwardedHeaders);
 
 // **وحالَةُ المُضيف تُقال بِاسمِها عِندَ الإقلاع**: قائِمَةٌ مَكتوبَةٌ
 // خَطَأً (‏`*` أَو مِفتاحٌ مُخطِئ) تَسقُط صامِتَةً، فَيَظُنّ المُهَيِّئ

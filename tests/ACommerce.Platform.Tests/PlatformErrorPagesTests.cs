@@ -369,7 +369,9 @@ public class PlatformErrorPagesTests
     {
         var program = Read("apps", "V1.App", "Program.cs");
 
-        var forwarded = program.IndexOf("app.UseForwardedHeaders();", StringComparison.Ordinal);
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واجِهَةُ الرُؤوسِ المُمَرَّرَةِ صارَت بِاسمِها
+        // (`UsePlatformForwardedHeaders`) — والتَرتيبُ المَقيسُ نَفسُه؛ و`ForwardedFrontCharacterizationTests` يَحمَرُّ عَلى `UseForwardedHeaders()` عارٍ.
+        var forwarded = program.IndexOf("app.UsePlatformForwardedHeaders(forwardedHeaders);", StringComparison.Ordinal);
         var pages = program.IndexOf("app.UsePlatformErrorPages(buildVersion);", StringComparison.Ordinal);
         var host = program.IndexOf("app.UsePlatformHost();", StringComparison.Ordinal);
         Assert.True(forwarded > 0 && pages > forwarded && host > pages,

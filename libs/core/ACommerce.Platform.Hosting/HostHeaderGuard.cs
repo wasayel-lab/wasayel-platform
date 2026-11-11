@@ -39,6 +39,18 @@ public static class HostHeaderGuard
         catch (FormatException) { return false; }
     }
 
+    /// <summary>
+    /// <para><b>واجِهَةُ الرُؤوسِ المُمَرَّرَةِ بِاسمِها</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2 وC2z-PATHS-R1-03): <c>Program.cs</c> كانَ
+    /// يُرَكِّبُ <c>app.UseForwardedHeaders()</c> سَطراً بِلا اسم، وهُوَ ما يَقرَأُ <c>X-Forwarded-Host</c> قَبلَ الحارِسِ أَعلاه — فَتَوصيفُ ما يَنجو يَقيسُ هذا التَركيبَ
+    /// بِاسمِه عَلى مُضيفٍ مُصَغَّرٍ بِسِياسَةِ المَنَصَّةِ نَفسِها (<see cref="ForwardedHeadersPolicy"/>)، فَيَبقى مِلَفُّه بِبَصمَتِه قَبلَ التَبديلِ وبَعدَه.
+    /// والخِياراتُ مِن الحاوِيَةِ كَما كانَت (<c>Configure&lt;ForwardedHeadersOptions&gt;(policy.ApplyTo)</c>).</para>
+    /// </summary>
+    public static IApplicationBuilder UsePlatformForwardedHeaders(this IApplicationBuilder app, ForwardedHeadersPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return app.UseForwardedHeaders();
+    }
+
     /// <summary>الوَسيط: 400 لِرَأسٍ لا يُقرَأ، وما سِواه إلى ما بَعدَه.</summary>
     public static IApplicationBuilder UseHostHeaderGuard(this IApplicationBuilder app)
         => app.Use(next => ctx =>
