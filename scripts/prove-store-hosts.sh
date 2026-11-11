@@ -795,6 +795,25 @@ if [ -n "$ROLE" ]; then
   row GET  "$RH" "/$STORE/explore"                       302 "/explore"
   row GET  "$RH" "/$STORE/r/$ROLE/terms"                 200
 fi
+# ‏(‏2026-11-11، W13-4·C2f-R1·2 — SEC-C2f-R1-2 وC2f-PATHS-R1-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ومَقطَعٌ فارِغٌ لَيسَ صَفحَةً بِشَكلِ المَسار**: قالِبُ المَتجَرِ يُقرَأُ
+# بِلا المَقاطِعِ الفارِغَة، فَكانَ `/{store}//me` يُطابِقُ `/{slug}/me` ويُحَوَّلُ إلى `Location: //me` — والمُتَصَفِّحُ يَقرَؤُه عُنواناً بِلا مُخَطَّط: `https://me/`
+# خارِجَ المَوقِع (مَقيسٌ عِندَ 7a9efc7 عَلى مُضيفِ المَتجَرِ ومُضيفِ الدَور). الآن يَبقى كَما كانَ قَبلَ C2f·6، ولا `Location` يَبدَأُ بِـ`//` أَو `/\`.
+nosr() { # nosr <host> <path> — لا وِجهَةَ بِلا مُخَطَّطٍ ولا 302 إلى مِثلِها
+  local loc why=""; curl -s -m 20 -o /dev/null -D "$TMP/nosr" -H "Host: $1" "$(url "$1" "$2")" > /dev/null || why="لا جَواب"
+  loc="$(tr -d '\r' < "$TMP/nosr" | sed -n 's/^[Ll]ocation: //p')"
+  case "$loc" in //*|/\\*) why="الوِجهَة «$loc» بِلا مُخَطَّط";; esac
+  checked=$((checked + 1))
+  if [ -z "$why" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' GET "$1" "$2" "${loc:-بِلا وِجهَة}"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s\n' GET "$1" "$2" "$why"; fi
+}
+for P in "/$STORE//me" "/$STORE//" "/$STORE///me" "/$STORE//login" "/$STORE//deals/$DEAL" "/$STORE//r/customer/login"; do nosr "$S" "$P"; done
+if [ -n "$ROLE" ]; then
+  for P in "/$STORE//me" "/$STORE/r/$ROLE//me" "/$STORE/r/$ROLE//"; do nosr "$RH" "$P"; done
+  row GET  "$RH" "/$STORE/r/$ROLE//me"                 404
+fi
+row GET  "$S" "/$STORE//me"                             404                         # كَوَضعِ المَسار
+row GET  "$S" "/$STORE//"                               404
+row GET  "$R" "/$STORE//me"                             404                         # وَضعُ المَسارِ عَلى الجَذرِ كَما كان
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"

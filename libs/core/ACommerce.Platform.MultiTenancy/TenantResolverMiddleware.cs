@@ -299,6 +299,11 @@ public sealed class TenantResolverMiddleware
         if (!rolePages.MatchesStorePage(servedRest)) return null;
 
         var rest = firstSlash > 0 ? p[firstSlash..] : "/";
+        // ‏(‏2026-11-11، W13-4·C2f-R1·2 — SEC-C2f-R1-2 وC2f-PATHS-R1-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مَقطَعٌ فارِغٌ لَيسَ صَفحَةً بِشَكلِ المَسار**: القالِبُ
+        // يُقرَأُ بِلا المَقاطِعِ الفارِغَة (`MatchesStorePage`)، فَكانَ `/{slug}//me` يُطابِقُ `/{slug}/me` ويُكتَبُ ذَيلُه `//me` في `Location` — عُنوانٌ بِلا مُخَطَّطٍ
+        // يَقرَؤُه المُتَصَفِّحُ `https://me/` (مَقيسٌ عِندَ `7a9efc7` عَلى مُضيفِ المَتجَرِ ومُضيفِ الدَور)؛ وأَمانُه مُعَلَّقٌ بِأَلّا يَكونَ لِقالِبٍ مَقطَعٌ أَوَّلُ مُتَغَيِّر.
+        // الآن يَبقى كَما كانَ قَبلَ C2f·6 (يُجابُ كَما يُجابُ HEAD)، ووِجهَةٌ تَبدَأُ بِـ`//` أَو `/\` لا تُكتَبُ أَبَداً (أَدناه).
+        if (rest.Contains("//", StringComparison.Ordinal)) return null;
         var candidates = new List<string>(2);
         if (role is not null && WithoutRoleSegment(rest, role) is { } bare)
         {
@@ -315,7 +320,10 @@ public sealed class TenantResolverMiddleware
             if (segments.Length > 0 && ServedAtRoot(segments[0])) continue;
             var again = AnswerOnStoreHost(slug, role, host, apex, method, candidate, query, scheme, rolePages);
             if (ServedPath(again, candidate) is { } same && string.Equals(same.TrimEnd('/'), served.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
-                return new PathString(candidate).ToUriComponent() + AsciiOnly(query);
+            {
+                var location = new PathString(candidate).ToUriComponent() + AsciiOnly(query);
+                return location.StartsWith("//", StringComparison.Ordinal) || location.StartsWith("/\\", StringComparison.Ordinal) ? null : location;
+            }
         }
         return null;
     }

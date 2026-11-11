@@ -108,6 +108,70 @@ public class PathShapedOnHostTests(ITestOutputHelper output)
         Assert.Equal((head.Verdict, head.Path, head.Location), (get.Verdict, get.Path, get.Location));
     }
 
+    // ‏(‏2026-11-11، W13-4·C2f-R1·2 — SEC-C2f-R1-2 وC2f-PATHS-R1-02 — يُلحَق) **مَقطَعٌ فارِغٌ لَيسَ صَفحَةً بِشَكلِ المَسار**: القالِبُ يُقرَأُ بِلا المَقاطِعِ الفارِغَة،
+    // فَكانَ `/ashare//me` يُطابِقُ `/{slug}/me` ويُحَوَّلُ إلى `Location: //me` — عُنوانٌ بِلا مُخَطَّطٍ يَقرَؤُه المُتَصَفِّحُ `https://me/`. الآن يُجابُ كَما يُجابُ HEAD
+    // (ما كانَ قَبلَ C2f·6)، ولا `Location` يَبدَأُ بِـ`//` أَو `/\`.
+    [Theory]
+    [InlineData("ashare.example.test", "/ashare//me")]
+    [InlineData("ashare.example.test", "/ashare//")]
+    [InlineData("ashare.example.test", "/ashare///me")]
+    [InlineData("ashare.example.test", "/ashare//login")]
+    [InlineData("ashare.example.test", "/ashare//legal/x")]
+    [InlineData("ashare.example.test", "/ashare//deals/" + Id)]
+    [InlineData("ashare.example.test", "/ashare//r/customer/login")]
+    [InlineData("ashare.example.test", "/ashare/r/vendor//me")]
+    [InlineData("ashare.example.test", "/ashare/explore//")]
+    [InlineData("ashare-vendor.example.test", "/ashare//me")]
+    [InlineData("ashare-vendor.example.test", "/ashare/r/vendor//me")]
+    [InlineData("ashare-vendor.example.test", "/ashare/r/vendor//")]
+    [InlineData("ashare-vendor.example.test", "/ashare//r/vendor")]
+    [InlineData("ashare-vendor.example.test", "/ashare/explore//")]
+    [InlineData("ashare-admin.example.test", "/ashare/r/tenant_admin//manage")]
+    public void A_path_with_an_empty_segment_is_not_redirected_and_no_location_leaves_the_site(string host, string path)
+    {
+        var get = Answer(host, "GET", path);
+        var head = Answer(host, "HEAD", path);
+        output.WriteLine($"GET {host}{path} ⇒ {get.Verdict} {get.Path ?? get.Location}");
+        Assert.False(OffSite(get.Location), $"{host}{path} ⇒ {get.Location}");
+        Assert.Equal((head.Verdict, head.Slug, head.Path, head.Location), (get.Verdict, get.Slug, get.Path, get.Location));
+    }
+
+    /// <summary>
+    /// <para><b>لِكُلِّ قالِبِ صَفحَةِ مَتجَرٍ عَلى كُلِّ مُضيفٍ وبِكُلِّ مَوضِعٍ لِمَقطَعٍ فارِغ</b> (بَعدَ المَتجَر، وبَعدَ كُلِّ مَقطَع، وفي الآخِر): لا <c>Location</c>
+    /// يَبدَأُ بِـ<c>//</c> أَو <c>/\</c>، وGET كَـHEAD. يَطبَعُ عَدَدَ ما فَحَصَه ويَفشَلُ صِفراً (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void No_store_page_template_with_an_empty_segment_on_any_host_is_redirected_off_the_site()
+    {
+        var hosts = new (string Host, string Role)[]
+        {
+            ("ashare.example.test", "customer"), ("ashare-vendor.example.test", "vendor"), ("ashare-customer.example.test", "customer"), ("ashare-admin.example.test", "tenant_admin"),
+        };
+        int checkedRows = 0, offSite = 0;
+        foreach (var (host, role) in hosts)
+        foreach (var template in RoleHostPages.Templates.StoreTemplates)
+        {
+            var path = template.Replace("{slug}", "ashare").Replace("{role}", role).Replace("{id:guid}", Id).Replace("{conversationId:guid}", Id)
+                .Replace("{vendorId:guid}", Id).Replace("{section}", "privacy").Replace("{planId}", "p1");
+            var slashes = Enumerable.Range(0, path.Length).Where(i => path[i] == '/').ToList();
+            var variants = slashes.Select(i => path.Insert(i, "/")).Append(path + "//").Distinct();
+            foreach (var variant in variants)
+            {
+                var get = Answer(host, "GET", variant, "?x=1");
+                var head = Answer(host, "HEAD", variant, "?x=1");
+                checkedRows++;
+                if (OffSite(get.Location)) { offSite++; output.WriteLine($"  ✗ {host}{variant} ⇒ {get.Location}"); }
+                Assert.Equal((head.Verdict, head.Slug, head.Path, head.Location), (get.Verdict, get.Slug, get.Path, get.Location));
+            }
+        }
+        output.WriteLine($"مَساراتٌ بِمَقطَعٍ فارِغ: {checkedRows} · خارِجَ المَوقِع: {offSite}");
+        Assert.True(checkedRows > 100, $"فَحصٌ أَعمى: {checkedRows}");
+        Assert.Equal(0, offSite);
+    }
+
+    private static bool OffSite(string? location)
+        => location is { } l && (l.StartsWith("//", StringComparison.Ordinal) || l.StartsWith("/\\", StringComparison.Ordinal));
+
     [Fact]
     public void The_store_templates_are_the_page_routes_under_the_store_and_include_the_role_pages()
     {
