@@ -710,7 +710,9 @@ if [ "$DIRECT" != 1 ]; then
   XFP=javascript
   [ -n "$ROLE" ] && row GET "$S" "/"     200 - "https://$RH/login" "!javascript://$RH"
   if [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $AH" "$(url "$AH" /)")" = 200 ]; then
-    row GET "$AH" "/login?err=not_store_admin" 200 - "href=\"https://$S/\"" "!href=\"javascript:"
+    # ‏(‏2026-11-11، W13-4·C2z-R2·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الإبرَةُ السالِبَةُ رابِطُ المَتجَرِ بِعَينِه: كانَت `!href="javascript:` فَأَمسَكَت
+    # `<link rel="canonical">` الَّذي يَبنيه `App.razor` مِن `Request.Scheme` بِحَرفِه في الوَضعَين (وَسمٌ لا وِجهَةُ تَحويل، خارِجَ SEC-C2z-R2-1 — يُقالُ في ADR-050 §١٥).
+    row GET "$AH" "/login?err=not_store_admin" 200 - "href=\"https://$S/\"" "!href=\"javascript://$S/\""
   else
     echo "  – صَفُّ مُضيفِ الإدارَةِ لَم يُفحَص: $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
   fi
