@@ -48,7 +48,7 @@ else if (!Tenant.IsResolved)
 {
     <p>@L.Markup("auth.login.tenant_missing")</p>
 }
-else if (Err == Services.Ux.AdminHostSignIn.NotStoreAdmin)
+else if (Err == Services.Ux.AdminHostSignIn.NotStoreAdmin && Services.Ux.AdminHostSignIn.Applies(Slug))
 {
     @* ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) دُخولٌ عَلى مُضيفِ الإدارَةِ لا يَحمِلُ دَورَها رُدَّ بِلا كَعكَة (`AdminHostSignIn`) —
        فَلا استِمارَةَ تُعيدُه إلى الحَلقَة: الرَفضُ مِن القاموسِ ومَخرَجانِ حَقيقِيّانِ، المَتجَرُ عَلى مُضيفِه ودُخولٌ بِحِسابٍ آخَر. وما سِوى هذا الرَمزِ بِبايتاتِه. *@

@@ -749,6 +749,19 @@ lang "$R" "/$STORE/مثال"  "/$STORE/%D9%85%D8%AB%D8%A7%D9%84"
 lang "$S" "/مثال"          "/%D9%85%D8%AB%D8%A7%D9%84"
 lang "$S" "/explore"       "/explore"
 
+# ‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·4 — C2z-PATHS-R3-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **بِطاقَةُ رَفضِ مُضيفِ الإدارَةِ عَلى مُضيفِ الإدارَةِ
+# وَحدَه**: كانَ `?err=not_store_admin` يَرسُمُها بِلا استِمارَةٍ عَلى مُضيفِ المَتجَرِ ومُضيفِ دَورٍ آخَرَ والجَذر (والرَمزُ لا يَصدُرُ هُناك). الآن الاستِمارَة، والبِطاقَةُ
+# عَلى `{store}-admin` كَما كانَت. **لا يَكتُبُ شَيئاً.**
+echo "٢٦) بِطاقَةُ رَفضِ مُضيفِ الإدارَةِ عَلى مُضيفِ الإدارَةِ وَحدَه، وما سِواه الاستِمارَة (C2f·4)"
+row GET  "$S" "/login?err=not_store_admin"          200 - "<form"
+row GET  "$R" "/$STORE/login?err=not_store_admin"   200 - "<form"
+[ -n "$ROLE" ] && row GET "$RH" "/login?err=not_store_admin" 200 - "<form"
+if [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $AH" "$(url "$AH" /)")" = 200 ]; then
+  row GET "$AH" "/login?err=not_store_admin"        200 - "!<form" "href=\"$SCHEME://$S/\""
+else
+  echo "  – صَفُّ مُضيفِ الإدارَةِ لَم يُفحَص: $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

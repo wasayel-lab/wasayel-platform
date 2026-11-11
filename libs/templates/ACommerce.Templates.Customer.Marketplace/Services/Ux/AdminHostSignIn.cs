@@ -24,10 +24,21 @@ public static class AdminHostSignIn
     /// </summary>
     public static string? Refusal(HostView view, string slug, string? heldRole)
     {
-        if (!StoreUrl.OnHostOf(view, slug) || !Gates.SelfGrantPolicy.IsAdminSlug(view.HostRole)) return null;
+        if (!Applies(view, slug)) return null;
         if (Gates.SelfGrantPolicy.IsAdminSlug(heldRole)) return null;
         return StoreUrl.For(view, slug, null, $"login?err={NotStoreAdmin}");
     }
+
+    /// <summary>
+    /// <para><b>أَهذا الطَلَبُ عَلى مُضيفِ دَورِ الإدارَةِ لِهذا المَتجَرِ بِعَينِه؟</b> (‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·4 — C2z-PATHS-R3-03) —
+    /// شَرطُ <see cref="Refusal"/> بِحَرفِه، ويَسأَلُه <c>Login.razor</c> قَبلَ أَن يَرسُمَ البِطاقَة: كانَت تُرسَمُ لِكُلِّ <c>?err=not_store_admin</c> — في وَضعِ المَسارِ
+    /// وعَلى مُضيفِ المَتجَرِ ومُضيفِ دَورٍ آخَر (مَقيسٌ عِندَ <c>ad0a770</c>) حَيثُ لا يَصدُرُ الرَمزُ أَبَداً والنَصُّ كاذِب، ورابِطٌ مَصنوعٌ يُري الزائِرَ رَفضاً بَدَلَ الاستِمارَة.</para>
+    /// </summary>
+    public static bool Applies(HostView view, string slug)
+        => StoreUrl.OnHostOf(view, slug) && Gates.SelfGrantPolicy.IsAdminSlug(view.HostRole);
+
+    /// <summary><see cref="Applies(HostView, string)"/> بِالطَلَبِ الحالِيِّ (<c>AuthSession.HttpAccessor</c>) — لِصَفحَةِ الدُخول.</summary>
+    public static bool Applies(string slug) => Applies(StoreUrl.ViewOf(AuthSession.HttpAccessor?.HttpContext), slug);
 
     /// <summary>
     /// <para><b>المَتجَرُ عَلى مُضيفِه — مَخرَجُ الرَفض</b>: مِن مُضيفِ دَورٍ لِهذا المَتجَرِ <c>{scheme}://{slug}.R{port}/</c> (حَيثُ تُقرَأُ الكَعكَةُ العامَّة)، وما سِوى ذلك
