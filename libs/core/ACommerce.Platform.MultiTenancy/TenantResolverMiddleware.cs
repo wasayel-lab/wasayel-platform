@@ -210,6 +210,13 @@ public sealed class TenantResolverMiddleware
         => ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.Keys.Where(c => HoldsRoleHost(tenant, c)).Order(StringComparer.Ordinal).ToArray();
 
     /// <summary>
+    /// <para><b>أَيَخدِمُ الجَذرُ هذا المَتجَرَ بِمَسارٍ لَه جَرَّةٌ غَيرُ جِرارِ مُضيفاتِه؟</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-1): نَعَم حينَ يُهَيَّأُ النِطاقُ
+    /// ويَصلُحُ اسمُ المَتجَرِ مُضيفاً — فَلَه مُضيفٌ وجَرَّةُ <c>R/{slug}</c> مَعاً. وبِلا نِطاقٍ (وَضعُ المَسار) أَو لِمَتجَرٍ لا يَصلُحُ اسمُه مُضيفاً: جَرَّةٌ واحِدَةٌ لا سِلسِلَة.</para>
+    /// </summary>
+    public static bool ApexServes(string? apex, string slug)
+        => !string.IsNullOrEmpty(apex) && StoreHostName.IsValid(slug);
+
+    /// <summary>
     /// <para><b>ما يُفعَلُ بِطَلَبٍ عَلى مُضيفِه — قَرارٌ نَقِيٌّ يَقرَؤُه الحاقِن</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). لا يَقرَأُ حالَةً مَخزونَة
     /// (القاعِدَة ٧): وُجودُ المَتجَرِ يَسأَلُه <see cref="TenantResolverMiddleware"/> بَعدَ التَوجيه.</para>
     /// <list type="bullet">
@@ -464,6 +471,14 @@ public sealed class TenantResolverMiddleware
 
         // ‏(‏2026-11-07، SEC-C2b-R2-2) ومُضيفاتُ المَتجَرِ عَلى طَلَبٍ يَخدِمُه مُضيفٌ لَه — يَقرَؤُها الخُروجُ لِيَمُرَّ بِها كُلِّها (الكَعكاتُ مَقصورَةٌ عَلى مُضيفِها).
         if (entity is not null && hostSlug is not null) ctx.Items[StoreHostItems.HostedRoles] = HostedRoles(entity);
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجَرَّةُ الجَذرِ مَحَطَّةٌ أَيضاً**: مَعَ نِطاقٍ مُهَيَّأٍ يَخدِمُ `R/{slug}`
+        // المَتجَرَ بِجَرَّةٍ مُستَقِلَّة — كانَ الخُروجُ عَلى المُضيفِ يَترُكُها داخِلَة، والخُروجُ عَلَيها يَترُكُ المُضيفاتِ داخِلَة (مَقيسٌ عِندَ 818ef7b). فَالعَلامَةُ
+        // عَلى المُضيفاتِ وعَلى الجَذر، ومُضيفاتُ المَتجَرِ عَلى الجَذرِ أَيضاً. وبِلا نِطاقٍ لا يُكتَبُ شَيء.
+        if (entity is not null && ApexServes(_subdomains.Apex, entity.Slug))
+        {
+            ctx.Items[StoreHostItems.ApexServesStore] = true;
+            if (hostSlug is null) ctx.Items[StoreHostItems.HostedRoles] = HostedRoles(entity);
+        }
 
         if (entity is not null)
         {

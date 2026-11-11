@@ -274,16 +274,20 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
     checked=$((checked + 1))
     if [ "$1" = 1 ]; then printf '  ✓ %-60s %s\n' "$2" "$3"; else failed=$((failed + 1)); printf '  ✗ %-60s %s\n' "$2" "$3"; fi
   }
+  # ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجَرَّةُ الجَذرِ (`R/$STORE`) ثالِثَة**: الجَذرُ يَخدِمُ المَتجَرَ بِمَسارِه
+  # بِجَرَّةٍ مُستَقِلَّة، والخُروجُ عَلى المُضيفِ كانَ يَترُكُها داخِلَة، والخُروجُ عَلَيها يَترُكُ المُضيفاتِ داخِلَة (مَقيسٌ عِندَ 818ef7b). فَالدُخولُ والحالَةُ بِبادِئَةِ
+  # مَسارٍ (`/$STORE` عَلى الجَذر)، والجَولَةُ تَبدَأُ مِن الثَلاثَة، وآخِرُ سِلسِلَةٍ بَدَأَت عَلى الجَذرِ `R/$STORE`.
+  pre() { [ "$1" = "$R" ] && printf '/%s' "$STORE"; }   # بادِئَةُ المَسارِ عَلى الجَذرِ وَحدَه
   signin_b() { # signin_b <host>
     local g1 g2
-    g1="$(go POST "$1" "/auth/phone/login" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE")"
-    g2="$(go POST "$1" "/auth/phone/verify" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE")"
-    mark "$([ "${g1%%|*}" = 302 ] && [ "${g2%%|*}" = 302 ] && echo 1 || echo 0)" "دُخولٌ بِـ$ROLE عَلى $1" "${g1%%|*} ← ${g2%%|*}"
+    g1="$(go POST "$1" "$(pre "$1")/auth/phone/login" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "as=$ROLE")"
+    g2="$(go POST "$1" "$(pre "$1")/auth/phone/verify" --data-urlencode "phone=$ROLE_PHONE" --data-urlencode "code=$DEV_CODE" --data-urlencode "as=$ROLE")"
+    mark "$([ "${g1%%|*}" = 302 ] && [ "${g2%%|*}" = 302 ] && echo 1 || echo 0)" "دُخولٌ بِـ$ROLE عَلى $1$(pre "$1")" "${g1%%|*} ← ${g2%%|*}"
   }
   # ‏state <host> → in (صَفحَةُ /me لِهذا المَتجَرِ بِجَلسَة) · out (صَفحَتُه تَطلُبُ الدُخول، أَو تَحويلٌ إلى دُخول) · وما سِواهُما رَمزُه — فَصَفحَةٌ لَيسَت لِلمَتجَرِ
   # (404، أَو قِشرَةُ المَنَصَّة) لا تُقرَأُ «داخِلاً» ولا «خارِجاً» (مَقيس: بِلا نِطاقٍ كانَت قِشرَةُ المَنَصَّةِ تُقرَأُ «بِجَلسَة»).
   state() {
-    local g code; g="$(go GET "$1" "/me")"; code="${g%%|*}"
+    local g code; g="$(go GET "$1" "$(pre "$1")/me")"; code="${g%%|*}"
     if [ "$code" = 200 ] && grep -qF "\"slug\":\"$STORE\"" "$TMP/gobody"; then
       if grep -qE 'href="[^"]*/login(\?[^"]*)?"' "$TMP/gobody"; then echo out; else echo in; fi
     elif [ "$code" = 302 ] && [[ "${g#*|}" == */login* ]]; then echo out
@@ -293,16 +297,17 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
   outside() { [ "$(state "$1")" = out ] && echo 1 || echo 0; }
   ours() { # ours <host[:port]> → 1 إن كانَ مُضيفاً لِهذا المَتجَرِ تَحتَ النِطاق
     local n="${1%%:*}"
-    case "$n" in "$STORE.$DOMAIN"|"$STORE"-*."$DOMAIN") echo 1 ;; *) echo 0 ;; esac
+    case "$n" in "$STORE.$DOMAIN"|"$STORE"-*."$DOMAIN"|"$DOMAIN") echo 1 ;; *) echo 0 ;; esac
   }
   # حَدُّ التَحَقُّقِ في المُنتَجِ خَمسٌ في الدَقيقَةِ لِكُلِّ جَوّالٍ ومَتجَر (`AuthHandlers.MaxVerifyPerMinute`)، والمَجموعَةُ ١٠ تَحَقَّقَت مَرَّتَين: فَالجَولَةُ الثانِيَةُ
   # تَنتَظِرُ النافِذَةَ — وإلّا رُدَّ دُخولُها بِحَدِّ المُنتَجِ لا بِعَيبٍ فيه (مَقيس: «قَبلَ الخُروج … بِجَلسَة ✗» في الدُخولِ السادِس).
-  for START in "$S" "$RH"; do
+  for START in "$S" "$RH" "$R"; do
     rm -f "$B"
-    [ "$START" = "$RH" ] && { echo "  … انتِظارُ نافِذَةِ حَدِّ التَحَقُّق (61 ثانِيَة)"; sleep 61; }
-    signin_b "$RH"; signin_b "$S"
+    [ "$START" != "$S" ] && { echo "  … انتِظارُ نافِذَةِ حَدِّ التَحَقُّق (61 ثانِيَة)"; sleep 61; }
+    signin_b "$RH"; signin_b "$S"; signin_b "$R"
     mark "$(inside "$RH")" "قَبلَ الخُروج: $RH/me بِجَلسَة" ""
     mark "$(inside "$S")"  "قَبلَ الخُروج: $S/me بِجَلسَة" ""
+    mark "$(inside "$R")"  "قَبلَ الخُروج: $R/$STORE/me بِجَلسَة" ""
     if [ "$START" = "$RH" ]; then
       # ومَحَطَّةُ مُرورٍ بِتَذكِرَةٍ مُختَلَقَةٍ لا تُخرِجُ أَحَداً — والجَلسَةُ قائِمَةٌ قَبلَها وبَعدَها
       g="$(go GET "$RH" "/$STORE/auth/logout/continue?t=bG9nb3V0LWhvcHx4")"
@@ -310,7 +315,7 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
            "تَذكِرَةٌ مُختَلَقَةٌ عَلى $RH لا تُخرِجُ أَحَداً" "${g%%|*} → ${g#*|}"
     fi
     g="$(go POST "$START" "/$STORE/auth/logout" -H 'Content-Type: application/x-www-form-urlencoded' --data '')"
-    hops=0; bad=""; final="$SCHEME://$START/"
+    hops=0; bad=""; final="$SCHEME://$START/"; [ "$START" = "$R" ] && final="$SCHEME://$R/$STORE"
     while [ "${g%%|*}" = 302 ] && [ "${g#*|}" != "$final" ] && [ "$hops" -lt 15 ]; do
       loc="${g#*|}"; rest="${loc#*://}"; hp_="${rest%%/*}"; p_="/${rest#*/}"
       [ "$(ours "$hp_")" = 1 ] || { bad="وِجهَةٌ خارِجَ مُضيفاتِ المَتجَر: $loc"; break; }
@@ -320,6 +325,7 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
          "الخُروجُ عَلى $START ← يَنتَهي في $final" "مَحَطّاتُ المُرور: $hops ${bad:-· آخِرُها ${g%%|*} → ${g#*|}}"
     mark "$(outside "$RH")" "بَعدَ الخُروج: $RH/me يَطلُبُ الدُخول" ""
     mark "$(outside "$S")"  "بَعدَ الخُروج: $S/me يَطلُبُ الدُخول" ""
+    mark "$(outside "$R")"  "بَعدَ الخُروج: $R/$STORE/me يَطلُبُ الدُخول" ""
     left="$(grep -c "acommerce\.auth\.$STORE" "$B" || true)"
     mark "$([ "$left" = 0 ] && echo 1 || echo 0)" "بَعدَ الخُروج: كَعكاتُ جَلسَةِ $STORE في الجَرَّة" "$left"
   done
