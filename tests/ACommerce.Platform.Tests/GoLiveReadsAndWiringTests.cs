@@ -36,6 +36,66 @@ public class GoLiveReadsAndWiringTests(ITestOutputHelper output)
         Assert.Matches(@"(^|\s)-[a-zA-Z]*I", "-sI");                            // والفاحِصُ يَرى ما كانَ مَكتوباً
     }
 
+    // ═══ (ج) كُلُّ قِراءَةٍ نافِذَةٍ في §٢·ي لِصَفحَةٍ أَو نُقطَةِ GET طَلَبُ GET (‏2026-11-11، W13-4·C2f·1 — C2z-PATHS-R3-01) ═══
+    //
+    // **المَقيسُ قَبل**: قِراءَةُ النَفَقِ في الخُطوَةِ ٨ (`curl -sI https://<slug>.R/` و`<slug>-<role>.R/` ← «200 بِـcf-ray») طَلَبُ HEAD، والتَطبيقُ يُجيبُ HEAD
+    // عَلى صَفَحاتِ المَتجَرِ والدَورِ والجَذرِ بِـ**405** (مَقيسٌ عَلى خادِمٍ بِـ`MultiTenancy__BaseDomain=localhost`: GET ← 200) — فَلا تَنجَحُ أَبَداً، وتُرسِلُ
+    // المالِكَ إلى (ب) أَو (ج) عَن نَفَقٍ يَعمَل. والعَيبُ نَفسُه الَّذي أَصلَحَته (أ) لِلأَيقونَة وَحدَها. **والقاعِدَة**: لِكُلِّ قِراءَةٍ (العُنوانُ وما بَعدَه بِلا
+    // `tr -d '\r'`) آخِرُ ظُهورٍ لَها في القِسمِ — والقِسمُ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه، فَالتَصحيحُ قِراءَةٌ بِالمِفتاحِ نَفسِه بَعدَها — لا يَحمِلُ `-I`/`--head`
+    // ولا `-X HEAD`. **والمُستَثنى بِاسمِه**: قِراءاتُ تَحويلِ الحافَّة — الخُطوَةُ ٣·ب (`http://` لِلعائِلاتِ الثَلاث، Always Use HTTPS) والخُطوَةُ ٢ (`www`) —
+    // تُجيبُها Cloudflare بِـ301 قَبلَ أَن يَبلُغَ الطَلَبُ الأَصل.
+    private static readonly Regex DocRead = new(@"`(?<cmd>curl [^`]+)`", RegexOptions.CultureInvariant);
+    private static readonly Regex HeadFlag = new(@"(^|\s)(-[a-zA-Z]*I|--head|-X\s*HEAD)(\s|$)", RegexOptions.CultureInvariant);
+
+    /// <summary>قِراءاتُ تَحويلِ الحافَّةِ — المُستَثناةُ بِأَسمائِها.</summary>
+    public static readonly IReadOnlyList<string> EdgeRedirectReads =
+    [
+        "http://R/", "http://<slug>.R/", "http://<slug>-<role>.R/",   // الخُطوَةُ ٣·ب
+        "https://www.R/pricing",                                        // الخُطوَةُ ٢
+    ];
+
+    /// <summary>قِسمُ نِطاقاتِ المَتاجِر (§٢·ي) مِن <c>DEPLOY.md</c> — مِن عُنوانِه إلى القِسمِ التالي.</summary>
+    public static string HostsSection(string deploy)
+    {
+        var start = deploy.IndexOf("\n## ٢·ي.", StringComparison.Ordinal);
+        Assert.True(start >= 0, "قِسمُ §٢·ي غائِب");
+        var end = deploy.IndexOf("\n## ", start + 5, StringComparison.Ordinal);
+        return end < 0 ? deploy[start..] : deploy[start..end];
+    }
+
+    /// <summary>القِراءاتُ بِتَرتيبِها: (الأَمرُ، العُنوانُ، المِفتاح).</summary>
+    public static IReadOnlyList<(string Command, string Url, string Key)> CurlReads(string section)
+        => DocRead.Matches(section).Select(m =>
+        {
+            var cmd = m.Groups["cmd"].Value.Trim();
+            var url = cmd.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(t => t.StartsWith("http://", StringComparison.Ordinal)
+                          || t.StartsWith("https://", StringComparison.Ordinal) || t.StartsWith("'http", StringComparison.Ordinal))?.Trim('\'') ?? "";
+            var pipe = cmd.IndexOf('|') is var bar and >= 0 ? cmd[bar..] : "";
+            var key = url + " " + Regex.Replace(pipe.Replace(@"| tr -d '\r' ", "", StringComparison.Ordinal), @"\s+", " ").Trim();
+            return (cmd, url, key);
+        }).Where(r => r.url.Length > 0).ToList();
+
+    [Fact]
+    public void Every_read_in_force_in_the_hosts_section_that_targets_a_page_or_a_get_endpoint_is_a_get()
+    {
+        var reads = CurlReads(HostsSection(Read("docs/DEPLOY.md")));
+        var inForce = reads.GroupBy(r => r.Key).Select(g => g.Last()).ToList();
+        var excepted = inForce.Where(r => EdgeRedirectReads.Contains(r.Url)).ToList();
+        var judged = inForce.Except(excepted).ToList();
+        var superseded = reads.Count - inForce.Count;
+        var head = judged.Where(r => HeadFlag.IsMatch(r.Command)).ToList();
+        output.WriteLine($"قِراءاتُ curl في §٢·ي: {reads.Count} · نافِذَة: {inForce.Count} · مَنسوخَةٌ بِتَصحيحٍ لاحِق: {superseded} · مُستَثناةٌ بِاسمِها: {excepted.Count} · مَحكومَة: {judged.Count} · HEAD: {head.Count}");
+        foreach (var r in head) output.WriteLine($"  ✗ HEAD عَلى صَفحَةٍ أَو نُقطَةِ GET: {r.Command}");
+
+        Assert.True(judged.Count > 0, "صِفرُ قِراءَةٍ مَحكومَة — الماسِحُ أَعمى (القاعِدَة ١٠)");
+        Assert.All(EdgeRedirectReads, u => Assert.Contains(excepted, r => r.Url == u));   // المُستَثنى مَوجودٌ لا اسمٌ بِلا قِراءَة
+        Assert.Empty(head);
+        // والفاحِصُ يَرى ما كانَ مَكتوباً
+        Assert.Matches(HeadFlag, "curl -sI https://x/");
+        Assert.Matches(HeadFlag, "curl --head https://x/");
+        Assert.DoesNotMatch(HeadFlag, "curl -s -o /dev/null -D - https://x/");
+    }
+
     [Fact]
     public void The_canonical_is_wired_from_the_host_store_alone()
     {
