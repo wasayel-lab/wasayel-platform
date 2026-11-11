@@ -490,6 +490,23 @@ row GET  "$S" "/$STORE/r/$ROLE/explore"  200 - "\"base\":\"/$STORE\"" "\"role\":
 row GET  "$S" "/r/$ROLE/explore"         200 - '"base":""' "\"role\":\"$ROLE\""
 fi
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2c-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **HTTP مُغلَقٌ عِندَ الحافَّة** (DEPLOY §٢·ي، قِسمُ Cloudflare، الخُطوَةُ ٣·ب):
+# `__Host-` وفَحصُ `Origin` يَحرُسانِ زِيارَةَ HTTPS وَحدَها، والتَطبيقُ لا يُحَوِّلُ HTTP. فَبَعدَ النَشرِ (`DIRECT=1 SCHEME=https`) كُلُّ عائِلَةِ مُضيفٍ بِـ`http://`
+# تُجابُ تَحويلاً إلى `https://` بِالمُضيفِ نَفسِه — مِن Cloudflare لا مِن التَطبيق؛ ومَحَلِّيّاً لا حافَّةَ فَلا تُفحَص. **لا يَكتُبُ شَيئاً.**
+echo "١٦) HTTP يُحَوَّلُ إلى HTTPS عِندَ الحافَّةِ لِكُلِّ عائِلَةِ مُضيف (C2z·1)"
+if [ "$DIRECT" = 1 ] && [ "$SCHEME" = https ]; then
+  for h in "$R" "$S" ${ROLE:+"$RH"}; do
+    got="$(curl -s -m 20 -o /dev/null -D "$TMP/edge" -w '%{http_code}' "http://$h/")" || got=000
+    loc="$(tr -d '\r' < "$TMP/edge" | sed -n 's/^[Ll]ocation: //p' | head -1)"
+    checked=$((checked + 1))
+    if [[ "$got" =~ ^30[1278]$ && "$loc" == "https://$h/"* ]]; then
+      printf '  ✓ %-4s %-34s %-52s → %s\n' GET "http://$h" "/" "$got $loc"
+    else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s\n' GET "http://$h" "/" "الرَمز $got والوِجهَة «$loc» — لا تَحويلَ إلى https"; fi
+  done
+else
+  echo "  – لَم تُفحَص: بَعدَ النَشرِ وَحدَه (DIRECT=1 SCHEME=https) — مَحَلِّيّاً لا حافَّة"
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi
