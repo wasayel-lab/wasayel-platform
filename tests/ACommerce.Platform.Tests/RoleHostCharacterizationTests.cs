@@ -30,7 +30,7 @@ public class RoleHostCharacterizationTests(ITestOutputHelper output)
     [InlineData("tenant_admin.example.test", "GET", "/", "NotFound||")]
     [InlineData("shop--vendor.example.test", "GET", "/", "NotFound||")]
     [InlineData("-vendor.example.test", "GET", "/", "NotFound||")]
-    [InlineData("vendor.example.test", "GET", "/", "Rewrite|vendor|/vendor")]
+    [InlineData("vendor.example.test", "GET", "/", "NotFound||")]
     [InlineData("v1-vendor.example.test", "GET", "/", "NotFound||")]
     [InlineData("www-vendor.example.test", "GET", "/", "NotFound||")]
     [InlineData("ashare-sales.example.test", "GET", "/", "Rewrite|ashare-sales|/ashare-sales")]

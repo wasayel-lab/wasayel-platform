@@ -249,7 +249,11 @@ public sealed class TenantResolverMiddleware
             return StoreHostAnswer.Through;
 
         var label = name[..(name.Length - apex.Length - 1)];
-        if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label)) return StoreHostAnswer.Through;
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-4 وSEC-C2a-R2-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمِلصَقُ المَحجوزُ لا يَخدِمُ المَنَصَّة**: كانَ كُلُّ
+        // مَحجوزٍ تَحتَ `R` (admin، studio، api، cdn، blog …) يَمُرُّ فَيَخدِمُ المَنَصَّةَ كُلَّها عَلى أَصلٍ آخَر — جَرَّةٌ ثانِيَةٌ لِدُخولِ الاستوديو والإشراف، وأَصلٌ شَقيقٌ
+        // آخَر؛ والقَرارُ سَمّى `www` وَحدَه. الآن `www` و`mail` (`ApexAliases`) يَمُرّانِ كَما كانا، وما سِواهُما 404.
+        if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label))
+            return ApexAliases.Contains(label) ? StoreHostAnswer.Through : StoreHostAnswer.NotFound;
 
         var slug = StoreSlugFromHost(host, baseDomain);
         string? role = null;
@@ -260,6 +264,10 @@ public sealed class TenantResolverMiddleware
         }
         return WithRole(AnswerOnStoreHost(slug, role, host, apex, method, path, query, scheme, rolePages), role);
     }
+
+    /// <summary><b>مِلصَقاتٌ مَحجوزَةٌ تَمُرُّ إلى الجَذرِ كَما كانَت</b> (‏2026-11-11، SEC-C2a-R2-4): <c>www</c> (يُحَوِّلُه Cloudflare إلى <c>R</c> عِندَ الحافَّة — DEPLOY §٢·ي)
+    /// و<c>mail</c> (سِجِلُّه صَريحٌ إلى مُزَوِّدِ البَريدِ فَلا يَبلُغُ الأَصلَ عادَةً). وما سِواهُما مِن المَحجوزِ 404 عَلى مُضيفِه.</summary>
+    public static readonly IReadOnlySet<string> ApexAliases = new HashSet<string>(StringComparer.Ordinal) { "www", "mail" };
 
     private static StoreHostAnswer WithRole(StoreHostAnswer answer, string? role)
         => role is null || answer.Slug is null ? answer : answer with { Role = role };
@@ -347,10 +355,12 @@ public sealed class TenantResolverMiddleware
     private static bool IsHostStoreAdmin(string path, string slug)
     {
         var s = path.Split('/', 5);
+        // ‏(‏2026-11-11، SEC-C2a-R2-3 — يُلحَقُ) ولا أَخٌ حَرفِيٌّ (`/admin/tenants/new`، `/admin/tenants/create`) ولَو كانَ اسمَ مَتجَرِ المُضيف.
         return s.Length >= 4
                && string.Equals(s[1], "admin", StringComparison.OrdinalIgnoreCase)
                && string.Equals(s[2], "tenants", StringComparison.OrdinalIgnoreCase)
-               && string.Equals(s[3], slug, StringComparison.OrdinalIgnoreCase);
+               && string.Equals(s[3], slug, StringComparison.OrdinalIgnoreCase)
+               && !StoreHostName.PlatformLiteralSiblings.Contains(s[3]);
     }
 
     /// <summary><b>أَيَحمِلُ هذا المَسارُ سِياقَ مَتجَرٍ عَلى مُضيفِه؟</b> لا لِمَنطِقَةِ المَنَصَّة: مَسارُها عَلى الجَذرِ بِلا سِياقِ مَتجَر (<see cref="SlugFromPath"/>

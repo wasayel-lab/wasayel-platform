@@ -42,7 +42,7 @@ public class SlugDoorHostShapeCharacterizationTests(ITestOutputHelper output)
     [InlineData("owner-test", null)]
     [InlineData("ashare", null)]
     [InlineData("vendors", null)]
-    [InlineData("vendor", null)]
+    [InlineData("vendor", "slug_reserved")]
     [InlineData("a-b-c", null)]
     public void The_one_slug_door_answers_the_surviving_inputs_as_today(string? slug, string? code)
     {

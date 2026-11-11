@@ -88,7 +88,7 @@ public class StoreHostRequestTests(ITestOutputHelper output)
     [InlineData("v1.example.test", "GET", "/", "NotFound||")]
     [InlineData("push.example.test", "GET", "/api/push/manifest.json", "NotFound||")]
     [InlineData("push.example.test", "GET", "/", "NotFound||")]
-    [InlineData("billing.example.test", "GET", "/api/billing/paypal", "Pass||")]
+    [InlineData("billing.example.test", "GET", "/api/billing/paypal", "NotFound||")]
     public void The_store_host_answer_matrix(string host, string method, string pathAndQuery, string expected)
     {
         var q = pathAndQuery.IndexOf('?');

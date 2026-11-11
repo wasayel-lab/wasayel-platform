@@ -38,6 +38,25 @@ public static class StoreHostName
     /// لِكُلِّ مَتجَرٍ في مِلصَقٍ واحِد. ودَورٌ أَطوَلُ يَدخُلُ الكَتالوجَ غَداً يُنقِصُه بِلا لَمسِ هذا السَطر.</summary>
     public static readonly int MaxLength = DnsLabelMax - 1 - RoleHostNames.LongestLength;
 
+    /// <summary>
+    /// <para><b>مَقاطِعُ صَفَحاتِ المَتجَرِ الأولى</b> — ما بَعدَ <c>/{slug}/</c> في جَدوَلِ المَساراتِ (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P2-02). مَتجَرٌ اسمُه
+    /// أَحَدُها (<c>explore</c>) يَجعَلُ <c>explore.R/explore</c> جَذرَه لا صَفحَةَ الاستِكشاف، والـcanonical وخَريطَةُ مَوقِعِه تُعلِنانِ رابِطاً يَفتَحُ صَفحَةً أُخرى (القاعِدَة ١٢).
+    /// فَهِيَ مَحجوزَةٌ <b>اسمَ مُضيفٍ</b> لا اسمَ مَسار (لا في <see cref="ReservedTenantSlugs.All"/> — فَالقائِمُ بِها يَبقى بِمَسارِه بِلا مُضيف، ويَسرُدُه
+    /// <c>scripts/list-off-shape-store-slugs.cs</c>). <b>والقائِمَةُ مُشتَقَّةٌ لا مُختارَة</b>: <c>InStoreSegmentReservationTests</c> يَمسَحُ <c>@page</c> و<c>Map*</c>
+    /// ويَطبَعُ عَدَدَه ويَحمَرُّ إن افتَرَقَت عَنه في أَيِّ اتِّجاه.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> InStoreSegments = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "api", "auth", "cart", "chats", "checkout", "create-listing", "deals", "drivers", "edit-listing", "explore", "favorites", "legal",
+        "listings", "login", "manage", "me", "notifications", "offers", "pay", "payments", "plans", "r", "searches", "shipping", "support",
+        "terms", "trips", "users", "vendor",
+    };
+
+    /// <summary><b>الإخوَةُ الحَرفِيّونَ لِـ<c>{slug}</c> في مَساراتِ الإشرافِ والاستوديو</b> (<c>/admin/tenants/new</c>، <c>POST /admin/tenants/create</c>) — ‏2026-11-11،
+    /// SEC-C2a-R2-3: مَتجَرٌ بِاسمِ أَحَدِها تُظَلِّلُ المَساراتُ الحَرفِيَّةُ صَفَحاتِ إدارَتِه، وعَلى مُضيفِه كانَت كِتابَةٌ إلى مَنطِقَةِ المَنَصَّةِ تَبلُغُ بابَ إنشاءِ المَنَصَّة.
+    /// مُشتَقَّةٌ بِالماسِحِ نَفسِه.</summary>
+    public static readonly IReadOnlySet<string> PlatformLiteralSiblings = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "create", "new" };
+
     /// <summary>كُلُّ خُروقِ المُعَرِّف — فارِغَةً إن صَلَحَ مُضيفاً.</summary>
     public static IReadOnlyList<StoreHostNameViolation> Validate(string? slug)
     {
@@ -62,8 +81,10 @@ public static class StoreHostName
         // مَحجوزَةٌ هُنا لا في `ReservedTenantSlugs.All`: مَتجَرٌ بِها يُخدَمُ سَطحُه عَلى مُضيفاتِ غَيرِه أَو يَبلُغُ API المَنَصَّةِ عَلى مُضيفِه، والقائِمَةُ يَقرَؤُها حَلُّ المَسار.
         // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · C2b-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وعَلامَةُ الدَورِ `r` (`ReservedTenantSlugs.RoleSegment`): عَلى مُضيفِ
         // مَتجَرٍ بِها يَصيرُ `/r/{role}/…` مَساراً يَحمِلُ المَتجَرَ فَكُلُّ رابِطِ دَورٍ نَظيفٍ 404 — والمَسارُ لا يَقرَؤُها، فَالقائِمُ بِها يَبقى بِمَسارِه بِلا مُضيف.
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P2-02 وSEC-C2a-R2-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومَقاطِعُ صَفَحاتِ المَتجَرِ والإخوَةُ الحَرفِيّونَ لِـ`{slug}`.
         if (ReservedTenantSlugs.Contains(slug) || ReservedTenantSlugs.IsPlatformApiSegment(slug)
-            || string.Equals(slug, ReservedTenantSlugs.RoleSegment, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(slug, ReservedTenantSlugs.RoleSegment, StringComparison.OrdinalIgnoreCase)
+            || InStoreSegments.Contains(slug) || PlatformLiteralSiblings.Contains(slug))
             found.Add(new(Reserved, "هذا المُعَرِّفُ مَحجوزٌ لِلمَنَصَّة."));
 
         if (RoleSuffixOf(slug) is { } role)

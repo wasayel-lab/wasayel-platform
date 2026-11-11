@@ -191,6 +191,8 @@
         "slug_taken"    => L["admin.new.err_slug_taken"],
         // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2) بِنَصِّ استِمارَةِ الاستوديو لِلرَمزِ نَفسِه — مَعناهُ واحِد.
         Services.Incubator.TenantFromAnalysisFactory.SlugReserved => L[Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugReserved)],
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P-08) ورَمزُ الشَكلِ بِنَصِّ الاستوديو وطولُه مِن المُصادِق — كانَ يُعرَضُ الرَمزُ نَفسُه (`_ => err`).
+        Services.Incubator.TenantFromAnalysisFactory.SlugFormat => L.Format(Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugFormat), ACommerce.Kit.Tenants.StoreHostName.MaxLength),
         "name_required" => L["admin.new.err_name_required"],
         "color_invalid" => L["admin.new.err_color"],
         // ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الطولِ في الخادِم — بِنَصِّ الاستوديو لِلرَمزِ نَفسِه، مَعناهُ واحِد.

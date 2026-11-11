@@ -575,6 +575,16 @@ else
   echo "  – لَم تُفحَص: X-Forwarded-Proto يَكتُبُه Cloudflare، والمُضيفُ المُختَلَقُ لا يَحُلُّه DNS — مَحَلِّيّاً وَحدَه"
 fi
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-4 وSEC-C2a-R2-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المِلصَقُ المَحجوزُ لا يَخدِمُ المَنَصَّة**: كانَ `admin.R`
+# و`studio.R` و`api.R` … نُسَخاً كامِلَةً مِن المَنَصَّة (دُخولُ الاستوديو والإشراف ومَتاجِرُ المَسار). الآن 404، و`www` يَمُرُّ إلى الجَذرِ كَما كان. **لا يَكتُبُ شَيئاً.**
+echo "٢٠) المِلصَقاتُ المَحجوزَةُ تَحتَ النِطاقِ لا تَخدِمُ المَنَصَّة، و www كَما كان (C2z·4)"
+for L in admin studio api cdn blog support; do
+row GET  "$(hp "$L.$DOMAIN")"            "/"                 404
+done
+row GET  "$(hp "admin.$DOMAIN")"         "/studio/auth"      404
+row GET  "$(hp "studio.$DOMAIN")"        "/$STORE"           404
+row GET  "$(hp "www.$DOMAIN")"           "/"                 200
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

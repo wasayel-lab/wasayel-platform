@@ -166,8 +166,20 @@ public static class RoleDefinitionValidator
                 $"الـ slug «{d.Slug}» مَأخوذ في كاتالوج المَنصَّة — " +
                 "أَدوار المُستَأجِر تُضاف فَوقَه ولا تُظَلِّلُه. اِختَر اسماً آخَر."));
 
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P3-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ولا يُظَلِّلُ اسمَ مُضيفِ دَور**: `RoleHostNames` يُسَمّي `tenant_admin`
+        // بِـ`admin` — فَدَورٌ يُؤَلِّفُه مَتجَرٌ بِاسمِ `admin` كانَ يَجتازُ (لا يُطابِقُ اسمَ كَتالوج) فَيَصيرُ `{slug}-admin.R` اسماً لِدَورَين. وأَدوارُ المُستَأجِرِ تَبقى
+        // بِمَسارِها (`/{slug}/r/{role}`) بِلا مُضيفٍ حَتّى يَمُدَّ قَرارٌ المُعجَم (ADR-050 §٣).
+        if (!string.IsNullOrWhiteSpace(d.Slug) && RoleHostNames.CatalogSlugOf(d.Slug) is { } catalog
+            && !string.Equals(catalog, d.Slug, StringComparison.Ordinal))
+            v.Add(new(SlugShadowsRoleHost,
+                $"الـ slug «{d.Slug}» اسمُ مُضيفِ الدَورِ «{catalog}» في المَنَصَّة — " +
+                "دَورٌ بِه يَجعَلُ المُضيفَ الواحِدَ اسماً لِدَورَين. اِختَر اسماً آخَر."));
+
         return v;
     }
+
+    /// <summary>رَمزُ خَرقِ <see cref="ValidateTenantDefinition"/>: اسمُ دَورٍ مُؤَلَّفٍ هُوَ اسمُ مُضيفِ دَورٍ لِغَيرِه (‏2026-11-11، C2a-P3-06).</summary>
+    public const string SlugShadowsRoleHost = "slug_shadows_role_host";
 
     /// <summary>هَل يَجتاز بَوّابَة المُستَأجِر؟</summary>
     public static bool IsValidTenantDefinition(RoleDefinition d) =>

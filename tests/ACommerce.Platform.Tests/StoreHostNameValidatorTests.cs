@@ -79,7 +79,7 @@ public class StoreHostNameValidatorTests(ITestOutputHelper output)
     [InlineData("owner-test")]
     [InlineData("ejar")]
     [InlineData("injez")]
-    [InlineData("vendor")]
+    [InlineData("driver")]
     [InlineData("a")]
     [InlineData("0")]
     public void Seed_and_plain_names_are_valid(string slug)
