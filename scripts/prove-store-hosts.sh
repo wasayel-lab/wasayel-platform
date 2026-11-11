@@ -553,6 +553,25 @@ ws "$S" "/_blazor"              "$SCHEME://$(hp "$OTHER.$DOMAIN")" 403
 ws "$S" "/realtime?slug=$STORE" "$SCHEME://$S"                   101
 ws "$R" "/realtime?slug=$STORE" "$SCHEME://$R"                   101
 ws "$R" "/realtime?slug=$STORE" "$SCHEME://$S"                   403
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمُصافَحَةُ هِيَ الطَريقُ الوَحيد**: كانَ الاستِطلاعُ الطَويلُ
+# (`GET /realtime?id=…` بِلا تَرقِيَة) يَمُرُّ بِكَعكَةِ الضَحِيَّةِ مِن صَفحَةِ مُضيفٍ شَقيقٍ ولا يُسأَلُ Origin، فَيَنضَمُّ اتِّصالُ المُهاجِمِ إلى مَجموعَتِه (مَقيسٌ عِندَ `61dab36`).
+# الآن `negotiate` يَعرِضُ WebSockets وَحدَه لِلمَركَزَين (`LiveConnections`)، والاستِطلاعُ مِن أَصلٍ شَقيقٍ ← 404 قَبلَ المَركَز. **لا يَكتُبُ شَيئاً** (اتِّصالٌ في الذاكِرَةِ بِلا نَقل).
+negotiated() { # negotiated <host> <hub> <query-prefix> — النَواقِلُ المَعروضَةُ WebSockets بِالضَبط، والاستِطلاعُ الطَويلُ بِأَصلٍ شَقيقٍ 404
+  local body list tok got
+  body="$(curl -s -m 10 -X POST -H "Host: $1" -H "Origin: $SCHEME://$1" "$(url "$1" "$2/negotiate?$3negotiateVersion=1")")"
+  list="$(printf '%s' "$body" | grep -oE '"transport":"[A-Za-z]+"' | sed 's/"transport":"//; s/"$//' | tr '\n' ' ')"
+  checked=$((checked + 1))
+  if [ "$list" = "WebSockets " ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$1" "$2/negotiate" "[${list% }]"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → النَواقِل [%s] لا [WebSockets]\n' POST "$1" "$2/negotiate" "${list% }"; fi
+  tok="$(printf '%s' "$body" | sed -n 's/.*"connectionToken":"\([^"]*\)".*/\1/p')"
+  got="$(curl -s -m 5 -o /dev/null -w '%{http_code}' -H "Host: $1" -H "Origin: $SCHEME://$(hp "$OTHER.$DOMAIN")" "$(url "$1" "$2?$3id=$tok")")" || got=000
+  checked=$((checked + 1))
+  if [ -n "$tok" ] && [ "$got" = 404 ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' GET "$1" "$2?id=… · استِطلاعٌ مِن $OTHER" "$got"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا 404\n' GET "$1" "$2?id=… · استِطلاعٌ مِن $OTHER" "$got"; fi
+}
+negotiated "$S" "/realtime" "slug=$STORE&"
+negotiated "$S" "/_blazor"  ""
+negotiated "$R" "/realtime" "slug=$STORE&"
 
 # ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-5 وSEC-C2a-R3-1 وSEC-C2b-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **التَحويلُ مُؤَقَّتٌ ومُخَطَّطُه مِن قائِمَة، والمُضيفُ
 # المُختَلَقُ 400**: صُفوفُ مَناطِقِ المَنَصَّةِ أَعلاه صارَت 302 (كانَت 301 — يَحفَظُه المُتَصَفِّحُ بِلا انقِضاءٍ و`/terms` عَلى المُضيفِ سُؤالٌ مَفتوح)؛ و`X-Forwarded-Proto`
