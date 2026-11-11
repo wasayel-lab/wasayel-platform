@@ -219,15 +219,17 @@ public class StudioStoreCreateTests(ITestOutputHelper output)
     /// بِوِجهَةِ عَودَةٍ إلَيها، والاستِمارَةُ في الفَرعِ الآخَرِ وَحدَه؛ ونُقطَةُ القَبولِ تُعيدُه إلى <c>returnUrl</c>.</summary>
     /// <remarks>‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ التَحويلُ <c>&lt;script&gt;location.replace(…)</c> في
     /// فَرعِ <c>@if (Auth.IsAuthenticated &amp;&amp; !consented)</c> وهذا الصَفُّ يَقرَؤُه بِحَرفِه — ولا يَجري تَحتَ التَنَقُّلِ المُحَسَّن (صَفحَةٌ فارِغَة). وصارَ
-    /// <c>Nav.NavigateTo</c> في <c>OnInitializedAsync</c> لِلزائِرِ ولِغَيرِ المُوافِق، والاستِمارَةُ في فَرعِ <c>@if (consented)</c>، ولا سكربتَ في الصَفحَة.</remarks>
+    /// <c>Nav.NavigateTo</c> في <c>OnInitializedAsync</c> لِلزائِرِ ولِغَيرِ المُوافِق، والاستِمارَةُ في فَرعِ <c>@if (consented)</c>، ولا سكربتَ في الصَفحَة.
+    /// ‏(‏2026-11-11، W13-4·C2f-R2·1 — R2-SEC-1 — يُلحَق) والوِجهَتانِ مُطلَقَتانِ بِمُخَطَّطٍ مِن {http, https} (<c>OnThisOrigin</c>) — التَرتيبُ نَفسُه، والإبرَتانِ
+    /// تَتبَعانِ النِداءَ؛ وبايتاتُ http وhttps يُثَبِّتُها <c>StudioNewRedirectCharacterizationTests</c>.</remarks>
     [Fact]
     public void The_page_sends_an_unconsented_user_to_consent_and_back_before_it_draws_the_form()
     {
         var page = WriteEndpointGuardTests.StripMarkupComments(Read($"{Template}/Components/Pages/StudioNewStore.razor"));
         var code = page[page.IndexOf("@code", StringComparison.Ordinal)..];
-        var (anonymous, asks, unconsented) = (code.IndexOf("if (!Auth.IsAuthenticated) { Nav.NavigateTo(StudioAuthPage); return; }", StringComparison.Ordinal),
+        var (anonymous, asks, unconsented) = (code.IndexOf("if (!Auth.IsAuthenticated) { Nav.NavigateTo(OnThisOrigin(StudioAuthPage)); return; }", StringComparison.Ordinal),
             code.IndexOf("consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);", StringComparison.Ordinal),
-            code.IndexOf("if (!consented) { Nav.NavigateTo(StudioStoreCreate.ConsentPage); return; }", StringComparison.Ordinal));
+            code.IndexOf("if (!consented) { Nav.NavigateTo(OnThisOrigin(StudioStoreCreate.ConsentPage)); return; }", StringComparison.Ordinal));
         Assert.True(anonymous > 0 && asks > anonymous && unconsented > asks, "التَحويلُ مِن الخادِمِ ناقِصٌ أَو مَقلوب.");
         var branch = page.IndexOf("@if (consented)", StringComparison.Ordinal);
         var form = page.IndexOf("<form", StringComparison.Ordinal);

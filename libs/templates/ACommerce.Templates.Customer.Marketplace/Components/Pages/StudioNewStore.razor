@@ -14,6 +14,9 @@
     `<script>location.replace(…)</script>`: الصَفحَةُ تُحمِّلُ `blazor.web.js`، فَالنَقرُ عَلى رابِطٍ تَنَقُّلٌ مُحَسَّن (`fetch` ثُمَّ رُقعَةُ DOM) لا يُنَفِّذُ
     سكربتاً أَدرَجَتهُ الرُقعَة — فَكانَت «أَنشِئ مَتجَرَك» لِلزائِرِ و«مَتجَر جَديد» لِمَن لَم يَقبَل الإصدارَ 4 صَفحَةً فارِغَة. وتَحويلُ الخادِمِ يَتبَعُه التَنَقُّلُ
     المُحَسَّنُ والتَحميلُ الكامِلُ مَعاً.
+    ‏(‏2026-11-11، مُراجَعَةُ الإغلاقِ الأَخيرِ لِـW13-4 الجَولَةُ الثانِيَة · W13-4·C2f-R2·1 — R2-SEC-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهَةُ تُعطى
+    مُطلَقَةً بِمُخَطَّطٍ مِن {http, https} (`OnThisOrigin`): `NavigationManager` يَبنيها مِن مُخَطَّطِ الطَلَبِ بِحَرفِه، فَكانَ `X-Forwarded-Proto: javascript`
+    ‏`Location: javascript://…`. وماسِحُ `SchemeRobustnessTests` يَعُدُّ كُلَّ قارِئٍ لِـ`NavigationManager` يَبني عُنواناً مُطلَقاً.
 *@
 
 <StudioShell Title="@(L["studio.create.head_title"])" Active="new">
@@ -80,14 +83,24 @@
     /// <summary>صَفحَةُ دُخولِ الاستوديو — ما كانَ سكربتُ `StudioShell` يُحَوِّلُ إلَيه الزائِر.</summary>
     internal const string StudioAuthPage = "/studio/auth";
 
+    [CascadingParameter] public HttpContext? Http { get; set; }
+
+    /// <summary>‏(‏2026-11-11، مُراجَعَةُ الإغلاقِ الأَخيرِ لِـW13-4 الجَولَةُ الثانِيَة · W13-4·C2f-R2·1 — R2-SEC-1) <b>وِجهَةُ التَحويلِ مُطلَقَةٌ بِمُخَطَّطٍ
+    /// مِن {http, https}</b>: كانَ <c>Nav.NavigateTo(page)</c>، و<c>NavigationManager</c> يَبني الوِجهَةَ مِن <c>Request.Scheme</c> بِحَرفِه — والواجِهَةُ
+    /// الأَمامِيَّةُ تُمَرِّرُ المَقروءَ بِحَرفِه — فَـ<c>X-Forwarded-Proto: javascript</c> ← <c>Location: javascript://…/studio/auth</c> و<c>mailto</c> ←
+    /// <c>mailto:/studio/auth</c> في الوَضعَين. الآن الأَصلُ كَما يَبنيه الإطارُ (<c>{scheme}://{Host}{PathBase}</c>) والمُخَطَّطُ بِالقاعِدَة
+    /// (<see cref="ACommerce.Kit.Tenants.AbsoluteScheme.Of"/>)، فَـhttp وhttps بايتاً كَما كانا (<c>StudioNewRedirectCharacterizationTests</c>)؛ وبِلا طَلَبٍ نِسبِيَّةٌ كَما كانَت.</summary>
+    string OnThisOrigin(string page)
+        => Http is { Request: var req } ? $"{ACommerce.Kit.Tenants.AbsoluteScheme.Of(req.Scheme)}://{req.Host.ToUriComponent()}{req.PathBase.ToUriComponent()}{page}" : page;
+
     protected override async Task OnInitializedAsync()
     {
         Auth.Load();
-        if (!Auth.IsAuthenticated) { Nav.NavigateTo(StudioAuthPage); return; }
+        if (!Auth.IsAuthenticated) { Nav.NavigateTo(OnThisOrigin(StudioAuthPage)); return; }
         var uid = Auth.UserId!.Value;
         // السُؤالُ نَفسُه الَّذي يَسأَلُه البابُ وصَفحَةُ المُوافَقَة (`ConsentPolicy.AcceptedBy`) — مُسنَدٌ واحِد (القاعِدَة ٨).
         consented = await Studio.HasConsentedAsync(uid, ConsentPolicy.CurrentVersion);
-        if (!consented) { Nav.NavigateTo(StudioStoreCreate.ConsentPage); return; }
+        if (!consented) { Nav.NavigateTo(OnThisOrigin(StudioStoreCreate.ConsentPage)); return; }
         currentTier = (await TierSvc.GetUserAsync(uid))?.Tier ?? "spark";
     }
 }

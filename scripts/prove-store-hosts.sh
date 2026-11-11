@@ -741,6 +741,14 @@ if [ "$DIRECT" != 1 ]; then
   for XFP in ab mailto net.tcp; do
   row GET  "$S" "/"                       200
   done
+  # ‏(‏2026-11-11، مُراجَعَةُ الإغلاقِ الأَخيرِ لِـW13-4 الجَولَةُ الثانِيَة · W13-4·C2f-R2·1 — R2-SEC-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وتَحويلُ `/studio/new`
+  # لِلزائِر**: `NavigationManager` يَبني الوِجهَةَ مِن مُخَطَّطِ الطَلَبِ بِحَرفِه، فَكانَت `javascript://$R/studio/auth` و`gopher://…` و`ab://…` و`mailto:/studio/auth`
+  # عَلى الجَذر (مَقيسٌ عِندَ 0f788af)، ومُضيفُ المَتجَرِ يُحَوِّلُ إلَيه بِـhttps ثُمَّ يَكتُبُها الجَذرُ في الخُطوَةِ التالِيَة. الآن https في الخُطوَتَين.
+  for XFP in javascript gopher mailto ab; do
+  row GET  "$R" "/studio/new"             302 "https://$R/studio/auth"
+  done
+  XFP=javascript
+  row GET  "$S" "/studio/new"             302 "https://$R/studio/new"
   XFP=javascript
   row GET  "$S" "/"                       200 - "<link rel=\"canonical\" href=\"https://$S/\" />" "<meta property=\"og:url\" content=\"https://$S/\" />" "!javascript://"
   row GET  "$R" "/$STORE"                 200 - "<link rel=\"canonical\" href=\"https://$R/$STORE\" />" "!javascript://"

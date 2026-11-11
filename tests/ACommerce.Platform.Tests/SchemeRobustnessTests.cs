@@ -89,6 +89,64 @@ file sealed class ProtoGuard : IAsyncDisposable
     }
 }
 
+// ‏(‏2026-11-11، مُراجَعَةُ الإغلاقِ الأَخيرِ لِـW13-4 الجَولَةُ الثانِيَة · W13-4·C2f-R2·1 — R2-SEC-1 — يُلحَق) الصَفحَةُ الحَقيقِيَّةُ (`StudioNewStore` بِحَقنِها) خَلفَ
+// الواجِهَةِ الأَمامِيَّةِ ونُقطَةِ Razor الحَقيقِيَّتَين — تَركيبُ `StudioNewRedirectCharacterizationTests` نَفسُه (ذاكَ مِلَفُّ تَوصيفٍ لا يُمَسّ، فَالمُضيفُ هُنا نُسخَتُه).
+file sealed class StudioNewGuard : IAsyncDisposable
+{
+    private readonly WebApplication _app;
+    private readonly int _port;
+    private StudioNewGuard(WebApplication app, int port) { _app = app; _port = port; }
+
+    public static async Task<StudioNewGuard> StartAsync()
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            var builder = WebApplication.CreateSlimBuilder();
+            builder.Logging.ClearProviders();
+            var policy = new ForwardedHeadersPolicy();
+            builder.Services.Configure<ForwardedHeadersOptions>(policy.ApplyTo);
+            builder.Services.AddSingleton(new SubdomainTenancyOptions());
+            builder.Services.AddRazorComponents();
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddSingleton<Marten.IDocumentStore>(_ => Marten.DocumentStore.For(o => o.Connection("Host=127.0.0.1;Port=1;Database=none;Username=none;Password=none")));
+            builder.Services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth>();
+            builder.Services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.Queries.StudioQueries>();
+            builder.Services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioTierService>();
+            builder.Services.AddScoped<ACommerce.Platform.I18n.L>();
+            int port;
+            using (var l = new TcpListener(IPAddress.Loopback, 0)) { l.Start(); port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop(); }
+            var app = builder.Build();
+            app.Urls.Add($"http://127.0.0.1:{port}");
+            app.UsePlatformForwardedHeaders(policy);
+            app.UseRouting();
+            app.UseAntiforgery();
+            app.MapRazorComponents<ACommerce.Templates.Customer.Marketplace.Components.Pages.StudioNewStore>();
+            try { await app.StartAsync(); }
+            catch (IOException) when (attempt < 5) { await app.DisposeAsync(); continue; }
+            return new StudioNewGuard(app, port);
+        }
+    }
+
+    /// <summary>الحالَةُ وكُلُّ رُؤوسِ الجَوابِ — لِيُسأَلَ كُلُّ رَأسٍ لا <c>Location</c> وَحدَه.</summary>
+    public async Task<(int Status, IReadOnlyList<(string Name, string Value)> Headers)> GetAsync(string pathAndQuery, string? proto, bool enhanced = false)
+    {
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(30) };
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{_port}{pathAndQuery}");
+        request.Headers.Host = "localhost:5050";
+        if (proto is not null) request.Headers.TryAddWithoutValidation("X-Forwarded-Proto", proto);
+        if (enhanced) request.Headers.TryAddWithoutValidation("Accept", "text/html; blazor-enhanced-nav=on");
+        using var response = await client.SendAsync(request);
+        var headers = response.Headers.Concat(response.Content.Headers).SelectMany(h => h.Value.Select(v => (h.Key, v))).ToList();
+        return ((int)response.StatusCode, headers);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _app.StopAsync();
+        await _app.DisposeAsync();
+    }
+}
+
 public class SchemeRobustnessTests(ITestOutputHelper output)
 {
     [Theory]
@@ -274,6 +332,104 @@ public class SchemeRobustnessTests(ITestOutputHelper output)
         Assert.True(files.Count > 100, $"فَحصٌ أَعمى: {files.Count}");
         Assert.Equal(named.Length, namedHits.Count);   // المُسَمّى مَوجودٌ لا اسمٌ بِلا قارِئ
         Assert.True(throughRule.Count >= 4, $"بِالقاعِدَة: {throughRule.Count}");
+        Assert.Empty(raw);
+    }
+
+    /// <summary>
+    /// <para><b>وِجهَةُ <c>/studio/new</c> بِمُخَطَّطٍ مَقروءٍ غَيرِ http(s) ‏<c>https://</c> — ولا رَأسَ في الجَوابِ يَحمِلُ مُخَطَّطَ الطَلَب</b> (‏2026-11-11،
+    /// W13-4·C2f-R2·1 — R2-SEC-1). كانَ <c>Location: javascript://localhost:5050/studio/auth</c> و<c>gopher://…</c> و<c>ab://…</c> و<c>mailto:/studio/auth</c>
+    /// (<c>NavigationManager</c> يَبني مِن <c>Request.Scheme</c> بِحَرفِه — مَقيسٌ عَلى هذا المُضيفِ قَبلَ التَبديل). والتَنَقُّلُ المُحَسَّنُ يَأخُذُ تَحويلاً مُعتِماً
+    /// (الوِجهَةُ لا تُطابِقُ مُخَطَّطَ الطَلَب) يُتبَعُ هُنا بِالمُخَطَّطِ نَفسِه — فَيُقاسُ ما يُخَزِّنُه الإطارُ لا الرَأسُ الأَوَّلُ وَحدَه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("javascript")]
+    [InlineData("gopher")]
+    [InlineData("mailto")]
+    [InlineData("ab")]
+    [InlineData("JavaScript")]
+    [InlineData("https, javascript")]
+    public async Task The_studio_new_redirect_takes_https_for_a_readable_scheme_that_is_not_http(string proto)
+    {
+        await using var guard = await StudioNewGuard.StartAsync();
+        var raw = proto.Split(',')[^1].Trim();
+        bool Carries(IReadOnlyList<(string Name, string Value)> headers)
+            => headers.Any(h => h.Value.Contains(raw + ":", StringComparison.OrdinalIgnoreCase));
+
+        var (status, headers) = await guard.GetAsync("/studio/new", proto);
+        output.WriteLine($"{proto}: {status} {string.Join(" | ", headers.Where(h => h.Name is "Location").Select(h => h.Value))}");
+        Assert.Equal(302, status);
+        Assert.Equal("https://localhost:5050/studio/auth", Assert.Single(headers, h => h.Name == "Location").Value);
+        Assert.False(Carries(headers));
+
+        var (enhancedStatus, enhanced) = await guard.GetAsync("/studio/new", proto, enhanced: true);
+        Assert.Equal(200, enhancedStatus);
+        Assert.False(Carries(enhanced));
+        var opaque = Assert.Single(enhanced, h => h.Name == "blazor-enhanced-nav-redirect-location").Value;
+        var (followStatus, followed) = await guard.GetAsync("/" + opaque, proto);
+        output.WriteLine($"{proto} (مُحَسَّن ← مُعتِم): {followStatus} {string.Join(" | ", followed.Where(h => h.Name is "Location").Select(h => h.Value))}");
+        Assert.Equal(302, followStatus);
+        Assert.Equal("https://localhost:5050/studio/auth", Assert.Single(followed, h => h.Name == "Location").Value);
+        Assert.False(Carries(followed));
+    }
+
+    /// <summary>
+    /// <para><b>الماسِحُ الثاني — قُرّاءُ <c>NavigationManager</c></b> (القاعِدَة ٢؛ ‏2026-11-11، W13-4·C2f-R2·1 — R2-SEC-1): الماسِحُ أَعلاه يَعُدُّ مَن يَقرَأُ
+    /// <c>Request.Scheme</c> بِحَرفِه، و<c>NavigationManager</c> يَقرَؤُه داخِلَ الإطار — فَكانَ <c>Nav.NavigateTo(StudioAuthPage)</c> في <c>StudioNewStore</c> يَكتُبُ
+    /// <c>javascript://…</c> والماسِحُ «بِحَرفِه: 0». هُنا كُلُّ عُضوٍ يُعطي عُنواناً مُطلَقاً (<c>NavigateTo(</c> و<c>.Uri</c> و<c>.BaseUri</c> و<c>ToAbsoluteUri(</c>)
+    /// عَلى كُلِّ اسمٍ يُحقَنُ بِه <c>NavigationManager</c> تَحتَ <c>libs/</c> و<c>apps/</c> (وتَعليقاتُ Razor <c>@* … *@</c> تُنزَعُ قَبلَ القِراءَة): إمّا
+    /// <c>NavigateTo</c> بِوِجهَةٍ تَبنيها دالَّةٌ في المِلَفِّ نَفسِه بِـ<c>AbsoluteScheme.Of(</c>، أَو واحِدٌ مِن أَربَعَةٍ مُسَمّاةٍ لا تَبني عُنواناً يَخرُجُ بِمُخَطَّطِ
+    /// الطَلَب: مَسارُ الصَفحَةِ في <c>MainLayout</c> مَرَّتَين (<c>AbsolutePath</c> وَحدَه)، والانتِقالُ في جَزيرَتَي الوَكيلِ التَفاعُلِيَّتَين (الدائِرَةُ تَأخُذُ أَساسَها
+    /// مِن المُتَصَفِّح، ويُنادى مِن مُعالِجِ فِعلٍ لا في التَصييرِ الأَوَّل). وما سِواها أَحمَر — ومَقيسٌ: عَلى <c>StudioNewStore</c> قَبلَ التَبديلِ «بِحَرفِه: 2».
+    /// يَطبَعُ ما مَسَحَه ويَفشَلُ عَلى الصِفر (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void No_navigation_manager_builds_an_outgoing_url_from_the_raw_scheme()
+    {
+        var injected = new Regex(@"@inject\s+(?:Microsoft\.AspNetCore\.Components\.)?NavigationManager\s+(\w+)|\bNavigationManager\s+(\w+)\s*(?:\{|;|=|,|\))", RegexOptions.CultureInvariant);
+        string[] named =
+        [
+            "MainLayout.razor: var path = new Uri(Nav.Uri).AbsolutePath;",
+            "MainLayout.razor: var currentPath = new Uri(Nav.Uri).AbsolutePath;",
+            "AgentChatPanel.razor: Nav.NavigateTo(\"/studio/auth\", forceLoad: true);",
+            "StudioAgent.razor: Nav.NavigateTo(\"/studio/auth\", forceLoad: true);",
+        ];
+        var files = new[] { "libs", "apps" }.Select(d => Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, d))
+            .SelectMany(d => Directory.EnumerateFiles(d, "*.*", SearchOption.AllDirectories))
+            .Where(f => (f.EndsWith(".cs", StringComparison.Ordinal) || f.EndsWith(".razor", StringComparison.Ordinal))
+                        && !f.Split(Path.DirectorySeparatorChar).Any(s => s is "bin" or "obj"))
+            .ToList();
+        int injecting = 0;
+        var readers = new List<string>();
+        var throughRule = new List<string>();
+        foreach (var f in files)
+        {
+            var text = File.ReadAllText(f);
+            if (f.EndsWith(".razor", StringComparison.Ordinal))
+                text = Regex.Replace(text, @"@\*.*?\*@", m => new string('\n', m.Value.Count(c => c == '\n')), RegexOptions.Singleline);
+            var code = string.Join('\n', text.Split('\n').Select(l => l.Trim())
+                .Where(l => !(l.StartsWith("//", StringComparison.Ordinal) || l.StartsWith('*'))));
+            var names = injected.Matches(code).Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).Distinct().ToList();
+            if (names.Count == 0) continue;
+            injecting++;
+            var member = new Regex($@"\b(?:{string.Join('|', names.Select(Regex.Escape))})\.(?:NavigateTo\(|Uri\b|BaseUri\b|ToAbsoluteUri\()", RegexOptions.CultureInvariant);
+            foreach (var line in code.Split('\n').Where(l => member.IsMatch(l)))
+            {
+                var hit = $"{Path.GetFileName(f)}: {line}";
+                readers.Add(hit);
+                // NavigateTo(Builder(…)) و«string Builder(…) => … AbsoluteScheme.Of(…) …;» في المِلَفِّ نَفسِه
+                if (Regex.Match(line, @"\.NavigateTo\((\w+)\(") is { Success: true } call
+                    && Regex.Match(code, $@"\bstring\s+{Regex.Escape(call.Groups[1].Value)}\s*\([^;]*?AbsoluteScheme\.Of\(", RegexOptions.Singleline).Success)
+                    throughRule.Add(hit);
+            }
+        }
+        var namedHits = readers.Where(r => named.Any(n => r.StartsWith(n, StringComparison.Ordinal))).ToList();
+        var raw = readers.Except(throughRule).Except(namedHits).ToList();
+        output.WriteLine($"مِلَفّاتٌ مَمسوحَة: {files.Count} · تَحقِنُ NavigationManager: {injecting} · قُرّاءٌ مُطلَقون: {readers.Count} · بِالقاعِدَة: {throughRule.Count} · مُسَمّاة: {namedHits.Count} · بِحَرفِه: {raw.Count}");
+        foreach (var r in throughRule) output.WriteLine("  ✓ " + r);
+        foreach (var r in raw) output.WriteLine("  ✗ " + r);
+        Assert.True(files.Count > 100 && injecting > 5, $"فَحصٌ أَعمى: {files.Count}/{injecting}");
+        Assert.Equal(named.Length, namedHits.Count);   // المُسَمّى مَوجودٌ لا اسمٌ بِلا قارِئ
+        Assert.True(throughRule.Count >= 2, $"بِالقاعِدَة: {throughRule.Count}");
         Assert.Empty(raw);
     }
 
