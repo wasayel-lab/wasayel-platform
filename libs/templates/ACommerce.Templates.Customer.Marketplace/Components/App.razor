@@ -304,7 +304,8 @@
             Tenant.IsResolved ? Tenant.Slug : "",
             HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null ? roleForPwa : null,
             seoHostSlug is not null,
-            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null && seoIsHome));
+            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null && seoIsHome,
+            ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.VisibleBase(HttpCtx.HttpContext, Tenant.IsResolved ? Tenant.Slug : "")));
 
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
@@ -365,7 +366,9 @@
             var slug = t.slug;
             // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
             var store = t.hostMode ? '' : '/' + slug;
-            var scope = store + (t.role ? '/r/' + t.role : '') + '/';
+            @* ‏(‏2026-11-11، W13-4·C2z·1 — C2a-P3-01) النِطاقُ مِن بادِئَةِ العُنوانِ الظاهِرِ كَما يُرسِلُها الخادِم (`t.base`) لا مِن `hostMode`: صَفحَةُ دَورٍ بِشَكلِ
+               المَسارِ عَلى المُضيفِ كانَت تُسَجِّلُ `/r/{role}/` فَلا يَحكُمُها عامِلُها. و`store` يَبقى لِمُرَشِّحِ اشتِراكاتِ الخُروج: كُلُّ تَسجيلٍ عَلى أَصلِ المُضيفِ لِلمَتجَر. *@
+            var scope = t.base + (t.role ? '/r/' + t.role : '') + '/';
             // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
             // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
             // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
@@ -560,7 +563,8 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = (t.hostMode ? '' : '/' + t.slug) + (hasRole ? '/r/' + t.role : '') + '/';
+            @* ‏(‏2026-11-11، W13-4·C2z·1) ومِفتاحُ التَثبيتِ هُوَ نِطاقُ العامِلِ نَفسُه — مِن `t.base`. *@
+            var scopeKey = t.base + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }

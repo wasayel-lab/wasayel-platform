@@ -108,4 +108,36 @@ public static class StoreHostPage
             ["hostMode"] = hostMode,
             ["home"] = home,
         });
+
+    /// <summary>
+    /// <para><b>…ومَعَه <c>base</c>: بادِئَةُ المَتجَرِ الَّتي يَحمِلُها العُنوانُ الظاهِرُ فِعلاً</b> (‏2026-11-11، W13-4·C2z·1 — مُراجَعَةُ C2a · C2a-P3-01). كانَ سكربتُ
+    /// العَميلِ يَستَنتِجُها مِن <c>hostMode</c> (<c>'' : '/' + slug</c>) فَيَفتَرِضُ أَنّ العُنوانَ عَلى المُضيفِ نَظيفٌ دائِماً — وصَفحَةُ دَورٍ بِشَكلِ المَسارِ عَلى
+    /// المُضيفِ (<c>ashare.R/ashare/r/customer/explore</c>: رابِطٌ مَحفوظ، أَو <c>RelatedUrl</c>، أَو عَودَةُ استِمارَة) سَجَّلَت عامِلَ خِدمَتِها بِنِطاقِ
+    /// <c>/r/customer/</c> الَّذي لا يَحكُمُها ولا يَحكُمُ <c>start_url</c> بَيانِها (مَقيسٌ في Chrome: لا مُتَحَكِّمَ بَعدَ إعادَةِ التَحميل، و<c>serviceWorker.ready</c>
+    /// لا يُحَلّ). والآن يُرسِلُ الخادِمُ ما يَراه (<see cref="VisibleBase"/>)، ونِطاقُ العامِلِ ومِفتاحُ التَثبيتِ مِنه.</para>
+    /// </summary>
+    public static string ClientContextJson(string? slug, string? role, bool hostMode, bool home, string? visibleBase)
+        => JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["slug"] = slug ?? "",
+            ["role"] = role ?? "",
+            ["hostMode"] = hostMode,
+            ["home"] = home,
+            ["base"] = visibleBase ?? "",
+        });
+
+    /// <summary>
+    /// <para><b>بادِئَةُ المَتجَرِ في العُنوانِ الظاهِر</b> (‏2026-11-11، W13-4·C2z·1): بِلا مَتجَرٍ (صَفَحاتُ المَنَصَّة) <c>""</c>؛ وبِلا مُضيفِ مَتجَرٍ (وَضعُ المَسار، والجَذرُ
+    /// <c>R</c>) <c>/{slug}</c> كَما كانَ السكربتُ يَبنيها بِحَرفِها؛ وعَلى مُضيفِ المَتجَرِ أَو الدَورِ <c>/{المَقطَعُ كَما كُتِب}</c> إن بَدَأَ العُنوانُ الظاهِرُ بِمَقطَعِ
+    /// المَتجَرِ (فَنِطاقُ العامِلِ بادِئَةٌ لِلعُنوانِ بِحالَةِ أَحرُفِه — مُطابَقَةُ النِطاقِ حَرفِيَّة)، و<c>""</c> لِلعُنوانِ النَظيف.</para>
+    /// </summary>
+    public static string VisibleBase(HttpContext? ctx, string? slug)
+    {
+        if (string.IsNullOrEmpty(slug)) return "";
+        if (HostSlug(ctx) is null) return "/" + slug;
+        var path = VisiblePath(ctx);
+        var firstSlash = path.IndexOf('/', 1);
+        var first = path.Length < 2 ? "" : firstSlash > 0 ? path[1..firstSlash] : path[1..];
+        return string.Equals(first, slug, StringComparison.OrdinalIgnoreCase) ? "/" + first : "";
+    }
 }
