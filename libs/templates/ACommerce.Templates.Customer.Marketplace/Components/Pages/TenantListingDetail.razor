@@ -70,7 +70,7 @@ else
                 @if (Auth.IsAuthenticated && !isOwner && !isOfferBased)
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="margin:0;">
-                        <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
+                        <input type="hidden" name="return" value="@AuthSession.LinkFor(Slug, null, $"listings/{Id}")" />
                         <button type="submit" class="acm-details-circle-btn @(IsFav ? "is-fav" : "")"
                                 aria-label="@(IsFav ? L["listings.detail.fav_remove"] : L["listings.detail.fav_add"])">
                             <AcIcon Name="heart" Filled="@IsFav" Size="18" />

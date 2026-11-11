@@ -177,6 +177,10 @@ public static class SeoDocuments
     /// <summary>يَبني <c>robots.txt</c>: مَنع لَوحات الإدارَة والاستوديو
     /// وَالـ API وَصَفَحات المُستَخدِم الخاصَّة، مَع الإشارَة إلى خَريطَة
     /// المَوقِع.</summary>
+    /// <summary><b>robots.txt عَلى مُضيفِ الدَور</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-01): لا زَحفَ ولا خَريطَة — تَطبيقُ الدَورِ لَيسَ نُسخَةً تُفَهرَسُ
+    /// مِن واجِهَةِ المَتجَر، ومُضيفُ المَتجَرِ <c>{slug}.R</c> النُسخَةُ الوَحيدَة.</summary>
+    public const string RoleHostRobotsTxt = "User-agent: *\nDisallow: /\n";
+
     public static string BuildRobotsTxt(string baseUrl)
     {
         var b = NormalizeBaseUrl(baseUrl);

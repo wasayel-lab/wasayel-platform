@@ -201,7 +201,7 @@ else
                              ShowFavorite="@Auth.IsAuthenticated"
                              IsFavorite="@favIds.Contains(l.Id)"
                              FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                             FavoriteFormReturn="@($"/{Slug}/explore")"
+                             FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "explore")"
                              AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
                              RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
             }

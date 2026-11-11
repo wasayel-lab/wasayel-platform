@@ -133,7 +133,7 @@
                                      ShowFavorite="@Auth.IsAuthenticated"
                                      IsFavorite="@favIds.Contains(l.Id)"
                                      FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                                     FavoriteFormReturn="@($"/{Slug}")"
+                                     FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "")"
                                      AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
                                      RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                     </div>
@@ -161,7 +161,7 @@
                                  ShowFavorite="@Auth.IsAuthenticated"
                                  IsFavorite="@favIds.Contains(l.Id)"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                                 FavoriteFormReturn="@($"/{Slug}")"
+                                 FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "")"
                                  AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
                                  RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                 }
@@ -355,7 +355,10 @@
                 // (الـ DB يَحوي حَقل واحِد، لكِنّ المُستَخدِم قَد يَكون مُسَجَّلاً
                 // بِدَورَين في تَبويبَين — كُلّ تَبويب يَجِب أَن يَحتَرِم URLه).
                 // وهذا قَرارُ تَوجيهٍ لا استِعلام، فَمَوضِعُه الصَفحَة.
-                var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole;
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-2 وSEC-C2b-R2-5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بِقَرارِ `EffectiveRole.Resolve` الَّذي يَسأَلُه
+                // `canManage` و`PermissionDoor`: دَعوى `tenant_admin` (رابِطٌ أَو `{slug}-admin.R`) لِغَيرِ مُديرِها تَرسُمُ دَورَه المُخَزَّنَ لا بَطَلَ الإدارَةِ الَّذي زِرُّه
+                // الوَحيدُ يُرَدّ (القاعِدَة ١٢). وما سِواها بِحَرفِه: الرابِطُ وإلّا المُخَزَّن.
+                var effectiveRoleSlug = ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, home.StoredActiveRole);
                 if (!string.IsNullOrEmpty(effectiveRoleSlug))
                     activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
                 // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه — صَفحَةُ النَشرِ (`GatedPage`) و`PermissionFilter`

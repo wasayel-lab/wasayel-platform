@@ -585,6 +585,24 @@ row GET  "$(hp "admin.$DOMAIN")"         "/studio/auth"      404
 row GET  "$(hp "studio.$DOMAIN")"        "/$STORE"           404
 row GET  "$(hp "www.$DOMAIN")"           "/"                 200
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-3 وC2b-P3-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُضيفُ الدَورِ لا يُفَهرَس**: كانَت خَريطَتُه تَسرُدُ واجِهَةَ المَتجَرِ تَحتَ
+# اسمِه بِـcanonical ذاتِيّ (نُسخَةٌ لِكُلِّ دَور). الآن robots يَمنَعُ كُلَّ شَيءٍ بِلا خَريطَة، والخَريطَةُ فارِغَة، وكُلُّ جَوابٍ بِـ`X-Robots-Tag: noindex`؛ ومُضيفُ المَتجَرِ كَما كان.
+# **لا يَكتُبُ شَيئاً.**
+echo "٢١) مُضيفُ الدَورِ لا يُفَهرَس، ومُضيفُ المَتجَرِ النُسخَةُ الوَحيدَة (C2z·5)"
+if [ -n "$ROLE" ]; then
+row GET  "$RH" "/robots.txt"             200 - "Disallow: /" "!Sitemap:"
+row GET  "$RH" "/sitemap.xml"            200 - "urlset" "!<loc>"
+row GET  "$S"  "/robots.txt"             200 - "Sitemap: $SCHEME://$S/sitemap.xml"
+tag() { # tag <host> <want: noindex|none>
+  local got; got="$(curl -s -m 20 -o /dev/null -D - -H "Host: $1" "$(url "$1" /)" | tr -d '\r' | sed -n 's/^[Xx]-[Rr]obots-[Tt]ag: //p' | head -1)"
+  checked=$((checked + 1))
+  if [ "${got:-none}" = "$2" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' GET "$1" "/ · X-Robots-Tag" "${got:-none}"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → «%s» لا «%s»\n' GET "$1" "/ · X-Robots-Tag" "${got:-none}" "$2"; fi
+}
+tag "$RH" noindex
+tag "$S"  none
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

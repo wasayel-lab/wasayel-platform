@@ -468,7 +468,12 @@ public sealed class TenantResolverMiddleware
         if (slug is null) { await _next(ctx); return; }
 
         var cacheKey = $"tenant:{slug.ToLowerInvariant()}";
-        if (!_cache.TryGetValue(cacheKey, out Tenant? entity))
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-4 وC2b-P-03 وC2b-P2-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وحُضورُ الدَورِ عَلى مُضيفِه طازَج**: الـ404
+        // أَدناه كانَ يَقرَأُ ذاكِرَةَ الخَمسِ دَقائِقِ الَّتي لا يُخليها حِفظُ الأَدوار — فَدَورٌ أُضيفَ للتَوِّ تَظهَرُ بِطاقَتُه (مِن بَياناتٍ طازَجَة) ومُضيفُه 404 حَتّى
+        // ‏201 ثانِيَة، ودَورٌ أُزيلَ يَبقى مُضيفُه يَخدِم (مَقيسٌ عِندَ المُراجِعين). أَربَعَةُ كُتّابٍ لِـ`Tenant.Roles` في ثَلاثَةِ مِلَفّات، فَالإخلاءُ عِندَ كُلٍّ
+        // يَنجَرِفُ بِكاتِبٍ خامِس؛ والقِراءَةُ الطازَجَةُ عَلى مُضيفِ الدَورِ وَحدَه (‏LoadAsync بِالمُعَرِّف) تُغني عَنها، وتُجَدِّدُ الذاكِرَةَ لِمُضيفِ المَتجَرِ ولِلمَسارِ مَعَها.
+        Tenant? entity = null;
+        if (roleHost is not null || !_cache.TryGetValue(cacheKey, out entity))
         {
             await using var session = _store.QuerySession();
             entity = await session.LoadAsync<Tenant>(slug.ToLowerInvariant());
@@ -625,7 +630,14 @@ public sealed class SubdomainTenantPathMiddleware
         {
             ctx.Items[HostSlugItem] = answer.Slug;
             ctx.Items[OriginalPathItem] = req.Path.Value;
-            if (answer.Role is { } hostRole) ctx.Items[StoreHostItems.Role] = hostRole;
+            if (answer.Role is { } hostRole)
+            {
+                ctx.Items[StoreHostItems.Role] = hostRole;
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-3 وC2b-P-05 وSEC-C2b-R2-4 وC2b-P2-05 وC2b-P3-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُضيفُ الدَورِ
+                // لا يُفَهرَس**: كانَ نُسخَةً ذاتِيَّةَ الـcanonical لِواجِهَةِ المَتجَرِ بِخَريطَتِها (حَتّى عَشرُ نُسَخٍ لِلمَتجَر، ومِنها `{slug}-admin.R` الَّذي لا تُعلِنُه بِطاقَة).
+                // فَكُلُّ جَوابٍ عَلَيه بِـ`X-Robots-Tag: noindex` — بِلا بايتٍ في HTML — ومُضيفُ المَتجَرِ النُسخَةُ الوَحيدَةُ المُفَهرَسَة.
+                ctx.Response.Headers["X-Robots-Tag"] = "noindex";
+            }
             if (answer.Verdict == StoreHostVerdict.Rewrite) req.Path = answer.Path;
         }
 

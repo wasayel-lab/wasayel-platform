@@ -316,7 +316,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug,
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"
                     + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone)));
-            var asRole = (asRoleEarly ?? "").ToLowerInvariant();
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
             AuthSession.WriteCookie(res, slug, result,
@@ -418,7 +418,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug,
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"
                     + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email)));
-            var asRole = (asRoleEarly ?? "").ToLowerInvariant();
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
             if (!string.IsNullOrEmpty(asRole))
@@ -482,7 +482,7 @@ public static class MarketplaceTemplateExtensions
             if (result is null)
                 return Results.Redirect(Link(req, slug,
                     $"login?stage=verify&attempt={Uri.EscapeDataString(attempt)}&code=00&err=not_approved"));
-            var asRole = req.Form["as"].ToString().Trim().ToLowerInvariant();
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, req.Form["as"].ToString().Trim().ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
             if (!string.IsNullOrEmpty(asRole))
@@ -4875,6 +4875,20 @@ public static class MarketplaceTemplateExtensions
     // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهاتُ كُلُّها بِـ`StoreUrl.For` عَلى المُضيفِ الَّذي
     // كَتَبَ الكَعكَة: عَلى مُضيفِ المَتجَرِ نَظيفَة (`/`، `/r/{role}/…`)، وفي وَضعِ المَسارِ `/{slug}/…` بِحَرفِها. ولا تُغادِرُ المُضيفَ أَبَداً — الكَعكَةُ
     // مَقصورَةٌ عَلَيه (ADR-050 §٥)، فَتَحويلٌ إلى مُضيفٍ آخَرَ بَعدَ الدُخولِ يُسقِطُ الجَلسَةَ لِتَوِّها.
+    /// <summary>
+    /// <para><b>دَعوى <c>tenant_admin</c> عِندَ الدُخولِ لِمَن لا يَحمِلُه تُسقَط</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R2-5 وSEC-C2b-R3-2): استِمارَةُ دُخولِ
+    /// <c>{slug}-admin.R</c> تُرسِلُ <c>as=tenant_admin</c>، فَكانَ العُضوُ يَأخُذُ كَعكَةَ دَورِ الإدارَةِ ويُحَوَّلُ إلى <c>/manage</c> فَيُرَدّ — رِحلَةٌ تَنتَهي بِرَفض
+    /// (القاعِدَة ١٢). الدَورُ لا يُمنَحُ ذاتِيّاً (ADR-028) والحارِسُ يُحرِسُه (G7)؛ وهُنا لا تُكتَبُ كَعكَتُه ولا يُطلَبُ مَنحُه، ويُحَوَّلُ العُضوُ إلى دَورِه المُخَزَّن.
+    /// وما سِوى دَعوى الإدارَةِ — ومَن يَحمِلُها — بِحَرفِه.</para>
+    /// </summary>
+    private static async Task<string> HeldAdminClaimOrNoneAsync(IDocumentStore store, string slug, Guid userId, string asRole)
+    {
+        if (!Gates.SelfGrantPolicy.IsAdminSlug(asRole)) return asRole;
+        await using var qs = store.QuerySession(slug);
+        var user = await qs.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        return user is not null && string.Equals(user.ActiveRole, asRole, StringComparison.Ordinal) ? asRole : "";
+    }
+
     private static async Task<string> PostLoginRouteAsync(
         HttpRequest req, string slug, Guid userId, string? asRole, IDocumentStore store)
     {

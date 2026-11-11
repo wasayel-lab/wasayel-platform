@@ -46,7 +46,7 @@
                                  ShowFavorite="true"
                                  IsFavorite="true"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                                 FavoriteFormReturn="@($"/{Slug}/favorites")"
+                                 FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "favorites")"
                                  AddFavoriteAriaLabel="@L["favorites.action.add"]"
                                  RemoveFavoriteAriaLabel="@L["favorites.action.remove"]" />
                 }

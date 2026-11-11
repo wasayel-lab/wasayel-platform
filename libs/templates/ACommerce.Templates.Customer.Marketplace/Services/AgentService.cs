@@ -1035,6 +1035,9 @@ public sealed class AgentToolExecutor
     /// واحِدَة اللَقطَة <b>هي</b> الكاتالوج، فَالسُلوك لَم يَتَغَيَّر
     /// بِحَرف.</para>
     /// </summary>
+    /// <summary>مِفتاحُ نَصِّ تَصادُمِ مُضيفِ الدَور — نَفسُه في سَطحَي الحِفظ (‏2026-11-11، C2b-P3-03).</summary>
+    public const string RoleHostTakenKey = "roles.save.err_role_host_taken";
+
     private async Task<(bool, string)> SetRolesAsync(
         JsonElement root, TenantRoleSet roleSet, CancellationToken ct)
     {
@@ -1066,7 +1069,8 @@ public sealed class AgentToolExecutor
         // ‏(‏2026-11-07، W13-4·C2b·4) دَورٌ يَدخُلُ ومُضيفُه اسمُ مَتجَرٍ قائِم — يُرَدُّ بِرَمزِه كَحِفظِ الأَدوارِ في السَطحَين.
         var held = t.Roles.Select(x => x.CatalogSlug).ToHashSet(StringComparer.Ordinal);
         if (await Services.TenantConfig.RoleHostCollision.FirstTakenAsync(s, slug, roles.Select(x => x.CatalogSlug).Where(c => !held.Contains(c)), ct) is { } takenHost)
-            return (false, $"{Services.TenantConfig.TenantConfigCodes.RoleHostTaken}: مُضيفُ الدَورِ «{takenHost}» اسمُ مَتجَرٍ قائِم.");
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-03 — يُلحَقُ) النَصُّ مِن مِفتاحِ السَطحَينِ القائِم (القاعِدَة ١١) — كانَ جُملَةً حَرفِيَّةً جَديدَة.
+            return (false, $"{Services.TenantConfig.TenantConfigCodes.RoleHostTaken}: {LocaleCatalog.Text(LocaleCatalog.Arabic, RoleHostTakenKey)}");
         t.Roles = roles;
         s.Store(t);
         await s.SaveChangesAsync(ct);

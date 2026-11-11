@@ -333,7 +333,7 @@
         if (tenantRoles.Count > 0)
         {
             if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
-                activeRole = tenantRoles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
+                activeRole = tenantRoles.FirstOrDefault(r => r.Slug == (ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, me.ActiveRole) ?? me.ActiveRole));   // ‏2026-11-11، SEC-C2b-R3-2
             canManage = ACommerce.Kit.Roles.RolePermissions.Has(   // ‏W13-4·C2b·4 — G7: الدَورُ الفَعّالُ مِن `EffectiveRole.Resolve`
                 tenantRoles, ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, me?.ActiveRole), "tenant.manage");
         }
