@@ -48,6 +48,26 @@ else if (!Tenant.IsResolved)
 {
     <p>@L.Markup("auth.login.tenant_missing")</p>
 }
+else if (Err == Services.Ux.AdminHostSignIn.NotStoreAdmin)
+{
+    @* ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) دُخولٌ عَلى مُضيفِ الإدارَةِ لا يَحمِلُ دَورَها رُدَّ بِلا كَعكَة (`AdminHostSignIn`) —
+       فَلا استِمارَةَ تُعيدُه إلى الحَلقَة: الرَفضُ مِن القاموسِ ومَخرَجانِ حَقيقِيّانِ، المَتجَرُ عَلى مُضيفِه ودُخولٌ بِحِسابٍ آخَر. وما سِوى هذا الرَمزِ بِبايتاتِه. *@
+    <div class="ac-auth-wrap" style="--ac-primary:@Tenant.BrandColor;">
+        <div class="ac-auth-card">
+            <div class="ac-auth-logo" style="background:@Tenant.BrandColor;">
+                <AcIcon Name="key" Size="24" />
+            </div>
+            <h1 class="ac-auth-title">@Tenant.Name</h1>
+            <AcAlert Variant="danger">@L["auth.login.err_not_store_admin"]</AcAlert>
+            <p class="ac-auth-back">
+                <a href="@Services.Ux.AdminHostSignIn.StoreHome(Slug)">@L.Markup("auth.login.back_to") @Tenant.Name</a>
+            </p>
+            <p class="ac-auth-back">
+                <a href="@AuthSession.LinkFor(Slug, Role, "login")">@L.Markup("auth.login.other_account")</a>
+            </p>
+        </div>
+    </div>
+}
 else
 {
     <div class="ac-auth-wrap" style="--ac-primary:@Tenant.BrandColor;">

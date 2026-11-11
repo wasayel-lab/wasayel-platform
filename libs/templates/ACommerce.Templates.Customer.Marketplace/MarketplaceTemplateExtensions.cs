@@ -317,12 +317,13 @@ public static class MarketplaceTemplateExtensions
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"
                     + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone)));
             var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
             var needsName = false;
             await using (var qs = store.QuerySession(slug))
@@ -419,10 +420,11 @@ public static class MarketplaceTemplateExtensions
                     $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"
                     + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email)));
             var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
             var needsName = false;
             await using (var qs = store.QuerySession(slug))
@@ -483,10 +485,11 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug,
                     $"login?stage=verify&attempt={Uri.EscapeDataString(attempt)}&code=00&err=not_approved"));
             var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, req.Form["as"].ToString().Trim().ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
             return Results.Redirect(await PostLoginRouteAsync(req, slug, result.UserId, asRole, store));
         }).RequireFormBody().DisableAntiforgery();
 
@@ -4841,6 +4844,11 @@ public static class MarketplaceTemplateExtensions
         var picked = tenant?.Roles.FirstOrDefault(r => r.Slug == requestedRole);
         return Gates.SelfGrantPolicy.IsAdminRole(picked);
     }
+
+    /// <summary>تَسكينُ الدَورِ المُدَّعى بَعدَ التَحَقُّقِ إن وُجِد — شَرطُ الأَبوابِ الثَلاثَةِ (<c>if (!string.IsNullOrEmpty(asRole))</c>) بِحَرفِه، خارِجَ أَجسامِها
+    /// (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3: سَطرُ الرَفضِ عَلى مُضيفِ الإدارَةِ دَخَلَ كُلَّ باب، والشَرطُ خَرَجَ فَلا يَنمو عَدّادُ النَزيف).</summary>
+    private static Task AssignClaimedRoleAsync(string slug, Guid userId, string asRole, IDocumentStore store)
+        => string.IsNullOrEmpty(asRole) ? Task.CompletedTask : AssignRoleAsync(slug, userId, asRole, store);
 
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
     // وُجود ?as=role مِن صَفحَة الدُخول. tenant_admin مَمنوع: يَجِب أَن

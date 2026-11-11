@@ -40,6 +40,7 @@ ROLE="${ROLE-vendor}"              # دَورٌ في STORE مِن الكَتال
 ROLE_ABSENT="${ROLE_ABSENT:-driver}" # دَورٌ مِن الكَتالوجِ لا يَحمِلُه STORE — مُضيفُه 404
 ROLE_PHONE="${ROLE_PHONE:-}"       # هاتِفٌ يَدخُلُ بِدَورِ ROLE (بِرَمزِ المُحاكي) — يُشَغِّلُ المَجموعَةَ ١٠؛ يَكتُبُ دُخولاً ومُستَخدِماً إن لَم يَكُن (C2b-R1)
 ADMIN_PHONE="${ADMIN_PHONE:-}"     # PLATFORM_ADMIN_PHONE لِلخادِم — يُشَغِّلُ صُفوفَ الاستوديو في المَجموعَةِ ١٣ (C2c-R1)؛ يَكتُبُ دُخولاً ويَرفَعُ إصدارَ جَلسَتِه
+GUEST_PHONE="${GUEST_PHONE:-}"     # هاتِفٌ لا يُديرُ STORE — يُشَغِّلُ المَجموعَةَ ٢٣ (C2z-R1)؛ يَكتُبُ دُخولاً ومُستَخدِماً إن لَم يَكُن، وحِصَّتُه غَيرُ حِصَّةِ ROLE_PHONE
 JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٦ وَحدَها
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 ORIGIN=""                         # رَأسُ Origin يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ١٢ وَحدَها (W13-4·C2c·1)
@@ -645,6 +646,48 @@ pwa() { # pwa <host> <want>
   else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → «%s» لا «%s»\n' GET "$1" "/api/$STORE/icon.svg · CSP" "${got:-لا شَيء}" "$2"; fi
 }
 pwa "$R" "default-src 'none'; sandbox"
+
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **دُخولُ غَيرِ المُديرِ عَلى مُضيفِ الإدارَةِ يُرَدُّ ولا يُكتَب**:
+# كانَت الدَعوى تُسقَطُ فَتُكتَبُ الكَعكَةُ العامَّةُ وَحدَها — ولا صَفحَةَ عَلى `{store}-admin` تَقرَؤُها، فَكُلُّ دُخولٍ يَنجَحُ والتالِيَةُ تَطلُبُ الدُخول (مَقيسٌ عِندَ
+# `61dab36`: `/me/name` ثُمَّ `/me/role` ثُمَّ `/me`). الآن 302 إلى `/login?err=not_store_admin` بِلا كَعكَة، وصَفحَتُه رَفضٌ بِلا استِمارَةٍ ومَخرَجُه المَتجَرُ عَلى مُضيفِه؛
+# والمُديرُ (`MANAGER_PHONE`) يَدخُلُ ويَبلُغُ `/manage`. **يَكتُبُ دُخولاً** (ومُستَخدِماً جَديداً لِـ`GUEST_PHONE` إن لَم يَكُن) فَلا يَجري إلّا بِـ`GUEST_PHONE`.
+echo "٢٣) دُخولُ غَيرِ المُديرِ عَلى مُضيفِ الإدارَةِ يُرَدُّ بِمَخرَجٍ ولا يُكتَب، والمُديرُ يَبلُغُ /manage (C2z-R1)"
+AH="$(hp "$STORE-admin.$DOMAIN")"
+if [ -n "$GUEST_PHONE" ] && [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $AH" "$(url "$AH" /)")" = 200 ]; then
+  admin_signin() { # admin_signin <jar> <phone> — يَطبَعُ «رَمزُ التَحَقُّق|الوِجهَة»
+    curl -s -m 20 -o /dev/null -c "$1" -b "$1" -H "Host: $AH" --data-urlencode "phone=$2" --data-urlencode "as=tenant_admin" "$(url "$AH" /auth/phone/login)" >/dev/null
+    curl -s -m 20 -o /dev/null -D "$TMP/ah" -w '%{http_code}' -c "$1" -b "$1" -H "Host: $AH" --data-urlencode "phone=$2" --data-urlencode "code=$DEV_CODE" \
+      --data-urlencode "as=tenant_admin" "$(url "$AH" /auth/phone/verify)"
+    printf '|%s' "$(tr -d '\r' < "$TMP/ah" | sed -n 's/^[Ll]ocation: //p' | head -1)"
+  }
+  AJ="$TMP/ajar"; rm -f "$AJ"
+  g="$(admin_signin "$AJ" "$GUEST_PHONE")"
+  checked=$((checked + 1))
+  if [ "${g%%|*}" = 302 ] && [ "${g#*|}" = "/login?err=not_store_admin" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$AH" "/auth/phone/verify · غَيرُ مُدير" "${g%%|*} ${g#*|}"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s\n' POST "$AH" "/auth/phone/verify · غَيرُ مُدير" "${g%%|*} ${g#*|} — لا /login?err=not_store_admin"; fi
+  left="$(grep -c "acommerce\.auth\.$STORE" "$AJ" || true)"
+  checked=$((checked + 1))
+  if [ "$left" = 0 ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' JAR "$AH" "كَعكاتُ $STORE بَعدَ الرَفض" 0
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s\n' JAR "$AH" "كَعكاتُ $STORE بَعدَ الرَفض" "$left"; fi
+  JAR="$AJ"
+  row GET "$AH" "/login?err=not_store_admin" 200 - "href=\"$SCHEME://$S/\"" "href=\"/login\"" "!<form" "!name=\"code\""
+  JAR=""
+  if [ -n "$MANAGER_PHONE" ]; then
+    MJ="$TMP/mjar"; rm -f "$MJ"
+    g="$(admin_signin "$MJ" "$MANAGER_PHONE")"
+    checked=$((checked + 1))
+    # الوِجهَةُ /manage — أَو خُطوَةُ الاسمِ قَبلَها لِحِسابٍ اسمُه افتِراضِيّ (د40 «ج»)، والصَفُّ التالي يَقيسُ أَنّ /manage تُفتَحُ بِالجَرَّة.
+    if [ "${g%%|*}" = 302 ] && { [ "${g#*|}" = "/manage" ] || [ "${g#*|}" = "/me/name?next=%2Fmanage" ]; }; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$AH" "/auth/phone/verify · المُدير" "${g%%|*} ${g#*|}"
+    else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s\n' POST "$AH" "/auth/phone/verify · المُدير" "${g%%|*} ${g#*|} — لا /manage"; fi
+    JAR="$MJ"
+    row GET "$AH" "/manage" 200 - "/admin/tenants/$STORE/categories?from=tenant"
+    JAR=""
+  else
+    echo "  – صَفُّ المُديرِ لَم يُفحَص: MANAGER_PHONE غائِب"
+  fi
+else
+  echo "  – لَم تُفحَص: GUEST_PHONE غائِب، أَو $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
+fi
 
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
