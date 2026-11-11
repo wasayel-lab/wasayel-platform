@@ -91,20 +91,14 @@ public static class SeoDocuments
     // ─── خَريطَة المَوقِع ────────────────────────────────────────────────
 
     /// <summary>
-    /// يُحَوِّل قائِمَة مُستَأجِرين إلى مُدخَلات خَريطَة المَوقِع: رَئيسيَّة
-    /// كُلّ مُستَأجِر، ثُمّ صَفحَة الاستِكشاف، ثُمّ فِئاتُه (الفِئات مَقروءَة
-    /// مِن وَثيقَة المُستَأجِر نَفسِها — بِلا أَيّ استِعلام إضافيّ).
-    /// </summary>
-    /// <param name="tenants">كُلّ المُستَأجِرين؛ تُصَفَّى داخِلاً بِـ
-    /// <see cref="IsPublic"/>.</param>
-    /// <param name="baseUrl">مَثَلاً <c>https://wasayel.app</c>.</param>
-    /// <param name="includeCategories">إدراج روابِط الفِئات.</param>
-    /// <summary>
     /// <para><b>خَريطَةُ مَوقِعِ مُضيفِ المَتجَر</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·6 — G13): عَلى <c>{slug}.R</c> المُضيفُ جَذرُ المَتجَر، فَالمُدخَلاتُ
     /// عَناوينُه النَظيفَة — <c>{base}/</c> و<c>{base}/explore</c> وفِئاتُه — <b>ومَتجَرُه وَحدَه</b>. <b>والعِلَّةُ المَقيسَة</b>: كانَت الخَريطَةُ نَفسُها
     /// تُخدَمُ عَلى كُلِّ مُضيفٍ فَتَسرُدُ كُلَّ مَتجَرٍ بِمَسارِه تَحتَ مُضيفِ غَيرِه (‏29 مِن 33 رابِطاً مَيِّتاً عَلى مُضيفِ <c>theme-demo</c>، 2026-08-30).
     /// والمَتجَرُ غَيرُ العامِّ (<see cref="IsPublic"/>) أَو الغائِبُ لا مُدخَلَ لَه.</para>
     /// </summary>
+    /// <param name="tenant">مَتجَرُ المُضيف (<c>null</c> أَو غَيرُ العامِّ ← لا مُدخَل).</param>
+    /// <param name="baseUrl">أَصلُ المُضيفِ الظاهِر، مَثَلاً <c>https://{slug}.R</c>.</param>
+    /// <param name="includeCategories">إدراج روابِط الفِئات.</param>
     public static IReadOnlyList<SitemapEntry> StoreHostEntries(Tenant? tenant, string baseUrl, bool includeCategories = true)
     {
         if (tenant is null || !IsPublic(tenant)) return Array.Empty<SitemapEntry>();
@@ -121,6 +115,15 @@ public static class SeoDocuments
         return entries;
     }
 
+    /// <summary>
+    /// يُحَوِّل قائِمَة مُستَأجِرين إلى مُدخَلات خَريطَة المَوقِع: رَئيسيَّة
+    /// كُلّ مُستَأجِر، ثُمّ صَفحَة الاستِكشاف، ثُمّ فِئاتُه (الفِئات مَقروءَة
+    /// مِن وَثيقَة المُستَأجِر نَفسِها — بِلا أَيّ استِعلام إضافيّ).
+    /// </summary>
+    /// <param name="tenants">كُلّ المُستَأجِرين؛ تُصَفَّى داخِلاً بِـ
+    /// <see cref="IsPublic"/>.</param>
+    /// <param name="baseUrl">مَثَلاً <c>https://wasayel.app</c>.</param>
+    /// <param name="includeCategories">إدراج روابِط الفِئات.</param>
     public static IReadOnlyList<SitemapEntry> TenantEntries(
         IEnumerable<Tenant> tenants, string baseUrl, bool includeCategories = true)
     {
