@@ -21,16 +21,6 @@ public sealed record SitemapEntry(
     double? Priority = null);
 
 /// <summary>
-/// <para>بِناء وَثائِق الـ SEO — <c>robots.txt</c>، <c>sitemap.xml</c>،
-/// و JSON-LD لِلصَفحَة الرَئيسيَّة. كُلّ الدَوالّ هُنا <b>نَقِيَّة</b>:
-/// تَأخُذ مُستَأجِرين وَرابِطاً أَساسيّاً وَتُعيد نَصّاً — بِلا قاعِدَة
-/// بَيانات وَلا <c>HttpContext</c>، فَتُختَبَر مُباشَرَةً.</para>
-///
-/// <para>الطَبَقَة الَّتي تَجلِب المُستَأجِرين مِن Marten تَعيش في
-/// <c>ACommerce.Kit.Tenants.Server.SeoHandlers</c> — نَفس تَقسيم
-/// Core/Server في بَقيَّة العُدَد (META-MODEL §2).</para>
-/// </summary>
-/// <summary>
 /// <para><b>أَيُّ مَتجَرٍ تَعرِضُه المَنَصَّةُ واجِهَةً لَها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3): خَريطَةُ المَوقِعِ في هذِه العُدَّةِ تَسأَلُه إن
 /// سُجِّل، والقالِبُ يُجيبُه (‏<c>TenantShowcase</c>: إعلانٌ عَلى الأَقَلّ، وباقَةٌ لا في السَماحِ ولا مُعَلَّقَة) — العُدَّةُ لا تَعرِفُ الإعلاناتِ ولا الباقات.
 /// ومُستَهلِكاه في وَقتِ التَشغيلِ ثَلاثَة: الخَريطَةُ هُنا، وقائِمَةُ الصَفحَةِ الأُولى وإحصاءاتُها في القالِب (القاعِدَة ١).</para>
@@ -40,6 +30,16 @@ public interface ITenantShowcase
     Task<IReadOnlyList<Tenant>> ShowcaseAsync(IReadOnlyList<Tenant> tenants, CancellationToken ct = default);
 }
 
+/// <summary>
+/// <para>بِناء وَثائِق الـ SEO — <c>robots.txt</c>، <c>sitemap.xml</c>،
+/// و JSON-LD لِلصَفحَة الرَئيسيَّة. كُلّ الدَوالّ هُنا <b>نَقِيَّة</b>:
+/// تَأخُذ مُستَأجِرين وَرابِطاً أَساسيّاً وَتُعيد نَصّاً — بِلا قاعِدَة
+/// بَيانات وَلا <c>HttpContext</c>، فَتُختَبَر مُباشَرَةً.</para>
+///
+/// <para>الطَبَقَة الَّتي تَجلِب المُستَأجِرين مِن Marten تَعيش في
+/// <c>ACommerce.Kit.Tenants.Server.SeoHandlers</c> — نَفس تَقسيم
+/// Core/Server في بَقيَّة العُدَد (META-MODEL §2).</para>
+/// </summary>
 public static class SeoDocuments
 {
     /// <summary>مَسارات المَنصَّة الَّتي لا يُسمَح لِلزاحِف بِها: لَوحَة
@@ -177,13 +177,13 @@ public static class SeoDocuments
 
     // ─── robots.txt ─────────────────────────────────────────────────────
 
-    /// <summary>يَبني <c>robots.txt</c>: مَنع لَوحات الإدارَة والاستوديو
-    /// وَالـ API وَصَفَحات المُستَخدِم الخاصَّة، مَع الإشارَة إلى خَريطَة
-    /// المَوقِع.</summary>
     /// <summary><b>robots.txt عَلى مُضيفِ الدَور</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-01): لا زَحفَ ولا خَريطَة — تَطبيقُ الدَورِ لَيسَ نُسخَةً تُفَهرَسُ
     /// مِن واجِهَةِ المَتجَر، ومُضيفُ المَتجَرِ <c>{slug}.R</c> النُسخَةُ الوَحيدَة.</summary>
     public const string RoleHostRobotsTxt = "User-agent: *\nDisallow: /\n";
 
+    /// <summary>يَبني <c>robots.txt</c>: مَنع لَوحات الإدارَة والاستوديو
+    /// وَالـ API وَصَفَحات المُستَخدِم الخاصَّة، مَع الإشارَة إلى خَريطَة
+    /// المَوقِع.</summary>
     public static string BuildRobotsTxt(string baseUrl)
     {
         var b = NormalizeBaseUrl(baseUrl);

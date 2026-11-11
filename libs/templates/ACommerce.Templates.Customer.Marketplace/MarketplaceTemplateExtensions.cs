@@ -4874,15 +4874,6 @@ public static class MarketplaceTemplateExtensions
         });
     }
 
-    // قَرار التَّوجيه بَعد دُخول ناجِح:
-    //  1) مَتجَر بِلا أَدوار → الصَفحَة الرَّئيسِيَّة (سُلوك قَديم لِـ ashare/ejar).
-    //  2) إن وُجِدَ <paramref name="asRole"/> (مِن ?as= أَو /r/role/login)
-    //     → URL مَفروع تَحت /r/{role}/ لِيَفصِل الـ session.
-    //  3) خِلاف ذلك: نَتَّبِع ActiveRole مِن user doc (legacy/no-prefix).
-    //
-    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهاتُ كُلُّها بِـ`StoreUrl.For` عَلى المُضيفِ الَّذي
-    // كَتَبَ الكَعكَة: عَلى مُضيفِ المَتجَرِ نَظيفَة (`/`، `/r/{role}/…`)، وفي وَضعِ المَسارِ `/{slug}/…` بِحَرفِها. ولا تُغادِرُ المُضيفَ أَبَداً — الكَعكَةُ
-    // مَقصورَةٌ عَلَيه (ADR-050 §٥)، فَتَحويلٌ إلى مُضيفٍ آخَرَ بَعدَ الدُخولِ يُسقِطُ الجَلسَةَ لِتَوِّها.
     /// <summary>
     /// <para><b>دَعوى <c>tenant_admin</c> عِندَ الدُخولِ لِمَن لا يَحمِلُه تُسقَط</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R2-5 وSEC-C2b-R3-2): استِمارَةُ دُخولِ
     /// <c>{slug}-admin.R</c> تُرسِلُ <c>as=tenant_admin</c>، فَكانَ العُضوُ يَأخُذُ كَعكَةَ دَورِ الإدارَةِ ويُحَوَّلُ إلى <c>/manage</c> فَيُرَدّ — رِحلَةٌ تَنتَهي بِرَفض
@@ -4897,6 +4888,15 @@ public static class MarketplaceTemplateExtensions
         return user is not null && string.Equals(user.ActiveRole, asRole, StringComparison.Ordinal) ? asRole : "";
     }
 
+    // قَرار التَّوجيه بَعد دُخول ناجِح:
+    //  1) مَتجَر بِلا أَدوار → الصَفحَة الرَّئيسِيَّة (سُلوك قَديم لِـ ashare/ejar).
+    //  2) إن وُجِدَ <paramref name="asRole"/> (مِن ?as= أَو /r/role/login)
+    //     → URL مَفروع تَحت /r/{role}/ لِيَفصِل الـ session.
+    //  3) خِلاف ذلك: نَتَّبِع ActiveRole مِن user doc (legacy/no-prefix).
+    //
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهاتُ كُلُّها بِـ`StoreUrl.For` عَلى المُضيفِ الَّذي
+    // كَتَبَ الكَعكَة: عَلى مُضيفِ المَتجَرِ نَظيفَة (`/`، `/r/{role}/…`)، وفي وَضعِ المَسارِ `/{slug}/…` بِحَرفِها. ولا تُغادِرُ المُضيفَ أَبَداً — الكَعكَةُ
+    // مَقصورَةٌ عَلَيه (ADR-050 §٥)، فَتَحويلٌ إلى مُضيفٍ آخَرَ بَعدَ الدُخولِ يُسقِطُ الجَلسَةَ لِتَوِّها.
     private static async Task<string> PostLoginRouteAsync(
         HttpRequest req, string slug, Guid userId, string? asRole, IDocumentStore store)
     {

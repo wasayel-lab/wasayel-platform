@@ -228,6 +228,9 @@ public sealed class TenantResolverMiddleware
     /// <para>‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«<c>/api/push/…</c> كَما هو» صارَ
     /// <c>GET</c>/<c>HEAD</c> <c>/api/push/vapid-key</c> وَحدَه</b>، و<c>/api/{slug}/…</c> لِمَتجَرِ المُضيفِ ما لَم يَكُن اسمُه في
     /// <see cref="ReservedTenantSlugs.PlatformApiSegments"/> — وما سِواهُما 404.</para>
+    /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والبَندانِ الأَوَّلُ والثالِثُ أَعلاه لا يَصدُقانِ
+    /// اليَوم</b>: المِلصَقُ المَحجوزُ تَحتَ <c>R</c> يُجابُ 404 إلّا <c>www</c> (<see cref="ApexAliases"/> — ‏<c>97ba402</c>، ثُمَّ <c>621fc1a</c> أَخرَجَ <c>mail</c>)،
+    /// ومَنطِقَةُ المَنَصَّةِ عَلى المُضيفِ <b>302</b> لا 301 (‏<c>023b686</c>) — والسُطورُ المُؤَرَّخَةُ في الجِسمِ تَقولُ كُلّاً بِسَبَبِه.</para>
     /// </summary>
     public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
         => AnswerStoreHost(host, baseDomain, method, path, query, scheme, rolePages: null);
@@ -379,11 +382,11 @@ public sealed class TenantResolverMiddleware
         return !ReservedTenantSlugs.PlatformAreas.Contains(first);
     }
 
-    /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
     /// <summary>مُخَطَّطُ وِجهَةِ التَحويل — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (‏2026-11-11، SEC-C2a-R3-1).</summary>
     private static string SchemeOf(string? scheme)
         => string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
 
+    /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
     private static string PortOf(string? host)
     {
         var raw = host?.Trim() ?? "";

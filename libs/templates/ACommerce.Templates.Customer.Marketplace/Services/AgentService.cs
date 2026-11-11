@@ -1028,6 +1028,9 @@ public sealed class AgentToolExecutor
         return (true, $"تَمّ تَحديث هُويَّة «{slug}».");
     }
 
+    /// <summary>مِفتاحُ نَصِّ تَصادُمِ مُضيفِ الدَور — نَفسُه في سَطحَي الحِفظ (‏2026-11-11، C2b-P3-03).</summary>
+    public const string RoleHostTakenKey = "roles.save.err_role_host_taken";
+
     /// <summary>
     /// <para><b>مَوضِع التِقاط</b>: البَحث صارَ في لَقطَة أَدوار
     /// المُستَأجِر لا في الكاتالوج السّاكِن — فَدَور أَلَّفَه هذا المَتجَر
@@ -1035,9 +1038,6 @@ public sealed class AgentToolExecutor
     /// واحِدَة اللَقطَة <b>هي</b> الكاتالوج، فَالسُلوك لَم يَتَغَيَّر
     /// بِحَرف.</para>
     /// </summary>
-    /// <summary>مِفتاحُ نَصِّ تَصادُمِ مُضيفِ الدَور — نَفسُه في سَطحَي الحِفظ (‏2026-11-11، C2b-P3-03).</summary>
-    public const string RoleHostTakenKey = "roles.save.err_role_host_taken";
-
     private async Task<(bool, string)> SetRolesAsync(
         JsonElement root, TenantRoleSet roleSet, CancellationToken ct)
     {

@@ -128,8 +128,6 @@ public sealed record CheckoutCardFacts(
     /// </summary>
     public string? CartRefusal { get; init; }
 
-    /// <summary>الحَقائِقُ نَفسُها ومَعَها <see cref="CartRefusal"/> لِسَلَّةِ المُشتَري — بِمُدخَلَي الفاتورَةِ نَفسَيهِما: عَدَدُ البُنودِ (صَفقَةٌ لِكُلِّ بَند)
-    /// ومَجموعُها (<c>Cart.SubtotalSar</c> = مَجموعُ مَبالِغِ الصَفَقات). سَلَّةٌ غائِبَةٌ أَو فارِغَةٌ لا تُسأَل — لا شَيءَ يولَد.</summary>
     /// <summary>
     /// <para><b>نَمَطُ صَفَقاتِ المَتجَرِ بِلا «دَفع» يَرُدُّ بِطاقَةَ البَوّابَة</b> (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b الثانِيَة، G5 (xvii-g)؛ تَوصيفُ
     /// «اليَوم» <c>0473a70</c>): <see cref="CheckoutPayMethods.CardPatternUnpaid"/> لِطَريقِ البَوّابَةِ وَحدَه حينَ لا يَحمِلُ النَمَطُ <c>Paid</c> — كانَت
@@ -148,6 +146,8 @@ public sealed record CheckoutCardFacts(
             ? this with { PatternRefusal = DealPatternCatalog.For(pattern).Includes(DealStage.Paid) ? null : CheckoutPayMethods.CardPatternUnpaid }
             : this;
 
+    /// <summary>الحَقائِقُ نَفسُها ومَعَها <see cref="CartRefusal"/> لِسَلَّةِ المُشتَري — بِمُدخَلَي الفاتورَةِ نَفسَيهِما: عَدَدُ البُنودِ (صَفقَةٌ لِكُلِّ بَند)
+    /// ومَجموعُها (<c>Cart.SubtotalSar</c> = مَجموعُ مَبالِغِ الصَفَقات). سَلَّةٌ غائِبَةٌ أَو فارِغَةٌ لا تُسأَل — لا شَيءَ يولَد.</summary>
     public CheckoutCardFacts ForCart(ACommerce.Kit.Cart.Cart? cart)
         => cart is { Items.Count: > 0 } && ThroughGateway
             ? this with

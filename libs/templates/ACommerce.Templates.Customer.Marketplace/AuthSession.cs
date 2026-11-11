@@ -200,9 +200,6 @@ public sealed class AuthSession
         return null;
     }
 
-    /// <summary>يُكتَب مِن SSR endpoint بَعد نَجاح المُصادَقَة. حِنَّ يُعطَى
-    /// <paramref name="role"/>، يُكتَب cookie role-scoped؛ بِلا role يُكتَب
-    /// الـ cookie القَديم (لِـ ashare/ejar).</summary>
     /// <summary>الـ HttpContext الحاليّ — يُستَخدَم لِكَشف هَل الطَّلَب على
     /// HTTPS فَنَضَع Secure تِلقائيّاً. يُحقَن مَرَّةً في Program عَبر
     /// IHttpContextAccessor.</summary>
@@ -238,6 +235,9 @@ public sealed class AuthSession
         Path        = "/"
     };
 
+    /// <summary>يُكتَب مِن SSR endpoint بَعد نَجاح المُصادَقَة. حِنَّ يُعطَى
+    /// <paramref name="role"/>، يُكتَب cookie role-scoped؛ بِلا role يُكتَب
+    /// الـ cookie القَديم (لِـ ashare/ejar).</summary>
     public static void WriteCookie(HttpResponse res, string tenantSlug, AuthResult auth,
                                     string? role = null)
     {
