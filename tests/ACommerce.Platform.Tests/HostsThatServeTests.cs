@@ -27,6 +27,8 @@ public class HostsThatServeTests(ITestOutputHelper output)
     [InlineData("uploads")]
     [InlineData("lang")]
     [InlineData("pricing")]
+    // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-2) وmail — كانَ يَمُرُّ (ApexAliases) فَيَخدِمُ الاستوديو والإشرافَ ومَتاجِرَ المَسارِ عَلى أَصلٍ ثانٍ
+    [InlineData("mail")]
     public void A_reserved_label_other_than_the_apex_aliases_serves_nothing(string label)
     {
         foreach (var (method, path) in new[] { ("GET", "/"), ("GET", "/studio/auth"), ("GET", "/admin"), ("GET", "/ashare"), ("POST", "/admin/tenants/create") })
@@ -37,8 +39,10 @@ public class HostsThatServeTests(ITestOutputHelper output)
         output.WriteLine($"{label}.{Base} ⇒ NotFound ×5");
     }
 
+    /// <summary>‏(‏2026-11-11، SEC-C2z-R2-2) كانَ «www وmail» — والقَرارُ (G4، A2 «www.R → R») سَمّى www وَحدَه؛ mail.R بِسِجِلٍّ صَريحٍ لا يَبلُغُ الأَصلَ أَصلاً، وبِلا
+    /// سِجِلٍّ (MX وَحدَه) كانَ يَبلُغُه عَبرَ `*` فَيَصيرُ أَصلاً ثانِياً لِلمَنَصَّة.</summary>
     [Fact]
-    public void Only_www_and_mail_pass_among_the_reserved_labels()
+    public void Only_www_passes_among_the_reserved_labels()
     {
         var passing = ReservedTenantSlugs.All
             .Where(l => Regex.IsMatch(l, "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"))
@@ -47,8 +51,8 @@ public class HostsThatServeTests(ITestOutputHelper output)
         var labels = ReservedTenantSlugs.All.Count(l => Regex.IsMatch(l, "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"));
         output.WriteLine($"مِلصَقاتٌ مَحجوزَةٌ صالِحَة: {labels} · تَمُرّ: {string.Join(" ", passing)}");
         Assert.True(labels >= 40, $"فَحصٌ أَعمى: {labels}");
-        Assert.Equal(["mail", "www"], passing);
-        Assert.Equal(["mail", "www"], TenantResolverMiddleware.ApexAliases.Order(StringComparer.Ordinal));
+        Assert.Equal(["www"], passing);
+        Assert.Equal(["www"], TenantResolverMiddleware.ApexAliases.Order(StringComparer.Ordinal));
     }
 
     [Theory]

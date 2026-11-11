@@ -252,6 +252,7 @@ public sealed class TenantResolverMiddleware
         // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-4 وSEC-C2a-R2-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمِلصَقُ المَحجوزُ لا يَخدِمُ المَنَصَّة**: كانَ كُلُّ
         // مَحجوزٍ تَحتَ `R` (admin، studio، api، cdn، blog …) يَمُرُّ فَيَخدِمُ المَنَصَّةَ كُلَّها عَلى أَصلٍ آخَر — جَرَّةٌ ثانِيَةٌ لِدُخولِ الاستوديو والإشراف، وأَصلٌ شَقيقٌ
         // آخَر؛ والقَرارُ سَمّى `www` وَحدَه. الآن `www` و`mail` (`ApexAliases`) يَمُرّانِ كَما كانا، وما سِواهُما 404.
+        // ‏(‏2026-11-11، SEC-C2z-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) و`mail` خَرَجَ مِن `ApexAliases`: `www` وَحدَه يَمُرّ.
         if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label))
             return ApexAliases.Contains(label) ? StoreHostAnswer.Through : StoreHostAnswer.NotFound;
 
@@ -267,7 +268,11 @@ public sealed class TenantResolverMiddleware
 
     /// <summary><b>مِلصَقاتٌ مَحجوزَةٌ تَمُرُّ إلى الجَذرِ كَما كانَت</b> (‏2026-11-11، SEC-C2a-R2-4): <c>www</c> (يُحَوِّلُه Cloudflare إلى <c>R</c> عِندَ الحافَّة — DEPLOY §٢·ي)
     /// و<c>mail</c> (سِجِلُّه صَريحٌ إلى مُزَوِّدِ البَريدِ فَلا يَبلُغُ الأَصلَ عادَةً). وما سِواهُما مِن المَحجوزِ 404 عَلى مُضيفِه.</summary>
-    public static readonly IReadOnlySet<string> ApexAliases = new HashSet<string>(StringComparer.Ordinal) { "www", "mail" };
+    /// <remarks>‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b><c>www</c> وَحدَه</b>: «و<c>mail</c>» أَعلاه
+    /// سَقَط — القَرارُ (G4، A2 «www.R → R») سَمّى الجَذرَ و<c>www</c> وَحدَهُما، و«فَلا يَبلُغُ الأَصلَ عادَةً» يَصدُقُ بِسِجِلٍّ صَريحٍ ويَكذِبُ بِلاه: نِطاقٌ بَريدُه
+    /// بِسِجِلّاتِ MX وَحدَها يُرسِلُ <c>mail.R</c> عَبرَ <c>*</c> إلى الأَصل، فَكانَ أَصلاً ثانِياً لِلمَنَصَّةِ بِجَرَّتِه (مَقيسٌ عِندَ المُراجِع: <c>/studio</c> ← 200 بِـSet-Cookie،
+    /// و<c>/ashare</c> ← 200). والـ404 لا يُكَلِّفُ شَيئاً حينَ يوجَدُ السِجِلُّ الصَريح: الأَصلُ لا يَرى <c>mail.R</c> حينَها.</remarks>
+    public static readonly IReadOnlySet<string> ApexAliases = new HashSet<string>(StringComparer.Ordinal) { "www" };
 
     private static StoreHostAnswer WithRole(StoreHostAnswer answer, string? role)
         => role is null || answer.Slug is null ? answer : answer with { Role = role };

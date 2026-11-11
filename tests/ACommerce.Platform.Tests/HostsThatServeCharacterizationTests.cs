@@ -22,7 +22,7 @@ public class HostsThatServeCharacterizationTests(ITestOutputHelper output)
     [InlineData("example.test", "/studio", "Pass")]
     [InlineData("www.example.test", "/", "Pass")]
     [InlineData("www.example.test", "/studio", "Pass")]
-    [InlineData("mail.example.test", "/", "Pass")]
+    [InlineData("mail.example.test", "/", "NotFound")]   // كانَ Pass — ‏2026-11-11، W13-4·C2z-R2·2 (SEC-C2z-R2-2): يُعَدَّلُ في مَوضِعِه ويُسَجَّلُ في ADR-050 §١٥؛ الحاكِمُ HostsThatServeTests
     [InlineData("ashare.example.test", "/", "Rewrite")]
     [InlineData("ashare.example.test", "/studio", "Redirect")]
     [InlineData("zzz-unknown.example.test", "/", "Rewrite")]

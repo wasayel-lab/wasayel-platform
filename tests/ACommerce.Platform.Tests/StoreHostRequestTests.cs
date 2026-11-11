@@ -69,7 +69,7 @@ public class StoreHostRequestTests(ITestOutputHelper output)
     [InlineData("ab--cd.example.test", "GET", "/", "NotFound||")]
     [InlineData("best-admin.example.test", "GET", "/", "Rewrite|best|/best")]   // كانَ 404؛ مُضيفُ دَورِ الإدارَةِ لِمَتجَرِ best مُنذُ W13-4·C2b·4 — ووُجودُ الدَورِ في الحالّ
     [InlineData("shop-.example.test", "GET", "/", "NotFound||")]
-    [InlineData("mail.example.test", "GET", "/", "Pass||")]
+    [InlineData("mail.example.test", "GET", "/", "NotFound||")]   // كانَ Pass||؛ ‏2026-11-11 · SEC-C2z-R2-2 — www وَحدَه يَمُرُّ مِن المَحجوز
     [InlineData("ashare.evil.test", "GET", "/studio", "Pass||")]
     [InlineData("localhost:5050", "GET", "/studio", "Pass||")]
     // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1) سَطحُ مَتجَرٍ اسمُه push لا يُخدَمُ عَلى مُضيفِ غَيرِه — كانَ 200 بِبَيانِه؛ ومِن /api/push/ مِفتاحُ
