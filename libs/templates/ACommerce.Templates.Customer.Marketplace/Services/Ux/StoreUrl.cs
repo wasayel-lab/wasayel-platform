@@ -29,15 +29,24 @@ public readonly record struct HostView(string? Apex, string? HostSlug, string? S
 public static class StoreUrl
 {
     /// <summary>ما يَعرِفُه <paramref name="ctx"/> عَن المُضيف — فارِغٌ بِلا طَلَب.</summary>
+    /// <remarks>‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>المُخَطَّطُ مِن {http, https} وَحدَهُما،
+    /// هُنا مَرَّةً</b> (<see cref="SchemeOf"/>): كانَ <c>Request.Scheme</c> بِحَرفِه — و<c>X-Forwarded-Proto</c> يُصَدَّقُ مِن أَيِّ نِدٍّ (<c>KnownProxies</c> فارِغ) — فَجَولَةُ
+    /// الخُروجِ ورابِطُ «المَتجَرُ عَلى مُضيفِه» و<see cref="App(HostView, string, string, string)"/> و<see cref="Open(HostView, string)"/> و<see cref="PlatformOrigin"/>
+    /// كَتَبَت <c>javascript://…</c> (مَقيسٌ حَيّاً: ‏302 مِن بابِ الخُروج). والبُناةُ يَرِثونَه مِن هُنا، وماسِحُ <c>HostSchemeTests</c> يُحمَرُّ إن قَرَأَه غَيرُ هذا.</remarks>
     public static HostView ViewOf(HttpContext? ctx)
         => ctx is null
             ? default
             : new HostView(
                 ctx.Items[StoreHostItems.Apex] as string,
                 ctx.Items[StoreHostItems.Slug] as string,
-                string.IsNullOrEmpty(ctx.Request.Scheme) ? "https" : ctx.Request.Scheme,
+                SchemeOf(ctx.Request.Scheme),
                 ctx.Request.Host.Port is int port ? ":" + port : "")
             { HostRole = ctx.Items[StoreHostItems.Role] as string, PageRole = AuthSession.ExtractRoleFromPath(ctx.Request.Path) };
+
+    /// <summary>مُخَطَّطُ العُنوانِ المُطلَق — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (والفارِغُ <c>https</c> كَما كان). قاعِدَةُ
+    /// <c>TenantResolverMiddleware.SchemeOf</c> لِتَحويلِ مَنطِقَةِ المَنَصَّةِ بِعَينِها (‏023b686) — قائِمَةُ سَماحٍ لا تَنظيف.</summary>
+    private static string SchemeOf(string? scheme)
+        => string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
 
     /// <summary><b>شَكلُ المَسار</b> — جِسمُ <c>AuthSession.LinkFor</c> كَما كانَ بِحَرفِه: <c>/{slug}/{path}</c> أَو <c>/{slug}/r/{role}/{path}</c>، بِلا شَرطَةٍ أَخيرَة.</summary>
     public static string PathForm(string slug, string? role, string path)

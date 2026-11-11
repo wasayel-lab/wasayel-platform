@@ -45,6 +45,7 @@ JAR=""                            # جَرَّةُ كَعكاتٍ تُرسَلُ
 REF=""                            # رَأسُ Referer يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٧ وَحدَها
 ORIGIN=""                         # رَأسُ Origin يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ١٢ وَحدَها (W13-4·C2c·1)
 ALLOWED="${ALLOWED:-0}"           # 1 = الخادِمُ بِـAllowedHosts="$DOMAIN;*.$DOMAIN" — يُشَغِّلُ المَجموعَةَ ١٤ (W13-4·C2c·3)
+XFP=""                            # رَأسُ X-Forwarded-Proto يُرسَلُ مَعَ الصُفوفِ وَقتَ المَجموعَةِ ٢٤ وَحدَها (C2z-R2)
 hp() { if [ -n "$PORT" ]; then printf '%s:%s' "$1" "$PORT"; else printf '%s' "$1"; fi; }
 ADDR="$SCHEME://$(hp 127.0.0.1)"
 S="$(hp "$STORE.$DOMAIN")"        # مُضيفُ المَتجَر
@@ -64,6 +65,7 @@ row() {
   local jar=(); [ -n "$JAR" ] && jar=(-b "$JAR"); args+=("${jar[@]}")
   [ -n "$REF" ] && args+=(-H "Referer: $REF")
   [ -n "$ORIGIN" ] && args+=(-H "Origin: $ORIGIN")
+  [ -n "$XFP" ] && args+=(-H "X-Forwarded-Proto: $XFP")
   [ "$method" = POST ] && args+=(-H 'Content-Type: application/x-www-form-urlencoded' --data '')
   # ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن رُؤوسِ الجَوابِ نَفسِه (`-D`) لا مِن طَلَبٍ ثانٍ: الطَلَبُ
   # الثاني كانَ بِلا جِسمِ الـPOST ولا Referer، فَلا يَقيسُ وِجهَةَ ما أُرسِل. ووِجهَةٌ تَنتَهي بِـ* تُقارَنُ بادِئَةً (لِما بَعدَ ? مِن رَمزِ رَفضٍ يَختَلِفُ بِقَناةِ المَتجَر).
@@ -319,7 +321,12 @@ if [ -n "$ROLE" ] && [ -n "$ROLE_PHONE" ]; then
       mark "$([ "${g%%|*}" = 302 ] && [ "${g#*|}" = "/" ] && [ "$(inside "$RH")" = 1 ] && echo 1 || echo 0)" \
            "تَذكِرَةٌ مُختَلَقَةٌ عَلى $RH لا تُخرِجُ أَحَداً" "${g%%|*} → ${g#*|}"
     fi
-    g="$(go POST "$START" "/$STORE/auth/logout" -H 'Content-Type: application/x-www-form-urlencoded' --data '')"
+    # ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والجَولَةُ الأُولى بِـ`X-Forwarded-Proto: javascript`**
+    # عَلى بابِ الخُروجِ وَحدَه: كانَت أَوَّلُ وِجهَةٍ `javascript://{store}-customer…` (المُخَطَّطُ مِن الرَأسِ بِحَرفِه)؛ الآن `https://` — وما بَعدَها بِلا رَأسٍ كَما كان.
+    xh=(); [ "$START" = "$S" ] && xh=(-H 'X-Forwarded-Proto: javascript')
+    g="$(go POST "$START" "/$STORE/auth/logout" -H 'Content-Type: application/x-www-form-urlencoded' "${xh[@]}" --data '')"
+    [ "$START" = "$S" ] && mark "$([ "${g%%|*}" = 302 ] && [[ "${g#*|}" == https://* ]] && echo 1 || echo 0)" \
+         "الخُروجُ عَلى $START بِـX-Forwarded-Proto: javascript ← وِجهَةٌ https://" "${g%%|*} → ${g#*|}"
     hops=0; bad=""; final="$SCHEME://$START/"; [ "$START" = "$R" ] && final="$SCHEME://$R/$STORE"
     while [ "${g%%|*}" = 302 ] && [ "${g#*|}" != "$final" ] && [ "$hops" -lt 15 ]; do
       loc="${g#*|}"; rest="${loc#*://}"; hp_="${rest%%/*}"; p_="/${rest#*/}"
@@ -687,6 +694,24 @@ if [ -n "$GUEST_PHONE" ] && [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H
   fi
 else
   echo "  – لَم تُفحَص: GUEST_PHONE غائِب، أَو $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
+fi
+
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **العَناوينُ المُطلَقَةُ عَلى المُضيفاتِ مُخَطَّطُها مِن
+# {http, https}**: كانَ `StoreUrl.ViewOf` يَنسَخُ `Request.Scheme` بِحَرفِه، فَبِـ`X-Forwarded-Proto: javascript` كانَت بِطاقَةُ الدَورِ عَلى مُضيفِ المَتجَرِ
+# `javascript://{store}-{role}…/login` ورابِطُ «المَتجَرُ عَلى مُضيفِه» في رَفضِ مُضيفِ الإدارَةِ `javascript://{store}…/` (وبابُ الخُروجِ في المَجموعَةِ ١١). الآن `https://`.
+# **لا يَكتُبُ شَيئاً.**
+echo "٢٤) العَناوينُ المُطلَقَةُ عَلى المُضيفاتِ مُخَطَّطُها مِن {http, https} لا مِن X-Forwarded-Proto بِحَرفِه (C2z-R2)"
+if [ "$DIRECT" != 1 ]; then
+  XFP=javascript
+  [ -n "$ROLE" ] && row GET "$S" "/"     200 - "https://$RH/login" "!javascript://$RH"
+  if [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $AH" "$(url "$AH" /)")" = 200 ]; then
+    row GET "$AH" "/login?err=not_store_admin" 200 - "href=\"https://$S/\"" "!href=\"javascript:"
+  else
+    echo "  – صَفُّ مُضيفِ الإدارَةِ لَم يُفحَص: $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
+  fi
+  XFP=""
+else
+  echo "  – لَم تُفحَص: X-Forwarded-Proto يَكتُبُه Cloudflare — مَحَلِّيّاً وَحدَه"
 fi
 
 echo
