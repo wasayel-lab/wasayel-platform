@@ -98,6 +98,14 @@ public class SchemeRobustnessTests(ITestOutputHelper output)
     [InlineData("https, 1http")]
     [InlineData("1http, https")]
     [InlineData("java:script")]
+    // ‏(‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1 وC2f-PATHS-R1-01 — يُلحَق) ما يَمُرُّ بِـUri.CheckSchemeName ولا يَبني عُنواناً بِمُضيفٍ ومَنفَذ — كانَ 500 عَلى كُلِّ صَفحَة
+    [InlineData("a")]
+    [InlineData("Z")]
+    [InlineData("https,a")]
+    [InlineData("a,https")]
+    [InlineData("file")]
+    [InlineData("net.pipe")]
+    [InlineData("vsmacros")]
     public async Task An_unreadable_forwarded_proto_is_400_with_one_line_not_500(string proto)
     {
         await using var guard = await ProtoGuard.StartAsync();
@@ -128,6 +136,66 @@ public class SchemeRobustnessTests(ITestOutputHelper output)
         Assert.Equal(HostHeaderGuard.ForwardedProtoUnreadable, HostHeaderGuard.ForwardedRefusal(policy, "example.test", null, "1http")!.Code);
         // Host يُسأَلُ أَوَّلاً كَما كان
         Assert.Equal(HostHeaderGuard.HostUnreadable, HostHeaderGuard.ForwardedRefusal(policy, "xn--zz.example.test", null, "1http")!.Code);
+    }
+
+    /// <summary>
+    /// <para><b>ما تُمَرِّرُه الواجِهَةُ يَبني الصَفحَةَ عَلى كُلِّ مُضيفٍ مَقروء، وما تَرُدُّه يَكسِرُها عَلى واحِدٍ مِنها</b> (‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1
+    /// وC2f-PATHS-R1-01). الصَفحَةُ هُنا ما تَفعَلُه الصَفحَةُ الحَقيقِيَّة: <c>NavigationManager.Initialize</c> بِعُنوانِ الأَساسِ <c>{scheme}://{host}/</c>، ثُمَّ
+    /// <c>new PathString(new Uri(Nav.Uri).AbsolutePath)</c> (<c>MainLayout.razor</c>) و<c>ToBaseRelativePath</c> و<c>ToAbsoluteUri</c>. كانَ «يُقرَأُ» يَعني
+    /// <see cref="Uri.CheckSchemeName"/> وَحدَه فَمَرَّ الحَرفُ الواحِدُ وfile وnet.pipe وvsmacros وكَسَرَت الصَفحَة (500) — وهذا الماسِحُ يَحمَرُّ عَلى تِلكَ القاعِدَة
+    /// (مَقيسٌ عَلَيها قَبلَ التَبديل). والاتِّجاهُ الآخَرُ يَمنَعُ أَن تُرَدَّ قيمَةٌ تَبني الصَفحَة. يَطبَعُ عَدَدَ ما فَحَصَه ويَفشَلُ صِفراً (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void What_the_front_passes_forms_the_page_on_every_readable_host_and_what_it_refuses_breaks_it()
+    {
+        var hosts = new[] { "localhost", "localhost:5050", "127.0.0.1:5150", "[::1]:5050", "ashare.localhost:5162", "ashare-vendor.example.test",
+            "xn--mgbh0fb.localhost:5150", "example.test:443" };
+        Assert.All(hosts, h => Assert.True(HostHeaderGuard.IsReadable(h), h));
+        var letters = Enumerable.Range('a', 26).Select(c => ((char)c).ToString()).ToList();
+        var schemes = letters.Concat(letters.Select(l => l.ToUpperInvariant())).Concat(
+        [
+            "http", "https", "HTTP", "HTTPS", "ws", "wss", "ftp", "file", "FILE", "File", "gopher", "nntp", "news", "mailto", "uuid", "telnet", "ldap",
+            "net.tcp", "net.pipe", "NET.PIPE", "vsmacros", "javascript", "data", "about", "blob", "urn", "unc", "ms-appx", "tel", "git", "ssh",
+            "ab", "a1", "AB", "zz", "z9", "a.b", "a+b", "x-y", "1http", "9", "+x", "java:script",
+        ]).ToList();
+        var policy = new ForwardedHeadersPolicy();
+        int passed = 0, refused = 0, pages = 0;
+        var wrong = new List<string>();
+        foreach (var scheme in schemes)
+        {
+            var passes = HostHeaderGuard.ForwardedRefusal(policy, "localhost:5050", null, scheme) is null;
+            var forms = hosts.Select(h => (Host: h, Forms: PageForms(scheme, h))).ToList();
+            pages += forms.Count;
+            if (passes) passed++; else refused++;
+            if (passes && forms.FirstOrDefault(f => !f.Forms) is { Host: { } broken }) wrong.Add($"«{scheme}» يَمُرُّ ويَكسِرُ الصَفحَةَ عَلى {broken}");
+            if (!passes && forms.All(f => f.Forms)) wrong.Add($"«{scheme}» يُرَدُّ ويَبني الصَفحَةَ عَلى كُلِّ مُضيف");
+        }
+        output.WriteLine($"مُخَطَّطات: {schemes.Count} · مُضيفات: {hosts.Length} · صَفَحاتٌ مَبنِيَّة: {pages} · يَمُرّ: {passed} · يُرَدّ: {refused} · خِلاف: {wrong.Count}");
+        foreach (var w in wrong) output.WriteLine("  ✗ " + w);
+        Assert.True(passed > 20 && refused > 50, $"فَحصٌ أَعمى: {passed}/{refused}");
+        Assert.Empty(wrong);
+    }
+
+    private static bool PageForms(string scheme, string host)
+    {
+        try
+        {
+            var root = $"{scheme}://{host}/";
+            foreach (var at in new[] { root, root + "ashare/explore?q=a%20b" })
+            {
+                var nav = new PageNav(root, at);
+                _ = new PathString(new Uri(nav.Uri).AbsolutePath);   // MainLayout.razor
+                _ = nav.ToBaseRelativePath(nav.Uri);
+                _ = nav.ToAbsoluteUri("ashare/login");
+            }
+            return true;
+        }
+        catch (Exception e) when (e is UriFormatException or ArgumentException or InvalidOperationException) { return false; }
+    }
+
+    private sealed class PageNav : Microsoft.AspNetCore.Components.NavigationManager
+    {
+        public PageNav(string root, string at) => Initialize(root, at);
     }
 
     private static HttpRequest Req(string scheme)

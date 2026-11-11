@@ -731,6 +731,16 @@ if [ "$DIRECT" != 1 ]; then
   row GET  "$S" "/"                       400
   row GET  "$R" "/$STORE"                 400
   done
+  # ‏(‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1 وC2f-PATHS-R1-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمُخَطَّطُ الَّذي يَمُرُّ بِـ`Uri.CheckSchemeName` ولا يَبني
+  # عُنواناً بِمُضيفٍ ومَنفَذ**: الحَرفُ الواحِدُ (System.Uri يَقرَأُ «a://h/x» مَسارَ قُرص) وfile وnet.pipe وvsmacros كانَت 500 عَلى كُلِّ صَفحَةٍ في الوَضعَين
+  # (مَقيسٌ عِندَ 7a9efc7)، و«https,a» كَذلك (الإطارُ يَأخُذُ آخِرَها)، و«a,https» 200 — الآن 400 كُلُّها: كُلُّ قيمَةٍ تُقرَأ.
+  for XFP in a Z "https,a" "a,https" file net.pipe vsmacros; do
+  row GET  "$S" "/"                       400
+  row GET  "$R" "/$STORE"                 400
+  done
+  for XFP in ab mailto net.tcp; do
+  row GET  "$S" "/"                       200
+  done
   XFP=javascript
   row GET  "$S" "/"                       200 - "<link rel=\"canonical\" href=\"https://$S/\" />" "<meta property=\"og:url\" content=\"https://$S/\" />" "!javascript://"
   row GET  "$R" "/$STORE"                 200 - "<link rel=\"canonical\" href=\"https://$R/$STORE\" />" "!javascript://"

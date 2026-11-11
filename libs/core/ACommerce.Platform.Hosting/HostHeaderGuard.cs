@@ -94,7 +94,10 @@ public static class HostHeaderGuard
     /// و<c>9</c> و<c>+x</c> تَصيرُ <c>Request.Scheme</c> ثُمَّ <b>500</b> عَلى كُلِّ صَفحَةٍ في الوَضعَين (<c>UriFormatException</c> في
     /// <c>NavigationManager.set_BaseUri</c> — مَقيسٌ عِندَ <c>ad0a770</c> بِثَلاثِ القيَم: بِلا نِطاقٍ 15 مِن 15 صَفحَة، وبِنِطاقٍ 15 مِن 18 والثَلاثُ الباقِيَةُ 404 قَبلَ الصَفحَة).
     /// الآن كُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ مُخَطَّطٌ يُقرَأ (<see cref="Uri.CheckSchemeName"/>) أَو فارِغَة — وإلّا 400. وما يُقرَأُ (<c>javascript</c>) يَمُرُّ كَما كان،
-    /// والعُنوانُ المُطلَقُ يَأخُذُ مُخَطَّطَه مِن {http, https} عِندَ بانيه (<c>AbsoluteScheme</c>).</remarks>
+    /// والعُنوانُ المُطلَقُ يَأخُذُ مُخَطَّطَه مِن {http, https} عِندَ بانيه (<c>AbsoluteScheme</c>).
+    /// <para>‏(‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1 وC2f-PATHS-R1-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و«يُقرَأُ» صارَ «يَبني عُنواناً بِمُضيفٍ ومَنفَذ»</b>
+    /// (<see cref="IsReadableScheme"/>): <see cref="Uri.CheckSchemeName"/> وَحدَه أَمرَّ الحَرفَ الواحِدَ وfile وnet.pipe وvsmacros، فَكانَت 500 عَلى كُلِّ صَفحَةٍ في
+    /// الوَضعَين (مَقيسٌ عِندَ <c>7a9efc7</c>)، و«قيمَةٌ لا تُقرَأُ ← 400» أَعلاه لَم يَصدُق إلّا لِما يَرُدُّه ذلك الفاحِص.</para></remarks>
     public static ForwardedFrontRefusal? ForwardedRefusal(ForwardedHeadersPolicy policy, string? host, string? forwardedHost, string? forwardedProto = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
@@ -103,7 +106,7 @@ public static class HostHeaderGuard
         {
             var protos = forwardedProto.Split(',');
             foreach (var proto in protos)
-                if (proto.Trim() is { Length: > 0 } p && !Uri.CheckSchemeName(p))
+                if (proto.Trim() is { Length: > 0 } p && !IsReadableScheme(p))
                     return new(ForwardedProtoUnreadable, "X-Forwarded-Proto", forwardedProto.Length, protos.Length, ShapeOf(p));
         }
         if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return null;
@@ -112,6 +115,21 @@ public static class HostHeaderGuard
             if (!IsReadable(value.Trim())) return new(ForwardedHostUnreadable, "X-Forwarded-Host", forwardedHost.Length, values.Length, ShapeOf(value.Trim()));
         return null;
     }
+
+    /// <summary>
+    /// <para><b>أَيَبني هذا المُخَطَّطُ عُنواناً بِمُضيفٍ ومَنفَذٍ ومَسارٍ كَما يَبنيه <c>NavigationManager</c>؟</b> (‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1
+    /// وC2f-PATHS-R1-01). الصَفحَةُ تَبني أَساسَها <c>{Request.Scheme}://{Request.Host}/</c> وتَقرَأُ مَسارَه (<c>MainLayout.razor</c>:
+    /// <c>new Uri(Nav.Uri).AbsolutePath</c>)، و<see cref="Uri.CheckSchemeName"/> يَقبَلُ مُخَطَّطاتٍ لا يَبنيها <see cref="Uri"/> كَذلك: الحَرفُ الواحِدُ
+    /// (<c>a://h/x</c> مَسارُ قُرصٍ — <c>IsFile</c>)، و<c>file</c> و<c>vsmacros</c> (مَسارُ مِلَفٍّ أَو UNC — ومَنفَذٌ فيه لا يُقرَأ)، و<c>net.pipe</c> (لا مَنفَذ).</para>
+    /// <para>والسُؤالُ بِمُضيفٍ ومَنفَذٍ ثابِتَين (<c>h:1</c>) لا بِمُضيفِ الطَلَب: القَرارُ لا يَتَعَلَّقُ بِالمُضيف (‏<c>file</c> بِلا مَنفَذٍ كانَ يَبني الصَفحَةَ وبِه 500)،
+    /// ومَقيسٌ عَلى 95 مُخَطَّطاً و8 مُضيفاتٍ مَقروءَة أَنّه يُطابِقُ «يَبني الصَفحَةَ عَلى كُلِّ مُضيفٍ مَقروء» بِلا خِلاف (<c>SchemeRobustnessTests</c>).</para>
+    /// </summary>
+    public static bool IsReadableScheme(string scheme)
+        => Uri.CheckSchemeName(scheme)
+           && Uri.TryCreate(scheme + "://h:1/x", UriKind.Absolute, out var probe)
+           && !probe.IsFile && !probe.IsUnc
+           && string.Equals(probe.Scheme, scheme, StringComparison.OrdinalIgnoreCase)
+           && probe.AbsolutePath.StartsWith('/');
 
     /// <summary><b>صِنفُ القيمَةِ الَّتي لا تُقرَأ — مَعجَمٌ مُغلَق</b>: <c>control</c> (مَحرَفُ تَحَكُّم)، <c>non_ascii</c>، <c>port</c> (مَنفَذٌ لَيسَ 0..65535)،
     /// <c>idn</c> (<c>xn--</c> لا يُفَكّ)، <c>other</c>. يُكتَبُ في السِجِلِّ بَدَلَ القيمَة.</summary>
