@@ -22,9 +22,11 @@ namespace ACommerce.Platform.Tests;
 public class RoleHostSurfaceTests(ITestOutputHelper output)
 {
     [Fact]
-    public void A_role_host_robots_disallows_everything_and_names_no_sitemap()
+    public void A_role_host_robots_allows_crawling_and_names_no_sitemap()
     {
-        Assert.Equal("User-agent: *\nDisallow: /\n", SeoDocuments.RoleHostRobotsTxt);
+        // ‏(‏2026-11-11، W13-4·C2f·5 — C2z-PATHS-R1-05) كانَ «Disallow: /» فَيُخفي noindex عَن الزاحِف؛ الآنَ «Allow: /» وnoindex عَلى كُلِّ جَواب.
+        Assert.Equal("User-agent: *\nAllow: /\n", SeoDocuments.RoleHostRobotsTxt);
+        Assert.DoesNotContain("Disallow", SeoDocuments.RoleHostRobotsTxt, StringComparison.Ordinal);
         Assert.DoesNotContain("Sitemap:", SeoDocuments.RoleHostRobotsTxt, StringComparison.Ordinal);
         var empty = SeoDocuments.BuildSitemapXml([]);
         Assert.DoesNotContain("<loc>", empty, StringComparison.Ordinal);

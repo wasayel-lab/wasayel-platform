@@ -633,7 +633,8 @@ row GET  "$(hp "mail.$DOMAIN")"          "/$STORE"           404
 # **لا يَكتُبُ شَيئاً.**
 echo "٢١) مُضيفُ الدَورِ لا يُفَهرَس، ومُضيفُ المَتجَرِ النُسخَةُ الوَحيدَة (C2z·5)"
 if [ -n "$ROLE" ]; then
-row GET  "$RH" "/robots.txt"             200 - "Disallow: /" "!Sitemap:"
+# ‏(‏2026-11-11، W13-4·C2f·5 — C2z-PATHS-R1-05، يُلحَق) كانَ «Disallow: /» فَيُخفي noindex عَن الزاحِف — الآنَ يُسمَحُ بِالزَحفِ ويُرى noindex.
+row GET  "$RH" "/robots.txt"             200 - "Allow: /" "!Disallow" "!Sitemap:"
 row GET  "$RH" "/sitemap.xml"            200 - "urlset" "!<loc>"
 row GET  "$S"  "/robots.txt"             200 - "Sitemap: $SCHEME://$S/sitemap.xml"
 tag() { # tag <host> <want: noindex|none>

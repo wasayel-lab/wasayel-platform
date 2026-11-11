@@ -179,7 +179,12 @@ public static class SeoDocuments
 
     /// <summary><b>robots.txt عَلى مُضيفِ الدَور</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-01): لا زَحفَ ولا خَريطَة — تَطبيقُ الدَورِ لَيسَ نُسخَةً تُفَهرَسُ
     /// مِن واجِهَةِ المَتجَر، ومُضيفُ المَتجَرِ <c>{slug}.R</c> النُسخَةُ الوَحيدَة.</summary>
-    public const string RoleHostRobotsTxt = "User-agent: *\nDisallow: /\n";
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-05 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>الزَحفُ مَسموحٌ و<c>noindex</c> يَمنَعُ الفَهرَسَة</b>:
+    /// «لا زَحف» (<c>Disallow: /</c>) كانَ يُخفي <c>X-Robots-Tag: noindex</c> عَن الزاحِف — صَفحَةُ Google Search Central «Block Search indexing with noindex» (جُلِبَت
+    /// ‏2026-11-11): «If the page is blocked by a robots.txt file or the crawler can't access the page, the crawler will never see the noindex rule, and the page
+    /// can still appear in search results» — فَرابِطُ بِطاقَةِ الدَورِ مِن واجِهَةِ المَتجَرِ يُفَهرَسُ عُنواناً بِلا صَفحَة. الآن <c>Allow: /</c> بِلا خَريطَة،
+    /// والخَريطَةُ فارِغَة، وكُلُّ جَوابٍ بِـ<c>noindex</c> — فَيَزحَفُ ويَرى الرَأسَ ولا يُفَهرِس.</remarks>
+    public const string RoleHostRobotsTxt = "User-agent: *\nAllow: /\n";
 
     /// <summary>يَبني <c>robots.txt</c>: مَنع لَوحات الإدارَة والاستوديو
     /// وَالـ API وَصَفَحات المُستَخدِم الخاصَّة، مَع الإشارَة إلى خَريطَة
