@@ -592,6 +592,15 @@ row GET  "$(hp "xn--mgbh0fb-vendor.$DOMAIN")" "/"       400
 row GET  "xn--zz"                        "/$STORE"      400
 row GET  "$DOMAIN:99999"                 "/$STORE"      400
 row GET  "$STORE.$DOMAIN:70000"          "/"            400
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2 وC2z-PATHS-R1-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وخَلفَ العامِلِ الاسمُ في الرَأسِ المُمَرَّر**:
+# DEPLOY الخُطوَةُ ٦ (`ForwardedHeaders__AllowedHosts=R,*.R`) تَجعَلُ اسمَ كُلِّ زائِرٍ في `X-Forwarded-Host`، والإطارُ كانَ يَفُكُّه قَبلَ الحارِسِ فَـ`xn--zz.R` ← 500
+# (مَقيسٌ عِندَ `61dab36`). الآن 400 قَبلَ أَن يُقرَأ، والاسمُ الصالِحُ يَبلُغُ كَما كان. ومَعَ `ALLOWED=1` يُرَدُّ الاسمُ الداخِلِيُّ قَبلَها فَلا تُقاس. **لا يَكتُبُ شَيئاً.**
+if [ "${WORKER:-0}" = 1 ] && [ "$ALLOWED" != 1 ]; then
+  worker "$(hp "xn--zz.$DOMAIN")"             "/$STORE" "" 400 GET
+  worker "$(hp "xn--mgbh0fb-vendor.$DOMAIN")" "/"       "" 400 GET
+  worker "$S, $(hp "xn--zz.$DOMAIN")"         "/"       "" 400 GET
+  worker "$S"                                 "/"       "" 200 GET
+fi
 else
   echo "  – لَم تُفحَص: X-Forwarded-Proto يَكتُبُه Cloudflare، والمُضيفُ المُختَلَقُ لا يَحُلُّه DNS — مَحَلِّيّاً وَحدَه"
 fi

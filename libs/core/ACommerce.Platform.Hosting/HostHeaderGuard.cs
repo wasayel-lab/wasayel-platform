@@ -44,11 +44,39 @@ public static class HostHeaderGuard
     /// يُرَكِّبُ <c>app.UseForwardedHeaders()</c> سَطراً بِلا اسم، وهُوَ ما يَقرَأُ <c>X-Forwarded-Host</c> قَبلَ الحارِسِ أَعلاه — فَتَوصيفُ ما يَنجو يَقيسُ هذا التَركيبَ
     /// بِاسمِه عَلى مُضيفٍ مُصَغَّرٍ بِسِياسَةِ المَنَصَّةِ نَفسِها (<see cref="ForwardedHeadersPolicy"/>)، فَيَبقى مِلَفُّه بِبَصمَتِه قَبلَ التَبديلِ وبَعدَه.
     /// والخِياراتُ مِن الحاوِيَةِ كَما كانَت (<c>Configure&lt;ForwardedHeadersOptions&gt;(policy.ApplyTo)</c>).</para>
+    /// <para><b>‏(‏2026-11-11، التَبديل — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والرَأسُ يُسأَلُ قَبلَ أَن يُقرَأ</b>: خَلفَ عامِلٍ يُعيدُ كِتابَةَ <c>Host</c> (DEPLOY الخُطوَةُ ٦،
+    /// <c>ForwardedHeaders__AllowedHosts=R,*.R</c>) يَصِلُ اسمُ الزائِرِ في <c>X-Forwarded-Host</c>، و<c>ForwardedHeadersMiddleware</c> يَفُكُّه بِـ
+    /// <c>HostString.FromUriComponent</c> قَبلَ أَيِّ حارِس — فَـ<c>xn--zz.R</c> كانَ <b>500</b> بِأَثَرِ مُكَدَّس (مَقيسٌ عِندَ <c>61dab36</c>)، والحارِسُ في
+    /// <see cref="HostingExtensions.UsePlatformRequestFront"/> بَعدَه لا يَراه. الآن <see cref="ForwardedReadable"/> قَبلَه: <c>Host</c> الخامُ يُقرَأ، ومَتى صَدَّقَت
+    /// السِياسَةُ الرَأسَ (<see cref="ForwardedHeadersPolicy.TrustsForwardedHost"/>) فَكُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ فيه تُقرَأُ بِـ<see cref="IsReadable"/> — وإلّا 400.
+    /// وبِلا قائِمَةٍ لا يُقرَأُ الرَأسُ فَلا يُسأَل (الإطارُ لا يَلمِسُه). والحارِسُ في الأُنبوبِ باقٍ لِتَركيبٍ بِلا هذِه الواجِهَة.</para>
     /// </summary>
     public static IApplicationBuilder UsePlatformForwardedHeaders(this IApplicationBuilder app, ForwardedHeadersPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);
+        app.Use(next => ctx =>
+        {
+            var headers = ctx.Request.Headers;
+            if (ForwardedReadable(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString())) return next(ctx);
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Task.CompletedTask;
+        });
         return app.UseForwardedHeaders();
+    }
+
+    /// <summary>
+    /// <para><b>القَرارُ النَقِيُّ قَبلَ الرُؤوسِ المُمَرَّرَة</b>: <paramref name="host"/> الخامُ يُقرَأ (<see cref="IsReadable"/>)، و<paramref name="forwardedHost"/> — مَتى
+    /// صَدَّقَته <paramref name="policy"/> — كُلُّ قيمَةٍ فيه تُقرَأ (القيَمُ المُتَعَدِّدَةُ تَصِلُ مَفصولَةً بِفاصِلَة، والإطارُ يَأخُذُ آخِرَها؛ وتُسأَلُ كُلُّها فَلا يَتَعَلَّقُ
+    /// القَرارُ بِحَدِّ <c>ForwardLimit</c>).</para>
+    /// </summary>
+    public static bool ForwardedReadable(ForwardedHeadersPolicy policy, string? host, string? forwardedHost)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (!IsReadable(host)) return false;
+        if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return true;
+        foreach (var value in forwardedHost.Split(','))
+            if (!IsReadable(value.Trim())) return false;
+        return true;
     }
 
     /// <summary>الوَسيط: 400 لِرَأسٍ لا يُقرَأ، وما سِواه إلى ما بَعدَه.</summary>
