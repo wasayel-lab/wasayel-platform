@@ -603,6 +603,19 @@ tag "$RH" noindex
 tag "$S"  none
 fi
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **قِراءَةُ أَيقونَةِ الـPWA قَبلَ ضَبطِ النِطاقِ هِيَ هذِه** (DEPLOY §٢·ي
+# الخُطوَةُ ٨، وADR-050 §٥): كانَت `curl -sI` — طَلَبَ HEAD تُجيبُه النُقطَةُ (`MapGet`) 405 بِلا CSP، فَتَقولُ «قَبلَ الإصلاح» عَلى بِناءٍ مُصلَحٍ أَبَداً. الآن GET
+# بِرُؤوسِه، وأَعلامُه `PWA_READ` هِيَ ما في الدَليلِ حَرفاً (`GoLiveReadsAndWiringTests` يَحمَرُّ إن افتَرَقا). **لا يَكتُبُ شَيئاً.**
+echo "٢٢) قِراءَةُ أَيقونَةِ الـPWA قَبلَ ضَبطِ النِطاق: GET بِرُؤوسِه عَلى الجَذر (C2z·7)"
+PWA_READ=(-s -D - -o /dev/null)
+pwa() { # pwa <host> <want>
+  local got; got="$(curl -m 20 "${PWA_READ[@]}" -H "Host: $1" "$(url "$1" "/api/$STORE/icon.svg")" | tr -d '\r' | grep -i '^content-security-policy' | sed 's/^[^:]*: //' | head -1)"
+  checked=$((checked + 1))
+  if [ "$got" = "$2" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' GET "$1" "/api/$STORE/icon.svg · CSP" "$got"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → «%s» لا «%s»\n' GET "$1" "/api/$STORE/icon.svg · CSP" "${got:-لا شَيء}" "$2"; fi
+}
+pwa "$R" "default-src 'none'; sandbox"
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

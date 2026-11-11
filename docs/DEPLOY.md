@@ -2553,6 +2553,11 @@ OTO» عَلى كُلِّ بائِعٍ في كُلِّ مَتجَر**، ومَن
    ذلك تُعادُ SVG بِسكربتٍ يَرفَعُها صاحِبُ أَيِّ مَتجَرٍ مِن `R/api/{slug}/r/{role}/icon.svg` عَلى أَصلِ `/studio` و`/admin`، وعَلى `{slug}.R` تَزيدُ رَميَ كَعكاتٍ
    بِـ`Domain=R` (و`__Host-` في المَرحَلَةِ الرابِعَة — ADR-050 §٥). **يُقرَأ**: `curl -sI https://R/api/<مَتجَر>/icon.svg | grep -i '^content-security-policy'`
    ← `default-src 'none'; sandbox`؛ وغِيابُه = بِناءٌ قَبلَ الإصلاح ⇒ لا يُضبَطُ `MultiTenancy__BaseDomain`.
+   ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **تَصحيح: القِراءَةُ GET لا HEAD** — `-sI` يُرسِلُ HEAD، والنُقطَةُ
+   (`MapGet`) تُجيبُه 405 بِلا CSP، فَكانَت القِراءَةُ تَقولُ «قَبلَ الإصلاح» عَلى بِناءٍ مُصلَحٍ أَبَداً. **يُقرَأ**:
+   `curl -s -D - -o /dev/null https://R/api/<مَتجَر>/icon.svg | tr -d '\r' | grep -i '^content-security-policy'` ← `Content-Security-Policy: default-src 'none'; sandbox`.
+   مَقيسٌ مَحَلِّيّاً بِالأَمرِ نَفسِه (`http://localhost:<مَنفَذ>` بَدَلَ `https://R`، قاعِدَتانِ جَديدَتانِ بِبُذورِهِما): عَلى بِناءِ `2c09cb3` ← `Content-Security-Policy: default-src 'none'; sandbox`، وعَلى بِناءِ `0fa9b93` (قَبلَ الإصلاح) ← لا سَطر (خُروجُ grep ‏1)؛ و`-sI` عَلى الاثنَينِ ← `405 Method Not Allowed` بِلا سَطر.
+   والمَجموعَةُ ٢٢ مِن `prove-store-hosts.sh` تُرسِلُ الأَعلامَ نَفسَها (`GoLiveReadsAndWiringTests` يَحمَرُّ إن افتَرَقَت أَو عادَ `-I`).
 
 ### قاعِدَةُ التَأكيد — بِحَدِّ سِكّين
 
