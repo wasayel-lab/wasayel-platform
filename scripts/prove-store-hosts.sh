@@ -721,6 +721,34 @@ else
   echo "  – لَم تُفحَص: X-Forwarded-Proto يَكتُبُه Cloudflare — مَحَلِّيّاً وَحدَه"
 fi
 
+# ‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·2 — SEC-C2z-R3-2 وSEC-C2z-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **المُخَطَّطُ لا يَكسِرُ صَفحَةً ولا يَصيرُ
+# عُنواناً**: `X-Forwarded-Proto: 1http` (أَو `9` أَو `+x`) كانَ 500 عَلى كُلِّ صَفحَةٍ في الوَضعَين، و`javascript` يَكتُبُ canonical وog:url وog:image بِـ`javascript://`،
+# و`return=/…/مثال` في `/lang/ar` كانَ 500. الآن 400، و`https://`، و302 بِوِجهَةٍ مُرَمَّزَة. **لا يَكتُبُ شَيئاً** (كَعكَةُ اللُغَةِ في جَرَّةِ curl وَحدَها).
+echo "٢٥) المُخَطَّطُ لا يَكسِرُ صَفحَةً ولا يَصيرُ عُنواناً، والوِجهَةُ المَحَلِّيَّةُ غَيرُ ASCII مُرَمَّزَة (C2f·2)"
+if [ "$DIRECT" != 1 ]; then
+  for XFP in 1http 9 +x; do
+  row GET  "$S" "/"                       400
+  row GET  "$R" "/$STORE"                 400
+  done
+  XFP=javascript
+  row GET  "$S" "/"                       200 - "<link rel=\"canonical\" href=\"https://$S/\" />" "<meta property=\"og:url\" content=\"https://$S/\" />" "!javascript://"
+  row GET  "$R" "/$STORE"                 200 - "<link rel=\"canonical\" href=\"https://$R/$STORE\" />" "!javascript://"
+  row GET  "$S" "/robots.txt"             200 - "Sitemap: https://$S/sitemap.xml" "!javascript://"
+  XFP=""
+else
+  echo "  – صُفوفُ X-Forwarded-Proto لَم تُفحَص: يَكتُبُه Cloudflare — مَحَلِّيّاً وَحدَه"
+fi
+lang() { # lang <host> <return> <want-location>
+  local got loc; got="$(curl -s -m 20 -o /dev/null -D "$TMP/lang" -w '%{http_code}' -H "Host: $1" --data-urlencode "return=$2" "$(url "$1" /lang/ar)")" || got=000
+  loc="$(tr -d '\r' < "$TMP/lang" | sed -n 's/^[Ll]ocation: //p')"
+  checked=$((checked + 1))
+  if [ "$got" = 302 ] && [ "$loc" = "$3" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' POST "$1" "/lang/ar · return=$2" "$got $loc"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → %s %s\n' POST "$1" "/lang/ar · return=$2" "$got" "$loc"; fi
+}
+lang "$R" "/$STORE/مثال"  "/$STORE/%D9%85%D8%AB%D8%A7%D9%84"
+lang "$S" "/مثال"          "/%D9%85%D8%AB%D8%A7%D9%84"
+lang "$S" "/explore"       "/explore"
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

@@ -4422,8 +4422,10 @@ public static class MarketplaceTemplateExtensions
 
     /// <summary><b>جَذرُ المَتجَرِ (أَو صَفحَةٌ بِلا دَورٍ فيه) عَلى المُضيفِ الَّذي يَخدِمُ هذا الطَلَب</b> (‏2026-11-07، W13-4·C2b·1): كانَت عَشرَةُ تَحويلاتٍ تَكتُبُ
     /// <c>$"/{slug}"</c> بِيَدِها — عَلى مُضيفِ المَتجَرِ تُظهِرُ <c>ashare.R/ashare</c>. والآنَ <c>/</c> هُناك، و<c>/{slug}</c> بِحَرفِه في وَضعِ المَسار.</summary>
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) بِحُروفٍ يَحمِلُها <c>Location</c> (<see cref="Services.LocalRedirect.Ascii"/>): مَسارُ الدَورِ
+    /// يُؤَلِّفُه المَتجَرُ و<c>/مثال</c> كانَ 500. وASCII بِحَرفِه.</remarks>
     private static string Home(HttpRequest req, string slug, string path = "")
-        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path);
+        => Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path));
 
     /// <summary><b>بَيتُ الدَورِ بَعدَ اختِيارِه أَو إعدادِه</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — مُنتَقي الدَور): عَلى مُضيفٍ لِهذا المَتجَرِ والدَورُ لَه
     /// مُضيف ← مُضيفُ ذلكَ الدَور (<c>StoreUrl.Link</c>)؛ وما سِوى ذلك <see cref="Home"/> بِحَرفِها — في وَضعِ المَسارِ <c>/{slug}{home}</c> بِلا دَورٍ كَما كان.
@@ -4434,8 +4436,9 @@ public static class MarketplaceTemplateExtensions
         var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
         // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) العابِرُ المُعلَنُ بِاسمِه (`StoreUrl.App`) — `Link` صارَ يَبقى عَلى المُضيف
         // لِدَورِ الصَفحَة؛ والجَوابُ بِحَرفِه (`RoleHostSessionLinkCharacterizationTests`).
+        // ‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) بِحُروفٍ يَحمِلُها `Location` — `Home` كَذلك.
         return Services.Ux.StoreUrl.OnHostOf(view, slug) && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.ContainsKey(role)
-            ? Services.Ux.StoreUrl.App(view, slug, role, homeRoute ?? "")
+            ? Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.App(view, slug, role, homeRoute ?? ""))
             : Home(req, slug, homeRoute ?? "");
     }
 
@@ -4901,7 +4904,8 @@ public static class MarketplaceTemplateExtensions
         HttpRequest req, string slug, Guid userId, string? asRole, IDocumentStore store)
     {
         var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
-        string At(string? role, string path = "") => Services.Ux.StoreUrl.For(view, slug, role, path);
+        // ‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) كُلُّ وِجهَةٍ بِحُروفٍ يَحمِلُها `Location` (`LocalRedirect.Ascii`): `HomeRoute` يُؤَلِّفُه المَتجَر.
+        string At(string? role, string path = "") => Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.For(view, slug, role, path));
 
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null || tenant.Roles.Count == 0)

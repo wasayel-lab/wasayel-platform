@@ -86,6 +86,8 @@ public static class SeoHandlers
         await context.Response.WriteAsync(body, context.RequestAborted);
     }
 
+    // ‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) المُخَطَّطُ مِن {http, https} (‏AbsoluteScheme): كانَ `X-Forwarded-Proto: javascript` يَكتُبُ
+    // `Sitemap: javascript://…` و`<loc>javascript://…` — والمُخرَجُ بِـhttp وhttps كَما كانَ بايتاً (`SchemeRobustnessCharacterizationTests`).
     private static string BaseUrlOf(HttpContext context)
-        => $"{context.Request.Scheme}://{context.Request.Host}";
+        => $"{AbsoluteScheme.Of(context.Request.Scheme)}://{context.Request.Host}";
 }

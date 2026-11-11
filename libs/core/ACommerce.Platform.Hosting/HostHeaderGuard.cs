@@ -67,7 +67,8 @@ public static class HostHeaderGuard
         app.Use(next => ctx =>
         {
             var headers = ctx.Request.Headers;
-            if (ForwardedRefusal(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString()) is not { } refusal) return next(ctx);
+            if (ForwardedRefusal(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString(), headers["X-Forwarded-Proto"].ToString()) is not { } refusal)
+                return next(ctx);
             log.LogWarning("[host] {Code} {Method} {Path} {Header} length={Length} values={Values} shape={Shape}",
                 refusal.Code, ctx.Request.Method, ctx.Request.Path.Value, refusal.Header, refusal.Length, refusal.Values, refusal.Shape);
             ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
@@ -84,11 +85,27 @@ public static class HostHeaderGuard
     /// <summary>رَمزُ الرَدِّ لِقيمَةٍ في <c>X-Forwarded-Host</c> المُصَدَّقِ لا تُقرَأ.</summary>
     public const string ForwardedHostUnreadable = "forwarded_host_unreadable";
 
+    /// <summary>رَمزُ الرَدِّ لِقيمَةٍ في <c>X-Forwarded-Proto</c> لَيسَت مُخَطَّطاً (‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-2).</summary>
+    public const string ForwardedProtoUnreadable = "forwarded_proto_unreadable";
+
     /// <summary>القَرارُ نَفسُه الَّذي يُجيبُه <see cref="ForwardedReadable"/> — ومَعَه ما يُكتَبُ في السِجِلّ؛ <c>null</c> إن قُرِئَ كُلُّ شَيء.</summary>
-    public static ForwardedFrontRefusal? ForwardedRefusal(ForwardedHeadersPolicy policy, string? host, string? forwardedHost)
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · SEC-C2z-R3-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و<c>X-Forwarded-Proto</c> يُسأَلُ كَذلك</b>
+    /// (<paramref name="forwardedProto"/>): السِياسَةُ تُصَدِّقُه دائِماً، و<c>ForwardedHeadersMiddleware</c> يَقبَلُ مَحارِفَ المُخَطَّطِ دونَ تَرتيبِها — فَـ<c>1http</c>
+    /// و<c>9</c> و<c>+x</c> تَصيرُ <c>Request.Scheme</c> ثُمَّ <b>500</b> عَلى كُلِّ صَفحَةٍ في الوَضعَين (<c>UriFormatException</c> في
+    /// <c>NavigationManager.set_BaseUri</c> — مَقيسٌ عِندَ <c>ad0a770</c> بِثَلاثِ القيَم: بِلا نِطاقٍ 15 مِن 15 صَفحَة، وبِنِطاقٍ 15 مِن 18 والثَلاثُ الباقِيَةُ 404 قَبلَ الصَفحَة).
+    /// الآن كُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ مُخَطَّطٌ يُقرَأ (<see cref="Uri.CheckSchemeName"/>) أَو فارِغَة — وإلّا 400. وما يُقرَأُ (<c>javascript</c>) يَمُرُّ كَما كان،
+    /// والعُنوانُ المُطلَقُ يَأخُذُ مُخَطَّطَه مِن {http, https} عِندَ بانيه (<c>AbsoluteScheme</c>).</remarks>
+    public static ForwardedFrontRefusal? ForwardedRefusal(ForwardedHeadersPolicy policy, string? host, string? forwardedHost, string? forwardedProto = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (!IsReadable(host)) return new(HostUnreadable, "Host", host?.Length ?? 0, 1, ShapeOf(host));
+        if (!string.IsNullOrEmpty(forwardedProto))
+        {
+            var protos = forwardedProto.Split(',');
+            foreach (var proto in protos)
+                if (proto.Trim() is { Length: > 0 } p && !Uri.CheckSchemeName(p))
+                    return new(ForwardedProtoUnreadable, "X-Forwarded-Proto", forwardedProto.Length, protos.Length, ShapeOf(p));
+        }
         if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return null;
         var values = forwardedHost.Split(',');
         foreach (var value in values)

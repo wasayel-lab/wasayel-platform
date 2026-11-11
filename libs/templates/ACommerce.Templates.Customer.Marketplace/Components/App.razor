@@ -22,7 +22,9 @@
        مَرَّة واحِدَة، هُنا. *@
     @{
         var seoReq       = HttpCtx.HttpContext?.Request;
-        var seoBase      = seoReq is null ? "" : $"{seoReq.Scheme}://{seoReq.Host}";
+        // ‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ) المُخَطَّطُ مِن {http, https} (`AbsoluteScheme`): كانَ `X-Forwarded-Proto: javascript` يَكتُبُ canonical وog:url
+        // وog:image وtwitter:image بِـ`javascript://` في الوَضعَين. وhttp وhttps بايتاً كَما كانا.
+        var seoBase      = seoReq is null ? "" : $"{ACommerce.Kit.Tenants.AbsoluteScheme.Of(seoReq.Scheme)}://{seoReq.Host}";
         var seoPath      = seoReq?.Path.Value ?? "/";
         // ‏(‏2026-11-07، ADR-050 · W13-4·C2a·6) الـcanonical وog:url مِن العُنوانِ الظاهِر: عَلى مُضيفِ المَتجَرِ كانا `https://ashare.R/ashare/…`
         // (المَسارُ بَعدَ الحَقن). وبِلا نِطاقٍ مُهَيَّإٍ المَسارُ الظاهِرُ هُوَ مَسارُ الطَلَبِ بِحَرفِه. والرَئيسيَّةُ تُقرَأُ مِن مَسارِ الطَلَبِ كَما كانَت.

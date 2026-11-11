@@ -383,8 +383,8 @@ public sealed class TenantResolverMiddleware
     }
 
     /// <summary>مُخَطَّطُ وِجهَةِ التَحويل — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (‏2026-11-11، SEC-C2a-R3-1).</summary>
-    private static string SchemeOf(string? scheme)
-        => string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ) القاعِدَةُ في <see cref="AbsoluteScheme.Of"/> مَرَّةً — ظَهَرَ لَها مُستَهلِكٌ ثالِثٌ في مَشروعٍ ثالِث.</remarks>
+    private static string SchemeOf(string? scheme) => AbsoluteScheme.Of(scheme);
 
     /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
     private static string PortOf(string? host)

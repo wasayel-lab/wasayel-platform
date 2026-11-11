@@ -45,8 +45,8 @@ public static class StoreUrl
 
     /// <summary>مُخَطَّطُ العُنوانِ المُطلَق — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (والفارِغُ <c>https</c> كَما كان). قاعِدَةُ
     /// <c>TenantResolverMiddleware.SchemeOf</c> لِتَحويلِ مَنطِقَةِ المَنَصَّةِ بِعَينِها (‏023b686) — قائِمَةُ سَماحٍ لا تَنظيف.</summary>
-    private static string SchemeOf(string? scheme)
-        => string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? "http" : "https";
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ) القاعِدَةُ في <see cref="AbsoluteScheme.Of"/> مَرَّةً — ظَهَرَ لَها مُستَهلِكٌ ثالِثٌ في مَشروعٍ ثالِث.</remarks>
+    private static string SchemeOf(string? scheme) => AbsoluteScheme.Of(scheme);
 
     /// <summary><b>شَكلُ المَسار</b> — جِسمُ <c>AuthSession.LinkFor</c> كَما كانَ بِحَرفِه: <c>/{slug}/{path}</c> أَو <c>/{slug}/r/{role}/{path}</c>، بِلا شَرطَةٍ أَخيرَة.</summary>
     public static string PathForm(string slug, string? role, string path)
