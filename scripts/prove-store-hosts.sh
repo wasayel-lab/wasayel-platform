@@ -534,6 +534,24 @@ echo "١٧) خَلفَ عامِلٍ يُعيدُ كِتابَةَ Host — ال�
   fi
 fi
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2c-2 وSEC-C2c-R3-2 وC2c-P2-04 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُصافَحَةُ WebSocket مِن أَصلٍ آخَرَ تُرَدّ** (ADR-050 §١٥):
+# كانَت `GET` فَيُمَرِّرُها فَحصُ `Origin`، فَمُضيفٌ شَقيقٌ يَفتَحُ `/realtime` بِكَعكَةِ الضَحِيَّةِ ويَنضَمُّ إلى مَجموعَتِه (101). مُصافَحَةٌ خامٌ بِلا كَعكَة: مِن مُضيفٍ شَقيقٍ
+# ومِن أَصلٍ غَريبٍ 403، ومِن أَصلِها 101 (عَلى المُضيفِ وعَلى الجَذر). **لا يَكتُبُ شَيئاً.**
+echo "١٨) مُصافَحَةُ WebSocket مِن أَصلٍ آخَرَ تُرَدُّ قَبلَ المَركَز، ومِن أَصلِها تُقبَل (C2z·2)"
+ws() { # ws <host> <path> <origin> <want>
+  local got; got="$(curl -s -m 3 -o /dev/null -w '%{http_code}' -H "Host: $1" -H "Origin: $3" -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+    -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$(url "$1" "$2")" 2>/dev/null)"
+  checked=$((checked + 1))
+  if [ "$got" = "$4" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' WS "$1" "$2 · Origin: $3" "$got"
+  else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا %s\n' WS "$1" "$2 · Origin: $3" "$got" "$4"; fi
+}
+ws "$S" "/realtime?slug=$STORE" "$SCHEME://$(hp "$OTHER.$DOMAIN")" 403
+ws "$S" "/realtime?slug=$STORE" "https://evil.example"           403
+ws "$S" "/_blazor"              "$SCHEME://$(hp "$OTHER.$DOMAIN")" 403
+ws "$S" "/realtime?slug=$STORE" "$SCHEME://$S"                   101
+ws "$R" "/realtime?slug=$STORE" "$SCHEME://$R"                   101
+ws "$R" "/realtime?slug=$STORE" "$SCHEME://$S"                   403
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi

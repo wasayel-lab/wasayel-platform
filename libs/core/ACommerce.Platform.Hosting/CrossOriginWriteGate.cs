@@ -72,16 +72,36 @@ public static class CrossOriginWriteGate
     /// (<c>Request.Scheme</c> و<c>Request.Host.Value</c>)؛ و<paramref name="path"/> المَسارُ بَعدَ الحَقن.</para>
     /// </summary>
     public static CrossOriginRefusal? Validate(string? method, string? origin, string? scheme, string? host, string? path)
+        => Validate(method, origin, scheme, host, path, isUpgrade: false);
+
+    /// <summary>
+    /// <para><b>…ومُصافَحَةُ WebSocket تُسأَلُ كَالكِتابَة</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2c-2 وSEC-C2c-R2-1 وSEC-C2c-R3-2 وC2c-P2-04 وC2c-P3-02؛
+    /// ADR-050 §١٥). المُصافَحَةُ <c>GET</c> فَكانَت تَمُرُّ، والمُتَصَفِّحُ لا يُخضِعُها لِـCORS ويُرسِلُ مَعَها كَعكَةَ <c>Lax</c> بَينَ مُضيفاتِ المَوقِعِ الواحِد — فَصَفحَةٌ
+    /// عَلى مُضيفٍ شَقيقٍ فَتَحَت <c>/realtime</c> بِجَلسَةِ الضَحِيَّةِ وانضَمَّت إلى مَجموعَتِه (101 ثُمَّ <c>{}</c>، و<c>unread_changed</c> يَصِلُها — مَقيسٌ عِندَ المُراجِعين)،
+    /// وطَلَبُ <c>negotiate</c> المَردودُ لا يُسأَلُ إن تَخَطّاه العَميل. الآن بِـ<paramref name="isUpgrade"/> (<see cref="IsWebSocketUpgrade"/>) يُحكَمُ عَلى <c>Origin</c>
+    /// بِالقاعِدَةِ نَفسِها: حاضِرٌ غَيرُ أَصلِ الطَلَبِ ← <see cref="ForeignOrigin"/>، ولا يُقرَأ ← <see cref="OpaqueOrigin"/>، وغائِبٌ يَمُرّ (المُتَصَفِّحُ يُرسِلُه دائِماً
+    /// مَعَ المُصافَحَة؛ وعَميلٌ لَيسَ مُتَصَفِّحاً لا يَحمِلُ كَعكَةَ أَحَد). وبِلا <paramref name="isUpgrade"/> القَرارُ بِحَرفِه.</para>
+    /// </summary>
+    public static CrossOriginRefusal? Validate(string? method, string? origin, string? scheme, string? host, string? path, bool isUpgrade)
     {
-        if (IsSafeMethod(method)) return null;
+        if (IsSafeMethod(method) && !isUpgrade) return null;
         if (origin is null) return null;
         if (IsProviderCallback(path)) return null;
         if (!TryReadOrigin(origin, out var o))
-            return new(OpaqueOrigin, "طَلَبُ كِتابَةٍ بِأَصلٍ لا يُقرَأ — لا يُقبَل.");
-        return IsSameOrigin(o, scheme, host)
-            ? null
+            return isUpgrade
+                ? new(OpaqueOrigin, "اتِّصالٌ حَيٌّ بِأَصلٍ لا يُقرَأ — لا يُقبَل.")
+                : new(OpaqueOrigin, "طَلَبُ كِتابَةٍ بِأَصلٍ لا يُقرَأ — لا يُقبَل.");
+        if (IsSameOrigin(o, scheme, host)) return null;
+        return isUpgrade
+            ? new(ForeignOrigin, "اتِّصالٌ حَيٌّ مِن أَصلٍ غَيرِ أَصلِ الصَفحَة — لا يُقبَل.")
             : new(ForeignOrigin, "طَلَبُ كِتابَةٍ مِن أَصلٍ غَيرِ أَصلِ الصَفحَة — لا يُقبَل.");
     }
+
+    /// <summary><b>أَهذا طَلَبُ مُصافَحَةِ WebSocket؟</b> — <c>GET</c> ورَأسُ <c>Upgrade</c> يَحمِلُ الرَمزَ <c>websocket</c> (بِلا حالَةِ أَحرُف، بَينَ رُموزٍ مَفصولَةٍ
+    /// بِفاصِلَة — RFC 6455 §٤·١). ومُصافَحَةُ HTTP/2 (‏<c>CONNECT</c>) لَيسَت فِعلاً آمِناً فَيَسأَلُها الفَحصُ أَصلاً.</summary>
+    public static bool IsWebSocketUpgrade(string? method, string? upgrade)
+        => method is not null && HttpMethods.IsGet(method) && !string.IsNullOrEmpty(upgrade)
+           && upgrade.Split(',').Any(t => string.Equals(t.Trim(), "websocket", StringComparison.OrdinalIgnoreCase));
 
     public static bool IsAllowed(string? method, string? origin, string? scheme, string? host, string? path)
         => Validate(method, origin, scheme, host, path) is null;
@@ -116,7 +136,8 @@ public sealed class CrossOriginWriteMiddleware(RequestDelegate next, ILogger<Cro
     {
         var req = ctx.Request;
         var origin = req.Headers.Origin.Count == 0 ? null : req.Headers.Origin.ToString();
-        var refusal = CrossOriginWriteGate.Validate(req.Method, origin, req.Scheme, req.Host.Value, req.Path.Value);
+        var refusal = CrossOriginWriteGate.Validate(req.Method, origin, req.Scheme, req.Host.Value, req.Path.Value,
+                                                    CrossOriginWriteGate.IsWebSocketUpgrade(req.Method, req.Headers.Upgrade.ToString()));
         if (refusal is null) return next(ctx);
         log.LogWarning("[origin] {Code} {Method} {Host}{Path} Origin={Origin}", refusal.Code, req.Method, req.Host.Value, req.Path.Value, origin);
         ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
