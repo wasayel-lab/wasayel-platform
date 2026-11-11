@@ -507,6 +507,33 @@ else
   echo "  – لَم تُفحَص: بَعدَ النَشرِ وَحدَه (DIRECT=1 SCHEME=https) — مَحَلِّيّاً لا حافَّة"
 fi
 
+# ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2c-P3-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **خَلفَ عامِلٍ يُعيدُ كِتابَةَ `Host`** (DEPLOY الخُطوَتانِ ٦ و٩): خادِمٌ شُغِّلَ بِـ
+# `ForwardedHeaders__AllowedHosts="$DOMAIN,*.$DOMAIN"` يَتَلَقّى ما يُرسِلُه عامِلٌ أَمامَ HF — `Host` اسمُ الأَصلِ الداخِلِيّ، والاسمُ العامُّ في `X-Forwarded-Host` — فَالكِتابَةُ
+# بِأَصلِها عَلى الجَذرِ وعَلى المُضيفِ تَبلُغُ بابَها (302)؛ وكانَت عَلى الجَذرِ 403 بِـ`*.$DOMAIN` وَحدَه. ومَعَ `ALLOWED=1` يُقاسُ أَنّ `AllowedHosts` يَحكُمُ عَلى `Host`
+# الواصِل: الاسمُ الداخِلِيُّ خارِجَ القائِمَةِ ← 400. **لا يَكتُبُ شَيئاً.**
+if [ "${WORKER:-0}" = 1 ]; then
+echo "١٧) خَلفَ عامِلٍ يُعيدُ كِتابَةَ Host — الجَذرُ بِاسمِه في ForwardedHeaders__AllowedHosts (C2z·1)"
+  INTERNAL="$(hp "space-owner.hf.example")"
+  worker() { # worker <x-forwarded-host> <path> <origin> <want> [method]
+    local got extra=()
+    [ -n "$3" ] && extra+=(-H "Origin: $3")
+    [ "${5:-POST}" = POST ] && extra+=(-d '')
+    got="$(curl -s -m 20 -o /dev/null -w '%{http_code}' -X "${5:-POST}" -H "Host: $INTERNAL" -H "X-Forwarded-Host: $1" -H "X-Forwarded-Proto: $SCHEME" \
+      "${extra[@]}" "$ADDR$2")" || got=000
+    checked=$((checked + 1))
+    if [ "$got" = "$4" ]; then printf '  ✓ %-4s %-34s %-52s → %s\n' "${5:-POST}" "XFH $1" "$2" "$got"
+    else failed=$((failed + 1)); printf '  ✗ %-4s %-34s %-52s → الرَمز %s لا %s\n' "${5:-POST}" "XFH $1" "$2" "$got" "$4"; fi
+  }
+  if [ "$ALLOWED" = 1 ]; then
+    worker "$R" "/health" "" 400 GET
+  else
+    worker "$R" "/$STORE/auth/phone/login" "$SCHEME://$R" 302
+    worker "$R" "/studio/auth/login"       "$SCHEME://$R" 302
+    worker "$S" "/auth/phone/login"        "$SCHEME://$S" 302
+    worker "$R" "/$STORE/auth/phone/login" "https://evil.example" 403
+  fi
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi
