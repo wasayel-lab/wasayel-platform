@@ -440,6 +440,21 @@ public sealed class TenantResolverMiddleware
         return true;
     }
 
+    /// <summary>
+    /// <para><b>بابُ الخُروجِ أَو مَحَطَّتُه لِهذا المَتجَر</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · C2z-PATHS-R1-02): المَسارُ بَعدَ الحَقنِ
+    /// <c>/{slug}/auth/logout</c> أَو <c>/{slug}/auth/logout/continue</c> — المَقاطِعُ الحَرفِيَّةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه. ويُقابَلُ بِمَسارَي القالِبِ
+    /// (<c>LogoutHops.ContinueTail</c> وبابِ الخُروج) في <c>LogoutTourFreshTests</c> فَلا يَنجَرِفُ عَنهُما.</para>
+    /// </summary>
+    public static bool IsLogoutTour(string? path, string slug)
+    {
+        var segments = (path ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length is 3 or 4
+               && string.Equals(segments[0], slug, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(segments[1], "auth", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(segments[2], "logout", StringComparison.OrdinalIgnoreCase)
+               && (segments.Length == 3 || string.Equals(segments[3], "continue", StringComparison.OrdinalIgnoreCase));
+    }
+
     private readonly SubdomainTenancyOptions _subdomains;
 
     public TenantResolverMiddleware(RequestDelegate next, IDocumentStore store,
@@ -472,8 +487,13 @@ public sealed class TenantResolverMiddleware
         // أَدناه كانَ يَقرَأُ ذاكِرَةَ الخَمسِ دَقائِقِ الَّتي لا يُخليها حِفظُ الأَدوار — فَدَورٌ أُضيفَ للتَوِّ تَظهَرُ بِطاقَتُه (مِن بَياناتٍ طازَجَة) ومُضيفُه 404 حَتّى
         // ‏201 ثانِيَة، ودَورٌ أُزيلَ يَبقى مُضيفُه يَخدِم (مَقيسٌ عِندَ المُراجِعين). أَربَعَةُ كُتّابٍ لِـ`Tenant.Roles` في ثَلاثَةِ مِلَفّات، فَالإخلاءُ عِندَ كُلٍّ
         // يَنجَرِفُ بِكاتِبٍ خامِس؛ والقِراءَةُ الطازَجَةُ عَلى مُضيفِ الدَورِ وَحدَه (‏LoadAsync بِالمُعَرِّف) تُغني عَنها، وتُجَدِّدُ الذاكِرَةَ لِمُضيفِ المَتجَرِ ولِلمَسارِ مَعَها.
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · C2z-PATHS-R1-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجَولَةُ الخُروجِ تَقرَأُ ما يَقرَؤُه بابُ مُضيفِ الدَور**:
+        // مُضيفاتُ المَتجَرِ الَّتي يَمُرُّ بِها الخُروجُ (`HostedRoles` أَدناه) كانَت مِن الذاكِرَةِ والـ404 عَلى مُضيفِ الدَورِ طازَج — فَدَورٌ أُزيلَ تَحتَ الذاكِرَةِ بَقِيَ مَحَطَّةً
+        // تُجيبُ 404، فَانقَطَعَت السِلسِلَةُ وبَقِيَت جَرّاتُ ما بَعدَه داخِلَة (مَقيسٌ عِندَ المُراجِعِ وعِندي). فَبابُ الخُروجِ ومَحَطَّتُه (`IsLogoutTour`) يَقرَآنِ طازَجاً مَتى
+        // هُيِّئَ النِطاق؛ وبِلا نِطاقٍ لا جَولَةَ فَلا قِراءَة.
         Tenant? entity = null;
-        if (roleHost is not null || !_cache.TryGetValue(cacheKey, out entity))
+        if (roleHost is not null || (!string.IsNullOrEmpty(_subdomains.BaseDomain) && IsLogoutTour(ctx.Request.Path.Value, slug))
+            || !_cache.TryGetValue(cacheKey, out entity))
         {
             await using var session = _store.QuerySession();
             entity = await session.LoadAsync<Tenant>(slug.ToLowerInvariant());
