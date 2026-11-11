@@ -99,7 +99,7 @@ printf 'الخادِم: %s · النِطاق: %s · المَتجَر: %s · ال
 echo "١) المَتجَرُ عَلى مُضيفِه — والـcanonical مِن العُنوانِ الظاهِر"
 row GET  "$S" "/"                       200 - "<link rel=\"canonical\" href=\"$SCHEME://$S/\" />" '"hostMode":true' "\"slug\":\"$STORE\""
 row GET  "$S" "/explore"                200 - "<link rel=\"canonical\" href=\"$SCHEME://$S/explore\" />" "<meta property=\"og:url\" content=\"$SCHEME://$S/explore\" />"
-row GET  "$S" "/$STORE/explore"         200 - "<link rel=\"canonical\" href=\"$SCHEME://$S/explore\" />"
+row GET  "$S" "/$STORE/explore"         302 "/explore"   # ‏(‏2026-11-11، W13-4·C2f·6) كانَ 200 بِشَكلِه وcanonical النَظيف — الآن 302 إلَيه (المَجموعَةُ ٢٧)
 row GET  "$S" "/support"                200 - "<link rel=\"canonical\" href=\"$SCHEME://$S/support\" />"
 row GET  "$S" "/$OTHER/listings"        404
 
@@ -493,10 +493,10 @@ fi
 # `/{store}` حَيثُ يَحمِلُها العُنوانُ وفارِغَةٌ عَلى العُنوانِ النَظيف، وعَلى الجَذرِ `/{store}` كَما كانَ السكربتُ يَبنيها. **لا يَكتُبُ شَيئاً.**
 echo "١٥) نِطاقُ عامِلِ الخِدمَةِ مِن بادِئَةِ العُنوانِ الظاهِر (C2z·1)"
 row GET  "$S" "/explore"                 200 - '"base":""'
-row GET  "$S" "/$STORE/explore"          200 - "\"base\":\"/$STORE\""
+row GET  "$S" "/$STORE/terms"            200 - "\"base\":\"/$STORE\""   # ‏(‏2026-11-11، W13-4·C2f·6) كانَ /$STORE/explore — صَفحَةٌ بِشَكلِ المَسارِ عَلى المُضيفِ 302 الآن، وما يَبقى بِشَكلِه الشُروط
 row GET  "$R" "/$STORE/explore"          200 - "\"base\":\"/$STORE\""
 if [ -n "$ROLE" ]; then
-row GET  "$S" "/$STORE/r/$ROLE/explore"  200 - "\"base\":\"/$STORE\"" "\"role\":\"$ROLE\""
+row GET  "$S" "/$STORE/r/$ROLE/explore"  302 "/r/$ROLE/explore"   # ‏(‏2026-11-11، W13-4·C2f·6) كانَ 200 بِـbase /$STORE — الآن 302 إلى النَظيف
 row GET  "$S" "/r/$ROLE/explore"         200 - '"base":""' "\"role\":\"$ROLE\""
 fi
 
@@ -761,6 +761,29 @@ if [ "$(curl -s -m 10 -o /dev/null -w '%{http_code}' -H "Host: $AH" "$(url "$AH"
   row GET "$AH" "/login?err=not_store_admin"        200 - "!<form" "href=\"$SCHEME://$S/\""
 else
   echo "  – صَفُّ مُضيفِ الإدارَةِ لَم يُفحَص: $STORE بِلا دَورِ إدارَة (مُضيفُه لا يُجيب 200)"
+fi
+
+# ‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6 — C2z-PATHS-R1-04 وC2z-PATHS-R2-07 وC2z-PATHS-R1-07 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **صَفحَةٌ بِشَكلِ
+# المَسارِ عَلى مُضيفِها ← 302 إلى عُنوانِها النَظيف**: كانَت تُخدَمُ بِشَكلِها (200 و`base` = `/{store}`) فَيُسَجَّلُ عامِلُ الخِدمَةِ ومِفتاحُ التَثبيتِ بِبادِئَةٍ لا
+# يُعلِنُها البَيان — والوُصولُ إلَيها مِن `RelatedUrl` المُخَزَّن (`/{store}/deals/{id}`، `/{store}/me`) ومِن `returnUrl` صَفحَةِ عَودَةِ الدَفع. الآن 302 والاستِعلامُ
+# بِحَرفِه؛ وما لَيسَ صَفحَةً (بابُ GET) والشُروطُ (يَكتُبُها `StoreUrl` بِشَكلِ المَسارِ عَمداً) ووَضعُ المَسارِ عَلى الجَذرِ كَما كانَت. **لا يَكتُبُ شَيئاً.**
+echo "٢٧) صَفحَةٌ بِشَكلِ المَسارِ عَلى مُضيفِها ← 302 إلى عُنوانِها النَظيف، والاستِعلامُ بِحَرفِه (C2f·6)"
+DEAL=3f2504e0-4f89-11d3-9a0c-0305e82c3301
+row GET  "$S" "/$STORE"                                  302 "/"
+row GET  "$S" "/$STORE/explore?q=%D8%B4&page=2"          302 "/explore?q=%D8%B4&page=2"
+row GET  "$S" "/$STORE/deals/$DEAL"                      302 "/deals/$DEAL"          # RelatedUrl إشعارِ الصَفقَة (DealNotices)
+row GET  "$S" "/deals/$DEAL"                             200
+row GET  "$S" "/$STORE/me"                               302 "/me"                   # RelatedUrl تَأكيدِ وَسيلَةِ التَواصُل (AccountContacts)
+row GET  "$S" "/$STORE/pay/return?deal=${DEAL//-/}"      302 "/pay/return?deal=${DEAL//-/}"   # returnUrl الدُخولِ مِن صَفحَةِ العَودَة
+row GET  "$S" "/$STORE/terms"                            200
+row GET  "$S" "/$STORE/me/data/download"                 302 "/login?returnUrl=%2F$STORE%2Fme%2Fdata%2Fdownload"   # بابُ GET لا صَفحَة — كَما كان
+row GET  "$S" "/api/$STORE/manifest.json"                200 - '"scope":"/"'
+row GET  "$R" "/$STORE/explore"                          200 - "\"base\":\"/$STORE\""             # وَضعُ المَسارِ عَلى الجَذرِ كَما كان
+if [ -n "$ROLE" ]; then
+  row GET  "$RH" "/$STORE/r/$ROLE/explore"               302 "/explore"
+  row GET  "$RH" "/$STORE/r/$ROLE"                       302 "/"
+  row GET  "$RH" "/$STORE/explore"                       302 "/explore"
+  row GET  "$RH" "/$STORE/r/$ROLE/terms"                 200
 fi
 
 echo

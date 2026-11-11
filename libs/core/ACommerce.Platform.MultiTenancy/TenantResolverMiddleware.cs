@@ -231,6 +231,9 @@ public sealed class TenantResolverMiddleware
     /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والبَندانِ الأَوَّلُ والثالِثُ أَعلاه لا يَصدُقانِ
     /// اليَوم</b>: المِلصَقُ المَحجوزُ تَحتَ <c>R</c> يُجابُ 404 إلّا <c>www</c> (<see cref="ApexAliases"/> — ‏<c>97ba402</c>، ثُمَّ <c>621fc1a</c> أَخرَجَ <c>mail</c>)،
     /// ومَنطِقَةُ المَنَصَّةِ عَلى المُضيفِ <b>302</b> لا 301 (‏<c>023b686</c>) — والسُطورُ المُؤَرَّخَةُ في الجِسمِ تَقولُ كُلّاً بِسَبَبِه.</para>
+    /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و«مَسارٌ يَحمِلُ المَتجَرَ كَما هُوَ» صارَ لِما لَيسَ صَفحَة</b>:
+    /// GET لِقالِبِ صَفحَةِ مَتجَرٍ بِشَكلِ المَسارِ عَلى مُضيفِه ← 302 إلى عُنوانِه النَظيف حينَ تُمَرَّرُ القَوالِب (<c>CleanPageOnHost</c>)؛ وهذا المُحَمَّلُ بِلا قَوالِبَ
+    /// لا يَبلُغُه.</para>
     /// </summary>
     public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
         => AnswerStoreHost(host, baseDomain, method, path, query, scheme, rolePages: null);
@@ -266,7 +269,73 @@ public sealed class TenantResolverMiddleware
             if (RoleFromHost(host, baseDomain) is not { } roleHost) return StoreHostAnswer.NotFound;
             (slug, role) = roleHost;
         }
-        return WithRole(AnswerOnStoreHost(slug, role, host, apex, method, path, query, scheme, rolePages), role);
+        var answer = WithRole(AnswerOnStoreHost(slug, role, host, apex, method, path, query, scheme, rolePages), role);
+        // ‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6 — C2z-PATHS-R1-04 وC2z-PATHS-R2-07 وC2z-PATHS-R1-07 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **صَفحَةٌ
+        // بِشَكلِ المَسارِ عَلى مُضيفِها تُحَوَّلُ إلى عُنوانِها النَظيف** (`CleanPageOnHost`): كانَت تُخدَمُ بِشَكلِها — `RelatedUrl` مُخَزَّن، رابِطٌ مَحفوظ، عَودَةُ
+        // استِمارَة — فَيُسَجِّلُ عامِلَ الخِدمَةِ ومِفتاحَ التَثبيتِ بِبادِئَةٍ لا يُعلِنُها بَيانُ المُضيف، ويَبقى الوُصولُ مِن إشعارٍ بِشَكلِ المَسار.
+        return CleanPageOnHost(slug, role, host, apex, method, path, query, scheme, rolePages, answer) is { } clean
+            ? new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null, clean) { Role = role }
+            : answer;
+    }
+
+    /// <summary>
+    /// <para><b>العُنوانُ النَظيفُ لِصَفحَةٍ وَصَلَت بِشَكلِ المَسارِ عَلى مُضيفِها — أَو <c>null</c></b> (‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6). شُروطُه
+    /// مُجتَمِعَة: <c>GET</c>، وقَوالِبُ القالِبِ مُسَجَّلَة؛ ومَقطَعُ المَسارِ الأَوَّلُ اسمُ مَتجَرِ المُضيف (شَكلُ المَسار)؛ وما يَخدِمُه الطَلَبُ (بَعدَ الحَقنِ إن كانَ)
+    /// <b>قالِبُ صَفحَةِ مَتجَر</b> (<see cref="RolePageTemplates.MatchesStorePage"/> — فَلا API ولا كِتابَة ولا <c>/_blazor</c> ولا <c>/realtime</c> ولا جُذورٌ ساكِنَة
+    /// ولا مَحَطَّةُ خُروج)؛ والذَيلُ لا يَبدَأُ بِما يُخدَمُ مِن الجَذر (<c>terms</c>… — يَكتُبُه <c>StoreUrl</c> بِشَكلِ المَسارِ عَمداً)؛ <b>والعُنوانُ النَظيفُ يَعودُ بِالحاقِنِ
+    /// إلى الصَفحَةِ نَفسِها</b> (يُسأَلُ <see cref="AnswerOnStoreHost"/> عَنه). والمُرَشَّحُ عَلى مُضيفِ الدَورِ بِلا <c>/r/{دَورِه}</c> أَوَّلاً ثُمَّ بِه. والاستِعلامُ يُنقَلُ
+    /// بِحَرفِه (ASCII)، والمَسارُ مُرَمَّزاً. تَحويلٌ <b>مُؤَقَّت</b> (302) كَتَحويلِ مَنطِقَةِ المَنَصَّة. وبِلا نِطاقٍ والجَذرُ <c>R</c> لا يَبلُغانِ هذا (<see cref="StoreHostAnswer.Through"/>).</para>
+    /// </summary>
+    private static string? CleanPageOnHost(string slug, string? role, string? host, string apex, string? method, string? path, string? query, string? scheme,
+        RolePageTemplates? rolePages, StoreHostAnswer answer)
+    {
+        if (rolePages is null || !HttpMethods.IsGet(method ?? "")) return null;
+        var p = string.IsNullOrEmpty(path) ? "/" : path[0] == '/' ? path : "/" + path;
+        var firstSlash = p.IndexOf('/', 1);
+        var first = p.Length < 2 ? "" : firstSlash > 0 ? p[1..firstSlash] : p[1..];
+        if (!string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) return null;
+        if (ServedPath(answer, p) is not { } served) return null;
+        var servedRest = served.Length > slug.Length + 1 ? served[(slug.Length + 1)..] : "/";
+        if (!rolePages.MatchesStorePage(servedRest)) return null;
+
+        var rest = firstSlash > 0 ? p[firstSlash..] : "/";
+        var candidates = new List<string>(2);
+        if (role is not null && WithoutRoleSegment(rest, role) is { } bare)
+        {
+            // عَلى مُضيفِ الدَورِ ذَيلٌ يُخدَمُ مِن الجَذرِ (`terms`) يَكتُبُه `StoreUrl` بِشَكلِ المَسارِ عَمداً (`/{slug}/r/{role}/terms`) — فَلا يُحَوَّل:
+            // `StoreUrlRoundTripTests` يَحمَرُّ عَلى رابِطٍ يَبنيه التَطبيقُ ويَأخُذُ قَفزَة (مَقيسٌ عَلى هذا التَبديلِ قَبلَ هذا السَطر: صَفٌّ واحِد).
+            var bareFirst = bare.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (bareFirst.Length > 0 && ServedAtRoot(bareFirst[0])) return null;
+            candidates.Add(bare);
+        }
+        candidates.Add(rest);
+        foreach (var candidate in candidates)
+        {
+            var segments = candidate.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0 && ServedAtRoot(segments[0])) continue;
+            var again = AnswerOnStoreHost(slug, role, host, apex, method, candidate, query, scheme, rolePages);
+            if (ServedPath(again, candidate) is { } same && string.Equals(same.TrimEnd('/'), served.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+                return new PathString(candidate).ToUriComponent() + AsciiOnly(query);
+        }
+        return null;
+    }
+
+    /// <summary>ما يَخدِمُه الجَوابُ: مَسارُ الحَقنِ، أَو المَسارُ كَما هُوَ إن مَرَّ بِمَتجَرِه — و<c>null</c> لِتَحويلٍ أَو 404.</summary>
+    private static string? ServedPath(StoreHostAnswer answer, string path)
+        => answer.Verdict switch
+        {
+            StoreHostVerdict.Rewrite => answer.Path,
+            StoreHostVerdict.Pass when answer.Slug is not null => path,
+            _ => null,
+        };
+
+    /// <summary><c>/r/{role}/x</c> ← <c>/x</c> (و<c>/r/{role}</c> ← <c>/</c>) إن كانَ الدَورُ دَورَ المُضيف — وإلّا <c>null</c>.</summary>
+    private static string? WithoutRoleSegment(string rest, string role)
+    {
+        var marker = "/r/" + role;
+        if (!rest.StartsWith(marker, StringComparison.OrdinalIgnoreCase)) return null;
+        if (rest.Length == marker.Length) return "/";
+        return rest[marker.Length] == '/' ? rest[marker.Length..] : null;
     }
 
     /// <summary><b>مِلصَقاتٌ مَحجوزَةٌ تَمُرُّ إلى الجَذرِ كَما كانَت</b> (‏2026-11-11، SEC-C2a-R2-4): <c>www</c> (يُحَوِّلُه Cloudflare إلى <c>R</c> عِندَ الحافَّة — DEPLOY §٢·ي)

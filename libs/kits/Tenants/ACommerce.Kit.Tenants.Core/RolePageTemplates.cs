@@ -24,9 +24,32 @@ public sealed class RolePageTemplates
 
     public RolePageTemplates(IEnumerable<string> routes)
     {
-        Templates = routes.Where(IsRoleTemplate).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.Ordinal).ToArray();
+        var all = routes.ToArray();
+        Templates = all.Where(IsRoleTemplate).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.Ordinal).ToArray();
         _rests = Templates.Select(t => t[Prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries)).ToArray();
+        StoreTemplates = all.Where(IsStoreTemplate).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(t => t, StringComparer.Ordinal).ToArray();
+        _storeRests = StoreTemplates.Select(t => t[StorePrefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries)).ToArray();
     }
+
+    /// <summary>بادِئَةُ قالِبِ صَفحَةِ المَتجَر — <c>/{slug}</c> (‏2026-11-11، W13-4·C2f·6).</summary>
+    public const string StorePrefix = "/{slug}";
+
+    private readonly string[][] _storeRests;
+
+    /// <summary>
+    /// <para><b>قَوالِبُ صَفَحاتِ المَتجَرِ كُلُّها</b> (<c>/{slug}</c> و<c>/{slug}/…</c>، ومِنها قَوالِبُ الدَور) مِن الطُرُقِ نَفسِها الَّتي يَجمَعُها القالِب (‏2026-11-11،
+    /// الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6): الحاقِنُ يَسأَلُها هَل طَلَبُ GET بِشَكلِ المَسارِ عَلى مُضيفِه <b>صَفحَة</b> — فَيُحَوَّلُ إلى عُنوانِها النَظيف — أَم
+    /// بابٌ آخَر (مَحَطَّةُ الخُروج، تَنزيلُ البَيانات) يَمُرُّ كَما هُوَ. والقائِمَةُ مِن الحاوِيَةِ نَفسِها (لا تَسجيلَ ثانٍ).</para>
+    /// </summary>
+    public IReadOnlyList<string> StoreTemplates { get; }
+
+    /// <summary>أَقالِبُ صَفحَةِ مَتجَرٍ هذا؟ (<c>/{slug}</c> أَو <c>/{slug}/…</c>.)</summary>
+    public static bool IsStoreTemplate(string? route)
+        => route is not null && route.StartsWith(StorePrefix, StringComparison.OrdinalIgnoreCase)
+           && (route.Length == StorePrefix.Length || route[StorePrefix.Length] == '/');
+
+    /// <summary>أَيُطابِقُ <paramref name="rest"/> — المَسارُ بَعدَ <c>/{slug}</c> — قالِبَ صَفحَةِ مَتجَر؟ (المُطابَقَةُ نَفسُها.)</summary>
+    public bool MatchesStorePage(string? rest) => MatchesAny(_storeRests, rest);
 
     /// <summary>أَقالِبُ صَفحَةِ دَورٍ هذا؟</summary>
     public static bool IsRoleTemplate(string? route)
@@ -36,10 +59,12 @@ public sealed class RolePageTemplates
     /// <summary>
     /// <para>أَيُطابِقُ <paramref name="rest"/> — المَسارُ بَعدَ <c>/{slug}/r/{role}</c> (<c>/</c> لِجَذرِ الدَور، <c>/me/listings</c>…) — قالِبَ صَفحَةِ دَور؟</para>
     /// </summary>
-    public bool Matches(string? rest)
+    public bool Matches(string? rest) => MatchesAny(_rests, rest);
+
+    private static bool MatchesAny(string[][] rests, string? rest)
     {
         var segments = (rest ?? "/").Split('/', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var template in _rests)
+        foreach (var template in rests)
         {
             if (template.Length != segments.Length) continue;
             var all = true;

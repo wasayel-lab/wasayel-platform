@@ -51,8 +51,8 @@ public class RoleHostTests(ITestOutputHelper output)
     [InlineData("ashare-vendor.example.test", "HEAD", "/explore", "Rewrite|ashare|/ashare/r/vendor/explore|vendor")]
     [InlineData("ashare-vendor.example.test", "GET", "/listings/3f2c4a1e-0000-4000-8000-000000000001", "Rewrite|ashare|/ashare/r/vendor/listings/3f2c4a1e-0000-4000-8000-000000000001|vendor")]
     [InlineData("ashare-vendor.example.test", "GET", "/listings/not-a-guid", "Rewrite|ashare|/ashare/listings/not-a-guid|vendor")]
-    [InlineData("ashare-vendor.example.test", "GET", "/ashare/me", "Rewrite|ashare|/ashare/r/vendor/me|vendor")]
-    [InlineData("ashare-vendor.example.test", "GET", "/ashare/r/vendor/me", "Pass|ashare||vendor")]
+    [InlineData("ashare-vendor.example.test", "GET", "/ashare/me", "Redirect|ashare|/me|vendor")]                  // W13-4·C2f·6: شَكلُ المَسارِ عَلى مُضيفِه ← 302 إلى النَظيف
+    [InlineData("ashare-vendor.example.test", "GET", "/ashare/r/vendor/me", "Redirect|ashare|/me|vendor")]
     [InlineData("ashare-vendor.example.test", "GET", "/r/customer/explore", "Rewrite|ashare|/ashare/r/customer/explore|vendor")]
     [InlineData("ashare-vendor.example.test", "GET", "/me/data/download", "Rewrite|ashare|/ashare/me/data/download|vendor")]
     [InlineData("ashare-vendor.example.test", "POST", "/listings/create", "Rewrite|ashare|/ashare/listings/create|vendor")]
