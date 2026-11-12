@@ -36,10 +36,16 @@ public sealed class PermissionFilter : IEndpointFilter
         if (tenant is null) return Results.NotFound();
         // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return await next(ctx);   // legacy mode` — يَفتَحُ أَيَّ صَلاحِيَّةٍ لِمَتجَرٍ بِلا أَدوار، ومِنها
         // الإدارِيَّةُ لَو حُرِسَت بِها نُقطَة. صارَ يَسأَلُ الدالَّةَ نَفسَها: صَلاحِيّاتُ العُضوِ تَمُرّ، والإدارِيَّةُ 403.
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `return RolePermissions.Has(tenant.Roles, null, _permission)
+        // ? await next(ctx) : Results.StatusCode(StatusCodes.Status403Forbidden);` — والقَرارُ بِحَرفِه، ومَعَ القَبولِ يَكتُبُ `_none` الَّذي قَرَّرَه في حامِلِ
+        // العَدّ: كانَ `_none` يَأتي مِن الوَسيطِ وَحدَه (المُخَزَّنَةُ المُخَبَّأَة)، فَمَتجَرٌ أُزيلَ آخِرُ دَورٍ فيه تَحتَ الذاكِرَةِ يُكتَبُ نَشرُه بِلا دَور.
         if (tenant.Roles.Count == 0)
-            return RolePermissions.Has(tenant.Roles, null, _permission)
-                ? await next(ctx)
-                : Results.StatusCode(StatusCodes.Status403Forbidden);
+        {
+            if (!RolePermissions.Has(tenant.Roles, null, _permission))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            MeterScope.Current?.FillAcceptedRole(slug, MeterSentinels.None);
+            return await next(ctx);
+        }
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<User>(userId.Value);
@@ -59,7 +65,9 @@ public sealed class PermissionFilter : IEndpointFilter
         // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ** — كانَ
         // يُحسَبُ ويُرمى، فَكِتابَةُ النُقطَةِ في مَتجَرٍ بِأَدوارٍ دَورُها `_unresolved`. والحامِلُ يَقبَلُه لِمَتجَرِه وَحدَه وأَوَّلُ كاتِبٍ يَفوز (`MeterScopeHolder.Fill`)؛
         // وبِلا حامِلٍ لا شَيء. والقَرارُ فَوقَه بِحَرفِه (`LiveRoleDecisionCharacterizationProofTests`).
-        MeterScope.Current?.Fill(slug, role: effectiveRole);
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1) كانَ `MeterScope.Current?.Fill(slug, role: effectiveRole);` — و«الكاتِبُ الأَوَّلُ يَفوز» يُبقي `_none` الوَسيطِ
+        // (المُخَزَّنَةُ فارِغَة) فَوقَ دَورٍ مُؤَلَّفٍ مُعتَمَدٍ قَبِلَ بِه هذا المُرَشِّح. فَالدَورُ المَقبولُ يَحِلُّ مَحَلَّ المُؤَقَّت (`FillAcceptedRole`).
+        MeterScope.Current?.FillAcceptedRole(slug, effectiveRole);
         return await next(ctx);
     }
 }

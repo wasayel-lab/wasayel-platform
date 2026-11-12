@@ -623,9 +623,14 @@ public sealed class TenantResolverMiddleware
                 // ‏(‏2026-11-12، W13-6·٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والحامِلُ مِن الوَثيقَةِ نَفسِها حَيثُ يُحَلُّ المَتجَر: رائِدُ الأَعمالِ مالِكُه لَحظَةَ
                 // الكِتابَة (`_unowned` لِمَتجَرٍ بِلا مالِك)، والدَورُ `_none` لِمَتجَرٍ بِلا أَدوارٍ وإلّا يَبقى لِمَن يَحسِبُه (البَند ١٠). **ولا يُؤخَذُ دَورُ
                 // المُضيف** (`RoleFromHost`): ادِّعاءٌ يُفحَصُ عَلى المَتجَرِ (`HoldsRoleHost`) لا عَلى المُستَخدِم (COR-11).
+                // ‏(‏2026-11-12، W13-6·B-R1·1 — مُراجَعَةُ المَرحَلَةِ ب · M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `role: entity.Roles.Count == 0 ?
+                // MeterSentinels.None : null` في هذا النِداء — `_none` بِـ«الكاتِبُ الأَوَّلُ يَفوز» مِن `Tenant.Roles` **المُخَزَّنَةِ المُخَبَّأَة**، وحارِسا الصَلاحِيَّةِ
+                // يُقَرِّرانِ عَلى المُجَسَّدَة (وفَوقَها المُؤَلَّفَةُ المُعتَمَدَة): مَقيس — مَتجَرٌ بِلا أَدوارٍ مُخَزَّنَةٍ يَنشُرُ فيه عُضوٌ بِدَورِه المُؤَلَّفِ «mandoob»
+                // ⇐ `200` وسَطرُه `_none`. فَصارَ `_none` هُنا **مُؤَقَّتاً** يَحِلُّ مَحَلَّه الدَورُ الَّذي يَقبَلُ بِه الحارِس (`MeterScopeHolder.FillAcceptedRole`)،
+                // ويَبقى لِكِتابَةٍ لا حارِسَ لَها كَما كان — بِصِفرِ استِعلامٍ إضافِيّ.
                 meter.Fill(entity.Slug,
-                           entrepreneur: entity.OwnerUserId == Guid.Empty ? MeterSentinels.Unowned : entity.OwnerUserId.ToString("D"),
-                           role: entity.Roles.Count == 0 ? MeterSentinels.None : null);
+                           entrepreneur: entity.OwnerUserId == Guid.Empty ? MeterSentinels.Unowned : entity.OwnerUserId.ToString("D"));
+                if (entity.Roles.Count == 0) meter.FillProvisionalRole(entity.Slug, MeterSentinels.None);
             }
         }
         else if (hostSlug is not null)

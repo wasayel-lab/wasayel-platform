@@ -231,7 +231,8 @@ public class MeterScopeTests(ITestOutputHelper output)
         await Task.Delay(1);   // LoadAsync<User>
         var effectiveRole = await ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.ResolveAsync(http, slug, userId, storedRole);
         var allowed = ACommerce.Kit.Roles.RolePermissions.Has(SellerStore, effectiveRole, "offer.submit");
-        if (allowed) MeterScope.Current?.Fill(slug, role: effectiveRole);
+        // ‏(‏2026-11-12، W13-6·B-R1·1) سَطرُ المَلءِ بِحَرفِه في `HasPermissionAsync` — كانَ `Fill(slug, role: effectiveRole)`.
+        if (allowed) MeterScope.Current?.FillAcceptedRole(slug, effectiveRole);
         return allowed;
     }
 
@@ -270,5 +271,109 @@ public class MeterScopeTests(ITestOutputHelper output)
             if (ACommerce.Kit.Roles.RolePermissions.Has(SellerStore, effectiveRole, "offer.submit"))
                 Immutable.Value = Immutable.Value! with { Role = effectiveRole! };
         }
+    }
+
+    // ═══ ‏(‏2026-11-12، W13-6·B-R1·1 — مُراجَعَةُ المَرحَلَةِ ب · M6B-CNT-1) `_none` الوَسيطِ مُؤَقَّت، ويَحِلُّ مَحَلَّه دَورُ حارِسِ الصَلاحِيَّةِ المَقبولُ وَحدَه ═══
+    // الوَسيطُ يَرى `Tenant.Roles` المُخَزَّنَةَ في ذاكِرَتِه، والحارِسُ يُقَرِّرُ عَلى المُجَسَّدَة (وفَوقَها المُؤَلَّفَةُ المُعتَمَدَة). كانَ «الكاتِبُ الأَوَّلُ يَفوز» يُبقي
+    // `_none` الوَسيطِ فَوقَ دَورٍ مُؤَلَّفٍ قَبِلَ بِه الحارِس (مَقيس: `200` وسَطرُه `_none`). وصُفوفُ الحامِلِ هُنا؛ والحارِسانِ الحَقيقِيّانِ عَلى القاعِدَةِ في
+    // `LiveMeterPersistenceProofTests` (صَفّا الدَورِ المُؤَلَّفِ والذاكِرَة).
+
+    /// <summary>شَكلُ حارِسٍ قَبِلَ بَعدَ قِراءَتِه المُنتَظَرَة — سَطرُ <c>PermissionFilter</c>/<c>HasPermissionAsync</c> بِحَرفِه.</summary>
+    private static async Task<bool> GuardAcceptsAsync(string slug, string role)
+    {
+        await Task.Delay(1);   // LoadTenantWithRolesAsync + LoadAsync<User>
+        return MeterScope.Current!.FillAcceptedRole(slug, role);
+    }
+
+    /// <summary>الوَسيطُ الحَقيقِيُّ ثُمَّ ما بَعدَه (الحارِسُ والحِفظ) داخِلَ طَلَبِه — فَالحامِلُ حامِلُه.</summary>
+    private static async Task ThroughResolverRunningAsync(string path, Tenant cached, Func<Task> inner)
+    {
+        var cache = new MemoryCache(new MemoryCacheOptions());
+        cache.Set($"tenant:{cached.Id}", cached);
+        var resolver = new TenantResolverMiddleware(_ => inner(), store: null!, cache, new SubdomainTenancyOptions());
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Path = path;
+        ctx.Request.Host = new HostString("localhost");
+        await resolver.InvokeAsync(ctx);
+    }
+
+    [Fact]
+    public async Task Through_the_real_resolver_its_none_gives_way_to_the_role_an_awaited_permission_guard_accepted_and_stays_when_no_guard_runs()
+    {
+        var owner = Guid.NewGuid();
+        var noStoredRoles = new Tenant { Id = "store-a", OwnerUserId = owner };
+        var withStoredRoles = new Tenant { Id = "store-r", OwnerUserId = owner, Roles = [new ACommerce.Kit.Roles.Role { Slug = "vendor" }] };
+        UsageEntry? authored = null, unguarded = null, lastLeft = null;
+        MeterScopeView? resolverView = null;
+
+        // ‏مَتجَرٌ بِلا أَدوارٍ مُخَزَّنَةٍ ودَورُه المُؤَلَّفُ «khayyat»: الحارِسُ قَبِلَ بِه بَعدَ `await` ⇐ دَورُ الحِفظ.
+        await ThroughResolverRunningAsync("/store-a/listings/create", noStoredRoles, async () =>
+        {
+            resolverView = MeterScope.View();
+            Assert.True(await GuardAcceptsAsync("store-a", "khayyat"));
+            authored = SaveNow("store-a");
+        });
+        // ‏وكِتابَةٌ لا حارِسَ لَها: المُؤَقَّتُ ما يَراه الحِفظُ كَما كان.
+        await ThroughResolverRunningAsync("/store-a/chats/x/send", noStoredRoles, () => { unguarded = SaveNow("store-a"); return Task.CompletedTask; });
+        // ‏ذاكِرَةُ الوَسيطِ تَرى أَدواراً أُزيلَ آخِرُها: لا دَورَ يَضَعُه، والحارِسُ يَقبَلُ بِلا أَدوارٍ فَيَكتُبُ `_none` الَّذي قَرَّرَه.
+        await ThroughResolverRunningAsync("/store-r/listings/create", withStoredRoles, async () =>
+        {
+            Assert.True(await GuardAcceptsAsync("store-r", MeterSentinels.None));
+            lastLeft = SaveNow("store-r");
+        });
+        output.WriteLine($"[G16] الوَسيط {resolverView} ⇐ بَعدَ الحارِس role at save = {authored!.Role} · بِلا حارِس = {unguarded!.Role} · "
+                         + $"آخِرُ دَورٍ أُزيلَ تَحتَ الذاكِرَة = {lastLeft!.Role}");
+        Assert.Equal(new MeterScopeView("store-a", owner.ToString("D"), MeterSentinels.None, false), resolverView);
+        Assert.Equal(("khayyat", owner.ToString("D")), (authored.Role, authored.Entrepreneur));
+        Assert.Equal(MeterSentinels.None, unguarded.Role);
+        Assert.Equal(MeterSentinels.None, lastLeft.Role);
+    }
+
+    [Fact]
+    public void Only_the_accepted_role_replaces_the_provisional_one_once_for_its_own_store_and_never_a_role_another_filler_wrote()
+    {
+        // ‏المُؤَقَّتُ ثُمَّ المَقبول: يَحِلُّ مَحَلَّه، والمَقبولُ الأَوَّلُ يَفوز، والمُؤَقَّتُ بَعدَه لا يَمَسّ.
+        var h = MeterScope.Open();
+        Assert.True(h.Fill("store-a", entrepreneur: "owner-a"));
+        Assert.True(h.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.Equal(new MeterScopeView("store-a", "owner-a", MeterSentinels.None, false), h.View());
+        Assert.True(h.FillAcceptedRole("STORE-A", "khayyat"));
+        Assert.True(h.FillAcceptedRole("store-a", "vendor"));
+        Assert.True(h.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.Equal(new MeterScopeView("store-a", "owner-a", "khayyat", false), h.View());
+
+        // ‏كاتِبٌ سِوى الحارِسِ لا يَحِلُّ مَحَلَّ المُؤَقَّت (`Fill` بِحَرفِه)، والمَقبولُ لا يَحِلُّ مَحَلَّ دَورٍ كَتَبَه غَيرُه.
+        var other = MeterScope.Open();
+        Assert.True(other.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.True(other.Fill("store-a", role: MeterSentinels.Entrepreneur));
+        Assert.Equal(MeterSentinels.None, other.View().Role);
+        var written = MeterScope.Open();
+        Assert.True(written.Fill("store-a", role: "seller"));
+        Assert.True(written.FillAcceptedRole("store-a", "vendor"));
+        Assert.Equal("seller", written.View().Role);
+
+        // ‏لِمَتجَرِه وَحدَه: حارِسُ مَتجَرٍ آخَرَ يُرَدُّ ولا يُغَيِّرُ شَيئاً؛ والمُؤَقَّتُ والمَقبولُ يَضَعانِ مَتجَراً غَيرَ مَضبوطٍ كَـ`Fill`.
+        var cross = MeterScope.Open();
+        Assert.True(cross.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.False(cross.FillAcceptedRole("store-b", "khayyat"));
+        Assert.Equal(new MeterScopeView("store-a", null, MeterSentinels.None, false), cross.View());
+        var unset = MeterScope.Open();
+        Assert.True(unset.FillAcceptedRole("store-z", MeterSentinels.None));
+        Assert.Equal(new MeterScopeView("store-z", null, MeterSentinels.None, false), unset.View());
+
+        // ‏الفارِغُ لا يُكتَب، وحامِلُ البَذرِ لا يُملأ.
+        var empty = MeterScope.Open();
+        Assert.False(empty.FillAcceptedRole("store-a", ""));
+        Assert.False(empty.FillAcceptedRole("store-a", null));
+        Assert.False(empty.FillProvisionalRole("store-a", ""));
+        Assert.False(empty.FillAcceptedRole("", "vendor"));
+        Assert.Equal(new MeterScopeView(null, null, null, false), empty.View());
+        using (MeterScope.Seed())
+        {
+            Assert.False(MeterScope.Current!.FillProvisionalRole("store-a", MeterSentinels.None));
+            Assert.False(MeterScope.Current.FillAcceptedRole("store-a", "vendor"));
+            Assert.Equal(new MeterScopeView(null, MeterSentinels.Seed, MeterSentinels.Seed, true), MeterScope.Current.View());
+        }
+        output.WriteLine($"[G16] المُؤَقَّتُ والمَقبول: {h.View()} · غَيرُ الحارِس {other.View()} · دَورٌ قائِم {written.View()} · مَتجَرٌ آخَر {cross.View()} · غَيرُ مَضبوط {unset.View()}");
     }
 }

@@ -12,6 +12,9 @@ namespace ACommerce.Platform.Shared.Metering;
 /// مِن مَسارِه هُوَ. فَنِطاقُ المَتجَرِ أ لا يَنسِبُ كِتابَةَ المَتجَرِ ب.</item>
 /// </list>
 /// <para><b>وحامِلُ البَذر</b> (<see cref="IsSeed"/>) لا يُملأ: دَورُه ورائِدُ أَعمالِه <see cref="MeterSentinels.Seed"/> لِكُلِّ مَتجَر.</para>
+/// <para>‏(‏2026-11-12، W13-6·B-R1·1 — يُلحَقُ) <b>واستِثناءٌ واحِدٌ مِن «الكاتِبُ الأَوَّلُ يَفوز» في الدَور</b>: دَورُ الوَسيطِ مُؤَقَّتٌ
+/// (<see cref="FillProvisionalRole"/>، مِن الوَثيقَةِ المُخَزَّنَة)، ويَحِلُّ مَحَلَّه الدَورُ الَّذي قَبِلَ بِه حارِسُ صَلاحِيَّةٍ عَلى المَجموعَةِ المُجَسَّدَة
+/// (<see cref="FillAcceptedRole"/>) — فَـ<c>_none</c> في السَطرِ ما قَرَّرَه الحارِسُ لا ما خَبَّأَه الوَسيط.</para>
 /// </summary>
 public sealed class MeterScopeHolder
 {
@@ -56,6 +59,48 @@ public sealed class MeterScopeHolder
         lock (_gate)
         {
             Role ??= role;
+            return true;
+        }
+    }
+
+    // ‏(‏2026-11-12، W13-6·B-R1·1 — مُراجَعَةُ المَرحَلَةِ ب · M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **دَورٌ مُؤَقَّتٌ ودَورٌ مَقبول**: كانَ الوَسيطُ
+    // يَضَعُ `_none` بِـ`Fill` مِن `Tenant.Roles` المُخَزَّنَةِ المُخَبَّأَة، فَيَفوزُ عَلى الدَورِ الَّذي يَقبَلُ بِه حارِسا الصَلاحِيَّةِ عَلى المَجموعَةِ المُجَسَّدَة
+    // (المُخَزَّنَةُ وفَوقَها المُؤَلَّفَةُ المُعتَمَدَة) — مَقيس: مَتجَرٌ بِلا أَدوارٍ مُخَزَّنَةٍ ودَورُه المُؤَلَّفُ «mandoob» يَنشُرُ بِه ⇐ `200` وسَطرُه `_none`.
+    // فَدَورُ الوَسيطِ الآنَ **مُؤَقَّت** (`FillProvisionalRole`) يَحِلُّ مَحَلَّه **الدَورُ الَّذي قَبِلَ بِه حارِسُ صَلاحِيَّة** (`FillAcceptedRole`) — ولا يَحِلُّ مَحَلَّه
+    // كاتِبٌ سِواه (`Fill` يَبقى «الكاتِبُ الأَوَّلُ يَفوز» بِحَرفِه)، ولا يَحِلُّ المُؤَقَّتُ مَحَلَّ دَورٍ قائِم.
+    private bool _roleProvisional;
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·B-R1·1) <b>دَورٌ مُؤَقَّتٌ مِن الوَثيقَةِ المُخَزَّنَة</b> — كاتِبُه الوَسيطُ وَحدَه: <c>_none</c> لِمَتجَرٍ <c>Tenant.Roles</c> المُخَزَّنَةُ فيه
+    /// فارِغَة (مِن ذاكِرَتِه، وبِلا الأَدوارِ المُؤَلَّفَة). يُوضَعُ إن لَم يُضبَطِ الدَور، ويَحِلُّ مَحَلَّه دَورُ حارِسِ صَلاحِيَّةٍ قَبِلَ (<see cref="FillAcceptedRole"/>).
+    /// وقَواعِدُ المَتجَرِ قَواعِدُ <see cref="Fill"/>: لِمَتجَرِه وَحدَه، ويَضَعُ <see cref="App"/> غَيرَ المَضبوط؛ و<c>false</c> لِحامِلِ البَذرِ ولِلفارِغ.</para>
+    /// </summary>
+    public bool FillProvisionalRole(string app, string role)
+    {
+        if (IsSeed || string.IsNullOrEmpty(app) || string.IsNullOrEmpty(role)) return false;
+        lock (_gate)
+        {
+            if (App is null) App = app;
+            else if (!string.Equals(App, app, StringComparison.OrdinalIgnoreCase)) return false;
+            if (Role is null) { Role = role; _roleProvisional = true; }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·B-R1·1) <b>الدَورُ الَّذي قَبِلَ بِه حارِسُ صَلاحِيَّة</b> — كاتِباه <c>PermissionFilter</c> و<c>HasPermissionAsync</c> وَحدَهُما، بَعدَ
+    /// قَرارِهِما عَلى المَجموعَةِ المُجَسَّدَة: الدَورُ الفَعّالُ حينَ فيها أَدوار، و<c>_none</c> حينَ لا دَور. <b>يَحِلُّ مَحَلَّ الدَورِ المُؤَقَّت</b>
+    /// (<see cref="FillProvisionalRole"/>) أَو يَملَأُ غَيرَ المَضبوط؛ ودَورٌ قائِمٌ غَيرُ مُؤَقَّتٍ يَبقى (الكاتِبُ الأَوَّلُ يَفوز). وقَواعِدُ المَتجَرِ قَواعِدُ
+    /// <see cref="Fill"/>؛ و<c>false</c> لِمَتجَرٍ آخَرَ ولِحامِلِ البَذرِ ولِلفارِغ.</para>
+    /// </summary>
+    public bool FillAcceptedRole(string app, string? role)
+    {
+        if (IsSeed || string.IsNullOrEmpty(app) || string.IsNullOrEmpty(role)) return false;
+        lock (_gate)
+        {
+            if (App is null) App = app;
+            else if (!string.Equals(App, app, StringComparison.OrdinalIgnoreCase)) return false;
+            if (Role is null || _roleProvisional) { Role = role; _roleProvisional = false; }
             return true;
         }
     }

@@ -4785,7 +4785,14 @@ public static class MarketplaceTemplateExtensions
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return false;
         // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return true;   // legacy mode`. صارَ يَسأَلُ الدالَّةَ نَفسَها: الإدارِيَّةُ لا تُعطى لِمَتجَرٍ بِلا أَدوار.
-        if (tenant.Roles.Count == 0) return ACommerce.Kit.Roles.RolePermissions.Has(tenant.Roles, null, permission);
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `if (tenant.Roles.Count == 0) return …Has(tenant.Roles, null, permission);`
+        // — والقَرارُ بِحَرفِه، ومَعَ القَبولِ يَكتُبُ `_none` الَّذي قَرَّرَه في حامِلِ العَدّ (شَكلُ `PermissionFilter` بِعَينِه).
+        if (tenant.Roles.Count == 0)
+        {
+            var open = ACommerce.Kit.Roles.RolePermissions.Has(tenant.Roles, null, permission);
+            if (open) ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, ACommerce.Platform.Shared.Metering.MeterSentinels.None);
+            return open;
+        }
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
@@ -4799,7 +4806,9 @@ public static class MarketplaceTemplateExtensions
             tenant.Roles, effectiveRole, permission);
         // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ — شَكلُ
         // `PermissionFilter` بِعَينِه: لِمَتجَرِه وَحدَه، وأَوَّلُ كاتِبٍ يَفوز. فَعَرضٌ يَمُرُّ مِن هُنا يُعَدُّ `offer.submit` بِدَورِ مُقَدِّمِه لا `_unresolved`.
-        if (allowed) ACommerce.Platform.Shared.Metering.MeterScope.Current?.Fill(slug, role: effectiveRole);
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1) كانَ `….Fill(slug, role: effectiveRole)` — فَـ`_none` الوَسيطِ (المُخَزَّنَةُ فارِغَة) يَفوزُ عَلى دَورٍ مُؤَلَّفٍ
+        // مُعتَمَدٍ قَبِلَ بِه الحارِس. فَالدَورُ المَقبولُ يَحِلُّ مَحَلَّ المُؤَقَّت (`FillAcceptedRole`).
+        if (allowed) ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, effectiveRole);
         return allowed;
     }
 
