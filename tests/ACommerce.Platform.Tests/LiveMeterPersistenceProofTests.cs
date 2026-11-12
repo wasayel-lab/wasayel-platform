@@ -119,6 +119,62 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         output.WriteLine($"[P1] لِكُلِّ وَحدَة: deal.create — صَفَقاتٌ وُلِدَت 2 · سُطور {(await EntriesForAsync(deal.Id)).Count + (await EntriesForAsync(other)).Count}");
     }
 
+    /// <summary>
+    /// <para><b>التَحديثُ لا يُعَدّ — عَلى صَفقَةٍ بِلا سَطر</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-1): صَفُّ التَحديثِ أَعلاه يُحَدِّثُ صَفقَةً سَطرُ
+    /// وِلادَتِها قائِم، فَلَو عَدَّ المُستَمِعُ كُلَّ صَفقَةٍ مُخَزَّنَةٍ وِلادَةً لَابتَلَعَ <c>on conflict (id) do nothing</c> السَطرَ الثاني وبَقِيَ الصَفُّ أَخضَر —
+    /// مَقيسٌ بِحَقنِ <c>new PendingDocument(d, true)</c>: كُلُّ صُفوفِ العَدِّ خَضراء. ويَومَ النَشرِ كُلُّ صَفقَةٍ في الإنتاجِ قَبلَ العَدّ (بِلا سَطر)، فَتَقَدُّمُها
+    /// أَو إلحاقُ مَرجِعٍ بِها أَو مَحوُ طَرَفِها كانَ يَكتُبُ لَها <c>deal.create</c> ولا يَحمَرُّ شَيء.</para>
+    /// <para>فَالصَفقَةُ هُنا بِلا سَطرٍ (يُحذَفُ سَطرُها كَما لَو وُلِدَت قَبلَ المُستَمِع)، ثُمَّ تُحَدَّثُ بِالأَشكالِ الثَلاثَةِ الَّتي يَكتُبُ بِها الكودُ صَفقَةً قائِمَة:
+    /// <c>Load → Store</c>، و<c>Query → Store</c> (شَكلُ <c>AccountErasure</c>)، و<c>DealsService.AttachRefAsync</c> الحَقيقِيّ — وكُلُّ حِفظٍ يُرى نُسخَةً جَديدَةً في
+    /// <c>mt_version</c> (لا أَداةَ عَمياء)، والسُطورُ لِمَصدَرِها صِفرٌ بَعدَ كُلٍّ.</para>
+    /// </summary>
+    [Fact]
+    public async Task Updating_a_deal_born_before_the_meter_writes_no_entry_through_load_query_or_attach_ref()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        await using var scope = host.Services.CreateAsyncScope();
+        var deals = scope.ServiceProvider.GetRequiredService<DealsService>();
+        var slug = NewSlug();
+
+        var deal = await StartAsync(deals, slug, Guid.NewGuid());
+        Assert.Single(await EntriesForAsync(deal.Id));
+        await ScalarAsync("delete from meter.usage_entry where source_id = @s", ("s", deal.Id.ToString("D")));
+        Assert.Empty(await EntriesForAsync(deal.Id));
+        async Task<string> VersionAsync()
+            => Convert.ToString(await ScalarAsync("select mt_version::text from platform.mt_doc_deal where id = @id", ("id", deal.Id))) ?? "";
+        var v0 = await VersionAsync();
+
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            var loaded = (await s.LoadAsync<Deal>(deal.Id))!;
+            loaded.ListingTitle += " — Load";
+            s.Store(loaded);
+            await s.SaveChangesAsync();
+        }
+        var (vLoad, afterLoad) = (await VersionAsync(), (await EntriesForAsync(deal.Id)).Count);
+
+        int queried;
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            var rows = await s.Query<Deal>().Where(d => d.Id == deal.Id).ToListAsync();
+            queried = rows.Count;
+            foreach (var d in rows) { d.ListingTitle += " — Query"; s.Store(d); }
+            await s.SaveChangesAsync();
+        }
+        var (vQuery, afterQuery) = (await VersionAsync(), (await EntriesForAsync(deal.Id)).Count);
+
+        var attached = await deals.AttachRefAsync(slug, deal.Id, "meter_proof", "pre-meter");
+        var (vAttach, afterAttach) = (await VersionAsync(), (await EntriesForAsync(deal.Id)).Count);
+
+        output.WriteLine($"[P1·pre-meter] mt_version {v0} → Load {vLoad} → Query {vQuery} (صُفوف {queried}) → AttachRef {vAttach} · "
+                         + $"سُطورُ deal.create لِمَصدَرِها: Load {afterLoad} · Query {afterQuery} · AttachRef {afterAttach}");
+        Assert.Equal(1, queried);
+        Assert.Equal("pre-meter", attached?.Refs.GetValueOrDefault("meter_proof"));
+        Assert.True(new[] { v0, vLoad, vQuery, vAttach }.Distinct(StringComparer.Ordinal).Count() == 4, $"حِفظٌ لَم يُكتَب: {v0} · {vLoad} · {vQuery} · {vAttach}");
+        Assert.Equal((0, 0, 0), (afterLoad, afterQuery, afterAttach));
+    }
+
     /// <summary><b>التَراجُع</b> (D3): حِفظٌ يَفشَلُ بَعدَ أَن رَحَّلَ المُستَمِعُ سَطرَه لا يَترُكُ صَفقَةً ولا سَطراً.</summary>
     [Fact]
     public async Task A_failed_save_leaves_neither_the_deal_nor_its_entry()
