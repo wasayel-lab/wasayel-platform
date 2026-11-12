@@ -14,6 +14,9 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 /// <para>ثَلاثَةُ جَداوِلَ في البَند ٣: الدَفتَر (<see cref="MeterSql.UsageEntry"/>) بِفِهرِسَي المُؤَشِّرِ والصَفحَة، ونافِذَةُ كُلِّ وَحدَة
 /// (<see cref="MeterSql.UnitEpoch"/>)، والجيل (<see cref="MeterSql.Generation"/>). وجَدوَلا المُجَمِّعِ يَلِدانِ مَعَه (البَند ٤)، والنِيَّةُ مَعَ
 /// الصادِر (البَند ١١)، ومُطالَبَةُ اللَقطَةِ مَعَ الحُضور (البَند ١٩).</para>
+/// <para><b>وجَدوَلا المُجَمِّع</b> (‏2026-11-12، W13-6·٤ — ADR-051 §١٢): المُؤَشِّر (<see cref="MeterSql.AggCursor"/>، صَفٌّ واحِد) والمَجاميع
+/// (<see cref="MeterSql.AggDaily"/>، مِفتاحُها <see cref="MeterSql.AggDailyKey"/>). يُعلَنانِ هُنا لا في <c>apps/V1.Meter</c>: المُجَمِّعُ لا يُنشِئُ
+/// شَيئاً (التَصميم §4)، فَيُنشِئُهُما إقلاعُ التَطبيقِ ويَراهُما فِعلُ المُخَطَّط؛ ولا يَكتُبُهُما إلّا المُجَمِّع (G10).</para>
 /// </summary>
 public sealed class UsageLedgerFeature : FeatureSchemaBase
 {
@@ -50,5 +53,23 @@ public sealed class UsageLedgerFeature : FeatureSchemaBase
         generation.AddColumn("started_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
         generation.AddColumn("start_xid", "xid8").NotNull().DefaultValueByExpression("pg_current_xact_id()");
         yield return generation;
+
+        // ‏مُؤَشِّرُ المُجَمِّع: صَفٌّ واحِدٌ مِفتاحُه `singleton` (لا افتِراضَ لَه — جُملَةُ المُجَمِّعِ تَكتُبُ `true` دائِماً).
+        var cursor = new Table(Name(MeterSql.AggCursor));
+        cursor.AddColumn("singleton", "boolean").AsPrimaryKey();
+        cursor.AddColumn("after_gen", "integer").NotNull();
+        cursor.AddColumn("after_xid", "xid8").NotNull();
+        cursor.AddColumn("after_id", "text").NotNull();
+        cursor.AddColumn("pulled_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
+        yield return cursor;
+
+        // ‏المَجاميعُ لِكُلِّ يَوم (`Asia/Riyadh`) بِالأَبعادِ الخَمسَةِ والوَحدَة — والجانِبانِ لا يَختَلِطانِ لِأَنّ الوَحدَةَ في المِفتاح.
+        var daily = new Table(Name(MeterSql.AggDaily));
+        daily.AddColumn("day", "date").AsPrimaryKey();
+        foreach (var column in MeterSql.AggDailyKey.Skip(1))
+            daily.AddColumn(column, "text").AsPrimaryKey();
+        daily.AddColumn("entries", "bigint").NotNull();
+        daily.AddColumn("quantity", "bigint").NotNull();
+        yield return daily;
     }
 }

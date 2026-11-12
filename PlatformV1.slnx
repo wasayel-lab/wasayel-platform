@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/apps/">
     <Project Path="apps/V1.App/V1.App.csproj" />
+    <Project Path="apps/V1.Meter/V1.Meter.csproj" />
   </Folder>
   <Folder Name="/libs/" />
   <Folder Name="/libs/core/">

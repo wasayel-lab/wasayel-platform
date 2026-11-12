@@ -7,6 +7,10 @@
     <PackageVersion Include="WolverineFx.Marten" Version="6.25.1" />
     <!-- مُصَرِّف Roslyn وَقت التَشغيل: Wolverine 6 لَم يَعُد يَشحَنه في الـ core -->
     <PackageVersion Include="WolverineFx.RuntimeCompilation" Version="6.25.1" />
+    <!-- ‏(‏2026-11-12، W13-6·٤ — ADR-051 §١٢) مُشغِّلُ Postgres لِلمُجَمِّعِ المُستَقِلّ `apps/V1.Meter` وَحدَه، وهو لا يُشيرُ إلى Marten (G10).
+         الرَقمُ ما يَحُلُّه Marten أَعلاه تَعَدِّيّاً (مَقيسٌ في project.assets.json لِلقالِبِ والتَطبيق: Npgsql/9.0.4) — فَعَمَلِيَّتانِ
+         تَقرَآنِ الجَدوَلَ نَفسَه بِمُشغِّلٍ واحِد. ويُرفَعُ مَعَ Marten في كوميتٍ واحِد. -->
+    <PackageVersion Include="Npgsql" Version="9.0.4" />
 
     <!-- ASP.NET runtime bits -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.Web" Version="10.0.10" />
