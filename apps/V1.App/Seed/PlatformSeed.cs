@@ -161,7 +161,10 @@ public static class PlatformSeed
                 Kind = c.kind, SortOrder = i
             }).ToList()
         };
-        globalSession.Store(tenant);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٨ — ADR-051 §١٥) **إدراجٌ لا `Store`**: الوِلادَةُ مَحروسَةٌ بِالوُجودِ أَعلاه، والمُستَمِعُ يَعُدُّ
+        // `store.create` مِن `Inserts` وَحدَها — `Store` لِوَثيقَةٍ بِلا تَزامُنٍ تَفاؤُلِيٍّ لا يُمَيِّزُ وِلادَتَها. بَصمَةُ البَذرِ في `platform` لَم تَتَحَرَّك
+        // (`LiveMeterSeededFootprintCharacterizationProofTests`، بارِداً ودافِئاً).
+        globalSession.Insert(tenant);
         await globalSession.SaveChangesAsync();
         Console.WriteLine($"[Seed] created tenant '{slug}' with {categories.Length} categories.");
 

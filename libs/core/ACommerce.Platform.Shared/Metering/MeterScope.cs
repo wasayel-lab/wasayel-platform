@@ -43,6 +43,23 @@ public sealed class MeterScopeHolder
         }
     }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>دَورُ فاعِلٍ عَلى مُستَوى المَنَصَّة</b> — مُشرِفُ المَنَصَّةِ عَلى مَسارٍ لا مَتجَرَ فيه
+    /// (<c>/admin/tenants/create</c>، <c>/admin/agent/…</c>): يَضَعُ <see cref="Role"/> إن لَم يُضبَط (الكاتِبُ الأَوَّلُ يَفوز)، و<b>لا يَمَسُّ</b>
+    /// <see cref="App"/> ولا <see cref="Entrepreneur"/> — فَلا مَتجَرَ يُدَّعى، ولا يُنسَبُ مَتجَرٌ إلى غَيرِ مالِكِه.</para>
+    /// <para>وما دامَ الحامِلُ بِلا مَتجَرٍ فَالدَورُ لِكُلِّ كِتابَةٍ في الطَلَب — الفاعِلُ واحِدٌ أَيّاً كانَ المَتجَرُ الَّذي يَكتُبُ فيه (يَقرَؤُه
+    /// <c>MeterRules.FromScope</c>)؛ وإن مَلَأَه بَعدَه مُساعِدٌ لِمَتجَرٍ صارَ لِذلكَ المَتجَرِ وَحدَه كَأَيِّ حامِل. ويُعيدُ <c>false</c> لِحامِلِ البَذر.</para>
+    /// </summary>
+    public bool FillPlatformRole(string role)
+    {
+        if (IsSeed || string.IsNullOrEmpty(role)) return false;
+        lock (_gate)
+        {
+            Role ??= role;
+            return true;
+        }
+    }
+
     /// <summary>لَقطَةٌ ثابِتَةٌ لِما في الحامِلِ لَحظَةَ الحِفظ — يَقرَؤُها المُصَنِّفُ النَقِيّ.</summary>
     public MeterScopeView View()
     {
@@ -67,6 +84,10 @@ public static class MeterScope
 
     /// <summary>لَقطَةُ الحامِلِ الجاري، أَو <c>null</c> بِلا حامِل.</summary>
     public static MeterScopeView? View() => CurrentHolder.Value?.View();
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) <b>رائِدُ أَعمالِ مَتجَرٍ مِن مالِكِه</b>: المُعَرِّفُ بِصيغَةِ <c>D</c>، و<see cref="MeterSentinels.Unowned"/> لِمَتجَرٍ بِلا مالِك
+    /// (<c>Guid.Empty</c>) — شَكلُ وَسيطِ المُستَأجِرِ نَفسُه، يَقرَؤُه المُصَنِّفُ (<c>store.create</c>) وحارِسُ إدارَةِ المَتجَر.</summary>
+    public static string OwnerOf(Guid ownerUserId) => ownerUserId == Guid.Empty ? MeterSentinels.Unowned : ownerUserId.ToString("D");
 
     /// <summary>يَفتَحُ حامِلاً جَديداً فارِغاً لِلطَلَبِ الجاري ويُعيدُه.</summary>
     public static MeterScopeHolder Open()

@@ -8,6 +8,9 @@ namespace ACommerce.Platform.Shared.Metering;
 /// هذا المُعجَمَ مَعَ أَوَّلِ مَوضِعٍ يَضَعُها لا قَبلَه. والتَصميمُ (§2) يُسَمّي تِسعاً؛ أَربَعٌ مِنها لَها واضِعٌ اليَوم (البَند ٣)، والخَمسُ
 /// الباقِيَةُ تَدخُلُ مَعَ واضِعِها: <c>_platform</c> و<c>_entrepreneur</c> و<c>_platform_admin</c> (البَند ٨: حِسابُ الاستوديو وحُرّاسُ
 /// الاستوديو والإدارَة)، و<c>_provider</c> و<c>_system</c> (البَند ١٤: خَطاطيفُ المُزَوِّدينَ ومُعالِجُ انتِهاءِ الفاتورَة).</para>
+/// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ودَخَلَت الثَلاثُ مَعَ واضِعيها</b>: <see cref="Platform"/> يَضَعُه المُصَنِّفُ مَتجَراً لِسَطرِ
+/// <c>studio.account.create</c>؛ و<see cref="Entrepreneur"/> يَضَعُه <c>StudioOwnsAsync</c> و<c>TenantAdminGuard</c> حينَ يُثبِتانِ أَنّ الطالِبَ مالِكُ المَتجَر؛
+/// و<see cref="PlatformAdmin"/> يَضَعُه <c>PlatformAdminGuard</c> حينَ يَقبَلُ مُشرِفَ المَنَصَّة. فَهِيَ سَبعٌ، والباقِيَتانِ لِلبَند ١٤.</para>
 /// </summary>
 public static class MeterSentinels
 {
@@ -23,7 +26,19 @@ public static class MeterSentinels
     /// <summary>فَجوَةُ تَصنيف: لا يَرمي المُستَمِعُ بِسَبَبِها بَل يَكتُبُ هذه، فَتُعَدُّ وتُعرَضُ ويَحُدُّها سَقفٌ يَتَقَلَّص (<c>MeterRules</c>).</summary>
     public const string Unresolved = "_unresolved";
 
-    public static readonly IReadOnlyList<string> All = [Unowned, None, Seed, Unresolved];
+    /// <summary>‏(‏2026-11-12، W13-6·٨) المَنَصَّةُ نَفسُها تَطبيقاً: مَتجَرُ سَطرِ <c>studio.account.create</c> — حِسابُ رائِدِ الأَعمالِ يولَدُ في الاستوديو
+    /// لا في مَتجَر (يَضَعُه <c>MeterRules</c>).</summary>
+    public const string Platform = "_platform";
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) رائِدُ الأَعمالِ نَفسُه يَعمَلُ عَلى مَتجَرِه: دَورُ الحامِلِ حينَ يُثبِتُ <c>StudioOwnsAsync</c> مِلكِيَّتَه، أَو يَقبَلُه
+    /// <c>TenantAdminGuard</c> مالِكاً مِن الاستوديو.</summary>
+    public const string Entrepreneur = "_entrepreneur";
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) مُشرِفُ المَنَصَّة: دَورُ فاعِلٍ عَلى مُستَوى المَنَصَّةِ يَضَعُه <c>PlatformAdminGuard</c> حينَ يَقبَل
+    /// (<see cref="MeterScopeHolder.FillPlatformRole"/>).</summary>
+    public const string PlatformAdmin = "_platform_admin";
+
+    public static readonly IReadOnlyList<string> All = [Unowned, None, Seed, Unresolved, Platform, Entrepreneur, PlatformAdmin];
 
     public static bool IsSentinel(string value) => All.Contains(value, StringComparer.Ordinal);
 }

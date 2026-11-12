@@ -44,6 +44,42 @@
       "feature": "subscription",
       "reconcile": "event_ids:SubscriptionCreated",
       "source": "PlanSubscribeService.SubscribeAsync — SubscriptionCreated in a StreamAction.Start (a member granted a store plan); app = the stream tenant"
+    },
+    {
+      "code": "store.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "tenants",
+      "reconcile": "tenant_ids",
+      "source": "POST /admin/tenants/create, the studio create door (StudioTierService.RecordStoreBuiltAsync), the agent's create tool and the boot seeders — Tenant in Inserts; app = Tenant.Id; entrepreneur = Tenant.OwnerUserId"
+    },
+    {
+      "code": "studio.account.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "studio.build",
+      "reconcile": "studio_user_ids",
+      "source": "StudioAuth.VerifyAsync — StudioUser stored with VersionFor = null (an entrepreneur's first sign-in to the studio); app = _platform; entrepreneur = the account"
+    },
+    {
+      "code": "member.join",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "auth",
+      "reconcile": "user_ids",
+      "source": "AuthHandlers.GetOrCreateUserAsync — User stored with VersionFor = null (a member's first sign-in to a store); app = the session tenant; source = a pseudonym of User.Id"
+    },
+    {
+      "code": "review.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "reviews",
+      "reconcile": "review_ids",
+      "source": "ReviewsService.SubmitAsync — Review in Inserts; app = the session tenant; source = the review id"
     }
   ]
 }

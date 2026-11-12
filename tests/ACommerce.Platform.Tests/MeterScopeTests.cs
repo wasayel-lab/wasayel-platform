@@ -142,4 +142,70 @@ public class MeterScopeTests(ITestOutputHelper output)
         // ‏طَلَبٌ بِلا مَتجَر: حامِلٌ مَفتوحٌ فارِغ — لا يَرِثُ ما قَبلَه.
         Assert.Equal(new MeterScopeView(null, null, null, false), studio);
     }
+
+    // ═══ ‏(‏2026-11-12، W13-6·٨) مَسارا الاستوديو والإدارَة — لا يُحَلُّ فيهِما مَتجَر، فَيَملَأُ الحامِلَ حُرّاسُهُما بَعدَ `await` قِراءَتِهِم ═══
+    // (التَصميم §5.4، COR-1). الحُرّاسُ الحَقيقِيّونَ (`StudioOwnsAsync` و`TenantAdminGuard` و`PlatformAdminGuard`) يَقرَؤونَ القاعِدَة، فَصُفوفُهُم بِأَبوابِهِم
+    // في `LiveMeterPersistenceProofTests`؛ وهُنا قَواعِدُ الحامِلِ الَّتي يَقومونَ عَلَيها والمُحَلِّلُ الحَقيقِيُّ عَلى مَسارِ الاستوديو.
+
+    /// <summary><b>مَسارُ الاستوديو لا مَتجَرَ فيه</b> (<c>studio</c> مَحجوز، <c>ReservedTenantSlugs</c>) — والمَسارُ يَحمِلُ اسمَ المَتجَرِ بَعدَه: المُحَلِّلُ يَفتَحُ
+    /// حامِلاً فارِغاً ولا يَأخُذُه، فَما يَملَؤُه هُوَ حارِسُ المِلكِيَّةِ بَعدَ <c>await</c> قِراءَتِه (شَكلُ <c>StudioOwnsAsync</c>): المَتجَرُ ومالِكُه و<c>_entrepreneur</c>،
+    /// ويَراه الحِفظ. ومِثلُه <c>/admin/tenants/{slug}/…</c>.</summary>
+    [Fact]
+    public async Task On_the_studio_and_admin_paths_the_resolver_leaves_the_holder_empty_and_the_owner_guard_fills_it_after_its_await()
+    {
+        var owner = Guid.NewGuid();
+        var studio = await ThroughResolverAsync("/studio/apps/store-a/branding/save", new Tenant { Id = "store-a", OwnerUserId = owner });
+        var admin = await ThroughResolverAsync("/admin/tenants/store-a/users", new Tenant { Id = "store-a", OwnerUserId = owner });
+        Assert.Equal(new MeterScopeView(null, null, null, false), studio);
+        Assert.Equal(new MeterScopeView(null, null, null, false), admin);
+
+        UsageEntry? entry = null;
+        await Task.Run(async () =>
+        {
+            MeterScope.Open();
+            Assert.True(await OwnerGuardAsync("store-a", owner));
+            entry = SaveNow("store-a");
+        });
+        output.WriteLine($"[G16] الاستوديو: المُحَلِّل {studio} · الإدارَة {admin} · بَعدَ الحارِس {entry!.Entrepreneur}/{entry.Role}");
+        Assert.Equal((owner.ToString("D"), MeterSentinels.Entrepreneur), (entry.Entrepreneur, entry.Role));
+
+        static async Task<bool> OwnerGuardAsync(string slug, Guid ownerId)
+        {
+            await Task.Delay(1);
+            return MeterScope.Current!.Fill(slug, entrepreneur: MeterScope.OwnerOf(ownerId), role: MeterSentinels.Entrepreneur);
+        }
+    }
+
+    /// <summary><b>دَورُ فاعِلِ المَنَصَّة</b> (<see cref="MeterScopeHolder.FillPlatformRole"/>): يَضَعُ الدَورَ وَحدَه — لا مَتجَرَ ولا رائِدَ أَعمال — والكاتِبُ الأَوَّلُ
+    /// يَفوز؛ ويَرى الحِفظُ بَعدَ <c>await</c> الحارِسِ دَورَه في أَيِّ مَتجَر؛ ومُساعِدٌ لِمَتجَرٍ بَعدَه يَضَعُ المَتجَرَ ورائِدَ الأَعمالِ ولا يَمَسُّ الدَور؛ وحامِلُ البَذرِ يَرفُضُه.</summary>
+    [Fact]
+    public async Task The_platform_admin_role_fills_only_the_role_is_seen_after_the_guards_await_and_never_claims_a_store()
+    {
+        UsageEntry? entry = null;
+        MeterScopeView? afterGuard = null;
+        await Task.Run(async () =>
+        {
+            MeterScope.Open();
+            await Task.Delay(1);
+            Assert.True(MeterScope.Current!.FillPlatformRole(MeterSentinels.PlatformAdmin));
+            afterGuard = MeterScope.View();
+            entry = SaveNow("store-new");
+        });
+        output.WriteLine($"[G16] مُشرِفُ المَنَصَّة: {afterGuard} · سَطرُ مَتجَرٍ جَديد {entry!.Entrepreneur}/{entry.Role}");
+        Assert.Equal(new MeterScopeView(null, null, MeterSentinels.PlatformAdmin, false), afterGuard);
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.PlatformAdmin), (entry.Entrepreneur, entry.Role));
+
+        var h = MeterScope.Open();
+        Assert.True(h.FillPlatformRole(MeterSentinels.PlatformAdmin));
+        Assert.True(h.FillPlatformRole("seller"));
+        Assert.True(h.Fill("store-a", entrepreneur: "owner-a", role: MeterSentinels.Entrepreneur));
+        Assert.Equal(new MeterScopeView("store-a", "owner-a", MeterSentinels.PlatformAdmin, false), h.View());
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.Unresolved), (SaveNow("store-b").Entrepreneur, SaveNow("store-b").Role));
+        using (MeterScope.Seed())
+        {
+            Assert.False(MeterScope.Current!.FillPlatformRole(MeterSentinels.PlatformAdmin));
+            Assert.Equal(MeterSentinels.Seed, MeterScope.Current.View().Role);
+        }
+        Assert.False(MeterScope.Open().FillPlatformRole(""));
+    }
 }

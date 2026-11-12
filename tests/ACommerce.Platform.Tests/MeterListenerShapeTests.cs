@@ -63,9 +63,10 @@ public class MeterListenerShapeTests(ITestOutputHelper output)
     {
         var source = Source();
         // ‏(‏2026-11-12، W13-6·٧) المِرساةُ سَطرُ الخُروجِ المُبَكِّرِ كَما صارَ بِقَناةِ المَجرى — والحَقنُ بَعدَه كَما كانَ.
-        const string anchor = "if (deals.Count == 0 && !streams.Any(s => s.Started)) return;";
+        // ‏(‏2026-11-12، W13-6·٨) وكَما صارَ بِوَثائِقِ الوَحَداتِ الأَربَع: الخُروجُ حينَ لا وِلادَةَ ولا مَجرىً يَبدَأ — والحَقنُ نَفسُه بَعدَه.
+        const string anchor = "if (!documents.Any(d => d.Created) && !streams.Any(s => s.Started)) return;";
         Assert.Contains(anchor, source, StringComparison.Ordinal);
-        var injected = source.Replace(anchor, anchor + "\n        var stored = await session.LoadAsync<Deal>(deals[0].Id, token);", StringComparison.Ordinal);
+        var injected = source.Replace(anchor, anchor + "\n        var stored = await session.LoadAsync<Deal>(Guid.Empty, token);", StringComparison.Ordinal);
         var (_, notAllowed, forbidden) = Scan(injected);
         output.WriteLine($"[G4] الحَقن: خارِجَ المَسموح {string.Join(", ", notAllowed)} · مَمنوعَة {string.Join(", ", forbidden)}");
         Assert.Equal(new[] { "LoadAsync" }, notAllowed);

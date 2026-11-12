@@ -1,9 +1,13 @@
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
+using ACommerce.Kit.Reviews;
 using ACommerce.Kit.Subscriptions;
 using ACommerce.Kit.Support;
+using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using JasperFx.Events;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
@@ -40,6 +44,15 @@ public sealed record PendingSnapshot(string SessionTenant, IReadOnlyList<Pending
 /// والمَتجَرُ <b>مُستَأجِرُ المَجرى</b> (وإلّا مُستَأجِرُ الجَلسَة، و<c>*DEFAULT*</c> أَو الفارِغُ <c>_unresolved</c>)، والمَصدَرُ <b>مُعَرِّفُ الحَدَث</b>
 /// (<c>mt_events.id</c>) لا مُعَرِّفُ مَن فَعَلَه — فَإعادَةُ الحِفظِ بِالحَدَثِ نَفسِه لا تُضاعِف، وبِدءُ مَجرىً قائِمٍ يَرتَدُّ بِسَطرِه. والإلحاقُ بِمَجرىً قائِمٍ
 /// لا يُعَدّ (تَحريرٌ أَو انتِقال، §5.6)، واللَقطَةُ المُباشِرَةُ الَّتي يَكتُبُها الإسقاطُ مُشتَقَّةٌ لا تُعَدّ (§5.3).</para>
+/// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَت تِسعاً بِوَحَداتِ الوَثائِقِ الأَربَع</b> (التَصميم §3.4 و§5.2):
+/// <c>store.create</c> — <c>Tenant</c> في <c>Inserts</c> (الوِلاداتُ الثَلاثُ في البَذرِ قُلِبَت <c>Insert</c> في هذا البَندِ خَلفَ تَوصيفِها)، مَتجَرُه
+/// <c>Tenant.Id</c> ورائِدُ أَعمالِه <b>مِن التَغيير</b> <c>Tenant.OwnerUserId</c> (و<c>_unowned</c> لِلفارِغ)؛ و<c>studio.account.create</c> — <c>StudioUser</c>
+/// بِلا نُسخَة، مَتجَرُه <c>_platform</c> ورائِدُ أَعمالِه الحِسابُ نَفسُه؛ و<c>member.join</c> — <c>User</c> بِلا نُسخَة، مَتجَرُه مُستَأجِرُ الجَلسَة
+/// (الوَثيقَةُ مُقتَرِنَة)، <b>ومَصدَرُه اسمٌ مُستَعار</b> (<see cref="UsageEntryId.Pseudonym"/>) لا مُعَرِّفُ الشَخص؛ و<c>review.create</c> — <c>Review</c>
+/// في <c>Inserts</c>، مَتجَرُه مُستَأجِرُ الجَلسَة ومَصدَرُه مُعَرِّفُ التَقييم. و«في <c>Inserts</c>» يُقَرِّرُه المُستَمِعُ لا المُصَنِّف: يُمَرِّرُ وَثيقَةَ
+/// الإدراجِ وِلادَةً، و<c>Store</c> نَوعٍ بِلا تَزامُنٍ تَفاؤُلِيٍّ لا يَبلُغُه أَصلاً.</para>
+/// <para>‏(‏2026-11-12، W13-6·٨) <b>والدَورُ مِن حامِلٍ بِلا مَتجَر</b>: حامِلٌ لَم يَملَأه مَتجَرٌ ويَحمِلُ دَوراً (مُشرِفُ المَنَصَّة، <c>FillPlatformRole</c>)
+/// دَورُه لِكُلِّ كِتابَةٍ في طَلَبِه — ورائِدُ الأَعمالِ لا يُؤخَذُ مِنه أَبَداً (<see cref="FromScope"/>).</para>
 /// </summary>
 public static class MeterRules
 {
@@ -55,6 +68,24 @@ public static class MeterRules
 
     /// <summary>نَوعُ مَصدَرِ وَحَداتِ الأَحداث — ومُعَرِّفُه مُعَرِّفُ الحَدَثِ في <c>mt_events</c> (لا مُعَرِّفُ المُعلِنِ ولا العارِضِ ولا العُضو).</summary>
     public const string EventSource = "event";
+
+    // ‏(‏2026-11-12، W13-6·٨) وَحَداتُ الوَثائِقِ الأَربَع ومَصادِرُها.
+    public const string StoreCreate = "store.create";
+    public const string StudioAccountCreate = "studio.account.create";
+    public const string MemberJoin = "member.join";
+    public const string ReviewCreate = "review.create";
+
+    /// <summary>مَصدَرُ <c>store.create</c> — ومُعَرِّفُه مُعَرِّفُ المَتجَر (اسمُه، لا شَخص).</summary>
+    public const string TenantSource = "tenant";
+
+    /// <summary>مَصدَرُ <c>studio.account.create</c> — ومُعَرِّفُه الحِسابُ نَفسُه، وهُوَ رائِدُ الأَعمالِ المَحفوظُ صَريحاً (التَصميم §2، س٩).</summary>
+    public const string StudioUserSource = "studio_user";
+
+    /// <summary>مَصدَرُ <c>member.join</c> — ومُعَرِّفُه <b>اسمٌ مُستَعار</b> لِمُعَرِّفِ العُضو (<see cref="UsageEntryId.Pseudonym"/>)، لا المُعَرِّفُ نَفسُه.</summary>
+    public const string UserSource = "user";
+
+    /// <summary>مَصدَرُ <c>review.create</c> — ومُعَرِّفُه مُعَرِّفُ التَقييم (لا الكاتِبُ ولا المُقَيَّم).</summary>
+    public const string ReviewSource = "review";
 
     /// <summary><b>الحَدَثُ الَّذي يولَدُ بِه مَجراه وَحدَةً</b> — بِالنَوعِ لا بِاسمِه (إعادَةُ تَسمِيَةٍ تَكسِرُ البِناء). وقارِئُ مُطابَقَةِ كُلِّ وَحدَةٍ في المُعجَمِ
     /// <c>event_ids:{النَوع}</c> بِهذا النَوعِ نَفسِه (<c>MeterRulesTests</c>).</summary>
@@ -78,12 +109,23 @@ public static class MeterRules
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var p in pending.Documents)
         {
-            if (p is { Document: Deal deal, Created: true } && catalog.Find(DealCreate) is { } unit)
+            if (!p.Created) continue;
+            var entry = p.Document switch
             {
-                var entry = Entry(unit, string.IsNullOrWhiteSpace(deal.TenantSlug) ? MeterSentinels.Unresolved : deal.TenantSlug,
-                                  DealSource, deal.Id.ToString("D"), scope);
-                if (seen.Add(entry.Id)) entries.Add(entry);
-            }
+                Deal deal when catalog.Find(DealCreate) is { } unit
+                    => Entry(unit, string.IsNullOrWhiteSpace(deal.TenantSlug) ? MeterSentinels.Unresolved : deal.TenantSlug,
+                             DealSource, deal.Id.ToString("D"), scope),
+                Tenant tenant when catalog.Find(StoreCreate) is { } unit
+                    => StoreEntry(unit, tenant, scope),
+                StudioUser account when catalog.Find(StudioAccountCreate) is { } unit
+                    => Entry(unit, MeterSentinels.Platform, StudioUserSource, account.Id.ToString("D"), scope, entrepreneur: account.Id.ToString("D")),
+                User member when catalog.Find(MemberJoin) is { } unit
+                    => MemberEntry(unit, SessionApp(pending.SessionTenant), member, scope),
+                Review review when catalog.Find(ReviewCreate) is { } unit
+                    => Entry(unit, SessionApp(pending.SessionTenant), ReviewSource, review.Id.ToString("D"), scope),
+                _ => null,
+            };
+            if (entry is not null && seen.Add(entry.Id)) entries.Add(entry);
         }
         foreach (var stream in pending.Streams ?? [])
         {
@@ -108,21 +150,43 @@ public static class MeterRules
             ? MeterSentinels.Unresolved : tenant;
     }
 
-    private static UsageEntry Entry(MeterUnit unit, string app, string sourceType, string sourceId, MeterScopeView? scope)
+    /// <summary>‏(‏2026-11-12، W13-6·٨) مَتجَرُ وَثيقَةٍ مُقتَرِنَة: مُستَأجِرُ الجَلسَةِ — بِقاعِدَةِ <see cref="StreamApp"/> نَفسِها بِلا مَجرى.</summary>
+    public static string SessionApp(string? sessionTenant) => StreamApp(null, sessionTenant);
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) سَطرُ <c>store.create</c>: المَتجَرُ والمَصدَرُ مُعَرِّفُ المَتجَر (والفارِغُ <c>_unresolved</c> فيهِما)، ورائِدُ الأَعمالِ مالِكُه
+    /// مِن الوَثيقَةِ نَفسِها (<see cref="MeterScope.OwnerOf"/>) — لا مِن الحامِل: المَتجَرُ يولَدُ في طَلَبٍ لا مَتجَرَ فيه بَعد.</summary>
+    private static UsageEntry StoreEntry(MeterUnit unit, Tenant tenant, MeterScopeView? scope)
     {
-        var (entrepreneur, role) = FromScope(app, scope);
+        var slug = string.IsNullOrWhiteSpace(tenant.Id) ? MeterSentinels.Unresolved : tenant.Id;
+        return Entry(unit, slug, TenantSource, slug, scope, entrepreneur: MeterScope.OwnerOf(tenant.OwnerUserId));
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) سَطرُ <c>member.join</c>: المَصدَرُ <b>اسمٌ مُستَعارٌ</b> لِمُعَرِّفِ العُضو، فَلا يَدخُلُ مُعَرِّفُ الشَخصِ الدَفتَرَ لا في المُعَرِّفِ
+    /// ولا في المَصدَر (التَصميم §2، G17).</summary>
+    private static UsageEntry MemberEntry(MeterUnit unit, string app, User member, MeterScopeView? scope)
+        => Entry(unit, app, UserSource, UsageEntryId.Pseudonym(unit.Code, app, member.Id.ToString("D")), scope);
+
+    /// <param name="entrepreneur">‏(‏2026-11-12، W13-6·٨) رائِدُ الأَعمالِ <b>مِن التَغيير</b> حينَ تَحمِلُه الوَثيقَة (<c>Tenant.OwnerUserId</c>، الحِسابُ نَفسُه) —
+    /// يَسبِقُ الحامِلَ كَما يَسبِقُه المَتجَر (التَصميم §5.4، الخُطوَةُ ١)؛ و<c>null</c>: مِن الحامِل.</param>
+    private static UsageEntry Entry(MeterUnit unit, string app, string sourceType, string sourceId, MeterScopeView? scope, string? entrepreneur = null)
+    {
+        var (holderEntrepreneur, role) = FromScope(app, scope);
+        entrepreneur ??= holderEntrepreneur;
         var feature = string.IsNullOrWhiteSpace(unit.Feature) || MeterFeatureAnchors.IsAnchor(unit.Feature)
             ? MeterSentinels.Unresolved : unit.Feature;
         return new UsageEntry(UsageEntryId.For(unit.Code, app, sourceId), unit.Code, 1, app, entrepreneur, role,
                               feature, MeterSentinels.None, sourceType, sourceId);
     }
 
-    /// <summary>رائِدُ الأَعمالِ والدَورُ مِن الحامِل — <b>فَقَط</b> إن كانَ لِلمَتجَرِ نَفسِه أَو حامِلَ بَذر؛ فَنِطاقُ المَتجَرِ أ لا يَنسِبُ كِتابَةَ ب.</summary>
+    /// <summary>رائِدُ الأَعمالِ والدَورُ مِن الحامِل — <b>فَقَط</b> إن كانَ لِلمَتجَرِ نَفسِه أَو حامِلَ بَذر؛ فَنِطاقُ المَتجَرِ أ لا يَنسِبُ كِتابَةَ ب.
+    /// ‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وحامِلٌ بِلا مَتجَرٍ يَحمِلُ دَوراً</b> (فاعِلُ المَنَصَّة: <c>FillPlatformRole</c>) دَورُه لِكُلِّ مَتجَرٍ
+    /// يَكتُبُ فيه طَلَبُه — ورائِدُ أَعمالِه لا يُؤخَذُ أَبَداً، فَهُوَ لا يَملِكُه إلّا مَن مَلَأَه بِمَتجَرِه.</summary>
     public static (string Entrepreneur, string Role) FromScope(string app, MeterScopeView? scope)
     {
         var applies = scope is not null
             && (scope.IsSeed || (scope.App is not null && string.Equals(scope.App, app, StringComparison.OrdinalIgnoreCase)));
+        var platformActor = scope is { IsSeed: false, App: null } && !string.IsNullOrEmpty(scope.Role);
         return (applies && !string.IsNullOrEmpty(scope!.Entrepreneur) ? scope.Entrepreneur : MeterSentinels.Unresolved,
-                applies && !string.IsNullOrEmpty(scope!.Role) ? scope.Role : MeterSentinels.Unresolved);
+                (applies || platformActor) && !string.IsNullOrEmpty(scope!.Role) ? scope.Role : MeterSentinels.Unresolved);
     }
 }

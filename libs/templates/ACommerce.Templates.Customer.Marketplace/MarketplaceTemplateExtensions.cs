@@ -3861,7 +3861,14 @@ public static class MarketplaceTemplateExtensions
             if (!auth.IsAuthenticated) return false;
             await using var qs = docStore.QuerySession();
             var t = await qs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            return t is not null && t.OwnerUserId == auth.UserId!.Value;
+            if (t is null || t.OwnerUserId != auth.UserId!.Value) return false;
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٨ — ADR-051 §١٥؛ التَصميم §5.4) **والمِلكِيَّةُ المُثبَتَةُ تَملَأُ حامِلَ العَدّ**: ‏`/studio/*` لا يُحَلُّ فيه مَتجَر
+            // (`studio` مَحجوز، `ReservedTenantSlugs`)، فَالحامِلُ فارِغٌ حَتّى هُنا — وهذِه الدالَّةُ تَحمِلُ القيمَ الثَلاثَ بَعدَ `await` قِراءَتِها: المَتجَرُ،
+            // ورائِدُ أَعمالِه (صاحِبُ الجَلسَة = مالِكُه)، والدَورُ `_entrepreneur`. والحامِلُ مَرجِعٌ فَيَراه الحِفظُ بَعدَ عَودَتِها (R1)، والقَرارُ نَفسُه لَم يُمَسّ.
+            ACommerce.Platform.Shared.Metering.MeterScope.Current?.Fill(t.Id,
+                entrepreneur: ACommerce.Platform.Shared.Metering.MeterScope.OwnerOf(t.OwnerUserId),
+                role: ACommerce.Platform.Shared.Metering.MeterSentinels.Entrepreneur);
+            return true;
         }
 
         // ─── حارِس ادمن المَتجَر — لِكُلّ /admin/tenants/{slug}/* ─────────

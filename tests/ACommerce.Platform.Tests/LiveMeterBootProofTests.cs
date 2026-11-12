@@ -21,6 +21,11 @@ namespace ACommerce.Platform.Tests;
 // ‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصارَ المُعجَمُ خَمسَ وَحَدات** والبَذرُ يَكتُبُ أَحداثاً مَعدودَة (إعلاناتُ `PlatformSeed.cs:185`
 // وبَذرِ الاختِبار، وعَرضُ بَذرِ المَظهَر): فَسَطرُ الإقلاعِ ونَوافِذُه مِن المُعجَمِ المَضمونِ نَفسِه لا رَقَماً مَنسوخاً، و«سُطورُ البَذرِ = ما بُذِر» لِكُلِّ وَحدَة —
 // الصَفَقاتُ بِـ`mt_doc_deal`، وكُلُّ وَحدَةِ حَدَثٍ بِعَدَدِ حَدَثِ وِلادَتِها في `mt_events` (قاعِدَةٌ جَديدَةٌ لا يَكتُبُ فيها إلّا البَذر).
+//
+// ‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ووَحَداتُ الوَثائِقِ الأَربَعُ تَحتَ البَذرِ أَيضاً**: المَتاجِرُ المَبذورَةُ (قُلِبَت وِلاداتُها `Insert`)
+// والأَعضاءُ وحِسابُ المُشرِف. والدَورُ `_seed` لِكُلِّ سَطر؛ أَمّا رائِدُ الأَعمالِ فَمِن الوَثيقَةِ حَيثُ تَحمِلُه (التَصميم §5.4، الخُطوَةُ ١): `store.create` مالِكُ
+// المَتجَرِ لَحظَةَ وِلادَتِه — والمَبذورَةُ تولَدُ بِلا مالِكٍ ثُمَّ يُسنَدُ (`_unowned`) — و`studio.account.create` الحِسابُ نَفسُه. فَـ«الدَفتَرُ كُلُّه `_seed`»
+// صارَ بِالدَور، ورائِدُ الأَعمالِ `_seed` لِما سِوى الوَحدَتَين.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveMeterBootProofTests(ITestOutputHelper output)
@@ -157,7 +162,17 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
                 births.Add((unit, await One($"select count(*) from platform.mt_events where mt_dotnet_type like '{type.FullName},%'"),
                             await One($"select count(*) from meter.usage_entry where unit = '{unit}' and role = '_seed' and entrepreneur = '_seed'")));
             var allRows = await One("select count(*) from meter.usage_entry");
-            var allSeed = await One("select count(*) from meter.usage_entry where role = '_seed' and entrepreneur = '_seed'");
+            var allSeed = await One("select count(*) from meter.usage_entry where role = '_seed'");
+            // ‏(W13-6·٨) رائِدُ الأَعمالِ مِن الوَثيقَةِ لِوَحدَتَين، و`_seed` لِما سِواهُما؛ ولِكُلِّ وَحدَةِ وَثيقَةٍ سُطورٌ بِعَدَدِ وَثائِقِها المَبذورَة.
+            var notSeedOwner = await One("select coalesce(string_agg(distinct unit, ',' order by unit), '') from meter.usage_entry where entrepreneur <> '_seed'");
+            var stores = (await One("select count(*) from meter.usage_entry where unit = 'store.create' and entrepreneur = '_unowned' and source_id = app"),
+                          await One("select count(*) from platform.mt_doc_tenant"));
+            var accounts = (await One("select count(*) from meter.usage_entry where unit = 'studio.account.create' and entrepreneur = source_id and app = '_platform'"),
+                            await One("select count(*) from platform.mt_doc_studiouser"));
+            var members = (await One("select count(*) from meter.usage_entry where unit = 'member.join' and entrepreneur = '_seed'"),
+                           await One("select count(*) from platform.mt_doc_user"));
+            output.WriteLine($"[boot] وَحَداتُ الوَثائِق (سُطور/وَثائِق): store.create {stores.Item1}/{stores.Item2} · studio.account.create {accounts.Item1}/{accounts.Item2} · "
+                + $"member.join {members.Item1}/{members.Item2} · رائِدُ أَعمالٍ غَيرُ _seed في «{notSeedOwner}»");
             output.WriteLine($"[boot] وَحَداتُ الأَحداث (أَحداثُ الوِلادَة/سُطورُ _seed): {string.Join(" · ", births.Select(b => $"{b.Unit} {b.Events}/{b.Seeds}"))} · "
                 + $"الدَفتَرُ {allRows} · مِنها _seed {allSeed}");
 
@@ -166,6 +181,12 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
             Assert.All(births, b => Assert.Equal(b.Events, b.Seeds));
             Assert.True(long.Parse(births.Single(b => b.Unit == MeterRules.ListingCreate).Seeds) >= 1, "أَداةٌ عَمياء: صِفرُ إعلانٍ مَبذور.");
             Assert.Equal(allRows, allSeed);
+            Assert.Equal("store.create,studio.account.create", notSeedOwner);
+            Assert.Equal(stores.Item2, stores.Item1);
+            Assert.Equal(accounts.Item2, accounts.Item1);
+            Assert.Equal(members.Item2, members.Item1);
+            Assert.True(long.Parse(stores.Item1) >= 3 && long.Parse(accounts.Item1) >= 1 && long.Parse(members.Item1) >= 1,
+                        $"أَداةٌ عَمياء: مَتاجِر {stores.Item1} · حِسابات {accounts.Item1} · أَعضاء {members.Item1}.");
             Assert.Equal("ejar|_seed|_seed|1", seededRow);
             Assert.True(long.Parse(bySeed) >= 2, $"أَداةٌ عَمياء: {bySeed} سَطرَ بَذر.");
             Assert.Equal(seededDeals, bySeed);

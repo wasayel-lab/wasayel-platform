@@ -1,11 +1,14 @@
 using System.Net;
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Hosting;
 using ACommerce.Platform.MultiTenancy;
 using ACommerce.Platform.Shared;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using ACommerce.Templates.Customer.Marketplace.Services.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -534,5 +537,267 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         Assert.True(entries.Count > 0 && users.Count > 0, $"أَداةٌ عَمياء: {entries.Count} سَطراً و{users.Count} مُستَخدِماً.");
         Assert.Contains(member.Id.ToString("D"), users);
         Assert.Empty(leaks);
+    }
+
+    // ═══ ‏(‏2026-11-12، W13-6·٨) وَحَداتُ الوَثائِقِ الأَربَعُ بِأَبوابِها الحَقيقِيَّة، وحُرّاسُ الاستوديو والإدارَةِ يَملَؤونَ الحامِلَ بَعدَ `await` قِراءَتِهِم ═══
+    // (التَصميم §3.4 و§5.2 و§5.4 و§13 P1). المُضيفُ المُصَغَّرُ لا يُشَغِّلُ وَسيطَ المُستَأجِر، فَيَفتَحُ الصَفُّ الحامِلَ قَبلَ كُلِّ بابٍ كَما يَفتَحُه الوَسيطُ في
+    // أَوَّلِ سَطرٍ (`MeterScope.Open`) — وعَلى `/studio` و`/admin` لا يُملأُ (مَحجوزان: صَفُّ G16)، وعَلى مَسارِ المَتجَرِ يُملأُ كَما يَملَؤُه لِمَتجَرٍ بِلا أَدوار.
+    // والبابُ يُنادى في الجَريانِ نَفسِه، فَما يَكتُبُه حارِسُه في الحامِلِ يُقرَأُ بَعدَه.
+
+    private sealed record DocRow(string Unit, string App, string Entrepreneur, string Role, string SourceType, string SourceId, bool SameTransaction);
+
+    /// <summary>سُطورُ وَحدَةٍ لِمَصدَرٍ واحِد، ومَعَ كُلٍّ: <c>writer_xid</c> = <c>xmin</c> صَفِّ الوَثيقَةِ لَحظَةَ القِراءَة (D2) — يُقرَأُ قَبلَ أَيِّ تَحديثٍ لَها.</summary>
+    private static async Task<List<DocRow>> DocEntriesAsync(string unit, string sourceId, string table, object docId)
+    {
+        await using var conn = new NpgsqlConnection(Cs);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "select e.unit, e.app, e.entrepreneur, e.role, e.source_type, e.source_id, "
+            + $"coalesce(e.writer_xid::text = (select d.xmin::text from platform.{table} d where d.id = @d), false) "
+            + "from meter.usage_entry e where e.unit = @u and e.source_id = @s order by e.id", conn);
+        cmd.Parameters.AddWithValue("u", unit);
+        cmd.Parameters.AddWithValue("s", sourceId);
+        cmd.Parameters.AddWithValue("d", docId);
+        var rows = new List<DocRow>();
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+            rows.Add(new DocRow(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetBoolean(6)));
+        return rows;
+    }
+
+    private static async Task<long> UnitEntriesAsync(string unit, string sourceId)
+        => Convert.ToInt64(await ScalarAsync("select count(*) from meter.usage_entry where unit = @u and source_id = @s", ("u", unit), ("s", sourceId)));
+
+    /// <summary><b>التَحديثُ يُقاسُ عَلى وَثيقَةٍ بِلا سَطر</b> (دَرسُ M6A-CNT-1): المُعَرِّفُ حَتمِيٌّ و<c>ON CONFLICT DO NOTHING</c> يَبتَلِعُ تَحديثاً عُدَّ وِلادَةً ما دامَ
+    /// سَطرُ الوِلادَةِ قائِماً — فَيُحذَفُ السَطرُ كَأَنّ الوَثيقَةَ وُلِدَت قَبلَ المُستَمِع، ثُمَّ يُحَدَّث، فَصِفرٌ هُوَ الحُكم.</summary>
+    private static Task ForgetBirthAsync(string unit, string sourceId)
+        => ScalarAsync("delete from meter.usage_entry where unit = @u and source_id = @s", ("u", unit), ("s", sourceId));
+
+    private static string NewPhone() => "+9665" + Random.Shared.Next(10_000_000, 99_999_999).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary><b><c>studio.account.create</c> وبابا <c>store.create</c></b>: الدُخولُ الأَوَّلُ إلى الاستوديو بِبابَيه سَطرٌ واحِدٌ عَلى <c>_platform</c> رائِدُ أَعمالِه
+    /// الحِسابُ نَفسُه، والدُخولُ الثاني تَحديثٌ لا يُعَدّ؛ و<c>POST /admin/tenants/create</c> بِمُشرِفِ المَنَصَّةِ سَطرُ <c>store.create</c> مالِكُه المُنشِئُ
+    /// مِن الوَثيقَةِ ودَورُه <c>_platform_admin</c> — يَضَعُه <c>PlatformAdminGuard</c> في الحامِلِ ولا يَدَّعي مَتجَراً — وبِغَيرِ مُشرِفٍ <c>403</c> وحامِلٌ فارِغٌ
+    /// ولا سَطر؛ وبابُ الاستوديو سَطرٌ بِمالِكِه؛ وكُلٌّ في مُعامَلَةِ وَثيقَتِه؛ و<c>Store</c> مَتجَرٍ قائِمٍ لا يُعَدّ.</summary>
+    [Fact]
+    public async Task Studio_sign_up_and_both_store_doors_are_one_entry_each_in_the_documents_transaction_and_the_admin_guard_fills_only_the_role()
+    {
+        if (!Enabled) return;
+        var sms = new LiveContactNoticeProofTests.CaptureSms();
+        await using var host = LiveTemplateDoorHost.Build(services: s => s.AddSingleton<IOtpChannel>(sms));
+        var none = new Dictionary<string, string>();
+
+        // ١ · حِسابُ الاستوديو: الدُخولُ الأَوَّلُ وِلادَة، والثاني تَحديثٌ (LastLoginAt).
+        var phone = NewPhone();
+        async Task<(int Status, string Location)> SignInAsync()
+        {
+            MeterScope.Open();
+            Assert.Equal(302, (await host.PostStudioFormAsync("/studio/auth/login", none, null, ("phone", phone))).Status);
+            MeterScope.Open();
+            return await host.PostStudioFormAsync("/studio/auth/verify", none, null, ("method", "phone"), ("phone", phone), ("code", sms.Code!));
+        }
+        var first = await SignInAsync();
+        StudioUser account;
+        await using (var q = host.Store.QuerySession(StudioAuth.Tenant))
+            account = Assert.Single(await q.Query<StudioUser>().Where(u => u.Phone == PhoneNumber.Canonical(phone)).ToListAsync());
+        var accountId = account.Id.ToString("D");
+        var signUp = await DocEntriesAsync(MeterRules.StudioAccountCreate, accountId, "mt_doc_studiouser", account.Id);
+        await ForgetBirthAsync(MeterRules.StudioAccountCreate, accountId);
+        var second = await SignInAsync();
+        var afterSecond = await UnitEntriesAsync(MeterRules.StudioAccountCreate, accountId);
+
+        // ٢ · بابُ المُشرِف: مُشرِفٌ يُقبَلُ ويُنشِئ، وغَيرُ مُشرِفٍ يُرَدّ.
+        var admin = await LiveStoreBirthOnceCharacterizationTests.UserAsync(host, consented: false, platformAdmin: true);
+        var plain = await LiveStoreBirthOnceCharacterizationTests.UserAsync(host, consented: false);
+        var owner = await LiveStoreBirthOnceCharacterizationTests.UserAsync(host);
+        var adminSlug = LiveStoreBirthOnceCharacterizationTests.NewSlug("w13m8a-");
+        var refusedSlug = LiveStoreBirthOnceCharacterizationTests.NewSlug("w13m8r-");
+        var studioSlug = LiveStoreBirthOnceCharacterizationTests.NewSlug("w13m8s-");
+        try
+        {
+            var adminHolder = MeterScope.Open();
+            var created = await LiveStoreBirthOnceCharacterizationTests.AdminCreateAsync(host, admin, adminSlug, "مَتجَرُ المُشرِف");
+            var adminView = adminHolder.View();
+            var byAdmin = await DocEntriesAsync(MeterRules.StoreCreate, adminSlug, "mt_doc_tenant", adminSlug);
+
+            var refusedHolder = MeterScope.Open();
+            var refused = await LiveStoreBirthOnceCharacterizationTests.AdminCreateAsync(host, plain, refusedSlug, "مَرفوض");
+            var refusedView = refusedHolder.View();
+            var refusedRows = await UnitEntriesAsync(MeterRules.StoreCreate, refusedSlug);
+
+            // ٣ · بابُ الاستوديو: المالِكُ مِن الوَثيقَة، ولا حارِسَ يَملَأُ الدَورَ عَلى /studio/new.
+            MeterScope.Open();
+            var built = await LiveStoreBirthOnceCharacterizationTests.StudioCreateAsync(host, owner, studioSlug, "مَتجَرُ الاستوديو");
+            var byStudio = await DocEntriesAsync(MeterRules.StoreCreate, studioSlug, "mt_doc_tenant", studioSlug);
+
+            // ٤ · Store مَتجَرٍ قائِم (بِلا سَطر): تَحديثٌ لا وِلادَة.
+            await ForgetBirthAsync(MeterRules.StoreCreate, studioSlug);
+            MeterScope.Open();
+            await using (var s = host.Store.LightweightSession())
+            {
+                var t = (await s.LoadAsync<Tenant>(studioSlug))!;
+                t.Name = "اسمٌ جَديد";
+                s.Store(t);
+                await s.SaveChangesAsync();
+            }
+            var afterUpdate = await UnitEntriesAsync(MeterRules.StoreCreate, studioSlug);
+
+            output.WriteLine($"[P1·وَثيقَة] الاستوديو: الدُخولُ ⇒ {first.Status} {first.Location} · «{string.Join(" | ", signUp)}» · الثاني (بَعدَ حَذفِ سَطرِ الوِلادَة) ⇒ {second.Status} · سُطور {afterSecond}");
+            output.WriteLine($"[P1·وَثيقَة] المُشرِف ⇒ {created.Status} {created.Location} · الحامِل {adminView} · «{string.Join(" | ", byAdmin)}» · غَيرُ المُشرِف ⇒ {refused.Status} · الحامِل {refusedView} · سُطور {refusedRows}");
+            output.WriteLine($"[P1·وَثيقَة] بابُ الاستوديو ⇒ {built.Status} {built.Location} · «{string.Join(" | ", byStudio)}» · بَعدَ Store المَتجَرِ بِلا سَطر {afterUpdate}");
+
+            Assert.Equal(302, first.Status);
+            Assert.DoesNotContain("err=", first.Location, StringComparison.Ordinal);
+            Assert.Equal(new DocRow(MeterRules.StudioAccountCreate, MeterSentinels.Platform, accountId, MeterSentinels.Unresolved, MeterRules.StudioUserSource, accountId, true),
+                         Assert.Single(signUp));
+            Assert.Equal(302, second.Status);
+            Assert.Equal(0L, afterSecond);
+
+            Assert.Equal((302, "/admin"), created);
+            Assert.Equal(new MeterScopeView(null, null, MeterSentinels.PlatformAdmin, false), adminView);
+            Assert.Equal(new DocRow(MeterRules.StoreCreate, adminSlug, admin.User.Id.ToString("D"), MeterSentinels.PlatformAdmin, MeterRules.TenantSource, adminSlug, true),
+                         Assert.Single(byAdmin));
+            Assert.Equal(403, refused.Status);
+            Assert.Equal(new MeterScopeView(null, null, null, false), refusedView);
+            Assert.Equal(0L, refusedRows);
+
+            Assert.Equal((302, $"/studio/apps/{studioSlug}?built=1"), built);
+            Assert.Equal(new DocRow(MeterRules.StoreCreate, studioSlug, owner.User.Id.ToString("D"), MeterSentinels.Unresolved, MeterRules.TenantSource, studioSlug, true),
+                         Assert.Single(byStudio));
+            Assert.Equal(0L, afterUpdate);
+        }
+        finally { await LiveStoreBirthOnceCharacterizationTests.CleanAsync(host, [admin, plain, owner], adminSlug, refusedSlug, studioSlug); }
+    }
+
+    /// <summary><b>حُرّاسُ الاستوديو والإدارَةِ يَملَؤونَ الحامِلَ بَعدَ <c>await</c> قِراءَتِهِم عَلى أَبوابِهِم الحَقيقِيَّة</b> (التَصميم §5.4، COR-1): <c>StudioOwnsAsync</c>
+    /// لِلمالِكِ (المَتجَرُ ومالِكُه و<c>_entrepreneur</c>) ولا شَيءَ لِغَيرِه؛ و<c>TenantAdminGuard</c> لِلمالِكِ مِن الاستوديو (<c>_entrepreneur</c>) ولِعُضوٍ دَورُه
+    /// الفَعّالُ يَحمِلُ <c>tenant.manage</c> (دَورُ المَتجَرِ الَّذي قَرَأَه) ولا شَيءَ لِعُضوٍ بِلا الصَلاحِيَّة.</summary>
+    [Fact]
+    public async Task The_studio_owner_check_and_the_store_admin_guard_fill_the_holder_after_their_await_on_their_real_doors()
+    {
+        if (!Enabled) return;
+        await using var host = LiveStoreBirthOnceCharacterizationTests.HostWithPhone();
+        var owner = await LiveStoreBirthOnceCharacterizationTests.UserAsync(host);
+        var other = await LiveStoreBirthOnceCharacterizationTests.UserAsync(host);
+        var slug = LiveStoreBirthOnceCharacterizationTests.NewSlug("w13m8g-");
+        try
+        {
+            Assert.Equal((302, $"/studio/apps/{slug}?built=1"), await LiveStoreBirthOnceCharacterizationTests.StudioCreateAsync(host, owner, slug, "مَتجَرُ الحُرّاس"));
+            var adminRole = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(ACommerce.Kit.Roles.RoleCatalog.Find("tenant_admin")!, sortOrder: 0);
+            var plainRole = ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(ACommerce.Kit.Roles.RoleCatalog.Find("customer")!, sortOrder: 1);
+            await using (var s = host.Store.LightweightSession())
+            {
+                var t = (await s.LoadAsync<Tenant>(slug))!;
+                t.Roles.Add(adminRole);
+                t.Roles.Add(plainRole);
+                s.Store(t);
+                await s.SaveChangesAsync();
+            }
+            var manager = new User { Id = Guid.NewGuid(), Phone = NewPhone(), FullName = "مُديرُ المَتجَر", ActiveRole = adminRole.Slug, Role = adminRole.Slug };
+            var member = new User { Id = Guid.NewGuid(), Phone = NewPhone(), FullName = "عُضو", ActiveRole = plainRole.Slug, Role = plainRole.Slug };
+            await using (var s = host.Store.LightweightSession(slug)) { s.Store(manager); s.Store(member); await s.SaveChangesAsync(); }
+
+            var studioRoute = new Dictionary<string, string> { ["slug"] = slug };
+            var grant = new Dictionary<string, string> { ["slug"] = slug, ["userId"] = Guid.NewGuid().ToString() };
+            const string regions = "/studio/apps/{slug}/regions/save";
+            const string grantAdmin = "/admin/tenants/{slug}/users/{userId:guid}/grant-admin";
+
+            var h1 = MeterScope.Open();
+            var r1 = await host.PostStudioFormAsync(regions, studioRoute, owner.Token, ("regions", "الرِياض"));
+            var h2 = MeterScope.Open();
+            var r2 = await host.PostStudioFormAsync(regions, studioRoute, other.Token, ("regions", "الرِياض"));
+            var h3 = MeterScope.Open();
+            var r3 = await host.PostStudioFormAsync(grantAdmin, grant, owner.Token);
+            var h4 = MeterScope.Open();
+            var r4 = await host.PostFormAsync(grantAdmin, grant, slug, AuthHandlers.MakeToken(manager.Id, slug, manager.SessionVersion));
+            var h5 = MeterScope.Open();
+            var r5 = await host.PostFormAsync(grantAdmin, grant, slug, AuthHandlers.MakeToken(member.Id, slug, member.SessionVersion));
+            var ownerId = owner.User.Id.ToString("D");
+            output.WriteLine($"[G16·باب] StudioOwnsAsync: المالِك ⇒ {r1.Status} {r1.Location} · {h1.View()} | غَيرُه ⇒ {r2.Status} {r2.Location} · {h2.View()}");
+            output.WriteLine($"[G16·باب] TenantAdminGuard: المالِك ⇒ {r3.Status} {r3.Location} · {h3.View()} | المُدير ({adminRole.Slug}) ⇒ {r4.Status} {r4.Location} · {h4.View()} | العُضو ⇒ {r5.Status} · {h5.View()}");
+
+            Assert.NotEqual("/studio", r1.Location);
+            Assert.Equal(new MeterScopeView(slug, ownerId, MeterSentinels.Entrepreneur, false), h1.View());
+            Assert.Equal((302, "/studio"), r2);
+            Assert.Equal(new MeterScopeView(null, null, null, false), h2.View());
+            Assert.Equal(302, r3.Status);
+            Assert.Equal(new MeterScopeView(slug, ownerId, MeterSentinels.Entrepreneur, false), h3.View());
+            Assert.Equal(302, r4.Status);
+            Assert.Equal(new MeterScopeView(slug, ownerId, adminRole.Slug, false), h4.View());
+            Assert.Equal(403, r5.Status);
+            Assert.Equal(new MeterScopeView(null, null, null, false), h5.View());
+        }
+        finally { await LiveStoreBirthOnceCharacterizationTests.CleanAsync(host, [owner, other], slug); }
+    }
+
+    /// <summary><b><c>member.join</c> و<c>review.create</c></b>: الانضِمامُ بِبابَي الجَوّالِ سَطرٌ واحِدٌ في مَتجَرِه — <b>مَصدَرُه اسمٌ مُستَعارٌ</b> لا مُعَرِّفُ العُضو —
+    /// والدُخولُ الثاني تَحديثٌ لا يُعَدّ؛ والتَقييمُ بِالخِدمَةِ الحَقيقِيَّةِ سَطرٌ بِمُعَرِّفِه، والرَدُّ عَلَيه (<c>Store</c>) لا يُعَدّ؛ وكُلٌّ في مُعامَلَةِ وَثيقَتِه؛ ولا سَطرَ
+    /// في المَتجَرِ يَحمِلُ مُعَرِّفَ العُضو (G17).</summary>
+    [Fact]
+    public async Task A_member_join_and_a_review_are_one_entry_each_in_their_documents_transaction_and_the_member_id_never_enters_the_ledger()
+    {
+        if (!Enabled) return;
+        var sms = new LiveContactNoticeProofTests.CaptureSms();
+        await using var host = LiveTemplateDoorHost.Build(services: s => s.AddSingleton<IOtpChannel>(sms));
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        var tenant = new Tenant { Id = slug, Name = "مَتجَرُ الانضِمام", OwnerUserId = owner };
+        await using (var s = host.Store.LightweightSession()) { s.Insert(tenant); await s.SaveChangesAsync(); }
+        void AsStore(HttpContext ctx) => ctx.SetTenant(tenant.Id, tenant.Name, tenant.BrandColor, tenant.AuthChannel, tenant.TagLine, tenant.City, hasRoles: false);
+        // ‏ما يَضَعُه الوَسيطُ لِمَتجَرٍ بِلا أَدوار (صَفّاه في G16 وG5): المَتجَرُ ومالِكُه و`_none`.
+        void Resolve() => MeterScope.Open().Fill(slug, entrepreneur: MeterScope.OwnerOf(owner), role: MeterSentinels.None);
+        var route = new Dictionary<string, string> { ["slug"] = slug };
+        var phone = NewPhone();
+        async Task<string> JoinAsync()
+        {
+            Resolve();
+            var sent = await host.PostFormOnHostAsync("/{slug}/auth/phone/login", route, null, AsStore, ("phone", phone));
+            Assert.Equal(302, sent.Status);
+            Resolve();
+            var verified = await host.PostFormOnHostAsync("/{slug}/auth/phone/verify", route, null, AsStore, ("phone", phone), ("code", sms.Code!));
+            Assert.Equal(302, verified.Status);
+            Assert.DoesNotContain("err=", verified.Location, StringComparison.Ordinal);
+            return verified.Location;
+        }
+        var joined = await JoinAsync();
+        User member;
+        await using (var q = host.Store.QuerySession(slug))
+            member = Assert.Single(await q.Query<User>().Where(u => u.Phone == PhoneNumber.Canonical(phone)).ToListAsync());
+        var pseudonym = UsageEntryId.Pseudonym(MeterRules.MemberJoin, slug, member.Id.ToString("D"));
+        var join = await DocEntriesAsync(MeterRules.MemberJoin, pseudonym, "mt_doc_user", member.Id);
+        // ‏G17 عَلى سُطورِ المَتجَرِ وهِيَ قائِمَة: لا مُعَرِّفَ عُضوٍ فيها بِصيغَتَيه.
+        async Task<long> LeaksAsync() => Convert.ToInt64(await ScalarAsync(
+            "select count(*) from meter.usage_entry where app = @a and (position(@d in id) > 0 or position(@d in source_id) > 0 or position(@n in id) > 0 or position(@n in source_id) > 0)",
+            ("a", slug), ("d", member.Id.ToString("D")), ("n", member.Id.ToString("N"))));
+        var unitsAtBirth = await ScalarAsync("select string_agg(unit || ' ' || n, ' · ' order by unit) from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug));
+        var leaks = await LeaksAsync();
+        await ForgetBirthAsync(MeterRules.MemberJoin, pseudonym);
+        await JoinAsync();
+        var afterSecond = await UnitEntriesAsync(MeterRules.MemberJoin, pseudonym);
+
+        Resolve();
+        await using var scope = host.Services.CreateAsyncScope();
+        var reviews = scope.ServiceProvider.GetRequiredService<ACommerce.Kit.Reviews.ReviewsService>();
+        var review = await reviews.SubmitAsync(slug, Guid.NewGuid(), "بائِعُ العَدّ", member.Id, "عُضوُ العَدّ", 5, "تَقييمُ العَدّ");
+        var reviewId = review.Id.ToString("D");
+        var rated = await DocEntriesAsync(MeterRules.ReviewCreate, reviewId, "mt_doc_review", review.Id);
+        leaks += await LeaksAsync();
+        await ForgetBirthAsync(MeterRules.ReviewCreate, reviewId);
+        Resolve();
+        await reviews.RespondAsync(slug, review.Id, "شُكراً");
+        var afterRespond = await UnitEntriesAsync(MeterRules.ReviewCreate, reviewId);
+
+        var perUnit = await ScalarAsync("select string_agg(unit || ' ' || n, ' · ' order by unit) from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug));
+        output.WriteLine($"[P1·وَثيقَة] الانضِمام ⇒ {joined} · «{string.Join(" | ", join)}» · الثاني (بِلا سَطر) {afterSecond} · التَقييم «{string.Join(" | ", rated)}» · بَعدَ الرَدِّ (بِلا سَطر) {afterRespond}");
+        output.WriteLine($"[P1·وَثيقَة] لِكُلِّ وَحدَةٍ في /{slug} عِندَ الانضِمام: {unitsAtBirth} · وفي آخِرِه: {perUnit} · سُطورٌ تَحمِلُ مُعَرِّفَ العُضو {leaks}");
+
+        var ownerId = owner.ToString("D");
+        Assert.Equal(new DocRow(MeterRules.MemberJoin, slug, ownerId, MeterSentinels.None, MeterRules.UserSource, pseudonym, true), Assert.Single(join));
+        Assert.Equal(0L, afterSecond);
+        Assert.Equal(new DocRow(MeterRules.ReviewCreate, slug, ownerId, MeterSentinels.None, MeterRules.ReviewSource, reviewId, true), Assert.Single(rated));
+        Assert.Equal(0L, afterRespond);
+        Assert.Equal("member.join 1 · store.create 1", unitsAtBirth);
+        Assert.Equal("store.create 1", perUnit);
+        Assert.Equal(0L, leaks);
     }
 }

@@ -1,3 +1,4 @@
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -50,6 +51,11 @@ public readonly record struct PlatformAdminDecision(
 /// <para><b>القَرار لَم يُمَسّ بِحَرف عِندَ النَّقل</b> — هُوَ ذاتُه:
 /// جَلسَة studio صالِحَة، وَصاحِبُها <see cref="StudioUser.IsPlatformAdmin"/>.
 /// وَما عَدا ذلكَ رَفض.</para>
+///
+/// <para><b>(‏2026-11-12، الموجَة ١٣ W13-6·٨ — ADR-051 §١٥؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والقَبولُ يَملَأُ حامِلَ العَدِّ بِدَورِ فاعِلِ المَنَصَّة</b>
+/// (<c>_platform_admin</c>، <see cref="MeterScopeHolder.FillPlatformRole"/>): الدالَّةُ الواحِدَةُ لا تَأخُذُ مَتجَراً ولا تَقرَأُ وَثيقَتَه، فَلا تَدَّعي مَتجَراً
+/// ولا رائِدَ أَعمال — وكِتابَةُ المُشرِفِ المَعدودَةُ اليَومَ وِلادَةُ مَتجَرٍ عَلى مَسارٍ بِلا مَتجَر (<c>/admin/tenants/create</c>، <c>/admin/agent/…</c>)
+/// مَتجَرُها ومالِكُها مِن الوَثيقَة. وبِلا قَبولٍ لا يُكتَبُ شَيء، والقَرارُ نَفسُه لَم يُمَسّ.</para>
 /// </summary>
 public sealed class PlatformAdminGuard
 {
@@ -102,7 +108,9 @@ public sealed class PlatformAdminGuard
 
         await using var qs = docStore.QuerySession(StudioAuth.Tenant);
         var user = await qs.LoadAsync<StudioUser>(studioAuth.UserId!.Value);
-        return new(Decide(user), user);
+        var outcome = Decide(user);
+        if (outcome == PlatformAdminOutcome.Allowed) MeterScope.Current?.FillPlatformRole(MeterSentinels.PlatformAdmin);
+        return new(outcome, user);
     }
 
     /// <summary>نِصف القَرار النَقِيّ، بِلا I/O — عَلَيه تَقَع الوَحَدات.

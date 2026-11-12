@@ -2,6 +2,7 @@ using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Microsoft.AspNetCore.Http;
@@ -30,6 +31,11 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: (ب) في مَتجَرٍ <b>بِلا أَدوار</b> لا يَقَعُ لِأَحَد —
 /// <c>RolePermissions.Has</c> لا تُعطي <c>tenant.manage</c> لِصِفرِ الأَدوار، وكانَت تُعطيها لِكُلِّ مَن سَجَّل. فَمالِكُ ذلكَ المَتجَرِ يُديرُه
 /// بِـ(أ) مِن الاستوديو، ومَن أَرادَ مُديراً داخِلَ المَتجَرِ أَضافَ دَورَ <c>tenant_admin</c> ثُمَّ مَنَحَه مِن صَفحَةِ المُستَخدِمين.</para>
+///
+/// <para><b>(‏2026-11-12، الموجَة ١٣ W13-6·٨ — ADR-051 §١٥؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والقَبولُ يَملَأُ حامِلَ العَدّ</b> (التَصميم §5.4): مَسارُ
+/// <c>/admin/tenants/{slug}/*</c> لا يُحَلُّ فيه مَتجَر (<c>admin</c> مَحجوز)، فَالحامِلُ فارِغٌ حَتّى هُنا — والحارِسُ يَحمِلُ القيمَ أَصلاً: المَتجَرُ مِن
+/// مَسارِه، ورائِدُ الأَعمالِ مالِكُه مِن الوَثيقَةِ الَّتي حَمَّلَها، والدَورُ <c>_entrepreneur</c> لِلمالِكِ مِن الاستوديو أَو دَورُ المَتجَرِ الَّذي قَرَأَه
+/// (<c>ActiveRole</c>) لِمَن يَحمِلُ <c>tenant.manage</c>. وبِلا قَبولٍ لا يُكتَبُ شَيء، والقَرارُ نَفسُه لَم يُمَسّ.</para>
 /// </summary>
 public sealed class TenantAdminGuard
 {
@@ -91,7 +97,7 @@ public sealed class TenantAdminGuard
 
         // (أ) مالِك المَتجَر مُسَجَّل دُخولاً عَبر Studio.
         studioAuth.Load();
-        if (IsStudioOwner(tenant, studioAuth.UserId)) return true;
+        if (IsStudioOwner(tenant, studioAuth.UserId)) return Admit(tenant, MeterSentinels.Entrepreneur);
 
         // (ب) مُستَخدِم مُسَجَّل دُخولاً في نَفس المَتجَر بِدَور إداريّ.
         var token = AuthSession.ResolveToken(req, slug);
@@ -102,7 +108,15 @@ public sealed class TenantAdminGuard
 
         await using var tenantQs = docStore.QuerySession(slug);
         var me = await tenantQs.LoadAsync<User>(userId);
-        return HasTenantManage(tenant, me);
+        return HasTenantManage(tenant, me) && Admit(tenant, me!.ActiveRole);
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·٨) القَبولُ يَملَأُ حامِلَ العَدِّ بِما في يَدِ الحارِس — المَتجَرُ، ومالِكُه، والدَورُ الَّذي قُبِلَ بِه — ثُمَّ يُعيدُ
+    /// <c>true</c>. والحامِلُ يُطَبِّقُ قَواعِدَه: الكاتِبُ الأَوَّلُ يَفوز، والمَتجَرُ لا يُكتَبُ فَوقَه.</summary>
+    private static bool Admit(Tenant tenant, string? role)
+    {
+        MeterScope.Current?.Fill(tenant.Id, entrepreneur: MeterScope.OwnerOf(tenant.OwnerUserId), role: role);
+        return true;
     }
 
     // ─── نِصفا القَرار، نَقِيَّان بِلا I/O — عَلَيهِما تَقَع الوَحَدات ──────

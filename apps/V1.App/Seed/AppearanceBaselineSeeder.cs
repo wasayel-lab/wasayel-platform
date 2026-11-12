@@ -243,7 +243,8 @@ public static class AppearanceBaselineSeeder
         var tenant = await global.LoadAsync<Tenant>(ThemeDemo);
         if (tenant is null)
         {
-            global.Store(new Tenant
+            // ‏(‏2026-11-12، W13-6·٨ — ADR-051 §١٥) إدراجٌ لا `Store`: الوِلادَةُ مَحروسَةٌ بِالسَطرِ أَعلاه، والمُستَمِعُ يَعُدُّ `store.create` مِن `Inserts`.
+            global.Insert(new Tenant
             {
                 Id         = ThemeDemo,
                 Name       = "مَتجَر التَّجرِبَة",
@@ -365,7 +366,8 @@ public static class AppearanceBaselineSeeder
         var tenant = await global.LoadAsync<Tenant>(OwnerTest);
         if (tenant is null)
         {
-            global.Store(new Tenant
+            // ‏(‏2026-11-12، W13-6·٨ — ADR-051 §١٥) إدراجٌ لا `Store` — كَوِلادَةِ «theme-demo» أَعلاه.
+            global.Insert(new Tenant
             {
                 Id         = OwnerTest,
                 Name       = "مَتجَر المِلكِيَّة",

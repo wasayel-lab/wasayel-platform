@@ -75,6 +75,9 @@ public sealed record MeterClassificationRow(
 /// <para>‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ المَعدودُ خَمسَة</b>: قُلِبَت صُفوفُ الأَحداثِ الأَربَعَةِ إلى «مَعدودٍ» بِشَكلِ
 /// <see cref="MeterCreation.StartStream"/> في كوميتِ قاعِدَتِها (<see cref="MeterRules.StreamBirths"/>)، ودَخَلَت وَحَداتُها المُعجَم. واللَقَطاتُ الأَربَعُ
 /// مُشتَقَّةٌ كَما كانَت: وَحدَتُها الآنَ يَعُدُّها صَفُّ حَدَثِها.</para>
+/// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ المَعدودُ تِسعَة</b>: قُلِبَت صُفوفُ الوَثائِقِ الأَربَعِ في كوميتِ قاعِدَتِها —
+/// <c>Tenant</c> ← <c>store.create</c> و<c>Review</c> ← <c>review.create</c> بِشَكلِ <see cref="MeterCreation.Insert"/>، و<c>StudioUser</c> ←
+/// <c>studio.account.create</c> و<c>User</c> ← <c>member.join</c> بِشَكلِ <see cref="MeterCreation.OptimisticStore"/> — ودَخَلَت وَحَداتُها المُعجَم.</para>
 /// </summary>
 public static class MeterClassification
 {
@@ -94,7 +97,6 @@ public static class MeterClassification
     private const MeterTypeKind Doc = MeterTypeKind.Document;
     private const MeterTypeKind Ev = MeterTypeKind.Event;
 
-    private const string Item8 = "يُعَدُّ مِن البَند ٨ (وَحَداتُ الوَثائِق)، بَعدَ تَوصيفِ البَذرِ وتَحويلِ وِلاداتِه المَحروسَةِ إلى Insert.";
     private const string Item9 = "يُعَدُّ مِن البَند ٩ (chat.message)، بَعدَ تَوصيفِ الإرسالِ وتَحويلِ Store إلى Insert في نُقطَتِه وفي البَذر.";
     private const string Presence = "جانِبُ التِقنِيَة: يُعَدُّ حُضوراً لِكُلِّ مَتجَرٍ في كُلِّ يَوم (البَند ١٩) لا عَمَلِيَّةً عِندَ الحِفظ — فَالحِفظُ لا يَعُدُّه.";
     private const string Transition = "انتِقالٌ لا وِلادَة: الانتِقالاتُ وَحدَةٌ لاحِقَةٌ بِمُعَرِّفِ مَوضِعِها في المَجرى (التَصميم §5.6 و§15).";
@@ -120,6 +122,19 @@ public static class MeterClassification
         Counted(typeof(SubscriptionCreated), "member_plan.subscribe", MeterCreation.StartStream,
             "MeterRules.Classify: SubscriptionCreated في مَجرىً يَبدَأ — المَوضِعُ PlanSubscribeService.SubscribeAsync (PlanSubscribeService.cs:67)، " +
             "والمَتجَرُ مُستَأجِرُ المَجرى، والمَصدَرُ مُعَرِّفُ الحَدَث لا مُعَرِّفُ العُضو."),
+        Counted(typeof(Tenant), "store.create", MeterCreation.Insert,
+            "MeterRules.Classify: Tenant في Inserts — المَواضِعُ POST /admin/tenants/create (MTE:2387) وبابُ الاستوديو (StudioTierService.RecordStoreBuiltAsync ← MTE:4153) " +
+            "وأَداةُ الوَكيل (AgentService.cs:940) والمَصنَع (TenantFromAnalysisFactory.cs:247) وبَذرُ PlatformSeed.cs:164 وAppearanceBaselineSeeder.cs:246 و:368؛ " +
+            "والمَتجَرُ Tenant.Id، ورائِدُ الأَعمالِ Tenant.OwnerUserId مِن الوَثيقَة (_unowned لِلفارِغ). وStore مِنه لا يُعَدّ."),
+        Counted(typeof(StudioUser), "studio.account.create", MeterCreation.OptimisticStore,
+            "MeterRules.Classify: StudioUser بِلا نُسخَةٍ في الجَلسَة (VersionFor == null) — المَوضِعُ StudioAuth.VerifyAsync (StudioAuth.cs:136-141) " +
+            "وبَذرُ PlatformAdminSeeder؛ والمَتجَرُ _platform، ورائِدُ الأَعمالِ الحِسابُ نَفسُه، والمَصدَرُ مُعَرِّفُه."),
+        Counted(typeof(User), "member.join", MeterCreation.OptimisticStore,
+            "MeterRules.Classify: User بِلا نُسخَةٍ في الجَلسَة — المَوضِعُ AuthHandlers.GetOrCreateUserAsync (AuthHandlers.cs:590) وبَذرا الاختِبارِ والمَظهَر؛ " +
+            "والمَتجَرُ مُستَأجِرُ الجَلسَة، والمَصدَرُ اسمٌ مُستَعارٌ لِمُعَرِّفِ العُضو (UsageEntryId.Pseudonym) لا المُعَرِّفُ نَفسُه."),
+        Counted(typeof(Review), "review.create", MeterCreation.Insert,
+            "MeterRules.Classify: Review في Inserts — المَوضِعُ ReviewsService.SubmitAsync (ReviewsService.cs:43)؛ والمَتجَرُ مُستَأجِرُ الجَلسَة، " +
+            "والمَصدَرُ مُعَرِّفُ التَقييم لا الكاتِبُ ولا المُقَيَّم. والرَدُّ والإخفاءُ (Store) لا يُعَدّان."),
 
         // ═══ المُشتَقّ — لَقَطاتُ الإسقاطِ المُباشِر ══════════════════════
         Derived(typeof(Listing), "listing.create",
@@ -132,10 +147,6 @@ public static class MeterClassification
             "لَقطَةُ مَجرى اشتِراكِ العُضوِ يَكتُبُها الإسقاطُ المُباشِر؛ والوَحدَةُ حَدَثُ SubscriptionCreated."),
 
         // ═══ وَثائِقُ تُعَدُّ في بُنودٍ تالِيَة ══════════════════════════════
-        NotCounted(typeof(Tenant), Doc, Item8 + " المَتجَرُ Tenant.Id، ورائِدُ الأَعمالِ Tenant.OwnerUserId.", "store.create"),
-        NotCounted(typeof(StudioUser), Doc, Item8 + " بِلا نُسخَة (VersionFor == null)، والمَتجَرُ _platform.", "studio.account.create"),
-        NotCounted(typeof(User), Doc, Item8 + " بِلا نُسخَة، والمَصدَرُ اسمٌ مُستَعارٌ لا مُعَرِّفُ الشَخص.", "member.join"),
-        NotCounted(typeof(Review), Doc, Item8, "review.create"),
         NotCounted(typeof(Message), Doc, Item9, "chat.message"),
 
         // ═══ وَثائِقُ لا تُعَدّ — بِسَبَبِها ═════════════════════════════════

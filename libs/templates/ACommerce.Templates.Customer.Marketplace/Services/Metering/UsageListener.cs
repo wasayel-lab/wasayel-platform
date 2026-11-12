@@ -1,5 +1,9 @@
+using ACommerce.Kit.Auth;
+using ACommerce.Kit.Reviews;
+using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Marten.Services;
 
@@ -18,6 +22,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 /// <para>‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمَجاري المُعَلَّقَةُ مُدخَلٌ ثالِث</b>: <c>PendingChanges.Streams()</c> — مِن التَغييراتِ
 /// المُعَلَّقَةِ نَفسِها، فَلا نِداءَ جَلسَةٍ جَديد — قِيَماً بِـ<see cref="MeterRules.StreamsOf"/>، فَيَعُدُّ المُصَنِّفُ الحَدَثَ الَّذي يَبدَأُ بِه مَجراه
 /// (وَحَداتُ الأَحداثِ الأَربَع). ويَخرُجُ مُبَكِّراً حينَ لا صَفقَةَ ولا مَجرىً يَبدَأ.</para>
+/// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والوَثائِقُ المَعدودَةُ بِشَكلِ وِلادَتِها</b> (دَفتَرُ التَصنيف): المُتَفائِلَةُ — <c>Deal</c>
+/// و<c>User</c> و<c>StudioUser</c> — مِن <c>Updates</c> و<c>Inserts</c> مَعاً و«وِلادَةٌ» = <c>VersionFor == null</c> (D6)؛ وما بِلا تَزامُنٍ تَفاؤُلِيٍّ —
+/// <c>Tenant</c> و<c>Review</c> — مِن <c>Inserts</c> وَحدَها، فَـ<c>Store</c> مِنها (تَحديثٌ أَو كِتابَةُ نَسخٍ قائِم) لا يَبلُغُ المُصَنِّفَ أَصلاً: نُسخَتُها لا
+/// تُمَيِّزُ الوِلادَة. ولِذلكَ قُلِبَت وِلاداتُ <c>Tenant</c> الثَلاثُ في البَذرِ <c>Insert</c>. ويَخرُجُ مُبَكِّراً حينَ لا وِلادَةَ ولا مَجرىً يَبدَأ.</para>
 /// </summary>
 public sealed class UsageListener : DocumentSessionListenerBase
 {
@@ -31,12 +39,16 @@ public sealed class UsageListener : DocumentSessionListenerBase
     public override async Task BeforeSaveChangesAsync(IDocumentSession session, CancellationToken token)
     {
         var changes = session.PendingChanges;
-        var deals = changes.UpdatesFor<Deal>().Concat(changes.InsertsFor<Deal>()).ToList();
+        var documents = new List<PendingDocument>();
+        Optimistic(changes.UpdatesFor<Deal>().Concat(changes.InsertsFor<Deal>()));
+        Optimistic(changes.UpdatesFor<User>().Concat(changes.InsertsFor<User>()));
+        Optimistic(changes.UpdatesFor<StudioUser>().Concat(changes.InsertsFor<StudioUser>()));
+        documents.AddRange(changes.InsertsFor<Tenant>().Select(t => new PendingDocument(t, Created: true)));
+        documents.AddRange(changes.InsertsFor<Review>().Select(r => new PendingDocument(r, Created: true)));
         var streams = MeterRules.StreamsOf(changes.Streams());
-        if (deals.Count == 0 && !streams.Any(s => s.Started)) return;
+        if (!documents.Any(d => d.Created) && !streams.Any(s => s.Started)) return;
 
-        var pending = new PendingSnapshot(session.TenantId,
-            deals.Select(d => new PendingDocument(d, session.VersionFor(d) is null)).ToList(), streams);
+        var pending = new PendingSnapshot(session.TenantId, documents, streams);
         var entries = MeterRules.Classify(pending, MeterScope.View(), MeterUnitCatalog.Default);
         if (entries.Count == 0) return;
 
@@ -45,5 +57,11 @@ public sealed class UsageListener : DocumentSessionListenerBase
         foreach (var e in entries)
             session.QueueSqlCommand(MeterSql.Insert,
                 e.Id, e.Unit, e.Quantity, e.App, e.Entrepreneur, e.Role, e.Feature, e.Provider, e.SourceType, e.SourceId, generation);
+
+        // وَثيقَةٌ بِتَزامُنٍ تَفاؤُلِيّ: «وِلادَةٌ» = لا نُسخَةَ لَها في الجَلسَة (مَقيس D6).
+        void Optimistic<T>(IEnumerable<T> docs) where T : notnull
+        {
+            foreach (var d in docs) documents.Add(new PendingDocument(d, session.VersionFor(d) is null));
+        }
     }
 }

@@ -531,6 +531,8 @@ public class MeterClassificationTests(ITestOutputHelper output)
     ///   ‏(‏2026-11-12، W13-6·٧) صارَ مَعدوداً بِقاعِدَتِه، فَالرَمزانِ نَفسُهُما بِحَدَثٍ «مَعدودٍ» بِوَحدَةٍ خارِجَ المُعجَمِ ولا قاعِدَةَ لَه: <c>ListingEdited</c>.</item>
     ///   <item><c>Deal</c> «غَيرُ مَعدود» والمُصَنِّفُ يَعُدُّه ← <c>uncounted_yields_entry</c> بِكُلِّ شَكل، ووَحدَتُه في المُعجَمِ بِلا صَفّ.</item>
     /// </list>
+    /// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <c>Tenant</c> صارَ مَعدوداً بِقاعِدَتِه (<c>store.create</c>)، فَحَقنُ الصَفِّ الأَوَّلِ بِنَوعٍ
+    /// لا يُعَدُّ ولا قاعِدَةَ لَه أَبَداً: <c>Cart</c> — والرَمزُ نَفسُه.</para>
     /// </summary>
     [Fact]
     public async Task A_counted_row_whose_rule_is_missing_and_a_rule_on_an_uncounted_row_are_red()
@@ -543,9 +545,9 @@ public class MeterClassificationTests(ITestOutputHelper output)
 
         var cases = new (string Name, IReadOnlyList<MeterClassificationRow> Rows, string[] Expected)[]
         {
-            ("Tenant counted with no rule",
-             Swap(typeof(ACommerce.Kit.Tenants.Tenant), MeterClassification.Counted(typeof(ACommerce.Kit.Tenants.Tenant), "deal.create", MeterCreation.Insert, "حَقنٌ: مَعدودٌ بِلا قاعِدَةٍ في MeterRules.")),
-             ["counted_rule_missing:Tenant@Insert"]),
+            ("Cart counted with no rule",
+             Swap(typeof(ACommerce.Kit.Cart.Cart), MeterClassification.Counted(typeof(ACommerce.Kit.Cart.Cart), "deal.create", MeterCreation.Insert, "حَقنٌ: مَعدودٌ بِلا قاعِدَةٍ في MeterRules.")),
+             ["counted_rule_missing:Cart@Insert"]),
             ("ListingEdited counted with a unit outside the lexicon and no rule",
              Swap(typeof(ACommerce.Kit.Listings.ListingEdited), MeterClassification.Counted(typeof(ACommerce.Kit.Listings.ListingEdited), "listing.edit", MeterCreation.StartStream, "حَقنٌ: حَدَثٌ مَعدودٌ بِلا وَحدَةٍ ولا قاعِدَة.")),
              ["counted_unit_unknown:ListingEdited->listing.edit", "counted_rule_missing:ListingEdited@StartStream"]),

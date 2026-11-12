@@ -1,9 +1,13 @@
+using ACommerce.Kit.Auth;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
+using ACommerce.Kit.Reviews;
 using ACommerce.Kit.Subscriptions;
 using ACommerce.Kit.Support;
+using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using ACommerce.Templates.Customer.Marketplace.Services.Metering;
 using Xunit;
 using Xunit.Abstractions;
@@ -238,5 +242,133 @@ public class MeterRulesTests(ITestOutputHelper output)
         output.WriteLine($"[rules·حَدَث] قَواعِدُ الوِلادَة {births.Count}: {string.Join(", ", births.Select(b => $"{b.Key.Name}→{b.Value}"))} · صُفوفٌ مَعدودَةٌ بِبِدءِ مَجرى {countedStreams.Count}");
         Assert.True(births.Count >= 4, $"أَداةٌ عَمياء: {births.Count} قاعِدَةَ وِلادَة.");
         Assert.True(countedStreams.SetEquals(births.Keys), "صُفوفُ «مَعدودٍ بِبِدءِ مَجرى» والقَواعِدُ تَختَلِفان: " + string.Join(", ", countedStreams.Except(births.Keys).Concat(births.Keys.Except(countedStreams)).Select(t => t.Name)));
+    }
+
+    // ═══ ‏(‏2026-11-12، W13-6·٨) وَحَداتُ الوَثائِقِ الأَربَع — مِن الوِلادَةِ لا مِن التَحديث، والمَتجَرُ ورائِدُ الأَعمالِ حَيثُ تَحمِلُهُما الوَثيقَة ═══
+    // (التَصميم §3.4 و§5.2 و§5.4). «وِلادَةٌ» يُقَرِّرُها المُستَمِع: <c>Inserts</c> لِـ<c>Tenant</c> و<c>Review</c>، و<c>VersionFor == null</c> لِلمُتَفائِلَتَين.
+
+    private static IReadOnlyList<UsageEntry> ClassifyIn(string sessionTenant, MeterScopeView? scope, params PendingDocument[] docs)
+        => MeterRules.Classify(new PendingSnapshot(sessionTenant, docs), scope, MeterUnitCatalog.Default);
+
+    private static readonly MeterScopeView SeedScope = new(null, MeterSentinels.Seed, MeterSentinels.Seed, IsSeed: true);
+
+    /// <summary><b><c>store.create</c></b>: مَتجَرٌ في <c>Inserts</c> سَطرٌ واحِد — مَتجَرُه ومَصدَرُه <c>Tenant.Id</c>، ورائِدُ أَعمالِه <c>OwnerUserId</c> <b>مِن الوَثيقَة</b>
+    /// (و<c>_unowned</c> لِلفارِغ) حَتّى تَحتَ حامِلِ البَذر، ودَورُه مِن الحامِل. وتَحديثُه صِفر، ومُستَأجِرُ الجَلسَةِ لا شَأنَ لَه (الوَثيقَةُ عامَّة).</summary>
+    [Fact]
+    public void A_tenant_in_inserts_is_one_store_create_entry_whose_app_and_entrepreneur_come_from_the_document()
+    {
+        var owner = Guid.NewGuid();
+        var tenant = new Tenant { Id = "store-n", OwnerUserId = owner };
+        var e = Assert.Single(ClassifyIn("*DEFAULT*", null, new PendingDocument(tenant, Created: true)));
+        output.WriteLine($"[rules·وَثيقَة] {e}");
+        Assert.Equal((MeterRules.StoreCreate, 1L, "store-n", "store.create:store-n:store-n", owner.ToString("D"), MeterSentinels.Unresolved, "tenants",
+                      MeterSentinels.None, MeterRules.TenantSource, "store-n"),
+                     (e.Unit, e.Quantity, e.App, e.Id, e.Entrepreneur, e.Role, e.Feature, e.Provider, e.SourceType, e.SourceId));
+        Assert.Empty(ClassifyIn("*DEFAULT*", null, new PendingDocument(tenant, Created: false)));
+
+        var unowned = Assert.Single(ClassifyIn("*DEFAULT*", null, new PendingDocument(new Tenant { Id = "store-u" }, true)));
+        Assert.Equal(MeterSentinels.Unowned, unowned.Entrepreneur);
+        var seeded = Assert.Single(ClassifyIn("*DEFAULT*", SeedScope, new PendingDocument(new Tenant { Id = "ejar" }, true)));
+        Assert.Equal((MeterSentinels.Unowned, MeterSentinels.Seed), (seeded.Entrepreneur, seeded.Role));
+        var sameStore = Assert.Single(ClassifyIn("*DEFAULT*", new MeterScopeView("store-n", "holder-owner", "vendor", false), new PendingDocument(tenant, true)));
+        Assert.Equal((owner.ToString("D"), "vendor"), (sameStore.Entrepreneur, sameStore.Role));
+        var blank = Assert.Single(ClassifyIn("*DEFAULT*", null, new PendingDocument(new Tenant { Id = " " }, true)));
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.Unresolved), (blank.App, blank.SourceId));
+    }
+
+    /// <summary><b><c>studio.account.create</c></b>: حِسابُ استوديو بِلا نُسخَةٍ سَطرٌ واحِدٌ عَلى <c>_platform</c>، رائِدُ أَعمالِه والمَصدَرُ الحِسابُ نَفسُه
+    /// (مِفتاحُ عَميلِ المَنَصَّةِ صَريحاً، التَصميم §2). وتَحديثُه صِفر.</summary>
+    [Fact]
+    public void A_studio_account_born_is_one_studio_account_create_entry_on_the_platform_whose_entrepreneur_is_the_account()
+    {
+        var account = new StudioUser { Id = Guid.NewGuid() };
+        var id = account.Id.ToString("D");
+        var e = Assert.Single(ClassifyIn(StudioAuth.Tenant, null, new PendingDocument(account, Created: true)));
+        output.WriteLine($"[rules·وَثيقَة] {e}");
+        Assert.Equal((MeterRules.StudioAccountCreate, MeterSentinels.Platform, $"studio.account.create:_platform:{id}", id, MeterSentinels.Unresolved, "studio.build",
+                      MeterRules.StudioUserSource, id),
+                     (e.Unit, e.App, e.Id, e.Entrepreneur, e.Role, e.Feature, e.SourceType, e.SourceId));
+        Assert.Empty(ClassifyIn(StudioAuth.Tenant, null, new PendingDocument(account, Created: false)));
+        var seeded = Assert.Single(ClassifyIn(StudioAuth.Tenant, SeedScope, new PendingDocument(account, true)));
+        Assert.Equal((id, MeterSentinels.Seed), (seeded.Entrepreneur, seeded.Role));
+    }
+
+    /// <summary><b><c>member.join</c></b>: عُضوٌ بِلا نُسخَةٍ سَطرٌ واحِدٌ في مَتجَرِ الجَلسَة — <b>ومَصدَرُه اسمٌ مُستَعار</b>، فَمُعَرِّفُ العُضوِ لا يَظهَرُ في المُعَرِّفِ
+    /// ولا في المَصدَر (G17)؛ ورائِدُ الأَعمالِ والدَورُ مِن حامِلِ المَتجَرِ نَفسِه؛ والمُستَأجِرُ الافتِراضِيُّ <c>_unresolved</c>. وتَحديثُه صِفر.</summary>
+    [Fact]
+    public void A_member_born_is_one_member_join_entry_in_the_session_store_whose_source_is_a_pseudonym_never_the_user_id()
+    {
+        var member = new User { Id = Guid.NewGuid() };
+        var owner = Guid.NewGuid().ToString("D");
+        var e = Assert.Single(ClassifyIn("store-a", new MeterScopeView("store-a", owner, MeterSentinels.None, false), new PendingDocument(member, Created: true)));
+        var pseudonym = UsageEntryId.Pseudonym(MeterRules.MemberJoin, "store-a", member.Id.ToString("D"));
+        output.WriteLine($"[rules·وَثيقَة] {e}");
+        Assert.Equal((MeterRules.MemberJoin, "store-a", $"member.join:store-a:{pseudonym}", owner, MeterSentinels.None, "auth", MeterRules.UserSource, pseudonym),
+                     (e.Unit, e.App, e.Id, e.Entrepreneur, e.Role, e.Feature, e.SourceType, e.SourceId));
+        foreach (var form in new[] { member.Id.ToString("D"), member.Id.ToString("N") })
+            Assert.DoesNotContain(form, e.Id + " " + e.SourceId, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(ClassifyIn("store-a", null, new PendingDocument(member, Created: false)));
+        Assert.Equal(MeterSentinels.Unresolved, Assert.Single(ClassifyIn("*DEFAULT*", null, new PendingDocument(member, true))).App);
+    }
+
+    /// <summary><b><c>review.create</c></b>: تَقييمٌ في <c>Inserts</c> سَطرٌ واحِدٌ في مَتجَرِ الجَلسَة بِمُعَرِّفِ التَقييم — لا الكاتِبُ ولا المُقَيَّم. وتَحديثُه
+    /// (الرَدُّ والإخفاءُ <c>Store</c>) صِفر.</summary>
+    [Fact]
+    public void A_review_in_inserts_is_one_review_create_entry_in_the_session_store_keyed_by_the_review_id()
+    {
+        var review = new Review { Id = Guid.NewGuid(), TenantSlug = "store-a", AuthorId = Guid.NewGuid(), TargetUserId = Guid.NewGuid() };
+        var e = Assert.Single(ClassifyIn("store-a", null, new PendingDocument(review, Created: true)));
+        output.WriteLine($"[rules·وَثيقَة] {e}");
+        Assert.Equal((MeterRules.ReviewCreate, "store-a", $"review.create:store-a:{review.Id:D}", "reviews", MeterRules.ReviewSource, review.Id.ToString("D")),
+                     (e.Unit, e.App, e.Id, e.Feature, e.SourceType, e.SourceId));
+        foreach (var person in new[] { review.AuthorId, review.TargetUserId })
+            Assert.DoesNotContain(person.ToString("D"), e.Id + " " + e.SourceId, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(ClassifyIn("store-a", null, new PendingDocument(review, Created: false)));
+    }
+
+    /// <summary><b>حامِلٌ بِلا مَتجَرٍ يَحمِلُ دَوراً</b> (فاعِلُ المَنَصَّة، <c>FillPlatformRole</c>): دَورُه لِكُلِّ مَتجَرٍ يَكتُبُ فيه طَلَبُه، ورائِدُ أَعمالِه لا يُؤخَذُ
+    /// أَبَداً — فَوِلادَةُ المَتجَرِ عَلى <c>/admin/tenants/create</c> دَورُها <c>_platform_admin</c> ومالِكُها مِن الوَثيقَة. وحامِلٌ بِمَتجَرٍ يَبقى لِمَتجَرِه، والحامِلُ
+    /// الفارِغُ لا يُعطي شَيئاً.</summary>
+    [Fact]
+    public void A_holder_with_no_store_and_a_platform_role_gives_its_role_to_any_store_and_never_an_entrepreneur()
+    {
+        var actor = new MeterScopeView(null, null, MeterSentinels.PlatformAdmin, false);
+        var owner = Guid.NewGuid();
+        var deal = Assert.Single(Classify(actor, new PendingDocument(NewDeal("store-b"), true)));
+        var store = Assert.Single(ClassifyIn("*DEFAULT*", actor, new PendingDocument(new Tenant { Id = "store-n", OwnerUserId = owner }, true)));
+        output.WriteLine($"[rules·فاعِلُ المَنَصَّة] صَفقَة {deal.App}={deal.Entrepreneur}/{deal.Role} · مَتجَر {store.App}={store.Entrepreneur}/{store.Role}");
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.PlatformAdmin), (deal.Entrepreneur, deal.Role));
+        Assert.Equal((owner.ToString("D"), MeterSentinels.PlatformAdmin), (store.Entrepreneur, store.Role));
+        var scoped = Assert.Single(Classify(new MeterScopeView("store-a", "owner-a", MeterSentinels.PlatformAdmin, false), new PendingDocument(NewDeal("store-b"), true)));
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.Unresolved), (scoped.Entrepreneur, scoped.Role));
+        var empty = Assert.Single(Classify(new MeterScopeView(null, null, null, false), new PendingDocument(NewDeal("store-b"), true)));
+        Assert.Equal((MeterSentinels.Unresolved, MeterSentinels.Unresolved), (empty.Entrepreneur, empty.Role));
+    }
+
+    /// <summary><b>القاعِدَةُ والمُعجَمُ والدَفتَرُ يَقولونَ الشَيءَ نَفسَه لِوَحَداتِ الوَثائِق</b>: كُلُّ وَحدَةٍ تَشغيلٌ عِندَ حَدِّ الحِفظِ بِمِيزَتِها وقارِئِ مُطابَقَتِها،
+    /// وصَفُّ نَوعِها «مَعدودٌ» بِوَحدَتِها وشَكلِ وِلادَتِها. يَطبَعُ ما طابَقَ ويَفشَلُ عَلى الصِفر.</summary>
+    [Fact]
+    public void Every_document_unit_agrees_with_its_lexicon_row_and_its_classification_row()
+    {
+        (Type Type, string Unit, MeterCreation Creation, string Feature, string Reconcile)[] units =
+        [
+            (typeof(Tenant), MeterRules.StoreCreate, MeterCreation.Insert, "tenants", MeterReconcilers.TenantIds),
+            (typeof(StudioUser), MeterRules.StudioAccountCreate, MeterCreation.OptimisticStore, "studio.build", MeterReconcilers.StudioUserIds),
+            (typeof(User), MeterRules.MemberJoin, MeterCreation.OptimisticStore, "auth", MeterReconcilers.UserIds),
+            (typeof(Review), MeterRules.ReviewCreate, MeterCreation.Insert, "reviews", MeterReconcilers.ReviewIds),
+        ];
+        foreach (var (type, code, creation, feature, reconcile) in units)
+        {
+            var unit = MeterUnitCatalog.Default.Find(code);
+            Assert.NotNull(unit);
+            Assert.Equal((MeterSides.Operation, MeterBoundaries.Persistence, MeterMeasures.Count, feature, reconcile),
+                         (unit.Side, unit.Boundary, unit.Measure, unit.Feature, unit.Reconcile));
+            var row = Assert.Single(MeterClassification.All, r => r.ClrType == type);
+            Assert.Equal((MeterDisposition.Counted, code, (MeterCreation?)creation), (row.Disposition, row.Unit, row.Creation));
+        }
+        var countedDocs = MeterClassification.All.Where(r => r is { Disposition: MeterDisposition.Counted, Kind: MeterTypeKind.Document }).Select(r => r.ClrType).ToList();
+        output.WriteLine($"[rules·وَثيقَة] وَحَداتُ الوَثائِق {units.Length} · وَثائِقُ مَعدودَةٌ في الدَفتَر {countedDocs.Count}: {string.Join(", ", countedDocs.Select(t => t.Name))}");
+        Assert.True(countedDocs.ToHashSet().SetEquals(units.Select(u => u.Type).Append(typeof(Deal))),
+                    "الوَثائِقُ المَعدودَةُ في الدَفتَرِ والوَحَداتُ هُنا تَختَلِفان: " + string.Join(", ", countedDocs.Select(t => t.Name)));
     }
 }
