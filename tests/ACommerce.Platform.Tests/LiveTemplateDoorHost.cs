@@ -99,6 +99,13 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         => PostFormWithCookieAsync(pattern, route,
             studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form, files);
 
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) استِمارَةٌ مُتَعَدِّدَةُ الأَجزاءِ بِمِلَفّاتٍ وكوكيِّ المَتجَر — لِبابِ نَشرِ الإعلانِ بِصُوَرِه: الطَلَبُ بِحَرفِ
+    /// <see cref="PostStudioMultipartAsync"/>، والكوكيُّ كوكيُّ <see cref="PostFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostMultipartAsync(string pattern, IReadOnlyDictionary<string, string> route, string slug, string? token,
+        (string Key, string Value)[] form, params (string Name, string FileName, string ContentType, byte[] Bytes)[] files)
+        => PostFormWithCookieAsync(pattern, route,
+            token is null ? null : $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}", form, files);
+
     /// <summary>‏(‏2026-11-07، SEC-C2a-1) بابُ <c>GET</c> بِنَمَطِ مَسارِه كَما سُجِّل — ويَرمي إن لَم يَكُن واحِداً.</summary>
     public RouteEndpoint GetDoor(string pattern)
     {

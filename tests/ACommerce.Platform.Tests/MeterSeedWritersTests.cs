@@ -18,6 +18,14 @@ namespace ACommerce.Platform.Tests;
 //      (`seed_block_unscanned`).
 // والمَعدودُ يُقرَأُ مِن دَفتَرِ التَصنيفِ (`MeterClassification.All`) لا مِن قائِمَةٍ هُنا. **وحَدُّ الأَداةِ يُقال**: الماسِحُ نَصِّيٌّ عَلى نِداءاتِ الكِتابَةِ في المِلَفِّ
 // نَفسِه، فَكِتابَةُ دالَّةٍ في مَكتَبَةٍ يُناديها سكربت (`DuplicatePhones.RenameAsync`، `AccountErasure`) خارِجَه — وتِلكَ تُحَدِّثُ ما حَمَّلَت.
+//
+// ‏(‏2026-11-12، W13-6·B-R2·1 — مُراجَعَةُ المَرحَلَةِ ب الثانِيَة · M6B-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **و`store_of_insert_counted` يَبلُغُ libs/**
+// وapps/** خارِجَ البَذر** (المَجموعَةُ `Library` — بِلا صُفوفٍ مُثَبَّتَة: مَواضِعُ الكِتابَةِ فيها 163 عِندَ 3f8f152 ومُعظَمُها تَحديثٌ لِما حُمِّل، لا تُثَبَّتُ واحِداً واحِداً). كانَ الماسِحُ يَقرَأُ البَذرَ والسكربتاتِ
+// والمُستَورِدَ وَحدَها، فَـ`s.Insert(new Tenant` في أَداةِ الوَكيلِ (`AgentService.cs:940`) أَو `ws.Insert(tenant)` في المَصنَع (`TenantFromAnalysisFactory.cs:247`)
+// إن صارَ `Store` وَلَدَ مَتجَراً لا يَراهُ المُستَمِعُ (`Tenant` يُعَدُّ مِن `Inserts` وَحدَها) وكُلُّ حارِسٍ أَخضَر. والقاعِدَةُ هُناكَ: `Store`/`StoreObjects` وَسيطُه
+// `new T` أَو مُتَغَيِّرٌ أَقرَبُ ما يُعطيهِ قيمَتَه قَبلَ المَوضِعِ إسنادٌ فيه `new T` (`BornOf`) — و`T` مَعدودٌ بِشَكلِ `Insert` (`Tenant`، `Review`، `Message`). **وحَدُّها
+// يُقال**: المُتَغَيِّرُ مِن دالَّةٍ مَصنَع (`MTE:4162` `tenant = await factory.CreateAsync(…)`) لا يُرى نَصّاً — وذاكَ البابُ يَحرُسُه صَفُّه الحَيُّ في G5
+// (`Studio_sign_up_and_both_store_doors_…`: سَطرٌ واحِدٌ بِمالِكِه).
 
 public class MeterSeedWritersTests(ITestOutputHelper output)
 {
@@ -34,13 +42,16 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         ImporterExcluded,
     }
 
-    internal enum Group { Seeder, Script, Importer }
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) <c>Library</c>: libs/** وapps/** خارِجَ ما يَقرَؤُه الماسِحُ بِمَجموعَةٍ أُخرى — بِلا صُفوفٍ مُثَبَّتَة، و<c>store_of_insert_counted</c> وَحدَه.</summary>
+    internal enum Group { Seeder, Script, Importer, Library }
 
     /// <summary>مَوضِعٌ مُثَبَّت: المِلَفُّ، ومِفتاحُ النِداء (المُستَقبِلُ والنِداءُ ورَأسُ الوَسيط)، والنَوعُ المَكتوب، ومَصيرُه. لِكُلِّ تَكرارٍ صَفّ، بِتَرتيبِه في المِلَفّ.</summary>
     internal sealed record Pin(string File, string Key, string Type, Fate Fate);
 
-    /// <summary>مَوضِعٌ مَقيس: المِلَفُّ وسَطرُه ومِفتاحُه، والنَوعُ إن قُرِئَ مِن النَصّ، ونِداؤُه.</summary>
-    internal sealed record Site(string File, Group Group, int Line, string Key, string? Resolved, string Call, bool ArgIsNew);
+    /// <summary>مَوضِعٌ مَقيس: المِلَفُّ وسَطرُه ومِفتاحُه، والنَوعُ إن قُرِئَ مِن النَصّ، ونِداؤُه.
+    /// ‏(‏2026-11-12، W13-6·B-R2·1) و<paramref name="BornOf"/>: نَوعُ ما يولَدُ في المَوضِعِ نَصّاً — الوَسيطُ <c>new T</c>، أَو مُتَغَيِّرٌ أَقرَبُ ما يُعطيهِ قيمَتَه إسنادٌ فيه
+    /// <c>new T</c> (<see cref="BornOfIdentifier"/>) — وإلّا <c>null</c>.</summary>
+    internal sealed record Site(string File, Group Group, int Line, string Key, string? Resolved, string Call, bool ArgIsNew, string? BornOf = null);
 
     // ─── الماسِح ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -154,6 +165,22 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         return decl.Count > 0 ? Last(decl[^1].Groups["t"].Value) : null;
     }
 
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) <b>هَل يولَدُ المُتَغَيِّرُ هُنا؟</b> أَقرَبُ ما يُعطي الاسمَ قيمَتَه قَبلَ النِداء: إسنادٌ (<c>x = …;</c>)، أَو إعلانٌ بِلا قيمَة —
+    /// وَسيطُ دالَّة (<c>Tenant x,</c>)، ومُتَغَيِّرُ <c>foreach</c>، ووَسيطُ لامدا (<c>x =&gt;</c>)، ومُتَغَيِّرُ نَمَط (<c>is Tenant x</c>). فَإن كانَ إسناداً فيه <c>new T</c>
+    /// (لَيسَ حاوِيَة) فَـ<c>T</c> — ومِنه <c>existing ?? new Tenant { … }</c>: وِلادَةٌ مُحتَمَلَة؛ وإلّا <c>null</c> (قِراءَةٌ، أَو وَسيطٌ، أَو مَصنَعٌ لا يُرى نَصّاً).</summary>
+    internal static string? BornOfIdentifier(string code, int before, string id)
+    {
+        var name = Regex.Escape(id);
+        var head = code[..before];
+        var assign = new Regex($@"(?<![\w.])\b{name}\s*(?:\?\?=|=(?![=>]))\s*(?<rhs>[^;]+);", RegexOptions.CultureInvariant)
+            .Matches(head).LastOrDefault();
+        var declared = new Regex($@"\b(?:var|[A-Z][\w.<>]*\??)\s+{name}\s*(?:[;,)]|\bin\b)|(?<![\w.])\b{name}\s*=>|\(\s*{name}\s*\)\s*=>|\bis\s+[A-Z][\w.]*\s+{name}\b",
+            RegexOptions.CultureInvariant).Matches(head).LastOrDefault();
+        if (assign is null || declared is not null && declared.Index > assign.Index) return null;
+        return Regex.Matches(assign.Groups["rhs"].Value, @"\bnew\s+(?<t>[A-Za-z_][\w.]*)")
+            .Select(x => Last(x.Groups["t"].Value)).FirstOrDefault(t => !Containers.Contains(t));
+    }
+
     /// <summary>كُلُّ مَوضِعِ كِتابَةٍ في نَصِّ مِلَفّ.</summary>
     internal static IReadOnlyList<Site> Scan(string file, Group group, string source)
     {
@@ -171,17 +198,19 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
             var n = NewType.Match(head);
             string headKey;
             string? resolved = null;
-            if (n.Success) { resolved = Last(n.Groups["t"].Value); headKey = "new " + resolved; }
+            string? born = null;
+            if (n.Success) { resolved = Last(n.Groups["t"].Value); headKey = "new " + resolved; born = resolved; }
             else
             {
                 var token = Regex.Match(head, @"^[A-Za-z_][\w.]*!?").Value;
                 headKey = token.Length > 0 ? token : head[..Math.Min(head.Length, 24)];
                 var id = Identifier.Match(token);
                 if (id.Success) resolved = ResolveIdentifier(code, m.Index, id.Groups["id"].Value);
+                if (id.Success && !isEvent) born = BornOfIdentifier(code, m.Index, id.Groups["id"].Value);
             }
             var key = $"{m.Groups["recv"].Value}.{(isEvent ? "Events." : "")}{call}{m.Groups["gen"].Value}({headKey}";
             var line = code.AsSpan(0, m.Index).Count('\n') + 1;
-            sites.Add(new Site(file, group, line, key, resolved, call, n.Success));
+            sites.Add(new Site(file, group, line, key, resolved, call, n.Success, born));
         }
         return sites;
     }
@@ -212,6 +241,22 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         files.Add((Rel(ownership), Group.Seeder, File.ReadAllText(ownership)));
         foreach (var f in Directory.EnumerateFiles(Path.Combine(Root, "scripts"), "*.cs").Order(StringComparer.Ordinal)) files.Add((Rel(f), Group.Script, File.ReadAllText(f)));
         foreach (var f in Directory.EnumerateFiles(Path.Combine(Root, "tools", "ACommerce.Importer"), "*.cs").Order(StringComparer.Ordinal)) files.Add((Rel(f), Group.Importer, File.ReadAllText(f)));
+        return files;
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) <b>ما يَبلُغُه المُستَمِعُ خارِجَ البَذر</b>: كُلُّ <c>.cs</c> في libs/** وapps/** (بِلا obj/bin) عَدا ما في <see cref="Files"/> —
+    /// المُضيفُ ونِقاطُه وخِدماتُه، وكُلُّ جَلسَةٍ فيها مِن المَخزَنِ المُرَكَّبِ الَّذي سُجِّلَ فيه المُستَمِع.</summary>
+    internal static IReadOnlyList<(string File, Group Group, string Text)> LibraryFiles()
+    {
+        var scanned = Files().Select(f => f.File).ToHashSet(StringComparer.Ordinal);
+        var files = new List<(string, Group, string)>();
+        foreach (var root in new[] { "libs", "apps" })
+            foreach (var f in Directory.EnumerateFiles(Path.Combine(Root, root), "*.cs", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+            {
+                var rel = Rel(f);
+                if (rel.Contains("/obj/", StringComparison.Ordinal) || rel.Contains("/bin/", StringComparison.Ordinal) || scanned.Contains(rel)) continue;
+                files.Add((rel, Group.Library, File.ReadAllText(f)));
+            }
         return files;
     }
 
@@ -297,6 +342,13 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         var pinQueues = pins.GroupBy(p => (p.File, p.Key)).ToDictionary(g => g.Key, g => new Queue<Pin>(g));
         foreach (var site in sites)
         {
+            // ‏(‏2026-11-12، W13-6·B-R2·1) libs/apps: لا صُفوفَ مُثَبَّتَة — وِلادَةُ نَوعٍ يُعَدُّ بِـ`Insert` عَبرَ `Store` وَحدَها خَرق.
+            if (site.Group == Group.Library)
+            {
+                if (site.Call is "Store" or "StoreObjects" && site.BornOf is { } bt && counted.TryGetValue(bt, out var bc) && bc == MeterCreation.Insert)
+                    breaches.Add($"store_of_insert_counted:{site.File}:{site.Line}:{bt}");
+                continue;
+            }
             if (!pinQueues.TryGetValue((site.File, site.Key), out var q) || q.Count == 0)
             {
                 breaches.Add($"unpinned_write:{site.File}:{site.Line}:{site.Key}");
@@ -371,6 +423,106 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
             $"أَداةٌ عَمياء: {files.Count} مِلَفّاً · {sites.Count} مَوضِعاً · {counted.Count} نَوعاً مَعدوداً · {seedBlock.Count} بَذّاراً.");
         Assert.Contains("StudioOwnershipSeeder", seedBlock);
         Assert.Empty(breaches);
+    }
+
+    /// <summary>الأَنواعُ المَعدودَةُ بِشَكلِ <c>Insert</c> — ما لا يُرى إن وُلِدَ بِـ<c>Store</c>.</summary>
+    private static IReadOnlyList<string> InsertCounted(IReadOnlyDictionary<string, MeterCreation> counted)
+        => [.. counted.Where(c => c.Value == MeterCreation.Insert).Select(c => c.Key).Order(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·B-R2·1 — M6B-CNT-R2-1) <b>المُوجِبُ والعَمى في libs/apps</b>: كُلُّ <c>.cs</c> يَبلُغُه المُستَمِعُ خارِجَ البَذرِ مَمسوح، وصِفرُ
+    /// <c>store_of_insert_counted</c> فيه — ولِكُلِّ نَوعٍ مَعدودٍ بِشَكلِ <c>Insert</c> مَوضِعُ <c>Insert</c> واحِدٌ عَلى الأَقَلِّ يُرى فيه وِلادَتُه (<c>BornOf</c>):
+    /// أَداةٌ لا تَرى وِلادَةَ <c>Tenant</c> ولا <c>Review</c> ولا <c>Message</c> حَيثُ تولَدُ عَمياءُ ولا يوثَقُ بِصِفرِها. وما يُكتَبُ بِـ<c>Store</c> مِن هذه الأَنواعِ
+    /// (تَحديثاتٌ لِما حُمِّل) يُطبَعُ بِعَدَدِه ولا وِلادَةَ فيه.</para>
+    /// </summary>
+    [Fact]
+    public void In_libs_and_apps_no_Insert_counted_type_is_born_through_Store_and_each_is_seen_born_through_Insert()
+    {
+        var files = LibraryFiles();
+        var sites = files.SelectMany(f => Scan(f.File, f.Group, f.Text)).ToList();
+        var counted = CountedTypes(MeterClassification.All);
+        var insertCounted = InsertCounted(counted);
+        var breaches = Breaches(sites, [], counted, [], files.Select(f => f.File).ToList());
+
+        var births = sites.Where(s => s.Call is "Insert" or "InsertObjects" && s.BornOf is { } t && insertCounted.Contains(t)).ToList();
+        var stores = sites.Where(s => s.Call is "Store" or "StoreObjects" && (s.Resolved ?? s.BornOf) is { } t && insertCounted.Contains(t)).ToList();
+        foreach (var s in births.Concat(stores)) output.WriteLine($"[G18·libs] {s.File}:{s.Line} {s.Key} → وُلِدَ {s.BornOf ?? "—"} · مَقروء {s.Resolved ?? "؟"}");
+        output.WriteLine($"[G18·libs] مِلَفّات {files.Count} (libs {files.Count(f => f.File.StartsWith("libs/", StringComparison.Ordinal))} · apps {files.Count(f => f.File.StartsWith("apps/", StringComparison.Ordinal))}) · "
+            + $"مَواضِعُ الكِتابَة {sites.Count} (Store/StoreObjects {sites.Count(s => s.Call is "Store" or "StoreObjects")} · Insert/InsertObjects {sites.Count(s => s.Call is "Insert" or "InsertObjects")}) · "
+            + $"وِلادَةٌ مَقروءَة {sites.Count(s => s.BornOf is not null)} · المَعدودُ بِـInsert {string.Join(", ", insertCounted)} · وِلاداتُه بِـInsert {births.Count} "
+            + $"({string.Join(", ", insertCounted.Select(t => $"{t} {births.Count(b => b.BornOf == t)}"))}) · Store مِنه {stores.Count} · خُروق {breaches.Count}"
+            + (breaches.Count == 0 ? "" : ":\n" + string.Join("\n", breaches)));
+
+        Assert.True(files.Count > 300 && sites.Count > 100, $"أَداةٌ عَمياء: {files.Count} مِلَفّاً · {sites.Count} مَوضِعاً.");
+        Assert.Equal(["Message", "Review", "Tenant"], insertCounted);
+        Assert.All(insertCounted, t => Assert.True(births.Any(b => b.BornOf == t), $"أَداةٌ عَمياء: لا تَرى وِلادَةَ {t} بِـInsert في libs/apps."));
+        Assert.Empty(breaches);
+    }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·B-R2·1 — M6B-CNT-R2-1) <b>السالِب — بِنُسَخٍ مِن المِلَفّاتِ الحَقيقِيَّة</b>: كُلُّ وِلادَةِ <c>Insert</c> لِنَوعٍ مَعدودٍ في libs تَعودُ <c>Store</c>
+    /// في نُسخَتِها — الوَسيطُ <c>new Tenant</c> في أَداةِ الوَكيل، والمُتَغَيِّرُ <c>tenant</c> في المَصنَع، و<c>r</c> في خِدمَةِ التَقييم، و<c>msg</c> في بابِ الإرسال —
+    /// فَيَحمَرُّ كُلٌّ بِـ<c>store_of_insert_counted</c> عَلى سَطرِه وَحدَه؛ و<c>Store(r)</c> لِتَقييمٍ حُمِّلَ بِـ<c>LoadAsync</c> في الخِدمَةِ نَفسِها يَبقى أَخضَر
+    /// (السالِبُ لا يُكَبِّرُ ما يَرى: التَحديثُ لَيسَ وِلادَة).</para>
+    /// </summary>
+    [Fact]
+    public void A_Store_injected_in_place_of_each_libs_Insert_birth_of_a_counted_type_is_red_on_its_own_line()
+    {
+        var counted = CountedTypes(MeterClassification.All);
+        var cases = new (string File, string Born, string Injected, string Type)[]
+        {
+            ("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentService.cs", "s.Insert(new Tenant", "s.Store(new Tenant", "Tenant"),
+            ("libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Incubator/TenantFromAnalysisFactory.cs", "ws.Insert(tenant);", "ws.Store(tenant);", "Tenant"),
+            ("libs/kits/Reviews/ACommerce.Kit.Reviews.Core/ReviewsService.cs", "s.Insert(r);", "s.Store(r);", "Review"),
+            ("libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs", "s.Insert(msg);", "s.Store(msg);", "Message"),
+        };
+        foreach (var (file, born, injectedCall, type) in cases)
+        {
+            var text = File.ReadAllText(Path.Combine(Root, file));
+            var at = text.IndexOf(born, StringComparison.Ordinal);
+            Assert.True(at > 0 && text.IndexOf(born, at + 1, StringComparison.Ordinal) < 0, $"وِلادَةُ «{born}» في {file} لَيسَت واحِدَة — الأَداةُ عَمياء.");
+            var injected = text[..at] + injectedCall + text[(at + born.Length)..];
+            var line = text.AsSpan(0, at).Count('\n') + 1;
+            var real = Breaches(Scan(file, Group.Library, text), [], counted, [], [file]);
+            var breaches = Breaches(Scan(file, Group.Library, injected), [], counted, [], [file]);
+            var bornSite = Assert.Single(Scan(file, Group.Library, text), s => s.Line == line && s.Call == "Insert");
+            output.WriteLine($"[G18·libs·حَقن] {file}:{line} «{born}» → «{injectedCall}» · وُلِدَ {bornSite.BornOf} · الأَصل {real.Count} خَرقاً · المَحقون: {string.Join(" | ", breaches)}");
+            Assert.Equal(type, bornSite.BornOf);
+            Assert.Empty(real);
+            Assert.Equal([$"store_of_insert_counted:{file}:{line}:{type}"], breaches);
+        }
+        var reviews = Scan(cases[2].File, Group.Library, File.ReadAllText(Path.Combine(Root, cases[2].File)));
+        var updates = reviews.Where(s => s.Call == "Store").ToList();
+        output.WriteLine($"[G18·libs·حَقن] تَحديثاتُ التَقييم: {string.Join(" | ", updates.Select(s => $":{s.Line} {s.Key} → مَقروء {s.Resolved} · وُلِدَ {s.BornOf ?? "—"}"))}");
+        Assert.True(updates.Count >= 2 && updates.All(s => s.Resolved == "Review" && s.BornOf is null), "تَحديثُ تَقييمٍ مُحَمَّلٍ قُرِئَ وِلادَةً، أَو لَم يُرَ.");
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) <b>قارِئُ الوِلادَةِ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): يَرى <c>new T</c> وَسيطاً ومُتَغَيِّراً، و<c>?? new T</c>
+    /// وِلادَةً مُحتَمَلَة؛ ولا يَرى وِلادَةً في <c>LoadAsync</c>، ولا في وَسيطِ دالَّةٍ أَو مُتَغَيِّرِ <c>foreach</c> أَو وَسيطِ لامدا يَحجُبُ إسناداً أَبعَدَ بِالاسمِ نَفسِه،
+    /// ولا في <c>new List&lt;T&gt;</c>، ولا في إسنادِ خاصِّيَّةٍ بِالاسمِ نَفسِه (<c>x.t = new T</c>).</summary>
+    [Fact]
+    public void The_birth_reader_sees_new_and_ignores_loads_parameters_loop_and_lambda_variables()
+    {
+        const string code = """
+            var a = new Tenant { Id = "x" };
+            s.Store(a);
+            s.Store(new ACommerce.Kit.Tenants.Tenant { Id = "y" });
+            var b = existing ?? new Review { Id = id };
+            s.Store(b);
+            var a2 = await s.LoadAsync<Tenant>(slug);
+            s.Store(a2);
+            void Save(IDocumentSession s, Tenant a) { s.Store(a); }
+            foreach (var a in rows) s.Store(a);
+            items.ForEach(a => s.Store(a));
+            var c = new List<Tenant>();
+            s.StoreObjects(c);
+            holder.d = new Message();
+            s.Store(d);
+            """;
+        var sites = Scan("libs/x.cs", Group.Library, code);
+        output.WriteLine("[G18·قارِئ] " + string.Join(" | ", sites.Select(x => $"{x.Line}:{x.Key}→{x.BornOf ?? "—"}")));
+        Assert.Equal(["Tenant", "Tenant", "Review", null, null, null, null, null, null], sites.Select(x => x.BornOf));
+        Assert.Equal([2, 3, 5, 7, 8, 9, 10, 12, 14], sites.Select(x => x.Line));
     }
 
     /// <summary><b>الحَقنُ المُسَمّى في البَند</b>: نُسخَةٌ مِن <c>AppearanceBaselineSeeder.cs</c> تَعودُ فيها وِلادَةُ «theme-demo» إلى <c>Store(new Tenant</c> —

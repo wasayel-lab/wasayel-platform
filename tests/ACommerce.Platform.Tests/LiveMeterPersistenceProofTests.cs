@@ -350,6 +350,123 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         Assert.Equal("listing.create 1 · member_plan.subscribe 1 · offer.submit 1 · ticket.open 2", perUnit);
     }
 
+    // ─── ‏(‏2026-11-12، W13-6·B-R2·1 — مُراجَعَةُ المَرحَلَةِ ب الثانِيَة · M6B-CNT-R2-1) بابُ البَلاغِ وفَرعُ الصُوَرِ بِأَبوابِهِما ─────────────────────────────
+
+    /// <summary>مَخزَنُ مِلَفّاتٍ يَقبَلُ الرَفعَ ويُسَجِّلُه — فَيَبلُغُ بابُ النَشرِ فَرعَ الصُوَرِ (<c>photoUrls.Count &gt; 0</c>، MTE:1301) الَّذي لا يَبلُغُه
+    /// <c>UnavailableFileStorage</c> في المُضيفِ المُصَغَّر.</summary>
+    private sealed class UploadRecordingStorage : ACommerce.Kit.Files.IFileStorage
+    {
+        private readonly List<string> _keys = [];
+        public IReadOnlyList<string> Keys { get { lock (_keys) return [.. _keys]; } }
+        public string ProviderName => "recording-uploads";
+        public async Task<ACommerce.Kit.Files.StoredFile> UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default)
+        {
+            using var copy = new MemoryStream();
+            await content.CopyToAsync(copy, ct);
+            lock (_keys) _keys.Add(key);
+            return new ACommerce.Kit.Files.StoredFile(key, "/uploads/" + key, copy.Length, contentType, DateTime.UtcNow);
+        }
+        public Task<Stream?> ReadAsync(string key, CancellationToken ct = default) => Task.FromResult<Stream?>(null);
+        public Task<bool> DeleteAsync(string key, CancellationToken ct = default) => Task.FromResult(false);
+        public Task<bool> ExistsAsync(string key, CancellationToken ct = default) { lock (_keys) return Task.FromResult(_keys.Contains(key)); }
+        public Task<string> GetPublicUrlAsync(string key, TimeSpan? expiresIn = null, CancellationToken ct = default) => Task.FromResult("/uploads/" + key);
+    }
+
+    /// <summary>
+    /// <para><b>مَوضِعا الوِلادَةِ اللَذانِ لَم يَبلُغهُما بُرهان</b>: صَفُّ G5 لِلأَحداثِ أَعلاه يَبدَأُ المَجاري في جَلساتِه، ورِحلَةُ السَقفِ (G9) تَمشي
+    /// <c>/support/open</c> و<c>/listings/create</c> بِلا صُوَر — فَبابُ البَلاغِ (MTE:1167) وفَرعُ الصُوَر (MTE:1301) إن صارا <c>Append</c> كانَ كُلُّ حارِسٍ أَخضَرَ
+    /// والتَذكِرَةُ والإعلانُ يُكتَبانِ بِلا سَطر (مَقيسٌ في المُراجَعَة). فَهُنا البابانِ المُسَجَّلانِ بِمُرَشِّحاتِهِما عَبرَ الوَسيطِ الحَقيقِيّ (<c>throughResolver</c>):</para>
+    /// <list type="number">
+    ///   <item><c>POST /{slug}/listings/{id}/report</c> ⇐ <c>302 …?reported=1</c>، ووَثيقَةُ تَذكِرَةٍ واحِدَة، وحَدَثُ <c>TicketCreated</c> واحِد، و<b>سَطرُ <c>ticket.open</c>
+    ///   واحِد</b> بِمُعَرِّفِ الحَدَثِ ومالِكِ المَتجَر و<c>_none</c> (مَتجَرٌ بِلا أَدوار)، و<c>writer_xid</c> = <c>xmin</c> الحَدَث = <c>xmin</c> اللَقطَة.</item>
+    ///   <item><c>POST /{slug}/listings/create</c> بِصورَتَينِ ومَخزَنٍ يَقبَلُ الرَفع ⇐ <c>302</c> إلى الإعلان، والمَخزَنُ رَفَعَ مِفتاحَيه، والمَجرى حَدَثان
+    ///   (<c>ListingCreated</c> + <c>ListingMediaSet</c> — فَرعُ الصُوَرِ بِعَينِه)، و<b>سَطرُ <c>listing.create</c> واحِد</b> بِمُعامَلَةِ حَدَثِه؛ وبِلا صُوَرٍ
+    ///   (الفَرعُ التَوأَمُ MTE:1306) حَدَثٌ واحِدٌ وسَطرٌ واحِد — فَالأَداةُ تُمَيِّزُ الفَرعَين بِعَدَدِ الأَحداث.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public async Task The_report_door_and_the_photo_branch_of_the_publish_door_each_write_one_entry_in_their_events_transaction()
+    {
+        if (!Enabled) return;
+        var storage = new UploadRecordingStorage();
+        await using var host = LiveTemplateDoorHost.Build(services: s => s.AddSingleton<ACommerce.Kit.Files.IFileStorage>(storage), throughResolver: true);
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        var ownerId = owner.ToString("D");
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ البَلاغِ والصُوَر", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var member = new User
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, FullName = "عُضوُ البَلاغ", Phone = NewPhone(), PhoneVerified = true,
+            AcceptedTermsAt = DateTime.UtcNow, AcceptedTermsVersion = ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion,
+        };
+        var reported = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            s.Store(member);
+            s.Events.StartStream<ACommerce.Kit.Listings.Listing>(reported, new ACommerce.Kit.Listings.ListingCreated(reported, slug, "إعلانٌ يُبلَغُ عَنه", null, 1m, "general",
+                null, null, new() { ["owner_id"] = Guid.NewGuid().ToString() }, DateTime.UtcNow));
+            await s.SaveChangesAsync();
+        }
+        var token = AuthHandlers.MakeToken(member.Id, slug, member.SessionVersion);
+        async Task<List<Guid>> StreamsAsync(string table) => [.. ((await ScalarAsync(
+            $"select coalesce(string_agg(id::text, ','), '') from platform.{table} where tenant_id = @t", ("t", slug)))?.ToString() ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse)];
+        string Show(List<EventEntry> rows) => rows.Count == 0 ? "لا سَطر"
+            : string.Join(" | ", rows.Select(r => $"{r.Unit} {r.Id} role={r.Role} entrepreneur={r.Entrepreneur} writer_xid {r.WriterXid} = xmin الحَدَث {r.EventXmin}"));
+
+        // ١ · بابُ البَلاغ.
+        var report = await host.PostFormAsync("/{slug}/listings/{id:guid}/report",
+            new Dictionary<string, string> { ["slug"] = slug, ["id"] = reported.ToString() }, slug, token, ("reason", "مُخالِف"), ("note", "بَلاغُ العَدّ"));
+        var ticket = Assert.Single(await StreamsAsync("mt_doc_ticket"));
+        var ticketEvents = await StreamEventsAsync(ticket);
+        var ticketRows = await StreamEntriesAsync(ticket);
+        var ticketSnapXmin = Convert.ToString(await ScalarAsync("select xmin::text from platform.mt_doc_ticket where id = @id", ("id", ticket)));
+        output.WriteLine($"[P1·بَلاغ] POST /{slug}/listings/{reported}/report ⇒ {report.Status} {report.Location} · وَثائِقُ التَذكِرَة 1 · أَحداثُ مَجراها {ticketEvents} · "
+                         + $"{Show(ticketRows)} · xmin اللَقطَة {ticketSnapXmin}");
+
+        // ٢ · بابُ النَشرِ بِصورَتَين (فَرعُ MTE:1301)، ثُمَّ بِلا صُوَر (فَرعُ MTE:1306).
+        var store = new Dictionary<string, string> { ["slug"] = slug };
+        (string, string)[] Form(string title) => [("title", title), ("category", "general"), ("price", "120"), ("description", "إعلانُ العَدّ")];
+        var withPhotos = await host.PostMultipartAsync("/{slug}/listings/create", store, slug, token, Form("إعلانٌ بِصُوَرِه"),
+            ("photos", "a.jpg", "image/jpeg", [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]), ("photos", "b.png", "image/png", [0x89, 0x50, 0x4E, 0x47, 4, 5, 6]));
+        var photoListing = Guid.Parse(withPhotos.Location[(withPhotos.Location.LastIndexOf('/') + 1)..]);
+        var photoEvents = await StreamEventsAsync(photoListing);
+        var photoRows = await StreamEntriesAsync(photoListing);
+        var photoSnapXmin = Convert.ToString(await ScalarAsync("select xmin::text from platform.mt_doc_listing where id = @id", ("id", photoListing)));
+        var media = Convert.ToInt64(await ScalarAsync("select jsonb_array_length(coalesce(data->'MediaUrls', '[]'::jsonb)) from platform.mt_doc_listing where id = @id", ("id", photoListing)));
+        output.WriteLine($"[P1·صُوَر] POST /{slug}/listings/create (صورَتان) ⇒ {withPhotos.Status} {withPhotos.Location} · المَخزَنُ رَفَعَ {string.Join(", ", storage.Keys)} · "
+                         + $"أَحداثُ المَجرى {photoEvents} · وَسائِطُ الإعلان {media} · {Show(photoRows)} · xmin اللَقطَة {photoSnapXmin}");
+        var plain = await host.PostFormAsync("/{slug}/listings/create", store, slug, token, Form("إعلانٌ بِلا صُوَر"));
+        var plainListing = Guid.Parse(plain.Location[(plain.Location.LastIndexOf('/') + 1)..]);
+        var plainEvents = await StreamEventsAsync(plainListing);
+        var plainRows = await StreamEntriesAsync(plainListing);
+        var perUnit = await ScalarAsync("select string_agg(unit || ' ' || n, ' · ' order by unit) from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug));
+        output.WriteLine($"[P1·صُوَر] POST /{slug}/listings/create (بِلا صُوَر) ⇒ {plain.Status} {plain.Location} · أَحداثُ المَجرى {plainEvents} · {Show(plainRows)}");
+        output.WriteLine($"[P1·بَلاغ·صُوَر] لِكُلِّ وَحدَةٍ في /{slug}: {perUnit} — مَجارٍ بَدَأَت بِالأَبواب 3 (تَذكِرَةُ البَلاغ · إعلانٌ بِصُوَرِه · إعلانٌ بِلا صُوَر)، وفي الصَفِّ المَتجَرُ والعُضوُ والإعلانُ المُبلَغُ عَنه");
+
+        Assert.Equal((302, $"/{slug}/listings/{reported}?reported=1"), report);
+        Assert.Equal(1L, ticketEvents);
+        var t1 = Assert.Single(ticketRows);
+        Assert.Equal((MeterRules.TicketOpen, slug, $"{MeterRules.TicketOpen}:{slug}:{t1.EventId}", "event", t1.EventId, ownerId, MeterSentinels.None),
+                     (t1.Unit, t1.App, t1.Id, t1.SourceType, t1.SourceId, t1.Entrepreneur, t1.Role));
+        Assert.Equal(t1.EventXmin, t1.WriterXid);
+        Assert.Equal(t1.EventXmin, ticketSnapXmin);
+
+        Assert.Equal((302, $"/{slug}/listings/{photoListing}"), withPhotos);
+        Assert.Equal([$"tenants/{slug}/listings/{photoListing}/0.jpg", $"tenants/{slug}/listings/{photoListing}/1.png"], storage.Keys);
+        Assert.Equal((2L, 2L), (photoEvents, media));
+        var l1 = Assert.Single(photoRows);
+        Assert.Equal((MeterRules.ListingCreate, slug, $"{MeterRules.ListingCreate}:{slug}:{l1.EventId}", "event", ownerId, MeterSentinels.None),
+                     (l1.Unit, l1.App, l1.Id, l1.SourceType, l1.Entrepreneur, l1.Role));
+        Assert.Equal(l1.EventXmin, l1.WriterXid);
+        Assert.Equal(l1.EventXmin, photoSnapXmin);
+
+        Assert.Equal((302, $"/{slug}/listings/{plainListing}"), plain);
+        Assert.Equal(1L, plainEvents);
+        Assert.Equal(MeterRules.ListingCreate, Assert.Single(plainRows).Unit);
+        Assert.Equal("listing.create 3 · member.join 1 · store.create 1 · ticket.open 1", perUnit);   // ‏والعُضوُ والإعلانُ المُبلَغُ عَنه وُلِدا في الصَفّ
+    }
+
     // ─── صَفُّ الأُنبوبِ الحَقيقِيّ ──────────────────────────────────────────────────────────────────────────────────────
 
     private sealed class Pipeline : IAsyncDisposable

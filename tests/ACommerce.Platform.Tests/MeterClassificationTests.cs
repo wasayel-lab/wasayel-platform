@@ -390,10 +390,16 @@ public class MeterClassificationTests(ITestOutputHelper output)
     ///   لَم يُقلَب.</item>
     ///   <item><c>derived_not_inline</c>/<c>inline_not_derived</c>: المُشتَقُّ هُوَ اللَقطَةُ المُباشِرَةُ بِعَينِها.</item>
     /// </list>
+    /// <para>‏(‏2026-11-12، W13-6·B-R2·1 — مُراجَعَةُ المَرحَلَةِ ب الثانِيَة · M6B-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وشَكلُ الوِلادَةِ لِكُلِّ مَوضِعٍ لا لِكُلِّ نَوع</b>:
+    /// <c>counted_birth_off_shape:{النَوع}@{المِلَفّ}:{السَطر}</c> — مَوضِعٌ يَبني حَدَثاً مَعدوداً بِشَكلِ <see cref="MeterCreation.StartStream"/> ولَيسَ <c>Events.StartStream</c>.
+    /// كانَ التَشغيلُ المُصطَنَعُ يَقيسُ النَوعَ (بِدءُ مَجرىً مُصطَنَعٍ يُعطي سَطراً) والماسِحُ يُسَجِّلُ فِعلَ كُلِّ مَوضِعٍ ولا يُقارِنُه بِالدَفتَر: بابُ البَلاغِ (MTE:1167)
+    /// وفَرعُ الصُوَرِ (MTE:1301) إن صارا <c>Append</c> كُتِبَت التَذكِرَةُ والإعلانُ بِلا سَطرٍ وكُلُّ حارِسٍ أَخضَر (مَقيسٌ في المُراجَعَة). و<paramref name="sites"/> اختِيارِيٌّ:
+    /// الصُفوفُ الَّتي تَقيسُ الدَفتَرَ وَحدَه لا تُمَرِّرُه.</para>
     /// </summary>
     internal static IReadOnlyList<string> Breaches(
         IReadOnlyList<MeterClassificationRow> rows, IReadOnlyList<string> documents, IReadOnlyList<string> events,
-        IReadOnlyList<string> inlineSnapshots, IReadOnlyList<SyntheticRun> runs, MeterUnitCatalog catalog)
+        IReadOnlyList<string> inlineSnapshots, IReadOnlyList<SyntheticRun> runs, MeterUnitCatalog catalog,
+        IReadOnlyList<EventSite>? sites = null)
     {
         var breaches = new List<string>();
         var docRows = rows.Where(r => r.Kind == MeterTypeKind.Document).ToList();
@@ -439,6 +445,12 @@ public class MeterClassificationTests(ITestOutputHelper output)
             if (!counts && run.Entries.Count > 0)
                 breaches.Add($"uncounted_yields_entry:{run.Row.TypeName}@{run.Shape} ({string.Join(", ", run.Entries.Select(e => e.Unit))})");
         }
+
+        // ‏(‏2026-11-12، W13-6·B-R2·1) المَعدودُ بِبِدءِ مَجرىً يُبنى في مَوضِعِ `Events.StartStream` — كُلُّ مَوضِعٍ بِسَطرِه، لا النَوعُ مَرَّةً واحِدَة.
+        var bornAtStart = rows.Where(r => r is { Disposition: MeterDisposition.Counted, Creation: MeterCreation.StartStream })
+                              .Select(r => r.TypeName).ToHashSet(StringComparer.Ordinal);
+        foreach (var site in (sites ?? []).Where(s => s.Call != "StartStream"))
+            breaches.AddRange(site.Types.Where(bornAtStart.Contains).Select(t => $"counted_birth_off_shape:{t}@{site.File}:{site.Line}"));
         return breaches;
     }
 
@@ -477,7 +489,15 @@ public class MeterClassificationTests(ITestOutputHelper output)
         Assert.True(unseen.Count == 0, "حَدَثٌ يُبنى في المُنتَجِ ولا يَراهُ ماسِحُ المَواضِع: " + string.Join(", ", unseen));
         Assert.True(runs.Count >= rows.Count && runs.Sum(r => r.PendingStreams) > 0, $"أَداةٌ عَمياء: {runs.Count} إنشاءً لِـ{rows.Count} صَفّاً.");
 
-        var breaches = Breaches(rows, docs.All, events.All, inline, runs, MeterUnitCatalog.Default);
+        // ‏(‏2026-11-12، W13-6·B-R2·1) والمَواضِعُ مَعَه: كُلُّ مَوضِعٍ يَبني مَعدوداً بِبِدءِ مَجرىً يُطبَعُ بِفِعلِه — والعَدُّ صِفرٌ عَمى.
+        var bornAtStart = rows.Where(r => r is { Disposition: MeterDisposition.Counted, Creation: MeterCreation.StartStream }).Select(r => r.TypeName).ToHashSet(StringComparer.Ordinal);
+        var birthSites = events.Sites.Where(s => s.Types.Any(bornAtStart.Contains)).ToList();
+        output.WriteLine($"[G3] مَواضِعُ تَبني مَعدوداً بِبِدءِ مَجرى {birthSites.Count} (StartStream {birthSites.Count(s => s.Call == "StartStream")} · غَيرُه {birthSites.Count(s => s.Call != "StartStream")}): "
+                         + string.Join(" · ", birthSites.Select(s => $"{s.File[(s.File.LastIndexOf('/') + 1)..]}:{s.Line} {s.Call} {string.Join("+", s.Types.Where(bornAtStart.Contains))}")));
+        Assert.True(bornAtStart.Count >= 4 && bornAtStart.All(t => birthSites.Any(s => s.Types.Contains(t))),
+            $"أَداةٌ عَمياء: مَعدودٌ بِبِدءِ مَجرىً لا يُرى مَوضِعُه — {string.Join(", ", bornAtStart.Where(t => !birthSites.Any(s => s.Types.Contains(t))))}.");
+
+        var breaches = Breaches(rows, docs.All, events.All, inline, runs, MeterUnitCatalog.Default, events.Sites);
         output.WriteLine($"[G3] خُروق {breaches.Count}");
         Assert.True(breaches.Count == 0, "دَفتَرُ التَصنيف:\n  " + string.Join("\n  ", breaches));
     }
@@ -522,6 +542,54 @@ public class MeterClassificationTests(ITestOutputHelper output)
     }
 
     private sealed class InjectedDocument { public Guid Id { get; set; } }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·B-R2·1 — مُراجَعَةُ المَرحَلَةِ ب الثانِيَة · M6B-CNT-R2-1) <b>الحَقنُ الَّذي قاسَتهُ المُراجَعَة، في نُسخَةٍ مِن المِلَفِّ الحَقيقِيّ</b>:
+    /// بابُ البَلاغِ عَن إعلان (<c>POST /{slug}/listings/{id}/report</c>) يَعودُ فيه <c>StartStream&lt;Ticket&gt;(ev.Id, ev)</c> إلى <c>Append(ev.Id, ev)</c>، وفَرعُ
+    /// الإعلانِ بِصُوَرِه يَعودُ فيه <c>StartStream&lt;Listing&gt;(id, ev, …)</c> إلى <c>Append(id, ev, …)</c> — وكِلاهُما كانَ أَخضَرَ في كُلِّ حارِس (التَذكِرَةُ تُكتَبُ
+    /// و<c>ticket.open</c> صِفر). فَكُلٌّ يَحمَرُّ بِـ<c>counted_birth_off_shape</c> عَلى سَطرِه وَحدَه، والمَواضِعُ الأُخرى في المِلَفِّ — ومِنها بابُ الدَعمِ التَوأَمُ
+    /// <c>/support/open</c> بِالجُملَةِ نَفسِها حَرفاً — تَبقى خُضراً: الحارِسُ يَحكُمُ المَوضِعَ لا النَوع.</para>
+    /// </summary>
+    [Fact]
+    public void A_counted_birth_turned_into_an_append_at_the_report_door_or_the_photo_branch_is_red_on_its_own_line()
+    {
+        const string mte = "libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs";
+        var productTypes = ProductTypeNames();
+        var sources = EntitlementContractTests.SourceFiles().ToList();
+        var text = Assert.Single(sources, f => Rel(f.File) == mte).Text;
+        var rows = MeterClassification.All;
+        IReadOnlyList<string> Off(string replaced)
+        {
+            var sites = EventSites(sources.Select(f => Rel(f.File) == mte ? (f.File, replaced) : f), productTypes.Contains);
+            return [.. Breaches(rows, [], [], [], [], MeterUnitCatalog.Default, sites).Where(b => b.StartsWith("counted_birth_off_shape:", StringComparison.Ordinal))];
+        }
+        (string Injected, int Line) Inject(int from, string born, string append)
+        {
+            var at = text.IndexOf(born, from, StringComparison.Ordinal);
+            Assert.True(at > from, $"«{born}» غائِبٌ بَعدَ مَوضِعِه — الأَداةُ عَمياء.");
+            return (text[..at] + append + text[(at + born.Length)..], text.AsSpan(0, at).Count('\n') + 1);
+        }
+
+        const string ticketBirth = "s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);";
+        var reportDoor = text.IndexOf("\"/{slug}/listings/{id:guid}/report\"", StringComparison.Ordinal);
+        var supportDoor = text.IndexOf("\"/{slug}/support/open\"", StringComparison.Ordinal);
+        Assert.True(supportDoor > 0 && reportDoor > supportDoor, "البابانِ غائِبان — الأَداةُ عَمياء.");
+        var (report, reportLine) = Inject(reportDoor, ticketBirth, "s.Events.Append(ev.Id, ev);");
+        var (photo, photoLine) = Inject(0, "s.Events.StartStream<Listing>(id, ev,", "s.Events.Append(id, ev,");
+        var (support, supportLine) = Inject(supportDoor, ticketBirth, "s.Events.Append(ev.Id, ev);");
+
+        var real = Off(text);
+        var cases = new (string Name, IReadOnlyList<string> Breaches, string[] Expected)[]
+        {
+            ("report door", Off(report), [$"counted_birth_off_shape:TicketCreated@{mte}:{reportLine}"]),
+            ("photo branch", Off(photo), [$"counted_birth_off_shape:ListingCreated@{mte}:{photoLine}"]),
+            ("support door (its twin)", Off(support), [$"counted_birth_off_shape:TicketCreated@{mte}:{supportLine}"]),
+        };
+        output.WriteLine($"[G3·مَوضِع] الشَجَرَةُ الحَقيقِيَّة {real.Count} خَرقاً");
+        foreach (var (name, breaches, _) in cases) output.WriteLine($"[G3·مَوضِع] {name}: {string.Join(" | ", breaches)}");
+        Assert.Empty(real);
+        foreach (var (_, breaches, expected) in cases) Assert.Equal(expected, breaches);
+    }
 
     /// <summary>
     /// <para><b>صَفٌّ مَعدودٌ بِلا قاعِدَةٍ يَحمَرّ</b> (حَقنُ G3 المُسَمّى في البَند): الدَفتَرُ الحَقيقِيُّ ونُسَخٌ مِنه بِصَفٍّ واحِدٍ مُبَدَّل، تَمُرُّ بِالتَشغيلِ نَفسِه:</para>
@@ -569,6 +637,8 @@ public class MeterClassificationTests(ITestOutputHelper output)
     /// <para><b>والمُطابَقَةُ بِالاتِّجاهَين</b>: نَوعٌ تَراهُ أَداةٌ بِلا صَفٍّ (وَثيقَةٌ وحَدَث)، وصَفٌّ مَحذوف، وصَفٌّ لِنَوعٍ لا تَراهُ أَداة، ومُشتَقٌّ لَيسَ لَقطَة،
     /// ولَقطَةٌ لَيسَت مُشتَقّاً، وصَفّانِ لِنَوعٍ واحِد، ومَعدودٌ بِلا شَكلِ وِلادَة، وسَبَبٌ فارِغ، ووَحدَةٌ آتِيَةٌ تَدخُلُ المُعجَمَ قَبلَ قَلبِ صُفوفِها — كُلٌّ
     /// بِرَمزِه وَحدَه. والدَفتَرُ الحَقيقِيُّ صِفرُ خَرقٍ قَبلَها: فَلِكُلِّ رَمزٍ مِن الثَلاثَةَ عَشَرَ سالِبٌ يُنتِجُه ومُوجِبٌ لا يُنتِجُه.</para>
+    /// <para>‏(‏2026-11-12، W13-6·B-R2·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والرَمزُ الرابِعَ عَشَر</b> <c>counted_birth_off_shape</c>: مُوجِبُه الشَجَرَةُ الحَقيقِيَّةُ بِمَواضِعِها،
+    /// وسالِبُه مَوضِعُ <c>Append</c> يَبني <c>TicketCreated</c>؛ وسالِباه بِنُسخَتَينِ مِن المِلَفِّ الحَقيقِيِّ في الصَفِّ التالي.</para>
     /// </summary>
     [Fact]
     public async Task An_unclassified_a_stale_a_misplaced_derived_and_a_premature_lexicon_unit_are_each_red_by_their_code()
@@ -579,6 +649,7 @@ public class MeterClassificationTests(ITestOutputHelper output)
         var all = MeterClassification.All;
         var runs = await MartenSchemaVerbTests.WithComposedStore(Environments.Production, s => Run(s, all));
         Assert.Empty(Breaches(all, docs.All, events.All, inline, runs, MeterUnitCatalog.Default));
+        Assert.Empty(Breaches(all, docs.All, events.All, inline, runs, MeterUnitCatalog.Default, events.Sites));   // ‏(W13-6·B-R2·1) المُوجِبُ بِالمَواضِع
 
         // ‏(‏2026-11-12، W13-6·٧) `listing.create` في المُعجَمِ الحَقيقِيِّ الآن، فَالحالُ «وَحدَةٌ دَخَلَت المُعجَمَ قَبلَ قَلبِ صَفِّها» يُصنَعُ بِإعادَةِ صَفِّ
         // `ListingCreated` إلى ما كانَ عَلَيه قَبلَ البَند ٧ — والرُموزُ الثَلاثَةُ نَفسُها.
@@ -613,6 +684,10 @@ public class MeterClassificationTests(ITestOutputHelper output)
             ("a later unit enters the lexicon before its rows flip",
              ["lexicon_unit_without_row:listing.create", "later_unit_in_lexicon:Listing->listing.create", "later_unit_in_lexicon:ListingCreated->listing.create"],
              Breaches(unflipped, docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),
+            // ‏(‏2026-11-12، W13-6·B-R2·1) الرَمزُ الرابِعَ عَشَر: مَوضِعُ `Append` يَبني `TicketCreated` (مَعدودٌ بِبِدءِ مَجرى) — والمَواضِعُ الحَقيقِيَّةُ مَعَه خُضر.
+            ("a counted event built at an Append site", ["counted_birth_off_shape:TicketCreated@libs/injected/Report.cs:7"],
+             Breaches(all, docs.All, events.All, inline, runs, MeterUnitCatalog.Default,
+                      [.. events.Sites, new EventSite("libs/injected/Report.cs", 7, "Append", ["TicketCreated"])])),
         };
         foreach (var (name, expected, breaches) in cases)
         {
