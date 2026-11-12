@@ -236,6 +236,12 @@ public static class MarketplaceTemplateExtensions
             // ADR-041 §٣): إصدارُ جَلسَتِه لا يُعيدُه حِفظٌ قَرَأَ قَبلَ الرَفع. ونَظيرُه `User` في `HostingExtensions`. وبِهذا يَخرُجُ مِن
             // قائِمَةِ غَيرِ المُسَجَّلِ (`MartenSchemaVerbTests.PinnedUnregistered`) فَيَدخُلُ عَرضَ المُخَطَّطِ وتَوكيدَه.
             opts.Schema.For<Services.Incubator.StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);
+
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051) **دَفتَرُ العَدِّ ومُستَمِعُه** هُنا لا في `HostingExtensions`: المُستَمِعُ يَعرِفُ وَثائِقَ القالِب
+            // (الصَفقَة)، والاعتِمادُ يَمشي مِن القالِبِ إلى النَواة. جَداوِلُ `meter.*` ميزَةُ Weasel يَراها فِعلُ المُخَطَّطِ بِهذا النِداء، والمُستَمِعُ
+            // واحِدٌ يَبلُغُ كُلَّ جَلسَة (`MeterListenerShapeTests` يَعُدُّه)؛ ونَقضُه سَطرُه وَحدَه (ADR-051 §٨).
+            opts.Storage.Add(new Services.Metering.UsageLedgerFeature(opts.Advanced.Migrator));
+            opts.Listeners.Add(new Services.Metering.UsageListener());
         });
 
         return services;

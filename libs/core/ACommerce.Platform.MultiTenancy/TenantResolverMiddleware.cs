@@ -1,5 +1,6 @@
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -550,6 +551,11 @@ public sealed class TenantResolverMiddleware
 
     public async Task InvokeAsync(HttpContext ctx)
     {
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **حامِلُ نِطاقِ العَدِّ يُفتَحُ في أَوَّلِ سَطرٍ لِكُلِّ طَلَب** —
+        // قَبلَ كُلِّ رُجوعٍ مُبكِر، فَلِلطَلَبِ الَّذي لا مَتجَرَ فيه (`/studio`، `/admin`) حامِلٌ فارِغٌ يَملَؤُه مَن يَعرِفُ القيمَة (حُرّاسُ البَند ٨)، ولا يَرِثُ
+        // طَلَبٌ حامِلَ غَيرِه. ويُملأُ أَدناه مِن وَثيقَةِ المَتجَرِ الَّتي يُحَمِّلُها هذا الوَسيطُ أَصلاً — بِصِفرِ استِعلامٍ إضافِيّ.
+        var meter = MeterScope.Open();
+
         // **المُضيفُ أَوَّلاً ثُمَّ المَسار — والمَسارُ لا يُحذَف.**
         // وتَحتَ نِطاقٍ فَرعِيٍّ يَكونُ الجَوابانِ واحِداً أَصلاً،
         // لِأَنَّ `SubdomainTenantPathMiddleware` حَقَنَ المَقطَعَ
@@ -610,9 +616,17 @@ public sealed class TenantResolverMiddleware
         if (entity is not null)
         {
             if (hostSlug is null || CarriesStoreContext(ctx.Request.Path.Value))
+            {
                 ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
                               entity.TagLine, entity.City,
                               hasRoles: entity.Roles.Count > 0);
+                // ‏(‏2026-11-12، W13-6·٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والحامِلُ مِن الوَثيقَةِ نَفسِها حَيثُ يُحَلُّ المَتجَر: رائِدُ الأَعمالِ مالِكُه لَحظَةَ
+                // الكِتابَة (`_unowned` لِمَتجَرٍ بِلا مالِك)، والدَورُ `_none` لِمَتجَرٍ بِلا أَدوارٍ وإلّا يَبقى لِمَن يَحسِبُه (البَند ١٠). **ولا يُؤخَذُ دَورُ
+                // المُضيف** (`RoleFromHost`): ادِّعاءٌ يُفحَصُ عَلى المَتجَرِ (`HoldsRoleHost`) لا عَلى المُستَخدِم (COR-11).
+                meter.Fill(entity.Slug,
+                           entrepreneur: entity.OwnerUserId == Guid.Empty ? MeterSentinels.Unowned : entity.OwnerUserId.ToString("D"),
+                           role: entity.Roles.Count == 0 ? MeterSentinels.None : null);
+            }
         }
         else if (hostSlug is not null)
         {

@@ -328,6 +328,14 @@ ACommerce.Templates.Customer.Marketplace.AuthSession.HttpAccessor =
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١) **دَفتَرُ العَدِّ قَبلَ البَذرِ وقَبلَ أَن يَستَمِعَ الخادِم**: جَداوِلُ `meter.*`، والجيل، ونافِذَةُ كُلِّ
+    // وَحدَة — فَكُلُّ كِتابَةٍ مَعدودَةٍ بَعدَه تَجِدُها، ومُعجَمٌ فاسِدٌ يُفشِلُ الإقلاعَ هُنا بِرُموزِه. والسَطرُ `[meter] boot …` يُقرَأُ في سِجِلِّ الإقلاع.
+    var meterBoot = await ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterBoot.EnsureAsync(
+        scope.ServiceProvider.GetRequiredService<Marten.IDocumentStore>());
+    app.Logger.LogInformation("{MeterBoot}", meterBoot.Line);
+    // **والبَذرُ كُلُّه تَحتَ حامِلِ البَذر** (RULES-06): ما تَكتُبُه البَذّاراتُ مِن وَحدَةٍ مَعدودَةٍ دَورُه ورائِدُ أَعمالِه `_seed` لِكُلِّ مَتجَر — لا `_unresolved`.
+    // ويُعادُ ما قَبلَه عِندَ نِهايَةِ الكُتلَة، فَلا يَرِثُه ما يَبدَأُ بَعدَها (خِدماتُ الخَلفِيَّةِ وطَلَباتُ الخادِم).
+    using var meterSeedScope = ACommerce.Platform.Shared.Metering.MeterScope.Seed();
     await PlatformSeed.RunAsync(scope.ServiceProvider);
     // اِربِط المَتاجِر القَديمَة بِأَوَّل مُستَخدِم studio (إن وُجِد).
     // ‏(‏2026-10-25، W8-3 — lens-security-14) بِأَقدَمِ مُشرِفِ مَنَصَّةٍ — لا أَيِّ مُستَخدِم — وهُنا وَحدَه لا عِندَ كُلِّ دُخول.

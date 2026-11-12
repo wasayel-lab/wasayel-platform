@@ -1,0 +1,13 @@
+{
+  "units": [
+    {
+      "code": "deal.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "deal_status",
+      "reconcile": "deal_ids",
+      "source": "DealsService.StartAsync — Deal stored with VersionFor = null (one deal = one cart line or one listing-page request)"
+    }
+  ]
+}
