@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using ACommerce.Kit.Payments;
 using ACommerce.Platform.Providers;
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Providers;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -470,7 +471,8 @@ public sealed class GatewayPayments
         if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
             return With(Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured)));
 
-        var fetched = await _client.FetchInvoiceAsync(key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
+        var fetched = await _client.FetchInvoiceAsync(GatewayCalls.Fetch(tenantSlug, deal.Refs[GatewayPaymentProof.InvoiceRef], GatewayCalls.Verify, ProviderCall.FreshRequestId()),
+            key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
         if (!fetched.Ok)
             return With(Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code)));
 
@@ -513,7 +515,8 @@ public sealed class GatewayPayments
         if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
             return With(Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured)));
 
-        var fetched = await _client.FetchInvoiceAsync(key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
+        var fetched = await _client.FetchInvoiceAsync(GatewayCalls.Fetch(tenantSlug, deal.Refs[GatewayPaymentProof.InvoiceRef], GatewayCalls.Expiry, trigger: null),
+            key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
         if (!fetched.Ok)
             return With(Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code)));
 
@@ -686,7 +689,7 @@ public sealed class GatewayPayments
             return MoyasarFailures.NotConfigured;
 
         var secret = NewNoticeSecret();
-        var registered = await _client.CreateWebhookAsync(key, NoticeUrl(origin, tenantSlug), secret, ct);
+        var registered = await _client.CreateWebhookAsync(GatewayCalls.Webhook(tenantSlug), key, NoticeUrl(origin, tenantSlug), secret, ct);
         var values = new Dictionary<string, StoredValue>(current.Values, StringComparer.Ordinal);
         values.Remove(field.Code);
         if (registered.Ok)
@@ -708,7 +711,8 @@ public sealed class GatewayPayments
         if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
             return Logged(tenantSlug, new(null, null, MoyasarFailures.NotConfigured));
 
-        var fetched = await _client.FetchInvoiceAsync(key, notice.InvoiceId, ct);
+        var fetched = await _client.FetchInvoiceAsync(
+            GatewayCalls.Fetch(tenantSlug, notice.InvoiceId, GatewayCalls.Notice, notice.PaymentId ?? ProviderCall.FreshRequestId()), key, notice.InvoiceId, ct);
         if (!fetched.Ok) return Logged(tenantSlug, new(null, null, fetched.Failure!.Code));
 
         var invoice = fetched.Value!;
@@ -792,7 +796,7 @@ public sealed class GatewayPayments
                 // وتاريخُ انتِهائِها مَعَها: الآنَ وأَربَعٌ وعِشرون ساعَة (‏2026-10-29، قَرارُ المالِك د5 (٣)).
                 var draft = new MoyasarInvoiceDraft(amount!.Value, l.Format("pay.invoice.description", storeName), returnUrl, returnUrl,
                     GatewayPaymentProof.MetadataFor(deals.Select(d => d.Id).ToArray()), expiresAt = _clock.GetUtcNow() + InvoiceLifetime);
-                var created = await _client.CreateInvoiceAsync(key, draft, ct);
+                var created = await _client.CreateInvoiceAsync(GatewayCalls.Create(tenantSlug, deals[0].Id), key, draft, ct);
                 if (created.Ok) invoice = created.Value; else code = created.Failure!.Code;
             }
         }
@@ -1249,7 +1253,9 @@ public sealed class GatewayInvoiceCloser
             || await GatewayPayments.SecretKeyAsync(_providers, _vault, _log, tenantSlug, CancellationToken.None) is not { } key)
             return (Logged(tenantSlug, cancelled, MoyasarFailures.NotConfigured), null);
 
-        var fetched = await _client.FetchInvoiceAsync(key, cancelled.Refs[GatewayPaymentProof.InvoiceRef]);
+        var fetched = await _client.FetchInvoiceAsync(
+            GatewayCalls.Fetch(tenantSlug, cancelled.Refs[GatewayPaymentProof.InvoiceRef], GatewayCalls.Close, cancelled.Id.ToString("N")),
+            key, cancelled.Refs[GatewayPaymentProof.InvoiceRef]);
         if (!fetched.Ok) return (Logged(tenantSlug, cancelled, fetched.Failure!.Code), null);
         var invoice = fetched.Value!;
 
@@ -1272,7 +1278,7 @@ public sealed class GatewayInvoiceCloser
             return (Logged(tenantSlug, cancelled, kept[0].Code), null);
         }
 
-        var closed = await _client.CancelInvoiceAsync(key, invoice.Id);
+        var closed = await _client.CancelInvoiceAsync(GatewayCalls.Cancel(tenantSlug, invoice.Id), key, invoice.Id);
         if (!closed.Ok) return (Logged(tenantSlug, cancelled, closed.Failure!.Code), null);
         // و‏200 بِحالٍ غَيرِ «canceled» نَتيجَةٌ بِرَمزِها لا «أُلغِيَت» (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b).
         return string.Equals(closed.Value!.Status, MoyasarClient.CanceledStatus, StringComparison.Ordinal)
@@ -1292,4 +1298,47 @@ public sealed class GatewayInvoiceCloser
         _log.Log(level, "[gateway] close invoice {Slug} deal {Deal} ← {Outcome}", tenantSlug, cancelled.Id.ToString("D"), outcome);
         return code;
     }
+}
+
+/// <summary>
+/// <para><b>نِداءاتُ بَوّابَةِ المَتجَرِ المَعدودَة — في مَوضِعٍ واحِد</b> (‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §6.2): المَتجَرُ مِن المُنادي (لا مِن
+/// الجَلسَة)، والوَحدَةُ مِن المُعجَم، ومُعَرِّفُ الطَلَبِ مِفتاحُ العَمَلِيَّةِ المَنطِقِيَّةِ المَعروفُ قَبلَ النِداء. مُستَهلِكاه في وَقتِ التَشغيل <see cref="GatewayPayments"/>
+/// (الفَتح، التَحَقُّق، المُهلَة، الإشعار، تَسجيلُ الإشعار) و<see cref="GatewayInvoiceCloser"/> (الجَلبُ والإلغاءُ بَعدَ إلغاءِ صَفقَة).</para>
+/// <list type="bullet">
+///   <item><b>الإنشاء</b>: مُعَرِّفُ نِداءٍ جَديد — البَوّابَةُ لا تَأخُذُ مِفتاحَ مَرَّة-واحِدَة، فَالإنشاءُ المُعادُ فاتورَةٌ ثانِيَة؛ ومَصدَرُه أُولى صَفَقاتِ الفاتورَة.</item>
+///   <item><b>الجَلب</b>: <c>{invoiceId}:{purpose}[:{trigger}]</c> — التَحَقُّقُ بِمُعَرِّفِ نِداءٍ جَديد (كُلُّ نَقرَةٍ جَلب)، والإشعارُ بِمُعَرِّفِ دَفعِه (إعادَةُ البَوّابَةِ
+///   لِلإشعارِ نَفسِه لا تُضاعِف)، والمُهلَةُ بِلا زِناد (إعاداتُ الرِسالَةِ ‏1/5/15 ث جَلبٌ واحِد)، والإغلاقُ بِالصَفقَةِ المُلغاة (كُلُّ إلغاءٍ جَلبُه).</item>
+///   <item><b>الإلغاءُ عِندَ البَوّابَة</b>: <c>{invoiceId}:close</c> — الفاتورَةُ تُلغى مَرَّةً، بَعدَ إلغاءِ آخِرِ صَفقَةٍ قائِمَةٍ فيها.</item>
+///   <item><b>تَسجيلُ الإشعار</b>: مُعَرِّفُ نِداءٍ جَديد — كُلُّ رَبطٍ تَسجيل.</item>
+/// </list>
+/// <para><b>والإغلاقُ غَرَضٌ رابِعٌ لا «المُهلَة»</b> (التَصميم §6.2 يَقولُ «expiry» لِلجَلبِ والإلغاءِ في المُلغي، ومَقيسٌ عِندَ <c>99943ad</c>: المُلغي يُنادى مِن
+/// <c>DealsService.CancelCoreAsync</c> لِكُلِّ إلغاءِ صَفقَةٍ عَلَيها فاتورَة — المُشتَري والبائِعُ والاستوديو والحَسمُ والمُهلَة — وفي المُهلَةِ يَجلِبُ مَرَّةً لِكُلِّ صَفقَة).
+/// فَمُعَرِّفُ المُهلَةِ عَلى جَلبِ المُلغي يَنسِبُ إلغاءَ المُشتَري إلى المُهلَةِ ويَطوي جَلبَينِ حَقيقِيَّينِ في سَطر.</para>
+/// </summary>
+public static class GatewayCalls
+{
+    public const string Verify = "verify";
+    public const string Notice = "notice";
+    public const string Expiry = "expiry";
+    public const string Close = "close";
+
+    /// <summary>إنشاءُ الفاتورَة — مَصدَرُه أُولى صَفَقاتِها.</summary>
+    public static ProviderCall Create(string tenantSlug, Guid firstDeal)
+        => ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceCreate, tenantSlug, ProviderCall.FreshRequestId())
+                       .About(ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterRules.DealSource, firstDeal.ToString("D"));
+
+    /// <summary>جَلبُ الفاتورَةِ لِغَرَضٍ بِزِنادِه — أَو بِلا زِنادٍ لِلمُهلَة.</summary>
+    public static ProviderCall Fetch(string tenantSlug, string invoiceId, string purpose, string? trigger)
+        => ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceFetch, tenantSlug,
+                                   trigger is null ? $"{invoiceId}:{purpose}" : $"{invoiceId}:{purpose}:{trigger}")
+                       .About(ProviderCall.InvoiceSource, invoiceId);
+
+    /// <summary>إلغاءُ الفاتورَةِ عِندَ البَوّابَة.</summary>
+    public static ProviderCall Cancel(string tenantSlug, string invoiceId)
+        => ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceCancel, tenantSlug, $"{invoiceId}:{Close}")
+                       .About(ProviderCall.InvoiceSource, invoiceId);
+
+    /// <summary>تَسجيلُ إشعارِ الدَفع.</summary>
+    public static ProviderCall Webhook(string tenantSlug)
+        => ProviderCall.ForChannel(OutboundUnits.PaymentGatewayWebhookCreate, tenantSlug, ProviderCall.FreshRequestId());
 }

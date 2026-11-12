@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -109,10 +110,15 @@ public sealed class MoyasarClient
     /// لا رَقَمٌ مُختَرَع: ميسّر لا تَنشُرُ مُهلَة.</summary>
     public const int TimeoutSeconds = 15;
 
-    private readonly HttpClient _http;
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // `ProviderHttp<MoyasarClient>` مالِكُه، وكُلُّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّةَ تَأخُذُ `ProviderCall` أَوَّلَ وُسَطائِها (القاعِدَة ٦): المُنادي يَعرِفُ المَتجَرَ وسَبَبَ
+    // النِداء، والعُدَّةُ تَسِمُه بِاسمِ المُزَوِّد (`ProviderNames.StoreGateway`). **والإنشاءُ يُعَدُّ عِندَ ‏2xx الـ`POST`** ووَسمُ بَياناتِه (`PUT`) نِداءٌ مُساعِد
+    // (`ProviderHelperReasons.MetadataTag`) — فَفاتورَةٌ أُنشِئَت ثُمَّ سَقَطَ وَسمُها سَطرٌ واحِد. والاستِثناءُ يَعودُ كَما هُوَ بَعدَ أَن يُعَدَّ مَجهولاً، فَتَحويلُ
+    // العَميلِ لِأَخطائِه (أَدناه) لا يَتَغَيَّر. وبِناءُ العَميلِ بِـ`HttpClient` في الاختِبارِ يَبقى بِالتَحويلِ الضِمنِيِّ (مَقعَدُ اختِبار، G6c).
+    private readonly ProviderHttp<MoyasarClient> _http;
     private readonly ILogger<MoyasarClient> _log;
 
-    public MoyasarClient(HttpClient http, ILogger<MoyasarClient> log)
+    public MoyasarClient(ProviderHttp<MoyasarClient> http, ILogger<MoyasarClient> log)
     {
         _http = http;
         _log = log;
@@ -129,7 +135,7 @@ public sealed class MoyasarClient
     /// <c>metadata</c> فارِغَةٌ أَو فَوقَ حُدودِها: <see cref="MoyasarFailures.Invalid"/> بِلا شَبَكَة.</para>
     /// </summary>
     public async Task<MoyasarResult<MoyasarInvoice>> CreateInvoiceAsync(
-        string secretKey, MoyasarInvoiceDraft draft, CancellationToken ct = default)
+        ProviderCall call, string secretKey, MoyasarInvoiceDraft draft, CancellationToken ct = default)
     {
         const string operation = "create invoice";
         if (string.IsNullOrWhiteSpace(secretKey)) return Fail<MoyasarInvoice>(MoyasarFailures.NotConfigured, operation, null);
@@ -146,7 +152,7 @@ public sealed class MoyasarClient
         // وتاريخُ الانتِهاءِ حَقلُ الوَثيقَةِ نَفسِها — يُرسَلُ حينَ تَحمِلُه المُسَوَّدَة (‏2026-10-29، قَرارُ المالِك د5 (٣)؛ تَوصيفُ «اليَوم» صَفُّ
         // `Creating_an_invoice_posts_the_documented_fields…` بِخَمسَةِ حُقولٍ بِلا تاريخ — باقٍ بِحَرفِه لِمُسَوَّدَةٍ بِلا تاريخ).
         if (draft.ExpiresAt is { } expires) fields["expired_at"] = ExpiryText(expires);
-        var created = await SendAsync(secretKey, HttpMethod.Post, InvoicesPath, fields, operation, ct);
+        var created = await SendAsync(Counted(call), secretKey, HttpMethod.Post, InvoicesPath, fields, operation, ct);
         if (!created.Ok) return MoyasarResult<MoyasarInvoice>.Fail(created.Failure!);
         // والرَدُّ يُقرَأُ بِشَرطِ أَخَواتِه (‏2026-10-13، مُراجَعَةُ بَوّابَةِ المَوجَة 3b، G5 (xvi-g)؛ تَوصيفُ «اليَوم» `e4a3f14`): الرابِطُ مُطلَقٌ
         // بِـhttp(s) — شَرطُ `GatewayReturn.PayUrlOf` لِلرابِطِ نَفسِه، فَلا يُحَوَّلُ المُشتَري إلى `javascript:` — والمُعَرِّفُ uuid قَبلَ أَن يَدخُلَ مَسارَ
@@ -154,7 +160,7 @@ public sealed class MoyasarClient
         if (Read(created.Value) is not { } invoice || !IsAbsoluteWeb(invoice.Url)) return Unreadable<MoyasarInvoice>(operation, "url");
         if (!Guid.TryParse(invoice.Id, out var id)) return Unreadable<MoyasarInvoice>(operation, "id");
 
-        var tagged = await SendAsync(secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D"),
+        var tagged = await SendAsync(Tag, secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D"),
             new Dictionary<string, object?> { ["metadata"] = draft.Metadata }, "update invoice metadata", ct);
         if (!tagged.Ok) return MoyasarResult<MoyasarInvoice>.Fail(tagged.Failure!);
 
@@ -172,13 +178,13 @@ public sealed class MoyasarClient
     /// referenced in the request was not found» — فَتَعودُ <see cref="MoyasarFailures.Refused"/> بِحالِها.</para>
     /// </summary>
     public async Task<MoyasarResult<MoyasarInvoice>> FetchInvoiceAsync(
-        string secretKey, string invoiceId, CancellationToken ct = default)
+        ProviderCall call, string secretKey, string invoiceId, CancellationToken ct = default)
     {
         const string operation = "fetch invoice";
         if (string.IsNullOrWhiteSpace(secretKey)) return Fail<MoyasarInvoice>(MoyasarFailures.NotConfigured, operation, null);
         if (!Guid.TryParse(invoiceId, out var id)) return Fail<MoyasarInvoice>(MoyasarFailures.Invalid, operation, null);
 
-        var res = await SendAsync(secretKey, HttpMethod.Get, InvoicesPath + "/" + id.ToString("D"), null, operation, ct);
+        var res = await SendAsync(Counted(call), secretKey, HttpMethod.Get, InvoicesPath + "/" + id.ToString("D"), null, operation, ct);
         if (!res.Ok) return MoyasarResult<MoyasarInvoice>.Fail(res.Failure!);
         return Read(res.Value) is { } invoice
             ? MoyasarResult<MoyasarInvoice>.Success(invoice)
@@ -195,13 +201,13 @@ public sealed class MoyasarClient
     /// مُستَهلِكُه إلّا عَلى فاتورَةٍ جَلَبَها لِلتَّوِّ بِحالِ <see cref="OpenStatus"/>، وما يُجابُ بِه غَيرُ ذلكَ يُقاسُ في البُرهانِ الحَيّ.</para>
     /// </summary>
     public async Task<MoyasarResult<MoyasarInvoice>> CancelInvoiceAsync(
-        string secretKey, string invoiceId, CancellationToken ct = default)
+        ProviderCall call, string secretKey, string invoiceId, CancellationToken ct = default)
     {
         const string operation = "cancel invoice";
         if (string.IsNullOrWhiteSpace(secretKey)) return Fail<MoyasarInvoice>(MoyasarFailures.NotConfigured, operation, null);
         if (!Guid.TryParse(invoiceId, out var id)) return Fail<MoyasarInvoice>(MoyasarFailures.Invalid, operation, null);
 
-        var res = await SendAsync(secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D") + CancelSuffix, null, operation, ct);
+        var res = await SendAsync(Counted(call), secretKey, HttpMethod.Put, InvoicesPath + "/" + id.ToString("D") + CancelSuffix, null, operation, ct);
         if (!res.Ok) return MoyasarResult<MoyasarInvoice>.Fail(res.Failure!);
         return Read(res.Value) is { } invoice
             ? MoyasarResult<MoyasarInvoice>.Success(invoice)
@@ -218,13 +224,13 @@ public sealed class MoyasarClient
     /// <para><b>ومُسَوَّدَةٌ خارِجَ الحُدودِ لا تُرسَل</b>: رابِطٌ غَيرُ مُطلَقٍ بِـhttp(s) أَو سِرٌّ أَبيَض — <see cref="MoyasarFailures.Invalid"/> بِلا شَبَكَة.</para>
     /// </summary>
     public async Task<MoyasarResult<string>> CreateWebhookAsync(
-        string secretKey, string url, string sharedSecret, CancellationToken ct = default)
+        ProviderCall call, string secretKey, string url, string sharedSecret, CancellationToken ct = default)
     {
         const string operation = "create webhook";
         if (string.IsNullOrWhiteSpace(secretKey)) return Fail<string>(MoyasarFailures.NotConfigured, operation, null);
         if (!IsAbsoluteWeb(url) || string.IsNullOrWhiteSpace(sharedSecret)) return Fail<string>(MoyasarFailures.Invalid, operation, null);
 
-        var res = await SendAsync(secretKey, HttpMethod.Post, WebhooksPath, new Dictionary<string, object?>
+        var res = await SendAsync(Counted(call), secretKey, HttpMethod.Post, WebhooksPath, new Dictionary<string, object?>
         {
             ["http_method"]   = "post",
             ["url"]           = url,
@@ -283,7 +289,10 @@ public sealed class MoyasarClient
     /// <para>(‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: و‏429 لَيسَ رَفضاً — <see cref="MoyasarFailures.RateLimited"/> بِحالِه،
     /// فَيُعيدُ مَن يُعيدُ: وَثيقَةُ الأَخطاءِ «429 Too Many Requests – Too many requests hit the API too quickly».)</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والنِداءُ يَمُرُّ بِالمُستَدعي</b>: <paramref name="send"/> مَعدودٌ
+    /// (<see cref="Counted"/>) أَو مُساعِد (<see cref="Tag"/>)، والطَلَبُ والمُهلَةُ والتَصنيفُ هُنا بِحَرفِها.</remarks>
     private async Task<MoyasarResult<JsonElement>> SendAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
         string secretKey, HttpMethod method, string path, object? body, string operation, CancellationToken ct)
     {
         using var msg = new HttpRequestMessage(method, BaseUrl + path);
@@ -297,7 +306,7 @@ public sealed class MoyasarClient
         HttpResponseMessage resp;
         try
         {
-            resp = await _http.SendAsync(msg, cts.Token);
+            resp = await send(msg, cts.Token);
         }
         catch (HttpRequestException)
         {
@@ -322,6 +331,18 @@ public sealed class MoyasarClient
                 : Fail<JsonElement>(MoyasarFailures.Unreadable, operation, status);
         }
     }
+
+    /// <summary>النِداءُ المَعدود — مَوسوماً بِاسمِ المُزَوِّد.</summary>
+    private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Counted(ProviderCall call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var stamped = call.By(ProviderNames.StoreGateway);
+        return (msg, ct) => _http.SendAsync(stamped, msg, ct);
+    }
+
+    /// <summary>وَسمُ الفاتورَةِ بِبَياناتِ صَفَقاتِها — مُساعِدٌ لا يُعَدّ (الإنشاءُ عُدَّ عِندَ الـ<c>POST</c>).</summary>
+    private Task<HttpResponseMessage> Tag(HttpRequestMessage msg, CancellationToken ct)
+        => _http.SendHelperAsync(new ProviderHelper(ProviderNames.StoreGateway, ProviderHelperReasons.MetadataTag), msg, ct);
 
     // ═══ أَدَوات ═══════════════════════════════════════════════════════
 
@@ -462,12 +483,16 @@ public static class MoyasarClientExtensions
     /// <para>سَقفُ <c>HttpClient.Timeout</c> ضِعفُ مُهلَتِنا الداخِلِيَّة، لِتَسبِقَ مُهلَتُنا دائِماً فَيَثبُتَ رَمزُ الفَشَلِ
     /// بَدَلَ أَن يَتَبَدَّلَ بِسِباق — حُجَّةُ جيرانِه.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والتَسجيلُ بِالمُستَدعي المَعدود</b>: <c>AddProviderHttp&lt;MoyasarClient&gt;</c>
+    /// بِالسَقفِ نَفسِه و<c>RedactLoggedHeaders</c> نَفسِه عَلى العَميلِ المُسَمّى بِاسمِ الصِنف (الاسمُ الَّذي كانَ يُعطيه <c>AddHttpClient&lt;MoyasarClient&gt;</c>)،
+    /// والعَميلُ عابِرٌ كَما كانَ العَميلُ المُطَبَّع.</remarks>
     public static IServiceCollection AddMoyasarGateway(this IServiceCollection services)
     {
         // ‏`RedactLoggedHeaders`: لوغُ مَصنَعِ العُمَلاءِ يَطبَعُ رُؤوسَ الطَلَبِ في مُستَوى التَتَبُّع — ورَأسُ المُصادَقَةِ هُنا المِفتاحُ
         // السِرِّيُّ بِـbase64 لا غَير. فَتُحجَبُ قيَمُ الرُؤوسِ كُلِّها صَراحَةً، لا اعتِماداً عَلى افتِراضِ نُسخَةٍ مِن الإطار.
-        services.AddHttpClient<MoyasarClient>(client => client.Timeout = TimeSpan.FromSeconds(MoyasarClient.TimeoutSeconds * 2))
+        services.AddProviderHttp<MoyasarClient>((_, client) => client.Timeout = TimeSpan.FromSeconds(MoyasarClient.TimeoutSeconds * 2))
                 .RedactLoggedHeaders(_ => true);
+        services.AddTransient<MoyasarClient>();
         return services;
     }
 }

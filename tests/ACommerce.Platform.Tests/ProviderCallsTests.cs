@@ -251,9 +251,10 @@ public class ProviderCallsTests(ITestOutputHelper output)
     public async Task A_helper_call_is_sent_unrecorded_and_its_reason_comes_from_the_closed_list()
     {
         output.WriteLine($"[G6] أَسبابُ المُساعِد {ProviderHelperReasons.All.Count}: {string.Join(", ", ProviderHelperReasons.All)}");
-        Assert.Equal(new[] { "oauth_token", "status_poll", "storage_read", "storage_delete" }, ProviderHelperReasons.All);
-        var bad = Assert.Throws<ArgumentException>(() => new ProviderHelper(ProviderNames.Nafath, "metadata_tag"));
-        Assert.Contains("metadata_tag", bad.Message, StringComparison.Ordinal);
+        // ‏(‏2026-11-12، W13-6·١٤) سَبعٌ: ودَخَلَ وَسمُ الفاتورَةِ ومُنتَجُ الكاتالوجِ وعُضوُ الواجِهَةِ بِلا مُنادٍ مَعَ مُنادِيها — فَالسالِبُ سَبَبٌ لا مُنادِيَ لَه.
+        Assert.Equal(new[] { "oauth_token", "status_poll", "storage_read", "storage_delete", "metadata_tag", "catalog_product", "uncalled_member" }, ProviderHelperReasons.All);
+        var bad = Assert.Throws<ArgumentException>(() => new ProviderHelper(ProviderNames.Nafath, "invented_reason"));
+        Assert.Contains("invented_reason", bad.Message, StringComparison.Ordinal);
 
         var recorder = new MemoryRecorder();
         var calls = new ProviderCalls(recorder);
@@ -392,5 +393,163 @@ public class ProviderCallsTests(ITestOutputHelper output)
         Assert.Equal(new[] { $"open {id} · سِلك 0", $"decide {id} {outcome} 1 · سِلك 1" }, recorder.Log);
         Assert.Equal(status == 410, world.Stored.OfType<ACommerce.Kit.Auth.User>().Any(u => u.PushSubscriptions.Count == 0));
         Assert.DoesNotContain(a.Endpoint, id, StringComparison.Ordinal);
+    }
+
+    // ═══ (‏2026-11-12، W13-6·١٤ — التَصميم §6.2) بَوّابَةُ المَتجَرِ وفَوتَرَةُ الاشتِراك ═══════════════════════════════════════════════════════════
+
+    /// <summary>مُعالِجٌ يُجيبُ بِالرُدودِ المُرَتَّبَةِ ويُسَجِّلُ ما طُلِب.</summary>
+    private sealed class Script(params (HttpStatusCode Status, string Body)[] replies) : HttpMessageHandler
+    {
+        private readonly Queue<(HttpStatusCode Status, string Body)> _replies = new(replies);
+        public List<string> Seen { get; } = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            lock (Seen) Seen.Add($"{request.Method} {request.RequestUri!.AbsolutePath}");
+            var (status, body) = _replies.Count > 0 ? _replies.Dequeue() : (HttpStatusCode.OK, "{}");
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") });
+        }
+    }
+
+    private const string Store = "w13-calls";
+
+    private static ACommerce.Kit.Payments.MoyasarClient Gateway(HttpMessageHandler handler, OutboundRecorder recorder)
+        => new(new ProviderHttp<ACommerce.Kit.Payments.MoyasarClient>(new HttpClient(handler), new ProviderCalls(recorder)),
+               NullLogger<ACommerce.Kit.Payments.MoyasarClient>.Instance);
+
+    /// <summary>المُعَرِّفاتُ المَقبولَةُ بِتَرتيبِها — والسُطورُ مِنها مُعَرِّفاتُها المُمَيَّزَة (<c>ON CONFLICT (id) DO NOTHING</c>).</summary>
+    private static List<string> Accepted(MemoryRecorder recorder)
+        => recorder.Log.Where(l => l.StartsWith("decide ", StringComparison.Ordinal) && l.EndsWith(" Accepted 1", StringComparison.Ordinal))
+                       .Select(l => l.Split(' ')[1]).ToList();
+
+    /// <summary>
+    /// <para><b>الجَلبُ بِغَرَضِه وزِنادِه</b> (التَصميم §6.2؛ صُفوفُ G6): الفاتورَةُ نَفسُها تُجلَبُ لِلتَحَقُّقِ ولِلإشعارِ ⇐ <b>سَطران</b>؛ والمُهلَةُ تُعادُ ثَلاثاً
+    /// (‏1/5/15 ث) ⇐ <b>سَطرٌ واحِد</b>؛ والإغلاقُ بَعدَ إلغاءِ صَفقَتَينِ ⇐ سَطران؛ والإلغاءُ عِندَ البَوّابَةِ <c>{invoiceId}:close</c>. والمَصدَرُ الفاتورَة، والمُزَوِّدُ تَسِمُه العُدَّة.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_same_invoice_fetched_under_verify_and_notice_is_two_entries_and_an_expiry_retried_three_times_is_one()
+    {
+        const string invoice = MoyasarClientTests.InvoiceId;
+        var recorder = new MemoryRecorder();
+        var script = new Script(Enumerable.Repeat((HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated")), 7)
+                                          .Append((HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("canceled"))).ToArray());
+        var client = Gateway(script, recorder);
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var verify = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Fetch(Store, invoice, "verify", ProviderCall.FreshRequestId());
+        var notice = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Fetch(Store, invoice, "notice", "pay-1");
+        var expiry = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Fetch(Store, invoice, "expiry", trigger: null);
+        var close = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Cancel(Store, invoice);
+
+        Assert.True((await client.FetchInvoiceAsync(verify, MoyasarClientTests.Key, invoice)).Ok);
+        Assert.True((await client.FetchInvoiceAsync(notice, MoyasarClientTests.Key, invoice)).Ok);
+        for (var i = 0; i < 3; i++) Assert.True((await client.FetchInvoiceAsync(expiry, MoyasarClientTests.Key, invoice)).Ok);
+        foreach (var deal in new[] { a, b })
+            Assert.True((await client.FetchInvoiceAsync(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Fetch(Store, invoice, "close", deal.ToString("N")),
+                                                        MoyasarClientTests.Key, invoice)).Ok);
+        Assert.True((await client.CancelInvoiceAsync(close, MoyasarClientTests.Key, invoice)).Ok);
+
+        var accepted = Accepted(recorder);
+        var entries = accepted.Distinct(StringComparer.Ordinal).ToList();
+        string Fetch(string tail) => $"{OutboundUnits.PaymentGatewayInvoiceFetch}:{ProviderNames.StoreGateway}:{invoice}:{tail}";
+        output.WriteLine($"[G6] الجَلب: طَلَبات {script.Seen.Count} · مَقبول {accepted.Count} · سُطور {entries.Count}: {string.Join(" | ", entries)}");
+        Assert.Equal(8, accepted.Count);
+        Assert.Equal(new[]
+        {
+            Fetch($"verify:{verify.RequestId.Split(':')[2]}"), Fetch("notice:pay-1"), Fetch("expiry"),
+            Fetch($"close:{a:N}"), Fetch($"close:{b:N}"),
+            $"{OutboundUnits.PaymentGatewayInvoiceCancel}:{ProviderNames.StoreGateway}:{invoice}:close",
+        }, entries);
+        Assert.Equal(3, accepted.Count(id => id == Fetch("expiry")));
+        Assert.Equal((ProviderCall.InvoiceSource, invoice, ProviderCall.InvoiceSource, invoice), (verify.SourceType, verify.SourceId, close.SourceType, close.SourceId));
+    }
+
+    /// <summary><b>الإنشاءُ يُعَدُّ عِندَ ‏2xx الـ<c>POST</c> ووَسمُه مُساعِد</b>: ‏<c>POST</c> ‏201 ثُمَّ <c>PUT</c> ‏503 ⇐ نِيَّةٌ واحِدَةٌ وسَطرُ إنشاءٍ واحِد، ولا نِيَّةَ لِلوَسم، والرَمزُ
+    /// رَمزُ الوَسمِ كَما كان (<c>gateway_unreachable</c>)؛ ومَصدَرُه أُولى صَفَقاتِ الفاتورَة.</summary>
+    [Fact]
+    public async Task A_create_whose_metadata_put_fails_is_one_create_entry_and_no_intent_for_the_tag()
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script((HttpStatusCode.Created, MoyasarClientTests.InvoiceJson("initiated", metadata: new Dictionary<string, string>())),
+                                (HttpStatusCode.ServiceUnavailable, "{\"type\":\"api_error\"}"));
+        var deal = Guid.NewGuid();
+        var create = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Create(Store, deal);
+        var draft = new ACommerce.Kit.Payments.MoyasarInvoiceDraft(15000, "طَلَب", "https://store.example/r", "https://store.example/r",
+            new Dictionary<string, string> { ["deal_1"] = deal.ToString("N") });
+
+        var res = await Gateway(script, recorder).CreateInvoiceAsync(create, MoyasarClientTests.Key, draft);
+
+        var id = $"{OutboundUnits.PaymentGatewayInvoiceCreate}:{ProviderNames.StoreGateway}:{create.RequestId}";
+        output.WriteLine($"[G6] الإنشاءُ ثُمَّ وَسمٌ ساقِط ⇒ {res.Failure?.Code} · {string.Join(" → ", script.Seen)} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(ACommerce.Kit.Payments.MoyasarFailures.Unreachable, res.Failure!.Code);
+        Assert.Equal(new[] { "POST /v1/invoices", $"PUT /v1/invoices/{MoyasarClientTests.InvoiceId}" }, script.Seen);
+        Assert.Equal(new[] { $"open {id}", $"decide {id} Accepted 1" }, recorder.Log);
+        Assert.Equal((ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterRules.DealSource, deal.ToString("D")), (create.SourceType, create.SourceId));
+    }
+
+    /// <summary>
+    /// <para><b>PayPal</b>: الرَمزُ ومُنتَجُ الكاتالوجِ مُساعِدانِ بِلا نِيَّة، والخُطَّةُ تُعَدُّ بِمِفتاحِ PayPal الَّذي تُرسِلُه العُدَّة (<c>PayPal-Request-Id</c> المُشتَقُّ مِن
+    /// المُنتَج) أَيّاً كانَ مُعَرِّفُ المُنادي؛ والرابِطُ بِمِفتاحِه، وعُضوُ الواجِهَةِ بِلا <c>ProviderCall</c> يُعَدُّ لِمَتجَرِ طَلَبِه بِالمِفتاحِ نَفسِه؛ والتَحَقُّقُ مِن التَوقيعِ
+    /// بِمُعَرِّفِ الإرسال؛ وعُضوا الواجِهَةِ بِلا مُنادٍ يَمُرّانِ ولا يُعَدّان.</para>
+    /// </summary>
+    [Fact]
+    public async Task PayPal_counts_the_plan_under_its_own_request_id_and_leaves_the_token_and_the_product_uncounted()
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script(
+            (HttpStatusCode.OK, "{\"access_token\":\"A21AA\",\"expires_in\":32400}"),
+            (HttpStatusCode.Created, "{\"id\":\"PROD-1\"}"), (HttpStatusCode.Created, "{\"id\":\"P-1\"}"),
+            (HttpStatusCode.Created, "{\"id\":\"I-1\",\"status\":\"APPROVAL_PENDING\"}"),
+            (HttpStatusCode.Created, "{\"id\":\"I-2\",\"status\":\"APPROVAL_PENDING\"}"),
+            (HttpStatusCode.OK, "{\"verification_status\":\"SUCCESS\"}"),
+            (HttpStatusCode.OK, "{}"), (HttpStatusCode.OK, "{}"));
+        var opts = new ACommerce.Kit.Payments.Providers.PayPal.PayPalOptions { ClientId = "c", ClientSecret = "s", Environment = "live", WebhookId = "WH-1" };
+        var provider = new ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider(Options.Create(opts),
+            new ProviderHttp<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>(new HttpClient(script), new ProviderCalls(recorder)),
+            new ACommerce.Kit.Payments.Providers.PayPal.PayPalTokenCache(), NullLogger<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>.Instance);
+        var gateway = new ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway(opts, provider);
+        var draft = ACommerce.Kit.Payments.Providers.PayPal.PayPalCatalogPolicy.ReadDraft("manual", "باقَة", "49", "USD", "MONTH");
+
+        await gateway.CreateCatalogPlanAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalPlanCreate, MeterSentinels.Platform, "caller-id"), draft);
+        await gateway.CreateSubscriptionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalLinkCreate, Store, "wsl-s-1"), "P-1", Store, "wsl-s-1");
+        await ((ACommerce.Kit.Payments.IPaymentProvider)provider).CreateSubscriptionAsync(new ACommerce.Kit.Payments.SubscriptionRequest(Store, "P-1", 0m, ""), "wsl-s-2");
+        Assert.True(await gateway.VerifyWebhookSignatureAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform, "TX-1"),
+            new ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders("TX-1", "2026-11-12T00:00:00Z", "https://api.paypal.com/cert.pem", "SHA256withRSA", "sig=="), "{}"));
+        await provider.CancelSubscriptionAsync("I-1");
+        await provider.GetInvoiceAsync("CAP-1");
+
+        var plan = $"{OutboundUnits.BillingPayPalPlanCreate}:{ProviderNames.PayPal}:{ACommerce.Kit.Payments.Providers.PayPal.PayPalCatalogPolicy.PlanRequestId("PROD-1", draft)}";
+        output.WriteLine($"[G6] PayPal ⇒ {string.Join(" → ", script.Seen)} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(8, script.Seen.Count);
+        Assert.Equal(new[]
+        {
+            $"open {plan}", $"decide {plan} Accepted 1",
+            $"open {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-1", $"decide {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-1 Accepted 1",
+            $"open {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-2", $"decide {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-2 Accepted 1",
+            $"open {OutboundUnits.BillingPayPalWebhookVerify}:{ProviderNames.PayPal}:TX-1", $"decide {OutboundUnits.BillingPayPalWebhookVerify}:{ProviderNames.PayPal}:TX-1 Accepted 1",
+        }, recorder.Log);
+    }
+
+    /// <summary><b>Paddle</b>: المُعامَلَةُ تُعَدُّ بِمَرجِعِنا — ‏201 مَقبولَة و‏400 مَرفوضَة والجَوابُ يَعودُ كَما كان (رِسالَةُ Paddle في النَتيجَة).</summary>
+    [Theory]
+    [InlineData(201, "Accepted")]
+    [InlineData(400, "Refused")]
+    public async Task Paddle_counts_the_transaction_under_our_reference(int status, string outcome)
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script(((HttpStatusCode)status, status == 201
+            ? "{\"data\":{\"id\":\"txn_01\",\"status\":\"ready\",\"checkout\":{\"url\":\"https://pay.example/c?_ptxn=txn_01\"}}}"
+            : "{\"error\":{\"code\":\"bad_request\"}}"));
+        var provider = new ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider(
+            Options.Create(new ACommerce.Kit.Payments.Providers.Paddle.PaddleOptions { ApiKey = "k", Environment = "live" }),
+            new ProviderHttp<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>(new HttpClient(script), new ProviderCalls(recorder)),
+            NullLogger<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>.Instance);
+        var draft = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.ReadDraft(Store, "manual", "49", "USD", "30", "شَهر", "");
+        var reference = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.Reference(draft);
+
+        var result = await provider.CreateTransactionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPaddleTransactionCreate, Store, reference), draft, reference);
+
+        var id = $"{OutboundUnits.BillingPaddleTransactionCreate}:{ProviderNames.Paddle}:{reference}";
+        output.WriteLine($"[G6] Paddle {status} ⇒ {result.FailureReason ?? result.TransactionId} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { $"open {id}", $"decide {id} {outcome} 1" }, recorder.Log);
+        Assert.Equal(status == 201, result.FailureReason is null);
     }
 }

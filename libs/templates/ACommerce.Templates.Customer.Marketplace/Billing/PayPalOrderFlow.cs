@@ -1,5 +1,6 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -107,7 +108,9 @@ public static class PayPalOrderFlow
         await gate.WaitAsync(ct);
         try
         {
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) والالتِقاطُ يُعَدُّ لِمَتجَرِ الطَلَب، ومُعَرِّفُه مِفتاحُ مَرَّة-واحِدَةٍ نَفسُه — زِرّاً كانَ مُناديه أَو الرِسالَة.
             var result = await paypal.CaptureOrderAsync(
+                ProviderCall.ForChannel(OutboundUnits.BillingPayPalOrderCapture, order.TenantSlug, PayPalOrderPolicy.CaptureRequestId(order.Id)),
                 order.OrderId, PayPalOrderPolicy.CaptureRequestId(order.Id), ct);
 
             if (!string.IsNullOrWhiteSpace(result.FailureReason))

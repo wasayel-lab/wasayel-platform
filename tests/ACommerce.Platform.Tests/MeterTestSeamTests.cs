@@ -25,6 +25,10 @@ namespace ACommerce.Platform.Tests;
 // ILogger)` — يَبنِيانِ بِـ`ProviderCalls.Unrecorded` فَتَبقى بُناتُهُما في الاختِباراتِ وسكربتاتِ المُشَغِّلِ كَما كانَت، والتَسجيلانِ في الإنتاجِ يَحُلّانِ الباني
 // الأَطوَلَ بِمُستَدعي المُضيف. والمُنادي المَأذونُ الرابِعُ والخامِس: جِسما البانِيَينِ القَديمَينِ نَفسُهُما يَقرَآنِ `Unrecorded`. و`INafathChannel` و`IFileStorage`
 // بِلا مَقعَد: `StartAsync` و`UploadAsync` يَحمِلانِ `ProviderCall` في التَوقيعِ نَفسِه.
+//
+// ‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ودَخَلَها عُضوا واجِهَةِ PayPal بِلا مُنادٍ**: `CancelSubscriptionAsync` و`GetInvoiceAsync` — عُضوا
+// `IPaymentProvider` وPayPal لا يُسَجَّلُ عَلَيها، فَلا يَجرِيانِ في الإنتاج (دَينُ القاعِدَة ١)؛ يَمُرّانِ بِالمُستَدعي مُساعِدَينِ ولا يُعَدّان، وأَوَّلُ مُنادٍ لَهُما
+// هُنا أَحمَر. ولا مَأذونَ لَهُما. أَمّا ميسّر وPaddle وعَمَلِيّاتُ PayPal الخَمسُ فَبِلا مَقعَد: `ProviderCall` في التَوقيع.
 
 public class MeterTestSeamTests(ITestOutputHelper output)
 {
@@ -117,6 +121,8 @@ public class MeterTestSeamTests(ITestOutputHelper output)
             // ‏(‏2026-11-12، W13-6·١٣) بانِيا عُدَّتَيِ الـSDK القَديمانِ — بِلا مُستَدعٍ يُسَجِّل.
             OldSdkConstructors[0], OldSdkConstructors[1],
         };
+        // ‏(‏2026-11-12، W13-6·١٤) وعُضوا واجِهَةِ PayPal بِلا مُنادٍ — مُساعِدانِ بِسَبَبِ دَينِهِما (`uncalled_member`) لا وَحدَتان.
+        seams.AddRange(UncalledMembers);
         foreach (var asm in assemblies)
         {
             Type[] types;
@@ -130,6 +136,15 @@ public class MeterTestSeamTests(ITestOutputHelper output)
         }
         return seams;
     }
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٤) <b>عُضوا <c>IPaymentProvider</c> في PayPal بِلا مُنادٍ في وَقتِ التَشغيل</b> (التَصميم §3.4: «دَينُ القاعِدَةِ ١ لا وَحدَة») — يَمُرّانِ
+    /// بِالمُستَدعي نِداءً مُساعِداً (<see cref="ProviderHelperReasons.UncalledMember"/>) فَلا يُعَدّان. مُنادٍ لَهُما في <c>libs/</c> أَو <c>apps/</c> يُحَمِّرُ هذا الصَفّ، فَيولَدُ
+    /// مَعَه صَفُّ وَحدَةٍ ونِداءٌ مَعدود.</summary>
+    internal static readonly MethodInfo[] UncalledMembers =
+    [
+        typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider).GetMethod(nameof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider.CancelSubscriptionAsync))!,
+        typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider).GetMethod(nameof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider.GetInvoiceAsync))!,
+    ];
 
     /// <summary>‏(‏2026-11-12، W13-6·١٣) البانِيانِ القَديمانِ لِعُدَّتَيِ الـSDK — يَبنِيانِ بِـ<see cref="ProviderCalls.Unrecorded"/>.</summary>
     internal static readonly ConstructorInfo[] OldSdkConstructors =

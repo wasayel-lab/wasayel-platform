@@ -6,6 +6,7 @@ using ACommerce.Templates.Customer.Marketplace.Services.Subscriptions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using ACommerce.Platform.Shared.Metering;
 
 namespace ACommerce.Platform.Tests;
 
@@ -62,6 +63,10 @@ internal sealed class CatalogHandler : HttpMessageHandler
 
 public class PayPalCatalogPlanTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.BillingPayPalPlanCreate, "test-store", "test-request");
+
     private static readonly DateTime Now = new(2026, 08, 24, 12, 00, 00, DateTimeKind.Utc);
 
     private static PayPalOptions Opts(string secret = "very-secret") => new()
@@ -101,7 +106,7 @@ public class PayPalCatalogPlanTests
     {
         var handler = Happy();
 
-        var created = await Gateway(handler).CreateCatalogPlanAsync(Draft());
+        var created = await Gateway(handler).CreateCatalogPlanAsync(Call, Draft());
 
         Assert.Equal("PROD-XXCD1234QWER65782", created.ProductId);
         Assert.Equal("P-5ML4271244454362WXNWU5NQ", created.PlanId);
@@ -132,7 +137,7 @@ public class PayPalCatalogPlanTests
     public async Task ProductBody_CarriesNameTypeCategory_AndNeverAnId()
     {
         var handler = Happy();
-        await Gateway(handler).CreateCatalogPlanAsync(Draft(name: "Wasayel Premium"));
+        await Gateway(handler).CreateCatalogPlanAsync(Call, Draft(name: "Wasayel Premium"));
 
         using var body = JsonDocument.Parse(handler.Bodies[1]!);
         Assert.Equal("Wasayel Premium", body.RootElement.GetProperty("name").GetString());
@@ -156,7 +161,7 @@ public class PayPalCatalogPlanTests
     public async Task PlanBody_CarriesTheProductPriceAndFrequency_WithTheHarshDefaultsOverridden()
     {
         var handler = Happy();
-        await Gateway(handler).CreateCatalogPlanAsync(
+        await Gateway(handler).CreateCatalogPlanAsync(Call,
             Draft(name: "Premium Monthly", amount: 9.99m, currency: "USD"));
 
         using var body = JsonDocument.Parse(handler.Bodies[2]!);
@@ -242,7 +247,7 @@ public class PayPalCatalogPlanTests
     {
         var handler = Happy();
         var draft = Draft();
-        await Gateway(handler).CreateCatalogPlanAsync(draft);
+        await Gateway(handler).CreateCatalogPlanAsync(Call, draft);
 
         Assert.Equal(PayPalCatalogPolicy.ProductRequestId(draft),
             handler.Requests[1].Headers.GetValues(PayPalPaymentProvider.RequestIdHeader).Single());
@@ -264,7 +269,7 @@ public class PayPalCatalogPlanTests
                 """);
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Gateway(handler).CreateCatalogPlanAsync(Draft()));
+            () => Gateway(handler).CreateCatalogPlanAsync(Call, Draft()));
 
         Assert.Contains("422", ex.Message);
         Assert.Contains("UNPROCESSABLE_ENTITY", ex.Message);
@@ -282,7 +287,7 @@ public class PayPalCatalogPlanTests
             .Then(HttpStatusCode.BadRequest, "{\"name\":\"INVALID_REQUEST\"}");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Gateway(handler, Opts(secret: "xsecret-super")).CreateCatalogPlanAsync(Draft()));
+            () => Gateway(handler, Opts(secret: "xsecret-super")).CreateCatalogPlanAsync(Call, Draft()));
 
         Assert.DoesNotContain("xsecret-super", ex.Message);
         Assert.DoesNotContain("AY-client", ex.Message);
@@ -300,7 +305,7 @@ public class PayPalCatalogPlanTests
             .Then(HttpStatusCode.Created, "{\"status\":\"ACTIVE\"}");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Gateway(handler).CreateCatalogPlanAsync(Draft()));
+            () => Gateway(handler).CreateCatalogPlanAsync(Call, Draft()));
     }
 
     /// <summary>والبابُ بِلا مُزَوِّدٍ يَرمي بِرِسالَةٍ تُسَمّي السَبَب
@@ -310,7 +315,7 @@ public class PayPalCatalogPlanTests
     {
         var gateway = new PayPalGateway(new PayPalOptions(), provider: null);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => gateway.CreateCatalogPlanAsync(Draft()));
+            () => gateway.CreateCatalogPlanAsync(Call, Draft()));
 
         Assert.Contains("PayPal", ex.Message);
         Assert.False(gateway.IsConfigured);
@@ -577,7 +582,7 @@ public class PayPalCatalogPlanTests
             .Then(HttpStatusCode.UnprocessableEntity,
                 """{"name":"UNPROCESSABLE_ENTITY","message":"Merchant not enabled for reference transaction"}""");
 
-        var result = await Gateway(handler).CreateSubscriptionAsync("P-1", "acme", "key-1");
+        var result = await Gateway(handler).CreateSubscriptionAsync(Call, "P-1", "acme", "key-1");
 
         Assert.False(string.IsNullOrWhiteSpace(result.FailureReason));
         Assert.Contains("UNPROCESSABLE_ENTITY", result.FailureReason!, StringComparison.Ordinal);
@@ -599,7 +604,7 @@ public class PayPalCatalogPlanTests
             .Then(HttpStatusCode.BadRequest, "{\"name\":\"INVALID_REQUEST\"}");
 
         var result = await Gateway(handler, Opts(secret: "xsecret-super"))
-            .CreateSubscriptionAsync("P-1", "acme", "key-1");
+            .CreateSubscriptionAsync(Call, "P-1", "acme", "key-1");
 
         Assert.DoesNotContain("xsecret-super", result.FailureReason ?? "");
         Assert.DoesNotContain("AY-client", result.FailureReason ?? "");

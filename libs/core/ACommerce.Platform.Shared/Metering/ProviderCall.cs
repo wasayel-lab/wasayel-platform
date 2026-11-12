@@ -49,6 +49,19 @@ public sealed record ProviderCall(string Unit, string Provider, string App, stri
 
     /// <summary>النِداءُ نَفسُه ومَصدَرُه غَيرُ الطَلَب.</summary>
     public ProviderCall About(string sourceType, string sourceId) => this with { SourceType = sourceType, SourceId = sourceId };
+
+    // ─── (‏2026-11-12، W13-6·١٤ — التَصميم §6.2) الفاتورَةُ مَصدَراً، ومِفتاحُ المُزَوِّدِ مُعَرِّفاً ─────────────────────────────────────────
+    // **مَصدَرُ جَلبِ الفاتورَةِ وإلغائِها الفاتورَةُ نَفسُها** — ومُعَرِّفُ الطَلَبِ `{invoiceId}:{purpose}[:{trigger}]` يُمَيِّزُ العَمَلِيَّة. مُستَهلِكُه الأَوَّلُ في
+    // وَقتِ التَشغيل `GatewayPayments` و`GatewayInvoiceCloser`.
+    /// <summary>‏(W13-6·١٤) نَوعُ مَصدَرِ جَلبِ فاتورَةِ البَوّابَةِ وإلغائِها: مُعَرِّفُ الفاتورَة.</summary>
+    public const string InvoiceSource = "invoice";
+
+    /// <summary>
+    /// <para>‏(W13-6·١٤) <b>مِفتاحُ المُزَوِّدِ مُعَرِّفاً</b>: العُدَّةُ تَضَعُ مُعَرِّفَ الطَلَبِ الَّذي تُرسِلُه هِيَ في رَأسِ مَنعِ التَكرار — حَيثُ لا يَعرِفُه المُنادي قَبلَ
+    /// النِداء. مُستَهلِكُه الأَوَّل: خُطَّةُ PayPal، ومِفتاحُها (<c>PayPal-Request-Id</c>) مُشتَقٌّ مِن مُنتَجٍ يُعيدُه النِداءُ المُساعِدُ قَبلَها
+    /// (<c>PayPalCatalogPolicy.PlanRequestId</c>). فَالطَلَبُ المُعادُ بِالمُسَوَّدَةِ نَفسِها يَحمِلُ المُعَرِّفَ نَفسَه، كَما يَراه PayPal.</para>
+    /// </summary>
+    public ProviderCall Keyed(string requestId) => this with { RequestId = requestId };
 }
 
 /// <summary>
@@ -74,6 +87,9 @@ public sealed record ProviderHelper
 /// <summary>
 /// <para><b>أَسبابُ النِداءِ المُساعِد — قائِمَةٌ مُغلَقَةٌ تُطبَع</b> (التَصميم §3.4). تَدخُلُها الأَسبابُ مَعَ أَوَّلِ مُنادٍ لَها (القاعِدَة ١): نَفاذ (الرَمزُ
 /// والاستِطلاع) ومَخزَنُ الكائِنات (القِراءَةُ والحَذف) في البَند ١٣؛ و<c>metadata_tag</c> (ميسّر) و<c>catalog_product</c> (PayPal) في البَند ١٤.</para>
+/// <para>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ودَخَلَت الثَلاثَة</b>: <see cref="MetadataTag"/> و<see cref="CatalogProduct"/> بِمُنادِيَيهِما، و<see cref="UncalledMember"/>
+/// لِعُضوَي <c>IPaymentProvider</c> في PayPal بِصِفرِ مُنادٍ في وَقتِ التَشغيل (التَصميم §3.4: «دَينُ القاعِدَةِ ١ لا وَحدَة») — يَمُرّانِ بِالمُستَدعي فَتَراهُما ٨-ج،
+/// ولا يُعَدّانِ لِأَنّهُما لا يَجرِيان؛ و<c>MeterTestSeamTests</c> (G6c) يَحمَرُّ عَلى أَوَّلِ مُنادٍ لَهُما في <c>libs/</c> أَو <c>apps/</c>، فَيولَدُ مَعَه صَفُّ وَحدَة.</para>
 /// </summary>
 public static class ProviderHelperReasons
 {
@@ -89,7 +105,17 @@ public static class ProviderHelperReasons
     /// <summary>حَذفٌ مِن المَخزَن — <c>S3FileStorage.DeleteAsync</c>.</summary>
     public const string StorageDelete = "storage_delete";
 
-    public static readonly IReadOnlyList<string> All = [OauthToken, StatusPoll, StorageRead, StorageDelete];
+    /// <summary>‏(W13-6·١٤) وَسمُ فاتورَةٍ أُنشِئَت بِبَياناتِ صَفَقاتِها (<c>PUT /invoices/:id</c>) — <c>MoyasarClient.CreateInvoiceAsync</c>: الإنشاءُ يُعَدُّ عِندَ ‏2xx الـ<c>POST</c>.</summary>
+    public const string MetadataTag = "metadata_tag";
+
+    /// <summary>‏(W13-6·١٤) مُنتَجُ الكاتالوجِ قَبلَ خُطَّةِ الفَوتَرَة — <c>PayPalPaymentProvider.CreateCatalogProductAsync</c>: الخُطَّةُ هِيَ المَعدودَة.</summary>
+    public const string CatalogProduct = "catalog_product";
+
+    /// <summary>‏(W13-6·١٤) عُضوُ واجِهَةٍ بِصِفرِ مُنادٍ في وَقتِ التَشغيل — <c>PayPalPaymentProvider.CancelSubscriptionAsync</c> و<c>GetInvoiceAsync</c>
+    /// (<c>IPaymentProvider</c>، وPayPal لا يُسَجَّلُ عَلَيها): دَينُ القاعِدَةِ ١، مَحروسٌ في G6c.</summary>
+    public const string UncalledMember = "uncalled_member";
+
+    public static readonly IReadOnlyList<string> All = [OauthToken, StatusPoll, StorageRead, StorageDelete, MetadataTag, CatalogProduct, UncalledMember];
 }
 
 /// <summary>نَتيجَةُ النِداءِ الصادِر — ثَلاث: <b>قُبِل</b> (يُكتَبُ السَطر)، و<b>رُفِض</b> (4xx، ومِنه 429)، و<b>مَجهول</b> (5xx، أَو مُهلَتُنا، أَو إلغاءُ المُنادي، أَو

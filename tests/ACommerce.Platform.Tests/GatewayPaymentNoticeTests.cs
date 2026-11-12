@@ -9,6 +9,7 @@ using ACommerce.Templates.Customer.Marketplace.Services.Providers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Xunit.Abstractions;
+using ACommerce.Platform.Shared.Metering;
 using static ACommerce.Platform.Tests.TenantGatewayEndpointsTests;
 
 namespace ACommerce.Platform.Tests;
@@ -22,6 +23,10 @@ namespace ACommerce.Platform.Tests;
 
 public class GatewayPaymentNoticeTests(ITestOutputHelper output)
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.PaymentGatewayWebhookCreate, "test-store", "test-request");
+
     private const string Secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     private static string Payload(string? secret = Secret, string type = MoyasarClient.PaymentPaidEvent, string? invoice = InvoiceId,
@@ -110,7 +115,7 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
         var handler = new MoyasarScriptedHandler().Then(HttpStatusCode.Created, "{\"id\":\"wh-1\",\"http_method\":\"post\",\"url\":\"https://s.example/zz/payments/notify\",\"events\":[\"payment_paid\"]}");
         var client = new MoyasarClient(new HttpClient(handler), NullLogger<MoyasarClient>.Instance);
 
-        var res = await client.CreateWebhookAsync(Key, "https://s.example/zz/payments/notify", Secret);
+        var res = await client.CreateWebhookAsync(Call, Key, "https://s.example/zz/payments/notify", Secret);
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal("wh-1", res.Value);
@@ -125,9 +130,9 @@ public class GatewayPaymentNoticeTests(ITestOutputHelper output)
 
         var silent = new MoyasarScriptedHandler();
         var offline = new MoyasarClient(new HttpClient(silent), NullLogger<MoyasarClient>.Instance);
-        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Key, "/zz/payments/notify", Secret)).Failure!.Code);
-        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Key, "javascript:alert(1)", Secret)).Failure!.Code);
-        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Key, "https://s.example/x", " ")).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "/zz/payments/notify", Secret)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "javascript:alert(1)", Secret)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "https://s.example/x", " ")).Failure!.Code);
         Assert.Empty(silent.Requests);
     }
 

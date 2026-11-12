@@ -87,7 +87,9 @@ public class LiveScheduledExpiryProofTests(ITestOutputHelper output)
         builder.Services.AddCustomerMarketplaceTemplate();
         builder.Services.AddSingleton<IPaymentProvider>(new DealMoneyClaimFirstTests.RecordingPaymentProvider());
         if (shiftClock) builder.Services.AddSingleton<TimeProvider>(new ShiftedClock(DueAfter - GatewayPayments.InvoiceLifetime));
-        builder.Services.AddHttpClient<MoyasarClient>().ConfigurePrimaryHttpMessageHandler(() => moyasar);
+        // ‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) العَميلُ المُسَمّى بِاسمِ الصِنفِ — ما يَبنيه `AddProviderHttp<MoyasarClient>` في القالِب؛ والمُطَبَّعُ القَديمُ كانَ
+        // يُسَجِّلُ `MoyasarClient` بِبانٍ يَأخُذُ `HttpClient`، والصِنفُ صارَ يَأخُذُ مُستَدعِيَه.
+        builder.Services.AddHttpClient(nameof(MoyasarClient)).ConfigurePrimaryHttpMessageHandler(() => moyasar);
 
         var app = builder.Build();
         app.Urls.Add($"http://127.0.0.1:{FreePort()}");

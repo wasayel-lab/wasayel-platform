@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -37,13 +38,15 @@ public sealed class PaddlePaymentProvider
     /// التَسجيل.</summary>
     public const string HttpClientName = "paddle";
 
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §6.1؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // `ProviderHttp<PaddlePaymentProvider>` مالِكُه، والنِداءُ الوَحيدُ يَأخُذُ `ProviderCall` أَوَّلَ وُسَطائِه والعُدَّةُ تَسِمُه بِاسمِها (`ProviderNames.Paddle`).
     private readonly PaddleOptions _opts;
-    private readonly HttpClient _http;
+    private readonly ProviderHttp<PaddlePaymentProvider> _http;
     private readonly ILogger<PaddlePaymentProvider> _logger;
     private readonly string _baseUrl;
 
     public PaddlePaymentProvider(
-        IOptions<PaddleOptions> opts, HttpClient http, ILogger<PaddlePaymentProvider> logger)
+        IOptions<PaddleOptions> opts, ProviderHttp<PaddlePaymentProvider> http, ILogger<PaddlePaymentProvider> logger)
     {
         _opts = opts.Value;
         _http = http;
@@ -86,13 +89,14 @@ public sealed class PaddlePaymentProvider
     /// «فَشِلَ الإنشاء» وَحدَها تُرسِل المُشرِفَ يُخَمِّن.</para>
     /// </summary>
     public async Task<PaddleTransactionResult> CreateTransactionAsync(
-        PaddleTransactionDraft draft, string reference, CancellationToken ct = default)
+        ProviderCall call, PaddleTransactionDraft draft, string reference, CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(call);
         using var msg = new HttpRequestMessage(HttpMethod.Post, _baseUrl + TransactionsPath);
         msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _opts.ApiKey);
         msg.Content = JsonContent.Create(PaddleTransactionPolicy.CreateBody(draft, reference));
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(call.By(ProviderNames.Paddle), msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -157,10 +161,10 @@ public sealed class PaddlePaymentProvider
         return b.Length <= 300 ? b : b[..300];
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage msg, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(ProviderCall call, HttpRequestMessage msg, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(PaddleEnvironment.Timeout(_opts.TimeoutSeconds));
-        return await _http.SendAsync(msg, timeout.Token);
+        return await _http.SendAsync(call, msg, timeout.Token);
     }
 }

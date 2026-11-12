@@ -152,6 +152,96 @@
       "feature": "notifications",
       "reconcile": "intents",
       "source": "WebPushService.SendAsync — SendNotificationAsync inside ProviderCalls.InvokeAsync, one entry per subscription the push service accepted; request id = {notificationId}:{pseudonym of the endpoint} (the notification written before the push); app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "GatewayPayments.OpenInvoiceAsync — the store gateway client's CreateInvoiceAsync through ProviderHttp; one entry when the POST /invoices answers 2xx (the metadata PUT that follows is a helper, not counted); request id = a fresh call id (the gateway takes no idempotency key, so a retried create is a second invoice); source = the first deal of the invoice; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.fetch",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's FetchInvoiceAsync through ProviderHttp — one entry per accepted GET; request id = {invoiceId}:verify:{fresh call id} (GatewayPayments.VerifyAsync), {invoiceId}:notice:{payment id} (ConfirmNoticeAsync), {invoiceId}:expiry (ExpireAsync — dedupes the scheduled retries) or {invoiceId}:close:{cancelled deal id} (GatewayInvoiceCloser, on every cancel of a deal with an invoice); source = the invoice id; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.cancel",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's CancelInvoiceAsync through ProviderHttp — one entry when PUT /invoices/:id/cancel answers 2xx; request id = {invoiceId}:close (GatewayInvoiceCloser, after the last open deal of the invoice is cancelled); source = the invoice id; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.webhook.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's CreateWebhookAsync through ProviderHttp — one entry when POST /webhooks answers 2xx; request id = a fresh call id (GatewayPayments.ConnectNoticesAsync, after the payments binding is written); app = the store slug"
+    },
+    {
+      "code": "billing.paypal.plan.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateBillingPlanAsync through ProviderHttp — one entry when POST /v1/billing/plans answers 2xx; request id = the PayPal-Request-Id the kit sends (derived from the catalog product and the draft); the catalog product call before it and the OAuth token are helpers, not counted; app = _platform (POST /admin/tenants/{slug}/plan/paypal-plan binds a platform plan)"
+    },
+    {
+      "code": "billing.paypal.link.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateSubscriptionAsync through ProviderHttp — one entry when POST /v1/billing/subscriptions answers 2xx; request id = the PayPal-Request-Id (PayPalSurface.LinkKey); app = the store slug (POST /admin/tenants/{slug}/plan/paypal-link)"
+    },
+    {
+      "code": "billing.paypal.order.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateOrderAsync through ProviderHttp — one entry when POST /v2/checkout/orders answers 2xx; request id = the PayPal-Request-Id (PayPalOrderPolicy.OrderRequestId); app = the store slug (POST /admin/tenants/{slug}/plan/paypal-order)"
+    },
+    {
+      "code": "billing.paypal.order.capture",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CaptureOrderAsync through ProviderHttp — one entry when the capture answers 2xx; request id = the PayPal-Request-Id (PayPalOrderPolicy.CaptureRequestId); app = the order's store (PayPalOrderFlow.CaptureAsync, from the capture button or the approval event)"
+    },
+    {
+      "code": "billing.paypal.webhook.verify",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.VerifyWebhookSignatureAsync through ProviderHttp — one entry when verify-webhook-signature answers 2xx, before the event is read; request id = the transmission id PayPal sent; app = _platform (POST /api/billing/paypal)"
+    },
+    {
+      "code": "billing.paddle.transaction.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PaddlePaymentProvider.CreateTransactionAsync through ProviderHttp — one entry when POST /transactions answers 2xx; request id = our reference (PaddleTransactionPolicy.Reference); app = the store slug (POST /admin/tenants/{slug}/plan/paddle-link)"
     }
   ]
 }

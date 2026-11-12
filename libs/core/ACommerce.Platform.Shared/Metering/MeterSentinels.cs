@@ -11,6 +11,8 @@ namespace ACommerce.Platform.Shared.Metering;
 /// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ودَخَلَت الثَلاثُ مَعَ واضِعيها</b>: <see cref="Platform"/> يَضَعُه المُصَنِّفُ مَتجَراً لِسَطرِ
 /// <c>studio.account.create</c>؛ و<see cref="Entrepreneur"/> يَضَعُه <c>StudioOwnsAsync</c> و<c>TenantAdminGuard</c> حينَ يُثبِتانِ أَنّ الطالِبَ مالِكُ المَتجَر؛
 /// و<see cref="PlatformAdmin"/> يَضَعُه <c>PlatformAdminGuard</c> حينَ يَقبَلُ مُشرِفَ المَنَصَّة. فَهِيَ سَبعٌ، والباقِيَتانِ لِلبَند ١٤.</para>
+/// <para>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ودَخَلَت الباقِيَتانِ مَعَ واضِعيهِما</b>: <see cref="Provider"/> تَضَعُه نِقاطُ الإشعارِ الثَلاثُ لِبَوّابَةِ المَتجَرِ
+/// وPayPal وPaddle، و<see cref="SystemJob"/> يَضَعُه مُعالِجُ انتِهاءِ الفاتورَة. فَهِيَ تِسعٌ كَما يُسَمّيها التَصميم.</para>
 /// </summary>
 public static class MeterSentinels
 {
@@ -38,7 +40,15 @@ public static class MeterSentinels
     /// (<see cref="MeterScopeHolder.FillPlatformRole"/>).</summary>
     public const string PlatformAdmin = "_platform_admin";
 
-    public static readonly IReadOnlyList<string> All = [Unowned, None, Seed, Unresolved, Platform, Entrepreneur, PlatformAdmin];
+    /// <summary>‏(‏2026-11-12، W13-6·١٤) المُزَوِّدُ نَفسُه فاعِلاً: دَورُ الحامِلِ في نِقاطِ الإشعارِ الوارِد — بَوّابَةُ المَتجَر (<c>/{slug}/payments/notify</c>)
+    /// وPayPal (<c>/api/billing/paypal</c>) وPaddle (<c>/api/billing/paddle</c>) — لا جَلسَةَ ولا دَور، والمَسارُ يَقولُ مَن يُنادي.</summary>
+    public const string Provider = "_provider";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٤) عَمَلٌ مُجَدوَلٌ تُنَفِّذُه المَنَصَّةُ بِلا طالِب: دَورُ الحامِلِ الَّذي يَفتَحُه مُعالِجُ انتِهاءِ الفاتورَة
+    /// (<c>GatewayInvoiceExpiryHandler.Handle</c>) لِمَتجَرِ رِسالَتِه.</summary>
+    public const string SystemJob = "_system";
+
+    public static readonly IReadOnlyList<string> All = [Unowned, None, Seed, Unresolved, Platform, Entrepreneur, PlatformAdmin, Provider, SystemJob];
 
     public static bool IsSentinel(string value) => All.Contains(value, StringComparer.Ordinal);
 }

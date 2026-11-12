@@ -14,8 +14,9 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
 {
     /// <summary><b>سَقفُ القائِمَة</b> — تَتَقَلَّصُ ولا تَنمو: 12 عِندَ البَند ١١ (خَرَجَ Twilio ودَخَلَ <c>ProviderHttp.cs</c>)، ويَنزِلُ مَعَ كُلِّ عُدَّةٍ تُرَحَّل.
     /// ‏(‏2026-11-12، W13-6·١٢) <b>11</b>: خَرَجَ Brevo (عَميلُه <c>ProviderHttp</c>)، وبَقِيَ SMTP بِحَقلِه <c>client</c> — أَوَّلُ سَطرٍ تَقيسُه قاعِدَةُ الفِعل.
-    /// ‏(‏2026-11-12، W13-6·١٣) <b>10</b>: خَرَجَ نَفاذ (عَميلُه <c>ProviderHttp</c>)، وصارَ لِـS3 والإشعارِ حَقلُهُما <c>_client</c> — فَقاعِدَةُ الفِعلِ تَقيسُ ثَلاثَةَ أَسطُر.</summary>
-    internal const int AllowListCeiling = 10;
+    /// ‏(‏2026-11-12، W13-6·١٣) <b>10</b>: خَرَجَ نَفاذ (عَميلُه <c>ProviderHttp</c>)، وصارَ لِـS3 والإشعارِ حَقلُهُما <c>_client</c> — فَقاعِدَةُ الفِعلِ تَقيسُ ثَلاثَةَ أَسطُر.
+    /// ‏(‏2026-11-12، W13-6·١٤) <b>7</b>: خَرَجَ ميسّر وPayPal وPaddle (عُمَلاؤُها <c>ProviderHttp</c>).</summary>
+    internal const int AllowListCeiling = 7;
 
     internal static readonly Regex RawTypes = new(
         @"\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(",

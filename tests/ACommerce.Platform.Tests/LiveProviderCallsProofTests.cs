@@ -34,6 +34,10 @@ namespace ACommerce.Platform.Tests;
 // عَلى مُستَمِعٍ مُزَيَّف ⇐ سَطرُ `file.upload` واحِدٌ كَمِّيَّتُه البايتاتُ ومَصدَرُه المِفتاحُ مُستَعاراً؛ وبابُ قَبولِ الصَفقَة (`DealNotices`) لِمُشتَرٍ بِاشتِراكَين ⇐ سَطرُ
 // `push.send` لِلمَقبولِ بِمُعَرِّفِ الإشعارِ المَكتوبِ وعُنوانِه مُستَعاراً، ونِيَّةٌ مَرفوضَةٌ بِلا سَطرٍ لِلمُنتَهي؛ و`POST /{slug}/auth/nafath/login` ثُمَّ `/verify` ⇐ سَطرُ
 // `identity.nafath.start` واحِدٌ ونِيَّةٌ واحِدَة — والرَمزانِ والاستِطلاعُ مُساعِدَةٌ لا نِيَّةَ لَها.
+//
+// ‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ومُعالِجُ انتِهاءِ الفاتورَة**: `GatewayInvoiceExpiryHandler.Handle` مِن حاوِيَةِ المُضيفِ عَلى فاتورَةٍ انتَهَت —
+// يَفتَحُ حامِلَه (`due.TenantSlug`، `_system`) فَتُعَدُّ جَلبَةُ المُهلَةِ وجَلبَتا الإغلاقِ والإلغاءُ عِندَ البَوّابَةِ بِالمَتجَرِ ومالِكِه والدَورِ `_system`؛ والرِسالَةُ المُعادَةُ
+// (‏1/5/15 ث) تَجلِبُ ثانِيَةً بِالمُعَرِّفِ نَفسِه فَلا سَطرَ ثانٍ؛ والحامِلُ لا يَتَسَرَّبُ إلى المُنادي.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveProviderCallsProofTests(ITestOutputHelper output)
@@ -531,5 +535,97 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
         Assert.Equal((OutboundUnits.IdentityNafathStart, slug, owner.ToString("D"), "nafath", ProviderNames.Nafath, UsageLedgerWriter.RequestSource, 1L, true),
                      (row.Unit, row.App, row.Entrepreneur, row.Feature, row.Provider, row.SourceType, row.Quantity, row.SameTransactionAsIntent));
         Assert.Equal($"{OutboundUnits.IdentityNafathStart}:{ProviderNames.Nafath}:{row.SourceId}", id);
+    }
+
+    /// <summary>
+    /// <para><b>مُعالِجُ انتِهاءِ الفاتورَةِ يُعَدُّ لِمَتجَرِ رِسالَتِه بِدَورِ <c>_system</c></b> (‏W13-6·١٤؛ التَصميم §5.4 و§6.2): صَفقَتانِ عَلى فاتورَةٍ تَقولُ البَوّابَةُ إنَّها
+    /// «expired» ثُمَّ «initiated» لِلمُلغي — المُعالِجُ مِن حاوِيَةِ المُضيفِ (كَما يَبنيه Wolverine) يُلغي الطَلَبَ كُلَّه ويُغلِقُ الفاتورَة. ⇐ أَربَعَةُ سُطور: جَلبُ المُهلَة
+    /// (<c>{invoice}:expiry</c>)، وجَلبُ الإغلاقِ لِكُلِّ صَفقَة (<c>{invoice}:close:{deal}</c>)، والإلغاء (<c>{invoice}:close</c>) — كُلُّها بِالمَتجَرِ ومالِكِه (مِن وَثيقَتِه، فَالحامِلُ
+    /// بِلا رائِدِ أَعمال) والدَورِ <c>_system</c>. ثُمَّ الرِسالَةُ مُعادَةً ⇐ جَلبَةٌ ثانِيَةٌ بِالمُعَرِّفِ نَفسِه ولا سَطرَ جَديد. والحامِلُ لا يَتَسَرَّبُ إلى المُنادي.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_expiry_handler_counts_its_fetches_and_its_cancel_for_the_message_store_as_the_system()
+    {
+        if (!Enabled) return;
+        var moyasar = new MoyasarScriptedHandler();
+        var vault = TenantGatewayEndpointsTests.NewVault();
+        await using var host = LiveTemplateDoorHost.Build(services: s =>
+        {
+            s.AddSingleton(vault);
+            s.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => moyasar));
+        });
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        var buyer = Guid.NewGuid();
+        // فاتورَةٌ بِمُعَرِّفِها هِيَ: مُعَرِّفُ الطَلَبِ بِلا المَتجَرِ (التَصميم §6.2، COR-4)، ومُعَرِّفاتُ البَوّابَةِ uuid لا تَتَكَرَّرُ بَينَ المَتاجِر — فَلا يُشارِكُ صَفّاً آخَرَ عَلى القاعِدَة.
+        var invoice = Guid.NewGuid().ToString("D");
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ المُهلَة", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var binding = TenantGatewayEndpointsTests.PaymentsBinding(vault, sealedFor: slug);
+        binding.TenantSlug = slug;
+        await using (var s = host.Store.LightweightSession(slug)) { s.Store(binding); await s.SaveChangesAsync(); }
+        var ids = new List<Guid>();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var deals = scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealsService>();
+            foreach (var amount in new[] { 100m, 50m })
+            {
+                var born = await deals.StartAsync(slug, "marketplace", buyer, "مُشتَرٍ", null, "سِلعَة", amount,
+                    ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments.MarkedAtBirth(new()
+                    {
+                        [ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutPayMethods.AttributeKey] =
+                            ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutPayMethods.Card,
+                    }, viaGateway: true));
+                await deals.AttachRefAsync(slug, born.Id, ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPaymentProof.InvoiceRef, invoice);
+                ids.Add(born.Id);
+            }
+        }
+        var listed = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPaymentProof.MetadataFor(ids.ToArray());
+        moyasar.Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("expired", 15000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 15000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 15000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("canceled", 15000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("canceled", 15000, metadata: listed, id: invoice));
+        var due = new ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayInvoiceExpiryDue(slug, ids[0]);
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        async Task HandleAsync()
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            await ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayInvoiceExpiryHandler.Handle(due,
+                scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments>(),
+                scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealNotices>(), l, CancellationToken.None);
+        }
+
+        Assert.Null(MeterScope.Current);
+        await HandleAsync();
+        Assert.Null(MeterScope.Current);
+        var first = (await EntriesOfAppAsync(slug, OutboundUnits.PaymentGatewayInvoiceFetch)).Concat(await EntriesOfAppAsync(slug, OutboundUnits.PaymentGatewayInvoiceCancel)).ToList();
+        await HandleAsync();
+        var fetches = (await EntriesOfAppAsync(slug, OutboundUnits.PaymentGatewayInvoiceFetch)).Concat(await EntriesOfAppAsync(slug, OutboundUnits.PaymentGatewayInvoiceCancel)).ToList();
+        var intents = await IntentsOfAppAsync(slug);
+        await AllCancelledAsync(ids);
+        output.WriteLine($"[G6·المُهلَة] طَلَباتُ البَوّابَة {moyasar.Requests.Count}: {string.Join(" → ", moyasar.Requests.Select(r => $"{r.Method} {r.RequestUri!.AbsolutePath}"))}");
+        output.WriteLine($"[G6·المُهلَة] نِيّات {intents.Count}: {string.Join(", ", intents.Select(i => $"{i.Id}={i.Outcome}"))}");
+        foreach (var (id, row) in fetches) output.WriteLine($"[G6·المُهلَة] {id} · {row}");
+
+        string Fetch(string tail) => $"{OutboundUnits.PaymentGatewayInvoiceFetch}:{ProviderNames.StoreGateway}:{invoice}:{tail}";
+        var cancel = $"{OutboundUnits.PaymentGatewayInvoiceCancel}:{ProviderNames.StoreGateway}:{invoice}:close";
+        Assert.Equal(new[] { "GET", "GET", "GET", "PUT", "GET" }, moyasar.Requests.Select(r => r.Method.Method));
+        Assert.Equal(new[] { Fetch($"close:{ids[0]:N}"), Fetch($"close:{ids[1]:N}"), Fetch("expiry"), cancel }.Order(StringComparer.Ordinal),
+                     fetches.Select(f => f.Id).Order(StringComparer.Ordinal));
+        Assert.Equal(first.Select(f => f.Id).Order(StringComparer.Ordinal), fetches.Select(f => f.Id).Order(StringComparer.Ordinal));
+        Assert.All(fetches, f => Assert.Equal((slug, owner.ToString("D"), MeterSentinels.SystemJob, "payments", ProviderNames.StoreGateway, ProviderCall.InvoiceSource,
+                                               invoice, 1L, true),
+                                              (f.Row.App, f.Row.Entrepreneur, f.Row.Role, f.Row.Feature, f.Row.Provider, f.Row.SourceType, f.Row.SourceId, f.Row.Quantity,
+                                               f.Row.SameTransactionAsIntent)));
+        Assert.Equal(4, intents.Count);
+        Assert.All(intents, i => Assert.Equal("accepted", i.Outcome));
+
+        async Task AllCancelledAsync(List<Guid> dealIds)
+        {
+            await using var q = host.Store.QuerySession(slug);
+            foreach (var id in dealIds)
+                Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Deals.DealStatus.Cancelled,
+                             (await q.LoadAsync<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal>(id))!.Status);
+        }
     }
 }

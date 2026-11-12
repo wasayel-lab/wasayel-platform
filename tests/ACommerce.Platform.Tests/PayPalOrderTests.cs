@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using ACommerce.Platform.Shared.Metering;
 
 namespace ACommerce.Platform.Tests;
 
@@ -59,6 +60,10 @@ file sealed class OrderHandler : HttpMessageHandler
 
 public class PayPalOrderTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.BillingPayPalOrderCreate, "test-store", "test-request");
+
     private static readonly DateTime Now = new(2026, 08, 24, 12, 00, 00, DateTimeKind.Utc);
 
     private static PayPalOptions Opts() => new()
@@ -110,7 +115,7 @@ public class PayPalOrderTests
                 """);
 
         var draft = Draft();
-        var result = await Provider(handler).CreateOrderAsync(
+        var result = await Provider(handler).CreateOrderAsync(Call,
             draft, PayPalOrderPolicy.Reference(draft), "https://wasayel.test",
             PayPalOrderPolicy.OrderRequestId(draft));
 
@@ -138,7 +143,7 @@ public class PayPalOrderTests
         var draft = Draft(amount: 49m);
         var reference = PayPalOrderPolicy.Reference(draft);
 
-        await Provider(handler).CreateOrderAsync(
+        await Provider(handler).CreateOrderAsync(Call,
             draft, reference, "https://wasayel.test", "k");
 
         using var body = JsonDocument.Parse(handler.Bodies[1]!);
@@ -170,7 +175,7 @@ public class PayPalOrderTests
         var draft = Draft();
         var reference = PayPalOrderPolicy.Reference(draft);
 
-        await Provider(handler).CreateOrderAsync(draft, reference, "https://wasayel.test/", "k");
+        await Provider(handler).CreateOrderAsync(Call, draft, reference, "https://wasayel.test/", "k");
 
         using var body = JsonDocument.Parse(handler.Bodies[1]!);
         var root = body.RootElement;
@@ -207,7 +212,7 @@ public class PayPalOrderTests
         var handler = new OrderHandler().ThenToken().Then(HttpStatusCode.Created, "{\"id\":\"5O1\"}");
         var draft = Draft(description: "   ");
 
-        await Provider(handler).CreateOrderAsync(
+        await Provider(handler).CreateOrderAsync(Call,
             draft, PayPalOrderPolicy.Reference(draft), "https://x", "k");
 
         using var body = JsonDocument.Parse(handler.Bodies[1]!);
@@ -234,7 +239,7 @@ public class PayPalOrderTests
                                  {"rel":"{{rel}}","href":"https://www.paypal.com/checkoutnow?token=5O1"}]}
             """);
 
-        var result = await Provider(handler).CreateOrderAsync(Draft(), "r", "https://x", "k");
+        var result = await Provider(handler).CreateOrderAsync(Call, Draft(), "r", "https://x", "k");
         Assert.Equal("https://www.paypal.com/checkoutnow?token=5O1", result.ApproveUrl);
     }
 
@@ -244,7 +249,7 @@ public class PayPalOrderTests
         var handler = new OrderHandler().ThenToken().Then(HttpStatusCode.Created,
             "{\"id\":\"5O1\",\"links\":[{\"rel\":\"self\",\"href\":\"https://x/self\"}]}");
 
-        var result = await Provider(handler).CreateOrderAsync(Draft(), "r", "https://x", "k");
+        var result = await Provider(handler).CreateOrderAsync(Call, Draft(), "r", "https://x", "k");
         Assert.Null(result.ApproveUrl);
 
         // ورابِطٌ لَم تُعِدهُ PayPal **لا يُخَزَّن** — ولا يُصنَع رابِطٌ
@@ -260,7 +265,7 @@ public class PayPalOrderTests
             .Then(HttpStatusCode.UnprocessableEntity,
                 "{\"name\":\"UNPROCESSABLE_ENTITY\",\"details\":[{\"issue\":\"CURRENCY_NOT_SUPPORTED\"}]}");
 
-        var result = await Provider(handler).CreateOrderAsync(Draft(), "r", "https://x", "k");
+        var result = await Provider(handler).CreateOrderAsync(Call, Draft(), "r", "https://x", "k");
 
         Assert.Equal("", result.OrderId);
         Assert.Null(result.ApproveUrl);
@@ -357,7 +362,7 @@ public class PayPalOrderTests
             """);
 
         var key = PayPalOrderPolicy.CaptureRequestId("wsl-ejar-abc");
-        var result = await Provider(handler).CaptureOrderAsync("5O1", key);
+        var result = await Provider(handler).CaptureOrderAsync(Call, "5O1", key);
 
         Assert.Equal("3C6", result.CaptureId);
         Assert.Equal("COMPLETED", result.Status);
@@ -378,7 +383,7 @@ public class PayPalOrderTests
         var handler = new OrderHandler().ThenToken()
             .Then(HttpStatusCode.Conflict, "{\"name\":\"ORDER_ALREADY_CAPTURED\"}");
 
-        var result = await Provider(handler).CaptureOrderAsync("5O1", "k");
+        var result = await Provider(handler).CaptureOrderAsync(Call, "5O1", "k");
         Assert.Contains("409", result.FailureReason);
         Assert.Contains("ORDER_ALREADY_CAPTURED", result.FailureReason);
     }

@@ -625,7 +625,10 @@ public class EndpointBodyBleedTests
         // وسِجِلُّ مَرَّة-واحِدَة يَقَعانِ في
         // `PayPalBillingService.Apply` نَفسِها — كاتِبٌ واحِدٌ
         // يَمُرُّ بِه المُزَوِّدان (القاعِدَة ٨).
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PaddleEndpoints.cs", 61),
+        //
+        // **‏61 ← 62 (‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨)**: سَطرٌ أَوَّلَ رِسالَةِ Paddle يَضَعُ دَورَ حامِلِ العَدِّ `_provider`
+        // (`MeterScope.Current?.FillPlatformRole`) — الفاعِلُ المُزَوِّدُ لا مُشرِفٌ ولا عُضو، والمَسارُ وَحدَه يَقولُه. صِفرُ قِراءَةٍ وصِفرُ كِتابَةٍ وصِفرُ سَطرِ قَرار.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PaddleEndpoints.cs", 62),
 
         // ─── مِلَفٌّ سادِس — الشَحنُ عَبرَ OTO (‏ADR-033 الخُطوَة 3، ‏2026-10-12) ─────────
         //
@@ -673,7 +676,9 @@ public class EndpointBodyBleedTests
         // **‏15 ← 25 (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»)**: نُقطَةٌ ثانِيَةٌ `POST /{slug}/payments/notify` في ‏10 أَسطُر — نَسَقُ وارِدِ OTO بِحَرفِه: سِرُّ
         // المَتجَرِ (١)، والجِسمُ بِشَرطِه (١)، والبَوّابَةُ النَقِيَّةُ `GatewayNoticeGate.Admit` (١)، ونِداءُ `ConfirmNoticeAsync` بِالإشعارِ المَقبول (١)، وإشعارُ البائِعِ
         // (١)، والرَدُّ مِن `StatusFor` النَقِيَّة (١)، والإطار (٤). **وصِفرُ سَطرِ قَرار**: البُرهانُ جَلبٌ بِمِفتاحِ المَتجَرِ في الخِدمَة.
-        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 25),
+        // **‏25 ← 26 (‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨)**: سَطرٌ أَوَّلَ نُقطَةِ الإشعارِ يَضَعُ دَورَ حامِلِ العَدِّ `_provider` لِمَتجَرِ المَسار
+        // (`FillAcceptedRole` — يَحِلُّ مَحَلَّ `_none` المُؤَقَّتِ مِن الوَسيط)، فَجَلبُ الفاتورَةِ بِالإشعارِ يُعَدُّ بِفاعِلِه. صِفرُ قِراءَةٍ وصِفرُ سَطرِ قَرار.
+        new("libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/TenantGatewayEndpoints.cs", 26),
 
         // ─── مِلَفٌّ خامِس — هُوِيَّةُ البِناء (‏ADR-019) ─────────────
         //
@@ -1271,7 +1276,9 @@ public class EndpointBodyBleedTests
     /// (سِتَّة) — التَفصيلُ عِندَ سَقفِ المِلَفّ. وعَدَدُ النِقاطِ ‏142 ← ‏143.</remarks>
     /// <remarks><b>‏3091 ← 3095 يَوم ‏2026-11-12</b> (الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨): مُعَرِّفُ الإشعارِ مُتَغَيِّراً في أَربَعَةِ أَبوابٍ لِيَحمِلَه الإرسالُ المَعدود؛
     /// التَفصيلُ عِندَ سَقفِ المِلَفّ. وعَدَدُ النِقاطِ ‏143 لَم يَتَحَرَّك.</remarks>
-    private const int PinnedTotal = 3095;
+    /// <remarks><b>‏3095 ← 3098 يَوم ‏2026-11-12</b> (الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨): سَطرُ دَورِ <c>_provider</c> أَوَّلَ نِقاطِ الإشعارِ الثَلاث (بَوّابَةُ المَتجَرِ وPayPal
+    /// وPaddle)؛ ومِلَفُّ PayPal دونَ سَقفِه ‏140. التَفصيلُ عِندَ سَقفَي المِلَفَّين. وعَدَدُ النِقاطِ ‏143 لَم يَتَحَرَّك.</remarks>
+    private const int PinnedTotal = 3098;
 
     /// <summary>وعَدَد النِقاط نَفسِها — سَقفٌ ثانٍ. فَنَقلُ المَنطِق
     /// إلى مُعالِج يُنقِص الأَسطُر <b>والنِقاط</b> مَعاً، ونُقطَةٌ

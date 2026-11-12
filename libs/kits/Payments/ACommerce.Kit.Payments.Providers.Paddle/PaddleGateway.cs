@@ -1,3 +1,4 @@
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -59,13 +60,14 @@ public sealed class PaddleGateway
     public string Environment => (_opts.Environment ?? "").Trim().ToLowerInvariant();
 
     /// <summary>يُنشِئ مُعامَلَةً — و«لا» بِلا انفِجارٍ حينَ لا
-    /// مُزَوِّدَ مُسَجَّلاً.</summary>
+    /// مُزَوِّدَ مُسَجَّلاً. ‏(‏2026-11-12، W13-6·١٤) و<see cref="ProviderCall"/> أَوَّلُ
+    /// وُسَطائِه (القاعِدَة ٦).</summary>
     public Task<PaddleTransactionResult> CreateTransactionAsync(
-        PaddleTransactionDraft draft, string reference, CancellationToken ct = default)
+        ProviderCall call, PaddleTransactionDraft draft, string reference, CancellationToken ct = default)
         => _provider is null
             ? Task.FromResult(new PaddleTransactionResult(
                 "", "", null, "Paddle غَير مُهَيَّأ في هذِه النُسخَة."))
-            : _provider.CreateTransactionAsync(draft, reference, ct);
+            : _provider.CreateTransactionAsync(call, draft, reference, ct);
 }
 
 public static class PaddleExtensions
@@ -102,13 +104,15 @@ public static class PaddleExtensions
 
         if (PaddleEnvironment.IsConfigured(options))
         {
-            services.AddHttpClient<PaddlePaymentProvider>(client =>
+            // ‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) بِالمُستَدعي المَعدود: العَميلُ المُسَمّى بِاسمِ الصِنفِ بِالسَقفِ نَفسِه، والمُزَوِّدُ عابِرٌ كَما كانَ مُطَبَّعاً.
+            services.AddProviderHttp<PaddlePaymentProvider>((_, client) =>
             {
                 // سَقفٌ احتِياطيٌّ **ضِعفُ** مُهلَتِنا الداخِلِيَّة، لِتَسبِقَ
                 // مُهلَتُنا دائِماً فَتَثبُتَ رِسالَةُ الخَطَإ بَدَلَ أَن
                 // تَتَبَدَّلَ بِسِباق. نَفسُ حُجَّةِ `AddPayPalSubscriptions`.
                 client.Timeout = PaddleEnvironment.Timeout(options.TimeoutSeconds) * 2;
             });
+            services.AddTransient<PaddlePaymentProvider>();
         }
 
         services.AddScoped(sp => new PaddleGateway(

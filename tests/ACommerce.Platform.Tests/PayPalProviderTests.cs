@@ -5,6 +5,7 @@ using ACommerce.Kit.Payments.Providers.PayPal;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
+using ACommerce.Platform.Shared.Metering;
 
 namespace ACommerce.Platform.Tests;
 
@@ -61,6 +62,10 @@ file sealed class ScriptedHandler : HttpMessageHandler
 
 public class PayPalProviderTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.BillingPayPalLinkCreate, "test-store", "test-request");
+
     private static PayPalOptions Opts(
         string environment = PayPalEnvironment.Live,
         string webhookId = "WH-TEST",
@@ -257,7 +262,7 @@ public class PayPalProviderTests
                           {"rel":"approve","href":"https://www.paypal.com/webapps/billing/subscriptions?ba_token=X"}]}
                 """);
 
-        var result = await Provider(handler).CreateSubscriptionAsync(
+        var result = await Provider(handler).CreateSubscriptionAsync(Call,
             new SubscriptionRequest("ejar", "P-PLAN-9", 0m, ""), "key-1");
 
         Assert.Equal("I-SUB1", result.SubscriptionId);
@@ -282,7 +287,7 @@ public class PayPalProviderTests
             .ThenToken()
             .Then(HttpStatusCode.UnprocessableEntity, "{\"name\":\"INVALID_REQUEST\"}");
 
-        var result = await Provider(handler).CreateSubscriptionAsync(
+        var result = await Provider(handler).CreateSubscriptionAsync(Call,
             new SubscriptionRequest("ejar", "P-BAD", 0m, ""), "key-1");
 
         Assert.Equal("", result.SubscriptionId);
@@ -315,7 +320,7 @@ public class PayPalProviderTests
             .ThenToken()
             .Then(HttpStatusCode.OK, "{\"verification_status\":\"SUCCESS\"}");
 
-        Assert.True(await Provider(handler).VerifyWebhookSignatureAsync(FullHeaders, raw));
+        Assert.True(await Provider(handler).VerifyWebhookSignatureAsync(Call, FullHeaders, raw));
 
         Assert.EndsWith(PayPalPaymentProvider.VerifySignaturePath,
             handler.Requests[1].RequestUri!.AbsolutePath);
@@ -333,7 +338,7 @@ public class PayPalProviderTests
         var handler = new ScriptedHandler()
             .ThenToken()
             .Then(HttpStatusCode.OK, "{\"verification_status\":\"FAILURE\"}");
-        Assert.False(await Provider(handler).VerifyWebhookSignatureAsync(FullHeaders, "{\"id\":\"1\"}"));
+        Assert.False(await Provider(handler).VerifyWebhookSignatureAsync(Call, FullHeaders, "{\"id\":\"1\"}"));
     }
 
     /// <summary><b>غِيابُ <c>WebhookId</c> يُغلِق قَبلَ أَيّ نِداء</b> —
@@ -345,7 +350,7 @@ public class PayPalProviderTests
         var handler = new ScriptedHandler().ThenToken();
         var provider = Provider(handler, Opts(webhookId: ""));
 
-        Assert.False(await provider.VerifyWebhookSignatureAsync(FullHeaders, "{\"id\":\"1\"}"));
+        Assert.False(await provider.VerifyWebhookSignatureAsync(Call, FullHeaders, "{\"id\":\"1\"}"));
         Assert.Empty(handler.Requests);
     }
 
@@ -355,7 +360,7 @@ public class PayPalProviderTests
         var handler = new ScriptedHandler().ThenToken();
         var provider = Provider(handler);
 
-        Assert.False(await provider.VerifyWebhookSignatureAsync(
+        Assert.False(await provider.VerifyWebhookSignatureAsync(Call,
             FullHeaders with { TransmissionSig = "" }, "{\"id\":\"1\"}"));
         Assert.Empty(handler.Requests);
     }
@@ -365,7 +370,7 @@ public class PayPalProviderTests
     public async Task Verify_IsFalse_WhenTheNetworkThrows()
     {
         var handler = new ThrowingHandler();
-        Assert.False(await Provider(handler).VerifyWebhookSignatureAsync(FullHeaders, "{\"id\":\"1\"}"));
+        Assert.False(await Provider(handler).VerifyWebhookSignatureAsync(Call, FullHeaders, "{\"id\":\"1\"}"));
     }
 
     private sealed class ThrowingHandler : HttpMessageHandler
@@ -410,9 +415,9 @@ public class PayPalProviderTests
 
         Assert.False(gateway.IsConfigured);
         Assert.False(gateway.CanVerifyWebhooks);
-        Assert.False(await gateway.VerifyWebhookSignatureAsync(FullHeaders, "{}"));
+        Assert.False(await gateway.VerifyWebhookSignatureAsync(Call, FullHeaders, "{}"));
 
-        var result = await gateway.CreateSubscriptionAsync("P-1", "ejar", "k");
+        var result = await gateway.CreateSubscriptionAsync(Call, "P-1", "ejar", "k");
         Assert.Equal("", result.SubscriptionId);
         Assert.Null(result.ApproveUrl);
         Assert.NotNull(result.FailureReason);

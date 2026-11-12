@@ -1,3 +1,4 @@
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -54,11 +55,13 @@ public sealed class PayPalGateway
     /// <summary>تَحَقُّقٌ مِن التَوقيع — و<c>false</c> حينَ لا مُزَوِّدَ
     /// أَصلاً. <b>لا استِثناءَ ولا «مَرَّت لِأَنَّها غَيرُ
     /// مُهَيَّأَة»</b>.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) <b>و<see cref="ProviderCall"/> أَوَّلُ وُسَطاءِ كُلِّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّة</b> هُنا وفي جاراتِها
+    /// (القاعِدَة ٦): المُنادي يَعرِفُ المَتجَرَ وسَبَبَ النِداء، والمُزَوِّدُ يَسِمُه ويَضَعُ مِفتاحَ مَرَّة-واحِدَةٍ مُعَرِّفاً. وحينَ لا مُزَوِّدَ فَلا نِداءَ ولا نِيَّة.</remarks>
     public Task<bool> VerifyWebhookSignatureAsync(
-        PayPalWebhookHeaders headers, string rawBody, CancellationToken ct = default)
+        ProviderCall call, PayPalWebhookHeaders headers, string rawBody, CancellationToken ct = default)
         => _provider is null
             ? Task.FromResult(false)
-            : _provider.VerifyWebhookSignatureAsync(headers, rawBody, ct);
+            : _provider.VerifyWebhookSignatureAsync(call, headers, rawBody, ct);
 
     /// <summary>
     /// <para><b>يُنشِئ مُنتَجَ الكاتالوجِ ثُمَّ خُطَّةَ الفَوتَرَة،
@@ -78,13 +81,13 @@ public sealed class PayPalGateway
     /// فَهذا الرَميُ حِزامُ أَمانٍ ثانٍ لا الطَريقَ الأَوَّل.</para>
     /// </summary>
     public async Task<PayPalCatalogPlan> CreateCatalogPlanAsync(
-        PayPalPlanDraft draft, CancellationToken ct = default)
+        ProviderCall call, PayPalPlanDraft draft, CancellationToken ct = default)
     {
         if (_provider is null)
             throw new InvalidOperationException("PayPal غَير مُهَيَّأ في هذِه النُسخَة.");
 
         var productId = await _provider.CreateCatalogProductAsync(draft, ct);
-        var planId    = await _provider.CreateBillingPlanAsync(productId, draft, ct);
+        var planId    = await _provider.CreateBillingPlanAsync(call, productId, draft, ct);
         return new PayPalCatalogPlan(productId, planId);
     }
 
@@ -101,34 +104,34 @@ public sealed class PayPalGateway
     /// الثاني غَيرُ مَوجود (القاعِدَة ١).</para>
     /// </summary>
     public Task<PayPalOrderResult> CreateOrderAsync(
-        PayPalOrderDraft draft, string reference, string origin, string idempotencyKey,
+        ProviderCall call, PayPalOrderDraft draft, string reference, string origin, string idempotencyKey,
         CancellationToken ct = default)
         => _provider is null
             ? Task.FromResult(new PayPalOrderResult(
                 "", "", null, "PayPal غَير مُهَيَّأ في هذِه النُسخَة."))
-            : _provider.CreateOrderAsync(draft, reference, origin, idempotencyKey, ct);
+            : _provider.CreateOrderAsync(call, draft, reference, origin, idempotencyKey, ct);
 
     /// <summary>يَلتَقِطُ المالَ لِطَلَبٍ وافَقَ عَلَيه الدافِع — <b>ولا
     /// يُمَدِّدُ باقَة</b>: التَمديدُ عِندَ
     /// <c>PAYMENT.CAPTURE.COMPLETED</c> وَحدَه.</summary>
     public Task<PayPalCaptureResult> CaptureOrderAsync(
-        string orderId, string idempotencyKey, CancellationToken ct = default)
+        ProviderCall call, string orderId, string idempotencyKey, CancellationToken ct = default)
         => _provider is null
             ? Task.FromResult(new PayPalCaptureResult(
                 "", "", null, "PayPal غَير مُهَيَّأ في هذِه النُسخَة."))
-            : _provider.CaptureOrderAsync(orderId, idempotencyKey, ct);
+            : _provider.CaptureOrderAsync(call, orderId, idempotencyKey, ct);
 
     /// <summary>يُنشِئ اشتِراكاً لِمَتجَرٍ بِخُطَّةِ PayPal المَذكورَةِ
     /// في تَعريفِ الباقَة، ويَضَع سلاجَ المَتجَرِ في
     /// <c>custom_id</c>.</summary>
     public Task<SubscriptionResult> CreateSubscriptionAsync(
-        string payPalPlanId, string tenantSlug, string idempotencyKey,
+        ProviderCall call, string payPalPlanId, string tenantSlug, string idempotencyKey,
         CancellationToken ct = default)
         => _provider is null
             ? Task.FromResult(new SubscriptionResult(
                 "", false, default, "PayPal غَير مُهَيَّأ في هذِه النُسخَة."))
             : _provider.CreateSubscriptionAsync(
-                new SubscriptionRequest(tenantSlug, payPalPlanId, 0m, ""), idempotencyKey, ct);
+                call, new SubscriptionRequest(tenantSlug, payPalPlanId, 0m, ""), idempotencyKey, ct);
 }
 
 public static class PayPalExtensions
@@ -159,7 +162,8 @@ public static class PayPalExtensions
 
         if (PayPalEnvironment.IsConfigured(options))
         {
-            services.AddHttpClient<PayPalPaymentProvider>(client =>
+            // ‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) بِالمُستَدعي المَعدود: العَميلُ المُسَمّى بِاسمِ الصِنفِ بِالسَقفِ نَفسِه، والمُزَوِّدُ عابِرٌ كَما كانَ مُطَبَّعاً.
+            services.AddProviderHttp<PayPalPaymentProvider>((_, client) =>
             {
                 // سَقفٌ احتِياطيٌّ لَو سَقَطَ الرَمزُ الداخِليّ —
                 // **ضِعفُ** نافِذَةِ المُزَوِّدِ لا مُساوِيها، لِيَسبِقَ
@@ -167,6 +171,7 @@ public static class PayPalExtensions
                 // تَتَبَدَّلَ بِسِباق. (نَفسُ حُجَّةِ `AddBrevoEmailChannel`.)
                 client.Timeout = PayPalEnvironment.Timeout(options.TimeoutSeconds) * 2;
             });
+            services.AddTransient<PayPalPaymentProvider>();
         }
 
         services.AddScoped(sp => new PayPalGateway(

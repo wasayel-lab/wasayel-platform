@@ -56,6 +56,14 @@ public class MeterCompositionTests(ITestOutputHelper output)
         // ‏(‏2026-11-12، W13-6·١٣) فَرعا `AuthChannelProvider.Nafath` و`FileStorageChoice.S3` بِحَرفِ نِدائَيهِما، والإعدادُ وَهمِيّ.
         builder.Services.AddNafathChannel(o => { o.ClientId = "c"; o.ClientSecret = "s"; });
         builder.Services.AddS3FileStorage(o => { o.Endpoint = "http://127.0.0.1:1"; o.Bucket = "b"; o.AccessKeyId = "k"; o.SecretAccessKey = "s"; o.PublicBaseUrl = "https://files.wasayel.test"; });
+        // ‏(‏2026-11-12، W13-6·١٤) فَرعا PayPal وPaddle في Program.cs بِحَرفِ نِدائَيهِما، والإعدادُ وَهمِيٌّ يَضبِطُهُما — وميسّر يُسَجِّلُه القالِب.
+        builder.Configuration[ACommerce.Kit.Payments.Providers.PayPal.PayPalEnvironment.ClientIdKey] = "c";
+        builder.Configuration[ACommerce.Kit.Payments.Providers.PayPal.PayPalEnvironment.ClientSecretKey] = "s";
+        builder.Configuration[ACommerce.Kit.Payments.Providers.PayPal.PayPalEnvironment.EnvironmentKey] = "live";
+        builder.Configuration[ACommerce.Kit.Payments.Providers.Paddle.PaddleEnvironment.ApiKeyKey] = "k";
+        builder.Configuration[ACommerce.Kit.Payments.Providers.Paddle.PaddleEnvironment.EnvironmentKey] = "live";
+        ACommerce.Kit.Payments.Providers.PayPal.PayPalExtensions.AddPayPalSubscriptions(builder.Services, builder.Configuration);
+        ACommerce.Kit.Payments.Providers.Paddle.PaddleExtensions.AddPaddleBilling(builder.Services, builder.Configuration);
         var services = builder.Services;
         return (builder.Build(), services);
     }
@@ -71,7 +79,10 @@ public class MeterCompositionTests(ITestOutputHelper output)
     /// <c>ProviderHttp&lt;…&gt;</c>) — فَعُدَّةُ SDK تُرى كَعُدَّةِ HTTP. والعُدَّةُ تُسَجِّلُ إن كانَ لَها مُستَدعٍ واحِدٌ عَلى الأَقَلِّ وكُلُّ مُستَدعِياتِها تُسَجِّل.</summary>
     private static IReadOnlyList<(string Kit, int Invokers, bool Recording)> OutboundKits(IServiceProvider services)
         => new[] { typeof(IOtpChannel), typeof(IEmailOtpChannel), typeof(INafathChannel), typeof(IFileStorage),
-                   typeof(ACommerce.Templates.Customer.Marketplace.Services.WebPushService) }.Select(services.GetService).OfType<object>()
+                   typeof(ACommerce.Templates.Customer.Marketplace.Services.WebPushService),
+                   // ‏(‏2026-11-12، W13-6·١٤) عُدَدُ الدَفعِ الثَلاث — ميسّر مِن القالِب، وPayPal وPaddle حينَ يُضبَطُ اعتِمادُهُما.
+                   typeof(ACommerce.Kit.Payments.MoyasarClient), typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider),
+                   typeof(ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider) }.Select(services.GetService).OfType<object>()
             .Select(kit =>
             {
                 var invokers = kit.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -89,6 +100,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
         Assert.Contains("builder.Services.AddSmtpEmailChannel(", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddNafathChannel(", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddS3FileStorage(", program, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddPayPalSubscriptions(builder.Configuration);", program, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddPaddleBilling(builder.Configuration);", program, StringComparison.Ordinal);
         Assert.Contains("AddCustomerMarketplaceTemplate", program, StringComparison.Ordinal);
 
         foreach (var email in EmailBranches)
@@ -106,8 +119,12 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.True(descriptors.IsService(typeof(IOtpChannel)));
             Assert.True(descriptors.IsService(typeof(IEmailOtpChannel)));
             Assert.True(clients.Count > 0, "أَداةٌ عَمياء: صِفرُ عَميلٍ صادِرٍ في المُضيفِ المُرَكَّب.");
-            // ‏(W13-6·١٣) خَمسٌ لا اثنَتان: والنَفاذُ والمَخزَنُ وخِدمَةُ الإشعار.
-            Assert.True(kits.Count == 5, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 5 ({email}).");
+            // ‏(W13-6·١٣) خَمسٌ لا اثنَتان: والنَفاذُ والمَخزَنُ وخِدمَةُ الإشعار. ‏(W13-6·١٤) ثَمانٍ: وعُدَدُ الدَفعِ الثَلاث.
+            Assert.True(kits.Count == 8, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 8 ({email}).");
+            Assert.Equal(new[] { "MoyasarClient", "PayPalPaymentProvider", "PaddlePaymentProvider" },
+                         kits.Select(k => k.Kit).Where(k => k is "MoyasarClient" or "PayPalPaymentProvider" or "PaddlePaymentProvider"));
+            Assert.Equal(new[] { "MoyasarClient", "PaddlePaymentProvider", "PayPalPaymentProvider" },
+                         clients.Select(c => c.Kit).Where(k => k is "MoyasarClient" or "PayPalPaymentProvider" or "PaddlePaymentProvider").Order(StringComparer.Ordinal));
             Assert.Contains(clients, c => c.Kit == nameof(NafathChannel));
             Assert.Equal(new[] { "NafathChannel", "S3FileStorage", "WebPushService" },
                          kits.Select(k => k.Kit).Where(k => k is "NafathChannel" or "S3FileStorage" or "WebPushService"));
@@ -133,7 +150,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.NotEmpty(clients);
             Assert.All(clients, c => Assert.False(c.Recording));
             // ‏(W13-6·١٣) أَربَعٌ لا اثنَتان: والنَفاذُ والمَخزَن — وخِدمَةُ الإشعارِ يُسَجِّلُها القالِبُ فَلا تُرى بِدونِه.
-            Assert.Equal(4, kits.Count);
+            // ‏(W13-6·١٤) سِتٌّ: وPayPal وPaddle — وميسّر يُسَجِّلُه القالِبُ فَلا يُرى بِدونِه.
+            Assert.Equal(6, kits.Count);
             Assert.All(kits, k => Assert.Equal((1, false), (k.Invokers, k.Recording)));
         }
     }

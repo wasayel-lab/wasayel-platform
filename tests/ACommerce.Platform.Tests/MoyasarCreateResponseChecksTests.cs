@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Xunit.Abstractions;
+using ACommerce.Platform.Shared.Metering;
 using static ACommerce.Platform.Tests.TenantGatewayEndpointsTests;
 
 namespace ACommerce.Platform.Tests;
@@ -25,6 +26,10 @@ namespace ACommerce.Platform.Tests;
 
 public class MoyasarCreateResponseChecksTests(ITestOutputHelper output)
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceCreate, "test-store", "test-request");
+
     private const string ReturnUrl = "https://store.example/zz-gateway/pay/return?deal=1";
     private const string Hosted = "https://checkout.moyasar.com/invoices/3fa85f64-5717-4562-b3fc-2c963f66afa6";
 
@@ -51,7 +56,7 @@ public class MoyasarCreateResponseChecksTests(ITestOutputHelper output)
             .Then(HttpStatusCode.Created, Created(odd, Hosted))
             .Then(HttpStatusCode.OK, Created(odd, Hosted));
 
-        var res = await Client(h).CreateInvoiceAsync(MoyasarClientTests.Key, Draft());
+        var res = await Client(h).CreateInvoiceAsync(Call, MoyasarClientTests.Key, Draft());
         output.WriteLine($"«{odd}» ⇒ {res.Failure?.Code ?? "ok"} · النِداءات: {h.Requests.Count}");
 
         Assert.Equal(MoyasarFailures.Unreadable, res.Failure?.Code);
@@ -96,7 +101,7 @@ public class MoyasarCreateResponseChecksTests(ITestOutputHelper output)
             .Then(HttpStatusCode.Created, Created(MoyasarClientTests.InvoiceId.ToUpperInvariant(), Hosted))
             .Then(HttpStatusCode.OK, Created(MoyasarClientTests.InvoiceId, updatedUrl));
 
-        var res = await Client(h).CreateInvoiceAsync(MoyasarClientTests.Key, Draft());
+        var res = await Client(h).CreateInvoiceAsync(Call, MoyasarClientTests.Key, Draft());
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal($"/v1/invoices/{MoyasarClientTests.InvoiceId}", h.Requests[1].RequestUri!.AbsolutePath);

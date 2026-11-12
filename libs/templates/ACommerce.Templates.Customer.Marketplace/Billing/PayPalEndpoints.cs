@@ -1,5 +1,6 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -72,11 +73,13 @@ public static class PayPalEndpoints
             HttpContext http, IDocumentSession session, PayPalGateway paypal,
             Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار) — يَحمِلُه نِداءُ التَحَقُّقِ وما يَليه.
+            MeterScope.Current?.FillPlatformRole(MeterSentinels.Provider);
             var raw = await new StreamReader(http.Request.Body).ReadToEndAsync(http.RequestAborted);
             var headers = PayPalSurface.HeadersFrom(http.Request);
 
             var verified = paypal.CanVerifyWebhooks
-                && await paypal.VerifyWebhookSignatureAsync(headers, raw, http.RequestAborted);
+                && await paypal.VerifyWebhookSignatureAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform, headers.TransmissionId), headers, raw, http.RequestAborted);
             var gate = PayPalBillingPolicy.Gate(paypal.Options, headers, verified);
             if (gate != PayPalWebhookGate.Accepted)
                 return PayPalSurface.Rejected(log, gate);
@@ -135,7 +138,7 @@ public static class PayPalEndpoints
                 return PayPalSurface.LinkFailed(slug, refusal);
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
-            var result = await paypal.CreateSubscriptionAsync(
+            var result = await paypal.CreateSubscriptionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalLinkCreate, slug, PayPalSurface.LinkKey(slug, payPalPlanId!)),
                 payPalPlanId!, slug, PayPalSurface.LinkKey(slug, payPalPlanId!), http.RequestAborted);
 
             // ─── فَشَلُ PayPal يُسَمّى، ولا يُخفى خَلفَ «تَعَذَّرَ» ───
@@ -201,7 +204,7 @@ public static class PayPalEndpoints
             // الإنشاء» وَحدَها تُرسِل المالِكَ يُخَمِّن.
             // ونَفسُ التَصنيفِ الَّذي يَقرَؤُه مَسارُ رابِطِ الدَفع —
             // خَطَأُ الاستِحقاقِ يُعطي رَمزَه، وما عَداهُ نَصَّ PayPal.
-            try { created = await paypal.CreateCatalogPlanAsync(draft, ct); }
+            try { created = await paypal.CreateCatalogPlanAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalPlanCreate, MeterSentinels.Platform, ProviderCall.FreshRequestId()), draft, ct); }
             catch (Exception ex) { return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(ex.Message)); }
 
             if (!Services.Subscriptions.PayPalBillingService.BindCatalogPlan(
@@ -262,7 +265,7 @@ public static class PayPalEndpoints
                     await session.LoadAsync<PayPalOrderRecord>(reference, ct)))
                 return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderSettled);
 
-            var result = await paypal.CreateOrderAsync(
+            var result = await paypal.CreateOrderAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalOrderCreate, slug, PayPalOrderPolicy.OrderRequestId(draft)),
                 draft, reference, PayPalOrderSurface.OriginFrom(req),
                 PayPalOrderPolicy.OrderRequestId(draft), ct);
 

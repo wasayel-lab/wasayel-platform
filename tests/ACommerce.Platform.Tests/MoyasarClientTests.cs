@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Xunit.Abstractions;
+using ACommerce.Platform.Shared.Metering;
 
 namespace ACommerce.Platform.Tests;
 
@@ -67,6 +68,10 @@ internal sealed class MoyasarCapturingLogger : ILogger<MoyasarClient>
 
 public class MoyasarClientTests(ITestOutputHelper output)
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceFetch, "test-store", "test-request");
+
     internal const string Key = "sk_test_5cD409HqwpoOIDjqOPJPd";
     internal const string InvoiceId = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
 
@@ -123,7 +128,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
             .Then(HttpStatusCode.Created, InvoiceJson("initiated", metadata: new Dictionary<string, string>()))
             .Then(HttpStatusCode.OK, InvoiceJson("initiated", metadata: metadata));
 
-        var res = await Client(handler).CreateInvoiceAsync(Key, Draft(metadata: metadata));
+        var res = await Client(handler).CreateInvoiceAsync(Call, Key, Draft(metadata: metadata));
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal(InvoiceId, res.Value!.Id);
@@ -161,7 +166,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
             .Then(HttpStatusCode.OK, InvoiceJson("initiated", metadata: metadata));
         var riyadh = new DateTimeOffset(2026, 10, 30, 12, 55, 14, 7, TimeSpan.FromHours(3));
 
-        var res = await Client(handler).CreateInvoiceAsync(Key, Draft(metadata: metadata) with { ExpiresAt = riyadh });
+        var res = await Client(handler).CreateInvoiceAsync(Call, Key, Draft(metadata: metadata) with { ExpiresAt = riyadh });
 
         Assert.True(res.Ok, res.Failure?.Code);
         using var created = JsonDocument.Parse(handler.Bodies[0]!);
@@ -182,7 +187,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
     {
         var handler = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, InvoiceJson("paid", 100));
 
-        var res = await Client(handler).FetchInvoiceAsync(Key, InvoiceId);
+        var res = await Client(handler).FetchInvoiceAsync(Call, Key, InvoiceId);
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.True(res.Value!.IsPaid);
@@ -208,7 +213,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
         var shapes = new List<string>();
         for (var i = 0; i < 5; i++)
         {
-            var r = await client.FetchInvoiceAsync(Key, InvoiceId);
+            var r = await client.FetchInvoiceAsync(Call, Key, InvoiceId);
             shapes.Add(r.ToString());
             if (r.Value is { } v) shapes.Add(v.ToString());
             if (r.Failure is { } f) shapes.Add(f.ToString());
@@ -232,13 +237,13 @@ public class MoyasarClientTests(ITestOutputHelper output)
         var silent = new MoyasarScriptedHandler();
         foreach (var key in new[] { "", "   " })
         {
-            Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).FetchInvoiceAsync(key, InvoiceId)).Failure!.Code);
-            Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).CreateInvoiceAsync(key, Draft())).Failure!.Code);
+            Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).FetchInvoiceAsync(Call, key, InvoiceId)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).CreateInvoiceAsync(Call, key, Draft())).Failure!.Code);
         }
         Assert.Empty(silent.Requests);
 
         var called = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, InvoiceJson());
-        Assert.True((await Client(called).FetchInvoiceAsync(Key, InvoiceId)).Ok);
+        Assert.True((await Client(called).FetchInvoiceAsync(Call, Key, InvoiceId)).Ok);
         Assert.Single(called.Requests);
     }
 
@@ -263,9 +268,9 @@ public class MoyasarClientTests(ITestOutputHelper output)
             Draft() with { BackUrl = "javascript:alert(1)" },
         };
         foreach (var d in bad)
-            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).CreateInvoiceAsync(Key, d)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).CreateInvoiceAsync(Call, Key, d)).Failure!.Code);
         foreach (var id in new[] { "../invoices", "3fa85f64?x=1", "", "not-a-uuid" })
-            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).FetchInvoiceAsync(Key, id)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).FetchInvoiceAsync(Call, Key, id)).Failure!.Code);
         Assert.Empty(silent.Requests);
 
         var edge = new[] { Draft(amount: 100), Draft(metadata: Keys(30)), Draft(metadata: Keys(1, 500)) };
@@ -273,7 +278,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
         {
             Assert.True(MoyasarClient.IsSendable(d));
             var h = new MoyasarScriptedHandler().Then(HttpStatusCode.Created, InvoiceJson("initiated")).Then(HttpStatusCode.OK, InvoiceJson("initiated"));
-            Assert.True((await Client(h).CreateInvoiceAsync(Key, d)).Ok);
+            Assert.True((await Client(h).CreateInvoiceAsync(Call, Key, d)).Ok);
         }
         output.WriteLine($"سَوالِب: {bad.Length + 4} · مُوجَباتُ الطَرَف: {edge.Length}");
     }
@@ -287,12 +292,12 @@ public class MoyasarClientTests(ITestOutputHelper output)
             .Then(HttpStatusCode.OK, InvoiceJson());
         var client = Client(handler);
 
-        var first = await client.FetchInvoiceAsync(Key, InvoiceId);
+        var first = await client.FetchInvoiceAsync(Call, Key, InvoiceId);
         Assert.Equal((MoyasarFailures.Unreachable, 500), (first.Failure!.Code, first.Failure.HttpStatus));
-        Assert.Equal(MoyasarFailures.Unreachable, (await client.FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
-        var dropped = await client.FetchInvoiceAsync(Key, InvoiceId);
+        Assert.Equal(MoyasarFailures.Unreachable, (await client.FetchInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
+        var dropped = await client.FetchInvoiceAsync(Call, Key, InvoiceId);
         Assert.Equal((MoyasarFailures.Unreachable, (int?)null), (dropped.Failure!.Code, dropped.Failure.HttpStatus));
-        Assert.True((await client.FetchInvoiceAsync(Key, InvoiceId)).Ok);
+        Assert.True((await client.FetchInvoiceAsync(Call, Key, InvoiceId)).Ok);
     }
 
     /// <summary><c>gateway_refused</c> — مُوجَب: ‏401 (رَدُّ المِثالِ «Invalid authorization credentials»)، و‏403، و‏404 (فاتورَةٌ لا يَعرِفُها
@@ -304,16 +309,16 @@ public class MoyasarClientTests(ITestOutputHelper output)
         {
             var h = new MoyasarScriptedHandler().Then(status,
                 "{\"type\":\"record_not_found\",\"message\":\"The <object type> record you were looking for was not found.\",\"errors\":null}");
-            var r = await Client(h).FetchInvoiceAsync(Key, InvoiceId);
+            var r = await Client(h).FetchInvoiceAsync(Call, Key, InvoiceId);
             Assert.Equal((MoyasarFailures.Refused, (int)status), (r.Failure!.Code, r.Failure.HttpStatus));
         }
 
         var create = new MoyasarScriptedHandler().Then(HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\"}");
-        Assert.Equal(MoyasarFailures.Refused, (await Client(create).CreateInvoiceAsync(Key, Draft())).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Refused, (await Client(create).CreateInvoiceAsync(Call, Key, Draft())).Failure!.Code);
         Assert.Single(create.Requests);
 
         var ok = new MoyasarScriptedHandler().Then(HttpStatusCode.Created, InvoiceJson("initiated")).Then(HttpStatusCode.OK, InvoiceJson("initiated"));
-        Assert.True((await Client(ok).CreateInvoiceAsync(Key, Draft())).Ok);
+        Assert.True((await Client(ok).CreateInvoiceAsync(Call, Key, Draft())).Ok);
     }
 
     /// <summary><c>gateway_rate_limited</c> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1) — مُوجَب: ‏429 «Too Many Requests» (جَدوَلُ وَثيقَةِ الأَخطاء) في الجَلبِ والإنشاءِ
@@ -322,14 +327,14 @@ public class MoyasarClientTests(ITestOutputHelper output)
     public async Task Rate_limited_fires_for_429_alone()
     {
         const string busy = "{\"type\":\"rate_limit_error\",\"message\":\"Too many requests hit the API too quickly.\"}";
-        var fetched = await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).FetchInvoiceAsync(Key, InvoiceId);
+        var fetched = await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).FetchInvoiceAsync(Call, Key, InvoiceId);
         Assert.Equal((MoyasarFailures.RateLimited, (int?)429), (fetched.Failure!.Code, fetched.Failure.HttpStatus));
-        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CreateInvoiceAsync(Key, Draft())).Failure!.Code);
-        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CreateInvoiceAsync(Call, Key, Draft())).Failure!.Code);
+        Assert.Equal(MoyasarFailures.RateLimited, (await Client(new MoyasarScriptedHandler().Then((HttpStatusCode)429, busy)).CancelInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
 
         foreach (var other in new[] { HttpStatusCode.BadRequest, HttpStatusCode.Conflict, (HttpStatusCode)428, (HttpStatusCode)430 })
-            Assert.Equal(MoyasarFailures.Refused, (await Client(new MoyasarScriptedHandler().Then(other, busy)).FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
-        Assert.Equal(MoyasarFailures.Unreachable, (await Client(new MoyasarScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, busy)).FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.Refused, (await Client(new MoyasarScriptedHandler().Then(other, busy)).FetchInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Unreachable, (await Client(new MoyasarScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, busy)).FetchInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
     }
 
     /// <summary><c>gateway_unreadable</c> — مُوجَب: نَجاحٌ لَيسَ JSON، أَو بِلا <c>id</c>، أَو بِمَبلَغٍ نَصّاً، أَو إنشاءٌ بِلا <c>url</c>؛
@@ -347,16 +352,16 @@ public class MoyasarClientTests(ITestOutputHelper output)
         foreach (var body in bodies)
         {
             var h = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, body);
-            Assert.Equal(MoyasarFailures.Unreadable, (await Client(h).FetchInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.Unreadable, (await Client(h).FetchInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
         }
 
         var noUrl = new MoyasarScriptedHandler().Then(HttpStatusCode.Created,
             "{\"id\":\"" + InvoiceId + "\",\"status\":\"initiated\",\"amount\":15000,\"currency\":\"SAR\"}");
-        Assert.Equal(MoyasarFailures.Unreadable, (await Client(noUrl).CreateInvoiceAsync(Key, Draft())).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Unreadable, (await Client(noUrl).CreateInvoiceAsync(Call, Key, Draft())).Failure!.Code);
         Assert.Single(noUrl.Requests);   // لا تُرسَلُ metadata لِفاتورَةٍ لا رابِطَ لَها
 
         var documented = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, InvoiceJson());
-        Assert.True((await Client(documented).FetchInvoiceAsync(Key, InvoiceId)).Ok);
+        Assert.True((await Client(documented).FetchInvoiceAsync(Call, Key, InvoiceId)).Ok);
     }
 
     /// <summary>المَعجَمُ مُغلَقٌ ومُعَدودٌ — خَمسَة، ولِكُلٍّ رِسالَةٌ بِلا سِرّ، ورَمزٌ خارِجَه يَرمي.
@@ -438,7 +443,7 @@ public class MoyasarClientTests(ITestOutputHelper output)
         var log = new MoyasarCapturingLogger();
         var handler = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, InvoiceJson("canceled"));
 
-        var res = await Client(handler, log).CancelInvoiceAsync(Key, InvoiceId);
+        var res = await Client(handler, log).CancelInvoiceAsync(Call, Key, InvoiceId);
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal((InvoiceId, "canceled", 15000L), (res.Value!.Id, res.Value.Status, res.Value.Amount));
@@ -460,10 +465,10 @@ public class MoyasarClientTests(ITestOutputHelper output)
     public async Task Cancelling_calls_nothing_without_a_key_or_a_uuid_and_returns_each_gateway_failure_by_its_code()
     {
         var silent = new MoyasarScriptedHandler();
-        Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).CancelInvoiceAsync("  ", InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.NotConfigured, (await Client(silent).CancelInvoiceAsync(Call, "  ", InvoiceId)).Failure!.Code);
         var badIds = new[] { "../invoices", InvoiceId + "/cancel", "", "not-a-uuid" };
         foreach (var id in badIds)
-            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).CancelInvoiceAsync(Key, id)).Failure!.Code);
+            Assert.Equal(MoyasarFailures.Invalid, (await Client(silent).CancelInvoiceAsync(Call, Key, id)).Failure!.Code);
         Assert.Empty(silent.Requests);
 
         var refusals = new (HttpStatusCode Status, string Body)[]
@@ -475,15 +480,15 @@ public class MoyasarClientTests(ITestOutputHelper output)
         foreach (var (status, body) in refusals)
         {
             var h = new MoyasarScriptedHandler().Then(status, body);
-            var r = await Client(h).CancelInvoiceAsync(Key, InvoiceId);
+            var r = await Client(h).CancelInvoiceAsync(Call, Key, InvoiceId);
             Assert.Equal((MoyasarFailures.Refused, (int)status), (r.Failure!.Code, r.Failure.HttpStatus));
             Assert.Single(h.Requests);
         }
 
         var down = new MoyasarScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, "");
-        Assert.Equal(MoyasarFailures.Unreachable, (await Client(down).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Unreachable, (await Client(down).CancelInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
         var odd = new MoyasarScriptedHandler().Then(HttpStatusCode.OK, "not json");
-        Assert.Equal(MoyasarFailures.Unreadable, (await Client(odd).CancelInvoiceAsync(Key, InvoiceId)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Unreadable, (await Client(odd).CancelInvoiceAsync(Call, Key, InvoiceId)).Failure!.Code);
         output.WriteLine($"بِلا نِداء: {1 + badIds.Length} · رَفضُ البَوّابَة: {refusals.Length} · بِلا جَواب: 1 · لا يُقرَأ: 1");
     }
 }
