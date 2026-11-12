@@ -1,0 +1,136 @@
+@page "/admin/meter"
+@using System.Globalization
+@using ACommerce.Platform.Shared.Metering
+@using ACommerce.Templates.Customer.Marketplace.Services.Queries
+@inject ACommerce.Templates.Customer.Marketplace.Services.PlatformAdminGuard PlatformGuard
+@inject MeterQueries Meter
+@inject ACommerce.Kit.Culture.ICultureContext Culture
+@inject L L
+
+@*
+    العَدُّ الداخِلِيّ — الفِهرِس (‏2026-11-12، الموجَة ١٣ W13-6·٥ — ADR-051 §١٣؛ التَصميم §11).
+    لِكُلِّ مَتجَرٍ اليَوم (يَومُ الرِياض): عَمَلِيّاتُه لِكُلِّ وَحدَة، وما لَم يُحسَم بُعدُه (`_unresolved`) والبَذر (`_seed`) مَعدودَينِ لا مَخفِيَّين،
+    ورائِدُ الأَعمالِ لَحظَةَ الكِتابَة؛ وسَطرُ المُجَمِّع. والأَرقامُ مِن `MeterQueries`: المَجموعُ حَتّى المُؤَشِّرِ والذَيلُ الخامُّ بَعدَه —
+    صادِقَةٌ عَمِلَ المُجَمِّعُ أَم لَم يَعمَل.
+    والمَدخَلُ رابِطٌ في `AdminHome.razor` بِجِوارِ لَوحَةِ المُراقَبَة (القاعِدَة ١٢)، والبابُ `RequirePlatformAdmin`، **والبَوّابَةُ قَبلَ الاستِعلام**:
+    طَلَبٌ مَجهولٌ لا يُقرَأُ لَه الدَفتَرُ أَصلاً، لا يُقرَأُ ثُمَّ يُحجَب (نَمَطُ `TenantEdit.razor`).
+    ورائِدُ الأَعمالِ نَصٌّ لا رابِط: صَفحَتُه تَلِدُ مَعَ البَند ٢١، ومَدخَلٌ إلى صَفحَةٍ غائِبَةٍ أَسوَأُ مِن غِيابِه.
+    وسِماتُ `data-meter-*` قَرائِنُ لِلبُرهانِ (`scripts/prove-meter.sh`) بِأَرقامٍ ثابِتَةِ الثَقافَة.
+*@
+
+<RequirePlatformAdmin>
+<div class="studio-root">
+    <div class="studio-shell">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-brand">
+                <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                     alt="@L["shell.seo.site_name"]" height="30" />
+            </div>
+            <nav class="studio-nav">
+                <a class="studio-nav-item" href="/admin">
+                    <AcIcon Name="building" Size="18" /> @L.Markup("admin.nav.tenants")
+                </a>
+                <a class="studio-nav-item" href="/admin/monitor">
+                    <AcIcon Name="grid" Size="18" /> @L.Markup("admin.nav.monitor")
+                </a>
+                <a class="studio-nav-item active" href="/admin/meter">
+                    <AcIcon Name="bar-chart" Size="18" /> @L.Markup("admin.nav.meter")
+                </a>
+            </nav>
+            <div class="studio-sidebar-footer">
+                <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>
+            </div>
+        </aside>
+
+        <div class="studio-main">
+            <header class="studio-topbar">
+                <h2 class="studio-topbar-title">@L.Markup("admin.meter.topbar")</h2>
+            </header>
+            <div class="studio-content">
+                <div class="studio-page-head">
+                    <h1>@L.Markup("admin.meter.title")</h1>
+                    @if (reading is { State: MeterReadState.Data })
+                    {
+                        <p>@L.Markup("admin.meter.subtitle", reading.To)</p>
+                    }
+                </div>
+
+                @if (reading is null || reading.State == MeterReadState.Error)
+                {
+                    <div data-meter-state="error">
+                        <AcAlert Variant="danger" Title="@L["admin.meter.error_title"]" Message="@L["admin.meter.error_body"]" />
+                    </div>
+                }
+                else if (reading.State == MeterReadState.NoLedger)
+                {
+                    <div data-meter-state="no-ledger">
+                        <AcEmptyState IconName="inbox" Title="@L["admin.meter.no_ledger_title"]" Message="@L["admin.meter.no_ledger_body"]" />
+                    </div>
+                }
+                else
+                {
+                    <div data-meter-state="data">
+                        @if (!reading.AggregatorRan)
+                        {
+                            <div data-meter-agg="absent">
+                                <AcAlert Variant="warning" Message="@L["admin.meter.agg_absent"]" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div data-meter-agg="ran" data-meter-tail="@Num(reading.TailEntries())">
+                                <AcAlert Variant="info" Message="@L.Format("admin.meter.agg_ran", Culture.FormatTime(reading.PulledAtUtc!.Value, "yyyy-MM-dd HH:mm"), Num(reading.TailEntries()))" />
+                            </div>
+                        }
+
+                        <div class="st-section-title">@L.Markup("admin.meter.side_operation")</div>
+                        @if (reading.Apps().Count == 0)
+                        {
+                            <div class="st-card" data-meter-apps="0">@L.Markup("admin.meter.empty_today")</div>
+                        }
+                        else
+                        {
+                            <div class="studio-list" data-meter-apps="@Num(reading.Apps().Count)">
+                                @foreach (var app in reading.Apps())
+                                {
+                                    <a class="studio-list-row" href="/admin/meter/stores/@app" data-meter-app="@app">
+                                        <span class="studio-list-icon"><AcIcon Name="store" Size="18" /></span>
+                                        <div class="studio-list-body">
+                                            <strong>@app</strong>
+                                            <span>@L.Markup("admin.meter.entrepreneur", string.Join(" · ", reading.By(r => r.Entrepreneur, app).Select(e => e.Value)))</span>
+                                            <span data-meter-unresolved="@Num(reading.Unresolved(app))" data-meter-seed="@Num(reading.Seed(app))">
+                                                @L.Markup("admin.meter.unresolved_seed", Num(reading.Unresolved(app)), Num(reading.Seed(app)))
+                                            </span>
+                                        </div>
+                                        @foreach (var (unit, entries) in reading.Operations(app))
+                                        {
+                                            <span class="st-chip" data-meter-unit="@unit" data-entries="@Num(entries)">@UnitLabel(unit) @Num(entries)</span>
+                                        }
+                                    </a>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    MeterReading? reading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // البَوّابَةُ قَبلَ أَيِّ استِعلام — والقَرارُ مَحفوظٌ لِلطَّلَب، فَنِداءُ RequirePlatformAdmin بَعدَه لا يُكَلِّفُ استِعلاماً ثانِياً.
+        if (!(await PlatformGuard.EvaluateAsync()).Allowed) return;
+        reading = await Meter.TodayAsync();
+    }
+
+    /// <summary>اسمُ الوَحدَةِ مِن القامُوس، ورَمزُها حينَ لا يَعرِفُها المُعجَم — تُعرَضُ ولا تُبتَلَع.</summary>
+    string UnitLabel(string unit)
+        => MeterUnitCatalog.Default.Find(unit) is null ? unit : L[MeterUnitCatalog.LabelKey(unit)];
+
+    static string Num(long n) => n.ToString(CultureInfo.InvariantCulture);
+}

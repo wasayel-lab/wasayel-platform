@@ -63,6 +63,8 @@ public static class MarketplaceTemplateExtensions
         services.AddScoped<Services.Queries.PlatformStatsQueries>();
         services.AddScoped<Services.Queries.TenantAdminQueries>();
         services.AddScoped<Services.Queries.PlatformBillingQueries>();
+        // ‏(‏2026-11-12، W13-6·٥ — ADR-051 §١٣) قارِئُ صَفحَتَي العَدِّ لِمُشرِفِ المَنَصَّة: المَجموعُ مَعَ الذَيلِ الخامّ في لَقطَةٍ واحِدَة.
+        services.AddScoped<Services.Queries.MeterQueries>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.

@@ -202,7 +202,9 @@ public class DisplayTimeAbsentTests(ITestOutputHelper output)
         // يُنادي الدالَّةَ نَفسَها مِن قَبلُ فَلا يُعَدُّ مَرَّتَين.
         // ‏2026-10-29 (مُراجَعَةُ تَيّارِ S3 الجَولَة ٢، قَرارُ المالِك د3 (٢) «د»): ‏28 ← 29 — `StudioOwnerNotices.razor` (وَقتُ تَنبيهِ صاحِبِ المَتجَرِ بِـ`Culture.FormatTime`
         // مِن اللَحظَةِ المُخَزَّنَة).
-        Assert.Equal(29, callers.Count);
+        // ‏2026-11-12 (الموجَة ١٣ W13-6·٥ — ADR-051 §١٣): ‏29 ← 31 — `MeterIndex.razor` و`MeterStore.razor` (آخِرُ سَحبٍ لِلمُجَمِّعِ بِـ`Culture.FormatTime`
+        // مِن اللَحظَةِ المُخَزَّنَة `meter.agg_cursor.pulled_at`).
+        Assert.Equal(31, callers.Count);
         Assert.Contains(callers, c => c.File.EndsWith("Chats.razor", StringComparison.Ordinal));
     }
 
