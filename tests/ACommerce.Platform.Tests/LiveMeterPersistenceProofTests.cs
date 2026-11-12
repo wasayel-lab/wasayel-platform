@@ -850,6 +850,10 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
     /// <summary><b><c>member.join</c> و<c>review.create</c></b>: الانضِمامُ بِبابَي الجَوّالِ سَطرٌ واحِدٌ في مَتجَرِه — <b>مَصدَرُه اسمٌ مُستَعارٌ</b> لا مُعَرِّفُ العُضو —
     /// والدُخولُ الثاني تَحديثٌ لا يُعَدّ؛ والتَقييمُ بِالخِدمَةِ الحَقيقِيَّةِ سَطرٌ بِمُعَرِّفِه، والرَدُّ عَلَيه (<c>Store</c>) لا يُعَدّ؛ وكُلٌّ في مُعامَلَةِ وَثيقَتِه؛ ولا سَطرَ
     /// في المَتجَرِ يَحمِلُ مُعَرِّفَ العُضو (G17).</summary>
+    /// <remarks>‏(‏2026-11-12، مُراجَعَةُ المَرحَلَةِ ب الثالِثَة · M6B-CNT-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«والدُخولُ الثاني تَحديثٌ لا يُعَدّ» أَعلاه
+    /// لَم يَكُن تَحديثاً</b>: لِعُضوٍ جَوّالُه مُوَثَّقٌ لا يَكتُبُ الدُخولُ الثاني وَثيقَتَه (إصدارُها قَبلَه وبَعدَه واحِد)، فَصِفرُه يَبقى أَخضَرَ مَهما قَرَّرَ
+    /// المُستَمِعُ في <c>User</c> المُحَدَّث. والتَحديثُ المَقيسُ صارَ <c>POST /{slug}/me/save</c> بِجِسمِه ومُرَشِّحاتِه عَلى عُضوٍ بِلا سَطرِ وِلادَة: الإصدارُ
+    /// يَتَغَيَّرُ و<c>member.join</c> صِفر — وحَقنُ «كُلُّ <c>User</c> مُعَلَّقٍ وِلادَة» في <c>UsageListener</c> يُحَمِّرُه.</remarks>
     [Fact]
     public async Task A_member_join_and_a_review_are_one_entry_each_in_their_documents_transaction_and_the_member_id_never_enters_the_ledger()
     {
@@ -888,9 +892,29 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
             ("a", slug), ("d", member.Id.ToString("D")), ("n", member.Id.ToString("N"))));
         var unitsAtBirth = await ScalarAsync("select string_agg(unit || ' ' || n, ' · ' order by unit) from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug));
         var leaks = await LeaksAsync();
+        // ‏(‏2026-11-12، W13-6·B-R3·1 — M6B-CNT-R3-1) إصدارُ وَثيقَةِ العُضوِ يُقرَأُ حَولَ كُلِّ بابٍ: يَتَغَيَّرُ إن كُتِبَت ويَبقى إن لَم تُكتَب.
+        async Task<string> VersionAsync() => Convert.ToString(await ScalarAsync(
+            "select mt_version::text from platform.mt_doc_user where id = @d", ("d", member.Id))) ?? "";
         await ForgetBirthAsync(MeterRules.MemberJoin, pseudonym);
+        var atBirth = await VersionAsync();
         await JoinAsync();
         var afterSecond = await UnitEntriesAsync(MeterRules.MemberJoin, pseudonym);
+        var afterSecondVersion = await VersionAsync();
+
+        // ‏(‏2026-11-12، W13-6·B-R3·1 — M6B-CNT-R3-1) الدُخولُ الثاني بِالجَوّالِ لا يَكتُبُ العُضوَ أَصلاً — `RaiseVerified` لِجَوّالٍ مُوَثَّقٍ لا يَرفَعُ شَيئاً فَلا حِفظ
+        // (`AuthHandlers.GetOrCreateUserAsync`) — فَصِفرُه أَعلاه لا يَحرُسُ قَرارَ وِلادَةِ `User` في المُستَمِع: حَقنُ «كُلُّ User مُعَلَّقٍ وِلادَة» كانَ يُبقيه أَخضَر.
+        // والتَحديثُ الحَقيقِيُّ هُنا بِبابِه: `POST /{slug}/me/save` (كاتِبُه `AccountWrites.UpdateAsync<User>` — كاتِبُ «حِسابي» والدَورِ والشُروطِ وجِهاتِ
+        // التَواصُل) عَلى عُضوٍ بِلا سَطرِ وِلادَة، والإصدارُ يَتَغَيَّرُ بُرهانَ أَنّ التَحديثَ وَقَع؛ والحُكمُ صِفر.
+        Resolve();
+        var token = AuthHandlers.MakeToken(member.Id, slug, member.SessionVersion);
+        var saved = await host.PostFormOnHostAsync("/{slug}/me/save", route,
+            $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}", AsStore, ("fullName", "عُضوٌ حَدَّثَ اسمَه"));
+        var afterSaveVersion = await VersionAsync();
+        var afterUpdate = await UnitEntriesAsync(MeterRules.MemberJoin, pseudonym);
+        string savedName;
+        await using (var q = host.Store.QuerySession(slug))
+            savedName = (await q.LoadAsync<User>(member.Id))!.FullName;
+        leaks += await LeaksAsync();
 
         Resolve();
         await using var scope = host.Services.CreateAsyncScope();
@@ -906,11 +930,18 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
 
         var perUnit = await ScalarAsync("select string_agg(unit || ' ' || n, ' · ' order by unit) from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug));
         output.WriteLine($"[P1·وَثيقَة] الانضِمام ⇒ {joined} · «{string.Join(" | ", join)}» · الثاني (بِلا سَطر) {afterSecond} · التَقييم «{string.Join(" | ", rated)}» · بَعدَ الرَدِّ (بِلا سَطر) {afterRespond}");
+        output.WriteLine($"[P1·وَثيقَة] member.join at birth {join.Count} · الإصدار {atBirth} · الدُخولُ الثاني ⇒ الإصدار {afterSecondVersion} (لا كِتابَة) · سُطور {afterSecond}"
+            + $" · /me/save ⇒ {saved.Status} {saved.Location} · الإصدار {afterSaveVersion} · الاسم «{savedName}» · after update without birth line {afterUpdate}");
         output.WriteLine($"[P1·وَثيقَة] لِكُلِّ وَحدَةٍ في /{slug} عِندَ الانضِمام: {unitsAtBirth} · وفي آخِرِه: {perUnit} · سُطورٌ تَحمِلُ مُعَرِّفَ العُضو {leaks}");
 
         var ownerId = owner.ToString("D");
         Assert.Equal(new DocRow(MeterRules.MemberJoin, slug, ownerId, MeterSentinels.None, MeterRules.UserSource, pseudonym, true), Assert.Single(join));
         Assert.Equal(0L, afterSecond);
+        Assert.Equal(atBirth, afterSecondVersion);   // ‏الدُخولُ الثاني لا يَكتُب — فَصِفرُه لَيسَ بُرهانَ تَحديث
+        Assert.Equal((302, $"/{slug}/me"), saved);
+        Assert.Equal("عُضوٌ حَدَّثَ اسمَه", savedName);
+        Assert.NotEqual(afterSecondVersion, afterSaveVersion);   // ‏التَحديثُ وَقَعَ فِعلاً
+        Assert.Equal(0L, afterUpdate);
         Assert.Equal(new DocRow(MeterRules.ReviewCreate, slug, ownerId, MeterSentinels.None, MeterRules.ReviewSource, reviewId, true), Assert.Single(rated));
         Assert.Equal(0L, afterRespond);
         Assert.Equal("member.join 1 · store.create 1", unitsAtBirth);
