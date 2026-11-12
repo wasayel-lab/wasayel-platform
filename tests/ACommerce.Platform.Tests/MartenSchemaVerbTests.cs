@@ -44,7 +44,7 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
 
     /// <summary>تَركيبُ المَخزَنِ كَما يُرَكِّبُه التَطبيقُ والفِعلُ: النِداءانِ نَفسُهُما، وسِلسِلَةٌ لا يُتَّصَلُ بِها —
     /// <c>AllObjects</c> والإعدادُ يُقرَآنِ مِن التَهيئَةِ وَحدَها.</summary>
-    private static async Task<T> WithComposedStore<T>(string environment, Func<DocumentStore, T> read)
+    internal static async Task<T> WithComposedStore<T>(string environment, Func<DocumentStore, T> read)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -828,7 +828,7 @@ public class MartenSchemaVerbTests(Xunit.Abstractions.ITestOutputHelper output)
     ];
 
     /// <summary>المُستَعمَلُ بِالأَداتَينِ مَعاً — النَصُّ في libs/apps والـIL في التَجميعاتِ المُحَمَّلَة — والعَدّاداتُ لِلطِباعَة.</summary>
-    private static (IReadOnlyList<string> Used, IReadOnlyList<string> Text, IlSessionScan Il, int Assemblies, int TypeLoadHoles) UsedByBothInstruments()
+    internal static (IReadOnlyList<string> Used, IReadOnlyList<string> Text, IlSessionScan Il, int Assemblies, int TypeLoadHoles) UsedByBothInstruments()
     {
         var text = SourceFiles().SelectMany(f => SessionDocumentTypesIn(File.ReadAllText(f))).Distinct().Order(StringComparer.Ordinal).ToList();
         var assemblies = LoadedACommerceAssemblies();

@@ -238,7 +238,7 @@ public class AppliedEventEmitterTests
 
     /// <summary>كُلّ نَوع حَدَث لَه <c>Apply</c> — بِالانعِكاس عَلى
     /// تَجميعات <c>ACommerce</c> المُحَمَّلَة بِجِوار الاختِبار.</summary>
-    private static IReadOnlyCollection<string> AppliedEventTypes()
+    internal static IReadOnlyCollection<string> AppliedEventTypes()
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
 
