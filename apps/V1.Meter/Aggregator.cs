@@ -24,6 +24,11 @@ namespace ACommerce.V1.Meter;
 // كُلِّ صَفحَة، وجَلسَةٌ مَيِّتَةٌ ⇐ الخُروج 3. كانَ القُفلُ وَحدَه يَضمَنُ «مَرَّةً واحِدَة»، و`--interval` يَترُكُ اتِّصالَه خامِلاً: قُتِلَ فَأَخَذَ ثانٍ القُفلَ،
 // وأُعيدَت صَفحَةُ الأَوَّلِ بَعدَ 40001 بِمُؤَشِّرٍ قَديمٍ فَجُمِعَ المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 23»).
 //
+// ‏(‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والإيداعُ بِشَرطِه في الفَرعَينِ لا في أَحَدِهِما**: كانَ
+// `AggCursorSet` يَشرِطُ التَحديثَ وحدَه، فَلَمّا حَذَفَ `--rebuild` صَفَّ المُؤَشِّرِ تَحتَ صَفحَةٍ قَرَأَته وَلَدَتهُ فَوقَ جَدوَلٍ فُرِّغ، وسَحَبَ المُعيدُ صِفراً
+// (مَقيس: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 3»). الآن صَفحَةٌ لَم تَقرَأ مُؤَشِّراً تَلِدُه (`MeterSql.AggCursorBirth`)، وما سِواها يَتَقَدَّمُ مِمّا قَرَأَ
+// (`MeterSql.AggCursorAdvance`) — صَفٌّ واحِدٌ أَو تَتَراجَع؛ وإعادَةُ البِناءِ حَذفٌ يَحفَظُ اللَقطَةَ لا `truncate`.
+//
 // **ولا سِعرَ هُنا** (القاعِدَة ١٦): يَعُدُّ السُطورَ ويَجمَعُ الكَمِّيّات، ويَطبَعُ التَشغيلَ والحُضورَ مُنفَصِلَين — والتَأكيدُ لِكُلِّ وَحدَةٍ لا لِلمَجموع.
 
 /// <summary>رُموزُ الخُروج — كُلُّ ما سِوى الصِفرِ يُحمِرُّ سكربتاً يُناديه، فَلا يَخضَرُّ صامِتاً (COR-8، COR-9، R4).</summary>
@@ -349,12 +354,17 @@ public sealed class Aggregator
             BindLast(upsert, last);
             await upsert.ExecuteNonQueryAsync(ct);
         }
-        await using (var move = new NpgsqlCommand(MeterSql.AggCursorSet, conn, tx))
+        // ‏(‏2026-11-12، M6A-CNT-R2-1) لا مُؤَشِّرَ مَخزونٌ قَرَأَتهُ الصَفحَةُ (`Cursor.Start` — لا يُخزَنُ أَبَداً، فَالجيلُ يَبدَأُ مِن 1) ⇐ تَلِدُه؛ وإلّا تَتَقَدَّمُ مِمّا قَرَأَت.
+        // وكِلاهُما صَفٌّ واحِدٌ أَو تَتَراجَعُ الصَفحَةُ بِلا كِتابَة.
+        var born = cursor == Cursor.Start;
+        await using (var move = new NpgsqlCommand(born ? MeterSql.AggCursorBirth : MeterSql.AggCursorAdvance, conn, tx))
         {
-            Bind(move, cursor);
+            if (!born) Bind(move, cursor);
             BindLast(move, last);
             if (await move.ExecuteNonQueryAsync(ct) != 1)
-                throw new CursorMovedException($"the stored cursor is no longer {cursor} — this page rolled back without writing");
+                throw new CursorMovedException(born
+                    ? "a cursor was born outside this runner — this page rolled back without writing"
+                    : $"the stored cursor is no longer {cursor} — this page rolled back without writing");
         }
         await tx.CommitAsync(ct);
         return new Page(generation, horizon, cursor, last, keys.Select(k => k.Unit).ToList());

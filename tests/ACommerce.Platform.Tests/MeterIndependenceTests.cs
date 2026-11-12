@@ -116,8 +116,10 @@ public class MeterIndependenceTests(ITestOutputHelper output)
     internal static readonly Regex WritesAgg = new(
         @"(?i)\b(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+(only\s+)?meter\.agg_", RegexOptions.CultureInvariant);
 
+    // ‏(‏2026-11-12، M6A-CNT-R2-1) `AggCursorSet` انقَسَمَ وِلادَةً وتَقَدُّماً — فَالجُمَلُ أَربَع.
     /// <summary>جُمَلُ <see cref="MeterSql"/> الَّتي تَكتُبُ جَدوَلَيِ المُجَمِّع — بِأَسمائِها، والصَفُّ يُثبِتُ أَنّ القائِمَةَ هِيَ ما يَكتُبُ فِعلاً.</summary>
-    internal static readonly string[] AggWriters = [nameof(MeterSql.AggUpsertRange), nameof(MeterSql.AggCursorSet), nameof(MeterSql.AggRebuild)];
+    internal static readonly string[] AggWriters =
+        [nameof(MeterSql.AggUpsertRange), nameof(MeterSql.AggCursorBirth), nameof(MeterSql.AggCursorAdvance), nameof(MeterSql.AggRebuild)];
 
     private static readonly Regex WriterReference = new(@"\b(" + string.Join("|", AggWriters) + @")\b", RegexOptions.CultureInvariant);
 
@@ -125,7 +127,7 @@ public class MeterIndependenceTests(ITestOutputHelper output)
     private static readonly Regex WriteEndpoint = new(
         @"\.Map(Post|Put|Delete|Patch|Methods)\s*\(|\[Wolverine(Post|Put|Delete|Patch)\b", RegexOptions.CultureInvariant);
 
-    private static readonly Regex MentionsAgg = new(@"agg_|\bAgg(Daily|Cursor|UpsertRange|CursorSet|Rebuild)\b", RegexOptions.CultureInvariant);
+    private static readonly Regex MentionsAgg = new(@"agg_|\bAgg(Daily|Cursor|UpsertRange|CursorBirth|CursorAdvance|Rebuild)\b", RegexOptions.CultureInvariant);
 
     [Fact]
     public void No_write_path_outside_the_aggregator_touches_its_tables()

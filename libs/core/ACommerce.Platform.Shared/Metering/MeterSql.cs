@@ -56,6 +56,8 @@ public static class MeterSql
     // ═══ المُجَمِّعُ المُستَقِلّ (‏2026-11-12، W13-6·٤ — ADR-051 §١٢؛ التَصميم §10) ═══════════════════════════════════════════════════
     // جَدوَلاهُ يُعلَنانِ في الميزَةِ نَفسِها فَيُنشِئُهُما إقلاعُ التَطبيق — **والمُجَمِّعُ لا يُنشِئُ شَيئاً**. وجُمَلُ كِتابَتِهِما الثَلاث
     // (`AggUpsertRange` و`AggCursorSet` و`AggRebuild`) لا يُناديها إلّا `apps/V1.Meter` — يَحرُسُه `MeterIndependenceTests` (G10).
+    // ‏(‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَت أَربَعاً: `AggCursorSet` انقَسَمَ
+    // وِلادَةً (`AggCursorBirth`) وتَقَدُّماً (`AggCursorAdvance`).
 
     /// <summary>مَجاميعُ المُجَمِّعِ لِكُلِّ يَومٍ ومَتجَرٍ ورائِدِ أَعمالٍ ودَورٍ ومِيزَةٍ ومُزَوِّدٍ ووَحدَة.</summary>
     public const string AggDaily = "agg_daily";
@@ -145,19 +147,31 @@ public static class MeterSql
 
     /// <summary>
     /// <para>المُؤَشِّرُ يَتَقَدَّمُ إلى آخِرِ مَفاتيحِ الصَفحَة — في مُعامَلَةِ مَجاميعِها نَفسِها: يُودَعانِ مَعاً أَو لا يُودَعُ أَحَدُهُما.</para>
-    /// <para><b>وبِشَرطِ ما قَرَأَتهُ الصَفحَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2): يَتَقَدَّمُ مِن <c>(@g, @x, @i)</c> — المُؤَشِّرِ المَخزونِ الَّذي
-    /// قَرَأَتهُ الصَفحَةُ في لَقطَتِها (<see cref="AggCursorRead"/>) — أَو يُولَدُ إن لَم يَكُن صَفّ؛ وإلّا لا يَكتُبُ شَيئاً (صِفرُ صُفوفٍ ⇐ تَتَراجَعُ الصَفحَة).
-    /// كانَ يَكتُبُ بِلا شَرطٍ فَوقَ ما كَتَبَه غَيرُه، فَصَفحَةٌ أُعيدَت بَعدَ 40001 بِمُؤَشِّرٍ في الذاكِرَةِ جَمَعَت المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 ·
-    /// مَجاميعُ agg_daily 23»). وفي <c>REPEATABLE READ</c> صَفٌّ حَدَّثَه غَيرُها بَعدَ لَقطَتِها يَرُدُّه 40001 قَبلَ الشَرط — والشَرطُ لِما سِوى ذلك.</para>
+    /// <para><b>وبِشَرطِ ما قَرَأَتهُ الصَفحَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2): كانَ يَكتُبُ بِلا شَرطٍ فَوقَ ما كَتَبَه غَيرُه، فَصَفحَةٌ أُعيدَت
+    /// بَعدَ 40001 بِمُؤَشِّرٍ في الذاكِرَةِ جَمَعَت المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 23»).</para>
+    /// <para><b>وجُملَتانِ لا جُملَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ <c>AggCursorSet</c>
+    /// ‏<c>insert … on conflict (singleton) do update … where (المُؤَشِّر) = (ما قَرَأَته)</c> — والشَرطُ في فَرعِ التَحديثِ وَحدَه، وفَرعُ <c>insert</c> بِلا شَرط. فَلَمّا
+    /// حَذَفَ <c>--rebuild</c> صَفَّ المُؤَشِّرِ تَحتَ صَفحَةٍ قَرَأَته (مُجَمِّعٌ فَقَدَ قُفلَه)، وَلَدَت تِلكَ الصَفحَةُ مُؤَشِّرَها فَوقَ جَدوَلٍ فُرِّغ، وسَحَبَ المُعيدُ مِنه صِفراً
+    /// (مَقيسٌ عِندَ <c>47f3c2d</c>: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 3»، بِلا خُروجٍ ولا سَطر). الآن: صَفحَةٌ لَم تَقرَأ مُؤَشِّراً <b>تَلِدُه</b>
+    /// (<see cref="AggCursorBirth"/>)، وما سِواها <b>يَتَقَدَّمُ مِمّا قَرَأَ</b> (<see cref="AggCursorAdvance"/>) — وكِلاهُما صَفٌّ واحِدٌ أَو تَتَراجَعُ الصَفحَةُ ولا تَكتُب.
+    /// وفي <c>REPEATABLE READ</c> صَفٌّ حَدَّثَه غَيرُها أَو حَذَفَه بَعدَ لَقطَتِها يَرُدُّه 40001 قَبلَ الشَرط، فَتُعادُ وتَقرَؤُه مِن جَديد.</para>
     /// </summary>
-    public const string AggCursorSet =
+    public const string AggCursorBirth =
         "insert into meter.agg_cursor (singleton, after_gen, after_xid, after_id, pulled_at) values (true, @lg, @lx::xid8, @li, transaction_timestamp()) "
-        + "on conflict (singleton) do update set after_gen = excluded.after_gen, after_xid = excluded.after_xid, "
-        + "after_id = excluded.after_id, pulled_at = excluded.pulled_at "
-        + "where (meter.agg_cursor.after_gen, meter.agg_cursor.after_xid, meter.agg_cursor.after_id) = (@g, @x::xid8, @i)";
+        + "on conflict (singleton) do nothing";
+
+    /// <summary>تَقَدُّمُ المُؤَشِّرِ مِن <c>(@g, @x, @i)</c> — ما قَرَأَتهُ الصَفحَةُ في لَقطَتِها (<see cref="AggCursorRead"/>) — إلى آخِرِ مَفاتيحِها؛ وصِفرُ صُفوفٍ
+    /// (حُذِفَ أَو تَغَيَّر) ⇐ تَتَراجَعُ الصَفحَة. والسِياقُ في <see cref="AggCursorBirth"/>.</summary>
+    public const string AggCursorAdvance =
+        "update meter.agg_cursor set after_gen = @lg, after_xid = @lx::xid8, after_id = @li, pulled_at = transaction_timestamp() "
+        + "where singleton and (after_gen, after_xid, after_id) = (@g, @x::xid8, @i)";
 
     /// <summary><b>إعادَةُ البِناء</b> = تَفريغُ المَجاميعِ وحَذفُ المُؤَشِّرِ في مُعامَلَةٍ واحِدَةٍ تَحتَ القُفل؛ ثُمَّ اللَحاقُ كَأَوَّلِ تَشغيل.</summary>
-    public const string AggRebuild = "truncate meter.agg_daily; delete from meter.agg_cursor";
+    /// <remarks>‏(‏2026-11-12، M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>حَذفٌ لا <c>truncate</c></b>: <c>truncate</c> لا يَحفَظُ اللَقطَة — قارِئٌ بِـ<c>REPEATABLE READ</c>
+    /// ثَبَّتَ لَقطَتَه عَلى المُؤَشِّرِ قَبلَه (رَأسُ <c>MeterQueries</c>، أَو صَفحَةُ مُجَمِّعٍ فَقَدَ قُفلَه) يَرى بَعدَه المَجاميعَ فارِغَةً والمُؤَشِّرَ قائِماً (مَقيسٌ خارِجَ
+    /// المُستَودَع: «agg 0 · cursor 10»، وبِالحَذفِ «agg 10 · cursor 10»)، ويَأخُذُ قُفلاً حَصرِيّاً يَقِفُ لَه كُلُّ قارِئ. والحَذفُ يَحفَظُها، ومَجاميعُ يَومِيَّةٌ بِعَدَدِ
+    /// (يَوم × مَتجَر × وَحدَة…) لا يَثقُلُ حَذفُها.</remarks>
+    public const string AggRebuild = "delete from meter.agg_daily; delete from meter.agg_cursor";
 
     /// <summary><b>ما أُودِعَ قَبلَ T0 ولَم يُجمَع</b>: سَطرٌ فَوقَ المُؤَشِّرِ مُعامَلَتُه مَرئِيَّةٌ في لَقطَةِ البَدء. <c>--once</c> لا يَنتَهي وهذا صَحيح.</summary>
     public const string PendingBeforeSnapshot =

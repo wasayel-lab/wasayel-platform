@@ -583,4 +583,136 @@ public class LiveMeterAggregatorProofTests(ITestOutputHelper output)
                     try { if (!run.Process.HasExited) run.Process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
         }
     }
+
+    // ─── (٩) إعادَةُ البِناءِ تُسابِقُ مُجَمِّعاً فَقَدَ قُفلَه في مُنتَصَفِ صَفحَتِه ⇐ لا يَضيعُ عَدّ (مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1) ─────
+    //
+    // ‏صَفُّ (٨) يُثبِتُ أَنّ صَفحَةً أُعيدَت بَعدَ 40001 تَقرَأُ المُؤَشِّرَ المَخزون — لا ما يَجري حينَ يَحذِفُ `--rebuild` صَفَّ المُؤَشِّرِ تَحتَ صَفحَةٍ قَرَأَته. فَهُنا
+    // أ (جَلسَةُ قُفلِه ماتَت — حالَةٌ مَقيسَةٌ في (٨)) في مُنتَصَفِ صَفحَتِه: رَأسُها ثَبَّتَ لَقطَتَها وقَرَأَ المُؤَشِّرَ C ومَفاتيحَها، ولَم يَمَسَّ `agg_daily` بَعد؛
+    // وب يَأخُذُ القُفلَ الحُرَّ ويُودِعُ `AggRebuild`؛ ثُمَّ يُكمِلُ أ بِمَجاميعِه وإيداعِ مُؤَشِّرِه؛ ثُمَّ يَسحَبُ ب (الثُنائِيُّ المَبنِيّ). وجُمَلُ أ وب جُمَلُ `MeterSql`
+    // بِأَعيانِها بِتَرتيبِ `PageOnceAsync` (كَما يَصنَعُ صَفُّ (١) تَداخُلَه): لا نُقطَةَ في الثُنائِيِّ يَقِفُ عِندَها بَينَ إيداعِ إعادَةِ البِناءِ وصَفحَتِه الأُولى.
+    // **فَإن أَودَعَ أ** فَوقَ جَدوَلٍ فُرِّغَ وصَفٍّ حُذِف — ‏`truncate` لا يَحفَظُ لَقطَتَه، وفَرعُ `insert` في إيداعِ المُؤَشِّرِ بِلا شَرط — قَرَأَ ب مُؤَشِّرَ أ فَسَحَبَ
+    // صِفراً وضاعَت عَشَرَةٌ بِلا خُروجٍ ولا سَطر (مَقيسٌ عِندَ 47f3c2d: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 3»). والمَطلوب: أ يُرَدُّ ولا يَكتُب، وب يَسحَبُ الثَلاثَةَ عَشَر.
+
+    [Fact]
+    public async Task A_rebuild_racing_a_runner_that_lost_its_lock_mid_page_loses_no_count()
+    {
+        if (!Enabled) return;
+        await using var l = await Ledger.CreateAsync(output);
+        await EntriesAsync(l.Cs, "w13-a", 10);
+        var warm = await RunAsync(l.Cs, "G8·race 0", "--once");
+        Assert.Equal((0, Deals(10)), (warm.Code, Pulled(warm.Lines).Units));
+        await EntriesAsync(l.Cs, "w13-a", 3);
+        Task<string> StateAsync() => TextAsync(l.Cs,
+            "select 'ledger ' || (select count(*) from meter.usage_entry) || ' · agg_daily ' || (select coalesce(sum(entries), 0) from meter.agg_daily) "
+            + "|| ' · cursor ' || coalesce((select concat_ws('|', after_gen, after_xid, after_id) from meter.agg_cursor), '(none)')");
+        var before = await StateAsync();
+        output.WriteLine($"[G8·race] قَبل: {before}");
+
+        // ‏أ: رَأسُ الصَفحَةِ ومُؤَشِّرُها المَخزونُ ومَفاتيحُها في لَقطَةِ `REPEATABLE READ` واحِدَة — حَتّى تَرى الثَلاثَةَ تَحتَ الأُفُق (مُعامَلَةٌ عَلى العُنقودِ قَد تُمسِكُه).
+        await using var a = await OpenAsync(l.Cs);
+        NpgsqlTransaction? ta = null;
+        int generation = 0;
+        string horizon = "";
+        (int G, string X, string I) stored = (0, "", "");
+        var keys = new List<(int G, string X, string I)>();
+        for (var attempt = 0; attempt < 240 && keys.Count != 3; attempt++)
+        {
+            if (ta is not null) { await ta.RollbackAsync(); await ta.DisposeAsync(); await Task.Delay(250); }
+            ta = await a.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead);
+            await using (var head = new NpgsqlCommand(MeterSql.PageHead, a, ta))
+            await using (var r = await head.ExecuteReaderAsync())
+            {
+                await r.ReadAsync();
+                (generation, horizon) = (r.GetInt32(0), r.GetString(1));
+            }
+            await using (var read = new NpgsqlCommand(MeterSql.AggCursorRead, a, ta))
+            await using (var r = await read.ExecuteReaderAsync())
+            {
+                Assert.True(await r.ReadAsync(), "لا مُؤَشِّرَ بَعدَ التَشغيلِ الأَوَّل.");
+                stored = (r.GetInt32(0), r.GetString(1), r.GetString(2));
+            }
+            keys.Clear();
+            await using (var page = new NpgsqlCommand(MeterSql.PageKeys, a, ta))
+            {
+                page.Parameters.AddWithValue("g", stored.G);
+                page.Parameters.AddWithValue("x", stored.X);
+                page.Parameters.AddWithValue("i", stored.I);
+                page.Parameters.AddWithValue("cur", generation);
+                page.Parameters.AddWithValue("h", horizon);
+                page.Parameters.AddWithValue("n", 1000);
+                await using var r = await page.ExecuteReaderAsync();
+                while (await r.ReadAsync()) keys.Add((r.GetInt32(0), r.GetString(1), r.GetString(2)));
+            }
+        }
+        Assert.True(keys.Count == 3, $"صَفحَةُ أ لَم تَرَ السُطورَ الثَلاثَةَ تَحتَ الأُفُق ({keys.Count}).");
+        var last = keys[^1];
+        output.WriteLine($"[G8·race] أ: رَأسُ الصَفحَة gen {generation} · horizon {horizon} · المُؤَشِّرُ المَخزون {stored.G}|{stored.X}|{stored.I} · مَفاتيح {keys.Count}");
+
+        // ‏ب: القُفلُ حُرٌّ (أ فَقَدَه) — يَأخُذُه ويُودِعُ إعادَةَ البِناءِ ويُطلِقُه، كَما يَفعَلُ `--once --rebuild` قَبلَ صَفحَتِه الأُولى.
+        await using (var b = await OpenAsync(l.Cs))
+        {
+            Assert.Equal("True", await TextAsync(b, null, MeterSql.AggregatorTryLock));
+            await using (var tb = await b.BeginTransactionAsync())
+            {
+                await ExecAsync(b, tb, MeterSql.AggRebuild);
+                await tb.CommitAsync();
+            }
+            Assert.Equal("True", await TextAsync(b, null, $"select pg_advisory_unlock(hashtext('{MeterSql.AggregatorLockName}'))"));
+        }
+        var rebuilt = await StateAsync();
+        output.WriteLine($"[G8·race] بَعدَ إعادَةِ بِناءِ ب: {rebuilt}");
+
+        // ‏أ يُكمِل: مَجاميعُ مَداه ثُمَّ إيداعُ مُؤَشِّرِه — والإيداعُ صَفٌّ واحِدٌ أَو تَتَراجَعُ الصَفحَة (`CursorMovedException`)، و40001 تَتَراجَعُ بِه.
+        string outcome;
+        try
+        {
+            int upserted, moved;
+            await using (var upsert = new NpgsqlCommand(MeterSql.AggUpsertRange, a, ta))
+            {
+                upsert.Parameters.AddWithValue("g", stored.G);
+                upsert.Parameters.AddWithValue("x", stored.X);
+                upsert.Parameters.AddWithValue("i", stored.I);
+                upsert.Parameters.AddWithValue("lg", last.G);
+                upsert.Parameters.AddWithValue("lx", last.X);
+                upsert.Parameters.AddWithValue("li", last.I);
+                upserted = await upsert.ExecuteNonQueryAsync();
+            }
+            // ‏الجُملَةُ الَّتي يَختارُها `PageOnceAsync` لِصَفحَةٍ قَرَأَت مُؤَشِّراً مَخزوناً: التَقَدُّمُ مِمّا قَرَأَت (`AggCursorAdvance`).
+            await using (var move = new NpgsqlCommand(MeterSql.AggCursorAdvance, a, ta))
+            {
+                move.Parameters.AddWithValue("g", stored.G);
+                move.Parameters.AddWithValue("x", stored.X);
+                move.Parameters.AddWithValue("i", stored.I);
+                move.Parameters.AddWithValue("lg", last.G);
+                move.Parameters.AddWithValue("lx", last.X);
+                move.Parameters.AddWithValue("li", last.I);
+                moved = await move.ExecuteNonQueryAsync();
+            }
+            if (moved == 1) { await ta!.CommitAsync(); outcome = $"committed · upsert {upserted} · cursor {moved}"; }
+            else { await ta!.RollbackAsync(); outcome = $"refused · upsert {upserted} · cursor {moved} — rolled back"; }
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.SerializationFailure)
+        {
+            await ta!.RollbackAsync();
+            outcome = $"refused · 40001 {e.MessageText}";
+        }
+        await ta!.DisposeAsync();
+        output.WriteLine($"[G8·race] أ: {outcome} · بَعدَه: {await StateAsync()}");
+
+        // ‏ب يَسحَب — الثُنائِيُّ المَبنِيّ.
+        var bRun = await RunAsync(l.Cs, "G8·race B", "--once");
+        var after = await StateAsync();
+        output.WriteLine($"[G8·race] بَعدَ سَحبِ ب: {after}");
+        var ledger = await TextAsync(l.Cs, "select count(*) from meter.usage_entry");
+        var entries = await TextAsync(l.Cs, "select coalesce(sum(entries), 0) from meter.agg_daily");
+        output.WriteLine($"[G8·race] سُطورُ الدَفتَر {ledger} · مَجاميعُ agg_daily {entries}");
+
+        Assert.StartsWith("ledger 13 · agg_daily 10 · cursor 1|", before, StringComparison.Ordinal);
+        Assert.Equal("ledger 13 · agg_daily 0 · cursor (none)", rebuilt);
+        Assert.StartsWith("refused · ", outcome, StringComparison.Ordinal);
+        Assert.Equal(0, bRun.Code);
+        Assert.Equal(Deals(13), Pulled(bRun.Lines).Units);
+        Assert.Equal(("13", "13"), (ledger, entries));
+        Assert.Equal(await LedgerTotalsAsync(l.Cs), await AggAsync(l.Cs));
+    }
 }
