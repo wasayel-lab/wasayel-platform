@@ -823,6 +823,16 @@ row GET  "$S" "/$STORE//me"                             404                     
 row GET  "$S" "/$STORE//"                               404
 row GET  "$R" "/$STORE//me"                             404                         # وَضعُ المَسارِ عَلى الجَذرِ كَما كان
 
+# ‏(‏2026-11-12، W13-4·C2f-R3·1 — C2f-PATHS-R3-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **النَقرُ عَلى الإشعارِ يَجِدُ تَبويبَ العُنوانِ النَظيف**: رابِطُ الإشعارِ
+# بِشَكلِ المَسار (G15) والمَجموعَةُ ٢٧ تُحَوِّلُه، فَكانَ `sw.js` لا يَجِدُ النافِذَةَ الَّتي فَتَحَها ويَفتَحُ مُكَرَّرَةً. السُلوكُ في المُتَصَفِّح (يُقاسُ بِـPlaywright —
+# ADR-050 §١٥)؛ وهذِه تَقرَأُ أَنّ ما يُخدَمُ عَلى كُلِّ مُضيفٍ هُوَ العامِلُ بِحُكمِ شَكلِ المَسار، وأَنّ رابِطَ الإشعارِ يَصِلُ إلى العُنوانِ الَّذي يَبنيه ذلك الحُكم.
+echo "٢٨) عامِلُ الخِدمَةِ عَلى المُضيفِ يَجِدُ تَبويبَ العُنوانِ النَظيفِ بِشَكلِ مَسارِه (C2f-R3)"
+row GET  "$S" "/sw.js"                                   200 - "function pathFormOnStoreHost(href, url)" "if (asPath && asPath.includes(url)) return c.focus();"
+if [ -n "$ROLE" ]; then
+  row GET  "$RH" "/sw.js"                                200 - "function pathFormOnStoreHost(href, url)" "if (asPath && asPath.includes(url)) return c.focus();"
+  row GET  "$RH" "/$STORE/me"                            302 "/me"                   # RelatedUrl تَأكيدِ وَسيلَةِ التَواصُل عَلى مُضيفِ الدَور — /$STORE + /me
+fi
+
 echo
 echo "الصُفوفُ المَفحوصَة: $checked · فَشِلَ: $failed"
 if [ "$checked" -eq 0 ]; then echo "✗ فَحصٌ أَعمى: صِفرُ صَفّ." >&2; exit 1; fi
