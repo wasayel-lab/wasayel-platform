@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.RegularExpressions;
+using ACommerce.Platform.Shared.Metering;
+using ACommerce.Templates.Customer.Marketplace.Services.Metering;
 using Npgsql;
 using Xunit;
 using Xunit.Abstractions;
@@ -15,6 +17,10 @@ namespace ACommerce.Platform.Tests;
 // **«قَبلَ البَذر» مَقيسٌ بِمُعَرِّفِ المُعامَلَة لا بِتَرتيبِ السِجِلّ**: سِجِلُّ المُسَجِّلِ يُكتَبُ مِن طابورٍ في الخَلفِيَّة فَتَرتيبُه مَعَ `Console.WriteLine`
 // البَذّاراتِ لا يُوثَقُ بِه (القاعِدَة ١٠). أَمّا `meter.generation.start_xid` فَمُعامَلَةُ الإقلاع، و`writer_xid` كُلِّ سَطرٍ مَبذورٍ مُعامَلَةُ بَذرِه —
 // وكِلاهُما `xid8` فَالمُقارَنَةُ دَقيقَة: لَو أَقلَعَ الدَفتَرُ بَعدَ البَذرِ (والمُستَمِعُ يَضمَنُ الجَدوَلَ بِنَفسِه) لَكانَت سُطورُ البَذرِ أَصغَر.
+//
+// ‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصارَ المُعجَمُ خَمسَ وَحَدات** والبَذرُ يَكتُبُ أَحداثاً مَعدودَة (إعلاناتُ `PlatformSeed.cs:185`
+// وبَذرِ الاختِبار، وعَرضُ بَذرِ المَظهَر): فَسَطرُ الإقلاعِ ونَوافِذُه مِن المُعجَمِ المَضمونِ نَفسِه لا رَقَماً مَنسوخاً، و«سُطورُ البَذرِ = ما بُذِر» لِكُلِّ وَحدَة —
+// الصَفَقاتُ بِـ`mt_doc_deal`، وكُلُّ وَحدَةِ حَدَثٍ بِعَدَدِ حَدَثِ وِلادَتِها في `mt_events` (قاعِدَةٌ جَديدَةٌ لا يَكتُبُ فيها إلّا البَذر).
 
 [Collection(LiveProofCollection.Name)]
 public class LiveMeterBootProofTests(ITestOutputHelper output)
@@ -123,7 +129,8 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
             lock (lines) boot = lines.Where(l => l.Contains("[meter] boot", StringComparison.Ordinal))
                                       .Select(l => l[l.IndexOf("[meter] boot", StringComparison.Ordinal)..].Trim()).ToArray();
             output.WriteLine($"[boot] سِجِلُّ الإقلاع ({lines.Count} سَطراً): {string.Join(" | ", boot)}");
-            Assert.Equal(new[] { "[meter] boot generation=1 units=1 epochs_new=1" }, boot);
+            var units = MeterUnitCatalog.Default.Units.Count;
+            Assert.Equal(new[] { $"[meter] boot generation=1 units={units} epochs_new={units}" }, boot);
 
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
@@ -135,17 +142,30 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
             }
 
             var generations = await One("select string_agg(generation::text, ',') from meter.generation");
-            var epochs = await One("select string_agg(unit, ',') from meter.unit_epoch");
+            var epochs = await One("select string_agg(unit, ',' order by unit collate \"C\") from meter.unit_epoch");
             var seededRow = await One("select app || '|' || entrepreneur || '|' || role || '|' || generation from meter.usage_entry where source_id = @d");
-            var bySeed = await One("select count(*) from meter.usage_entry where role = '_seed' and entrepreneur = '_seed'");
+            var bySeed = await One("select count(*) from meter.usage_entry where role = '_seed' and entrepreneur = '_seed' and unit = 'deal.create'");
             var unresolved = await One("select count(*) from meter.usage_entry where role = '_unresolved' or entrepreneur = '_unresolved'");
             var before = await One("select bool_and(g.start_xid < e.writer_xid and u.since_xid < e.writer_xid) from meter.usage_entry e, meter.generation g, meter.unit_epoch u where e.role = '_seed'");
             var seededDeals = await One("select count(*) from platform.mt_doc_deal");
             output.WriteLine($"[boot] الأَجيال {generations} · النَوافِذ {epochs} · الصَفقَةُ المَبذورَة {seeded}: {seededRow} · "
                 + $"سُطورُ البَذر {bySeed} مِن صَفَقاتٍ {seededDeals} · _unresolved {unresolved} · الدَفتَرُ قَبلَ البَذر {before}");
 
+            // ‏لِكُلِّ وَحدَةِ حَدَث: حَدَثُ وِلادَتِها في mt_events (البَذرُ وَحدَه يَكتُبُ هُنا) = سُطورُها تَحتَ `_seed`.
+            var births = new List<(string Unit, string Events, string Seeds)>();
+            foreach (var (type, unit) in MeterRules.StreamBirths.OrderBy(b => b.Value, StringComparer.Ordinal))
+                births.Add((unit, await One($"select count(*) from platform.mt_events where mt_dotnet_type like '{type.FullName},%'"),
+                            await One($"select count(*) from meter.usage_entry where unit = '{unit}' and role = '_seed' and entrepreneur = '_seed'")));
+            var allRows = await One("select count(*) from meter.usage_entry");
+            var allSeed = await One("select count(*) from meter.usage_entry where role = '_seed' and entrepreneur = '_seed'");
+            output.WriteLine($"[boot] وَحَداتُ الأَحداث (أَحداثُ الوِلادَة/سُطورُ _seed): {string.Join(" · ", births.Select(b => $"{b.Unit} {b.Events}/{b.Seeds}"))} · "
+                + $"الدَفتَرُ {allRows} · مِنها _seed {allSeed}");
+
             Assert.Equal("1", generations);
-            Assert.Equal("deal.create", epochs);
+            Assert.Equal(string.Join(',', MeterUnitCatalog.Default.Units.Select(u => u.Code).Order(StringComparer.Ordinal)), epochs);
+            Assert.All(births, b => Assert.Equal(b.Events, b.Seeds));
+            Assert.True(long.Parse(births.Single(b => b.Unit == MeterRules.ListingCreate).Seeds) >= 1, "أَداةٌ عَمياء: صِفرُ إعلانٍ مَبذور.");
+            Assert.Equal(allRows, allSeed);
             Assert.Equal("ejar|_seed|_seed|1", seededRow);
             Assert.True(long.Parse(bySeed) >= 2, $"أَداةٌ عَمياء: {bySeed} سَطرَ بَذر.");
             Assert.Equal(seededDeals, bySeed);

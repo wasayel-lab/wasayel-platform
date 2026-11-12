@@ -72,6 +72,9 @@ public sealed record MeterClassificationRow(
 /// <see cref="MeterRules"/> لِأَنّ البُنودَ ٧ و٨ و٩ تَقلِبُ صُفوفَها في كوميتِ قاعِدَتِها نَفسِه — فَمَن يُغَيِّرُ المُصَنِّفَ يَرى دَفتَرَه.</para>
 /// <para><b>اليَومَ المَعدودُ واحِد</b>: <c>Deal</c> ← <c>deal.create</c>. ووَحَداتُ البُنودِ التالِيَةِ «غَيرُ مَعدودَةٍ» بِوَحدَتِها الآتِيَة؛ فَإن دَخَلَت
 /// المُعجَمَ قَبلَ أَن يُقلَبَ صَفُّها حَمِرَ الحارِس.</para>
+/// <para>‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ المَعدودُ خَمسَة</b>: قُلِبَت صُفوفُ الأَحداثِ الأَربَعَةِ إلى «مَعدودٍ» بِشَكلِ
+/// <see cref="MeterCreation.StartStream"/> في كوميتِ قاعِدَتِها (<see cref="MeterRules.StreamBirths"/>)، ودَخَلَت وَحَداتُها المُعجَم. واللَقَطاتُ الأَربَعُ
+/// مُشتَقَّةٌ كَما كانَت: وَحدَتُها الآنَ يَعُدُّها صَفُّ حَدَثِها.</para>
 /// </summary>
 public static class MeterClassification
 {
@@ -91,7 +94,6 @@ public static class MeterClassification
     private const MeterTypeKind Doc = MeterTypeKind.Document;
     private const MeterTypeKind Ev = MeterTypeKind.Event;
 
-    private const string Item7 = "يُعَدُّ مِن البَند ٧ (وَحَداتُ الأَحداث): وِلادَةُ مَجراه بِحَدَثِه، والمَتجَرُ مُستَأجِرُ المَجرى.";
     private const string Item8 = "يُعَدُّ مِن البَند ٨ (وَحَداتُ الوَثائِق)، بَعدَ تَوصيفِ البَذرِ وتَحويلِ وِلاداتِه المَحروسَةِ إلى Insert.";
     private const string Item9 = "يُعَدُّ مِن البَند ٩ (chat.message)، بَعدَ تَوصيفِ الإرسالِ وتَحويلِ Store إلى Insert في نُقطَتِه وفي البَذر.";
     private const string Presence = "جانِبُ التِقنِيَة: يُعَدُّ حُضوراً لِكُلِّ مَتجَرٍ في كُلِّ يَوم (البَند ١٩) لا عَمَلِيَّةً عِندَ الحِفظ — فَالحِفظُ لا يَعُدُّه.";
@@ -106,6 +108,18 @@ public static class MeterClassification
         Counted(typeof(Deal), "deal.create", MeterCreation.OptimisticStore,
             "MeterRules.Classify: صَفقَةٌ مُعَلَّقَةٌ بِلا نُسخَةٍ في الجَلسَة (VersionFor == null، مَقيس D6) — المَوضِعُ DealsService.StartAsync، " +
             "والمَتجَرُ Deal.TenantSlug، والمَصدَرُ مُعَرِّفُ الصَفقَة. وتَحديثُها لا يُعَدّ."),
+        Counted(typeof(ListingCreated), "listing.create", MeterCreation.StartStream,
+            "MeterRules.Classify: ListingCreated في مَجرىً يَبدَأ (StreamAction.Start) — المَوضِعُ POST /{slug}/listings/create (MTE:1301 و:1306) " +
+            "وبَذرُ المَنَصَّة (PlatformSeed.cs:185)، والمَتجَرُ مُستَأجِرُ المَجرى، والمَصدَرُ مُعَرِّفُ الحَدَث (mt_events.id). والإلحاقُ بِمَجرىً قائِمٍ لا يُعَدّ."),
+        Counted(typeof(OfferSubmitted), "offer.submit", MeterCreation.StartStream,
+            "MeterRules.Classify: OfferSubmitted في مَجرىً يَبدَأ — المَوضِعُ POST /{slug}/listings/{id}/offers (MTE:1595)، " +
+            "والمَتجَرُ مُستَأجِرُ المَجرى، والمَصدَرُ مُعَرِّفُ الحَدَث لا مُعَرِّفُ العارِض."),
+        Counted(typeof(TicketCreated), "ticket.open", MeterCreation.StartStream,
+            "MeterRules.Classify: TicketCreated في مَجرىً يَبدَأ — المَوضِعانِ POST /{slug}/support/open (MTE:1139) والبَلاغُ عَن إعلان (MTE:1167)، " +
+            "والمَتجَرُ مُستَأجِرُ المَجرى، والمَصدَرُ مُعَرِّفُ الحَدَث لا مُعَرِّفُ الكاتِب. عَدُّ تَذاكِرَ لا دَقائِقُ دَعم."),
+        Counted(typeof(SubscriptionCreated), "member_plan.subscribe", MeterCreation.StartStream,
+            "MeterRules.Classify: SubscriptionCreated في مَجرىً يَبدَأ — المَوضِعُ PlanSubscribeService.SubscribeAsync (PlanSubscribeService.cs:67)، " +
+            "والمَتجَرُ مُستَأجِرُ المَجرى، والمَصدَرُ مُعَرِّفُ الحَدَث لا مُعَرِّفُ العُضو."),
 
         // ═══ المُشتَقّ — لَقَطاتُ الإسقاطِ المُباشِر ══════════════════════
         Derived(typeof(Listing), "listing.create",
@@ -154,12 +168,6 @@ public static class MeterClassification
         NotCounted(typeof(AgentSession), Doc, Internal),
         NotCounted(typeof(Wolverine.Envelope), Doc, Infra),
         NotCounted(typeof(JasperFx.Events.Daemon.DeadLetterEvent), Doc, Infra),
-
-        // ═══ أَحداثٌ تُعَدُّ في البَند ٧ ═══════════════════════════════════
-        NotCounted(typeof(ListingCreated), Ev, Item7, "listing.create"),
-        NotCounted(typeof(OfferSubmitted), Ev, Item7, "offer.submit"),
-        NotCounted(typeof(TicketCreated), Ev, Item7, "ticket.open"),
-        NotCounted(typeof(SubscriptionCreated), Ev, Item7, "member_plan.subscribe"),
 
         // ═══ أَحداثٌ لا تُعَدّ — بِسَبَبِها ════════════════════════════════
         NotCounted(typeof(ListingViewed), Ev, "مُشاهَدَةُ صَفحَة: المُشاهَداتُ خارِجَ الموجَة (التَصميم §15)."),

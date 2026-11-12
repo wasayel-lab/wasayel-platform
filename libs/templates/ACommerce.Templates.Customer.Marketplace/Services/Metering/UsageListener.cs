@@ -15,6 +15,9 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 /// و<c>Database.EnsureStorageExistsAsync</c> — والأَخيرُ <b>اللَمسَةُ الوَحيدَةُ المَأذونَةُ لِلقاعِدَةِ في مَسارِ الحِفظ</b> (RULES-18): يُخَبِّئُه
 /// Marten لِكُلِّ عَمَلِيَّةٍ فَلا يَعمَلُ بَعدَ <c>MeterBoot</c>، وهُوَ البَديلُ لِتَركيبٍ لا يَمُرُّ بِـ<c>Program.cs</c>.</para>
 /// <para><b>ولا مِفتاحَ إطفاء</b> (§5.5): يَفتَحُ الكِتابَةَ بِلا عَدٍّ الَّتي طَلَبَ المالِكُ إغلاقَها.</para>
+/// <para>‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمَجاري المُعَلَّقَةُ مُدخَلٌ ثالِث</b>: <c>PendingChanges.Streams()</c> — مِن التَغييراتِ
+/// المُعَلَّقَةِ نَفسِها، فَلا نِداءَ جَلسَةٍ جَديد — قِيَماً بِـ<see cref="MeterRules.StreamsOf"/>، فَيَعُدُّ المُصَنِّفُ الحَدَثَ الَّذي يَبدَأُ بِه مَجراه
+/// (وَحَداتُ الأَحداثِ الأَربَع). ويَخرُجُ مُبَكِّراً حينَ لا صَفقَةَ ولا مَجرىً يَبدَأ.</para>
 /// </summary>
 public sealed class UsageListener : DocumentSessionListenerBase
 {
@@ -29,10 +32,11 @@ public sealed class UsageListener : DocumentSessionListenerBase
     {
         var changes = session.PendingChanges;
         var deals = changes.UpdatesFor<Deal>().Concat(changes.InsertsFor<Deal>()).ToList();
-        if (deals.Count == 0) return;
+        var streams = MeterRules.StreamsOf(changes.Streams());
+        if (deals.Count == 0 && !streams.Any(s => s.Started)) return;
 
         var pending = new PendingSnapshot(session.TenantId,
-            deals.Select(d => new PendingDocument(d, session.VersionFor(d) is null)).ToList());
+            deals.Select(d => new PendingDocument(d, session.VersionFor(d) is null)).ToList(), streams);
         var entries = MeterRules.Classify(pending, MeterScope.View(), MeterUnitCatalog.Default);
         if (entries.Count == 0) return;
 

@@ -62,7 +62,8 @@ public class MeterListenerShapeTests(ITestOutputHelper output)
     public void An_injected_stored_read_in_a_copy_of_the_listener_is_caught()
     {
         var source = Source();
-        const string anchor = "if (deals.Count == 0) return;";
+        // ‏(‏2026-11-12، W13-6·٧) المِرساةُ سَطرُ الخُروجِ المُبَكِّرِ كَما صارَ بِقَناةِ المَجرى — والحَقنُ بَعدَه كَما كانَ.
+        const string anchor = "if (deals.Count == 0 && !streams.Any(s => s.Started)) return;";
         Assert.Contains(anchor, source, StringComparison.Ordinal);
         var injected = source.Replace(anchor, anchor + "\n        var stored = await session.LoadAsync<Deal>(deals[0].Id, token);", StringComparison.Ordinal);
         var (_, notAllowed, forbidden) = Scan(injected);

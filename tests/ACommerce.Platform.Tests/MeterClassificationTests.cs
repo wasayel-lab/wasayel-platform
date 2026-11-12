@@ -32,6 +32,10 @@ namespace ACommerce.Platform.Tests;
 //   - **مُدخَلُ المُصَنِّفِ بِلا قَناةِ مَجرى عِندَ الرَأس** (`PendingSnapshot(string SessionTenant, IReadOnlyList<PendingDocument> Documents)`)، فَبِدءُ
 //     المَجرى يُنشَأُ حَقّاً (`PendingChanges.Streams()` يَعُدُّه) ولا يَبلُغُ المُصَنِّفَ مِنه شَيء — فَصَفُّ حَدَثٍ «مَعدود» يَحمَرُّ اليَومَ بِلا
 //     قاعِدَة (`counted_rule_missing`). والبَندُ ٧ يُضيفُ القَناةَ ويَقلِبُ صُفوفَ أَحداثِه.
+//     ‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وأُضيفَت**: `PendingSnapshot(…, Streams)` و`SnapshotOf` يَبني المَجاري بِـ`MeterRules.StreamsOf`
+//     — ما يُمَرِّرُه المُستَمِعُ نَفسُه — فَبِدءُ المَجرى يَبلُغُ المُصَنِّف. وقُلِبَت صُفوفُ الأَحداثِ الأَربَعَة، والمُشتَقُّ الَّذي يَعُدُّ صَفُّ حَدَثِه وَحدَتَه
+//     لَيسَ «وَحدَةً آتِيَة» (`later_unit_in_lexicon` لِغَيرِ المَعدودِ وَحدَه)؛ وصَفّا الحَقنِ اللَذانِ كانا يَقيسانِ الحالَ قَبلَ البَند ٧ يَقيسانِ الرَمزَينِ نَفسَيهِما
+//     بِحَدَثٍ لا قاعِدَةَ لَه (`ListingEdited`) وبِإعادَةِ صَفِّ `ListingCreated` إلى ما كانَ عَلَيه.
 //   - اللَقطَةُ المُباشِرَةُ تُكتَبُ عِندَ الحِفظِ لا قَبلَه، فَلا تَظهَرُ هُنا مَعَ بِدءِ المَجرى؛ و«المُشتَقُّ صِفرٌ» يُقاسُ بِإنشائِه وَثيقَةً.
 //   - ماسِحُ المَواضِعِ نَصِّيّ: الدالَّةُ المُناداةُ تُقرَأُ بِاسمِها، فَأَحمالُها الزائِدَةُ كُلُّها تُرى مَعاً (`AccountErasure.cs:610` يَرى حَدَثَي
 //     `EraseEvents(Offer)` و`EraseEvents(Ticket)`) — زِيادَةٌ في الرُؤيَةِ لا نَقص. والوَسيطُ الأَوَّلُ حينَ يَليه غَيرُه مُعَرِّفُ المَجرى: يُعَدُّ ما يُبنى
@@ -341,12 +345,14 @@ public class MeterClassificationTests(ITestOutputHelper output)
     }
 
     /// <summary>مُدخَلُ المُصَنِّفِ مِن جَلسَةٍ بِما يَقرَؤُه المُستَمِع: كُلُّ وَثيقَةٍ مُعَلَّقَة (<c>Inserts</c> ∪ <c>Updates</c>)، و«وِلادَةٌ» = <c>VersionFor == null</c>.
-    /// <b>ولا قَناةَ مَجرى فيه</b>، لِأَنّ <see cref="PendingSnapshot"/> بِلا قَناةٍ عِندَ الرَأس — والبَندُ ٧ يُضيفُها هُنا حينَ يُضيفُها إلى المُدخَل.</summary>
+    /// <b>ولا قَناةَ مَجرى فيه</b>، لِأَنّ <see cref="PendingSnapshot"/> بِلا قَناةٍ عِندَ الرَأس — والبَندُ ٧ يُضيفُها هُنا حينَ يُضيفُها إلى المُدخَل.
+    /// ‏(‏2026-11-12، W13-6·٧) <b>وأُضيفَت</b>: المَجاري المُعَلَّقَةُ بِـ<see cref="MeterRules.StreamsOf"/> — ما يُمَرِّرُه المُستَمِع.</summary>
     internal static PendingSnapshot SnapshotOf(IDocumentSession session)
     {
         var pending = session.PendingChanges;
         return new PendingSnapshot(session.TenantId, [.. pending.Inserts().Concat(pending.Updates())
-            .Select(d => new PendingDocument(d, VersionForOpen.MakeGenericMethod(d.GetType()).Invoke(session, [d]) is null))]);
+            .Select(d => new PendingDocument(d, VersionForOpen.MakeGenericMethod(d.GetType()).Invoke(session, [d]) is null))],
+            MeterRules.StreamsOf(pending.Streams()));
     }
 
     /// <summary>نُسخَةٌ مِن النَوعِ بِمُعَرِّفٍ جَديد: بِمُنشِئِه الفارِغِ إن كانَ لَه، وإلّا بِلا مُنشِئ. والمُعَرِّفُ <c>Id</c> بِنَوعِه.</summary>
@@ -415,7 +421,10 @@ public class MeterClassificationTests(ITestOutputHelper output)
         }
         foreach (var unit in persistence.Where(u => !rows.Any(r => r.Disposition == MeterDisposition.Counted && r.Unit == u)))
             breaches.Add($"lexicon_unit_without_row:{unit}");
-        foreach (var r in rows.Where(r => r.Disposition != MeterDisposition.Counted && r.Unit is not null && catalog.Find(r.Unit) is not null))
+        // ‏(‏2026-11-12، W13-6·٧) والمُشتَقُّ الَّذي يَعُدُّ صَفُّ حَدَثِه وَحدَتَه لَيسَ «آتِياً»: وَحدَتُه وَحدَةُ الحَدَثِ الَّذي يُعَدُّ مَكانَه، فَإن عَدَّها صَفٌّ فَقَد قُلِبَ.
+        foreach (var r in rows.Where(r => r.Disposition != MeterDisposition.Counted && r.Unit is not null && catalog.Find(r.Unit) is not null
+                                          && !(r.Disposition == MeterDisposition.Derived
+                                               && rows.Any(c => c.Disposition == MeterDisposition.Counted && c.Unit == r.Unit))))
             breaches.Add($"later_unit_in_lexicon:{r.TypeName}->{r.Unit}");
 
         var derived = rows.Where(r => r.Disposition == MeterDisposition.Derived).Select(r => r.TypeName).ToHashSet(StringComparer.Ordinal);
@@ -518,7 +527,8 @@ public class MeterClassificationTests(ITestOutputHelper output)
     /// <para><b>صَفٌّ مَعدودٌ بِلا قاعِدَةٍ يَحمَرّ</b> (حَقنُ G3 المُسَمّى في البَند): الدَفتَرُ الحَقيقِيُّ ونُسَخٌ مِنه بِصَفٍّ واحِدٍ مُبَدَّل، تَمُرُّ بِالتَشغيلِ نَفسِه:</para>
     /// <list type="number">
     ///   <item><c>Tenant</c> «مَعدودٌ» بِوَحدَةٍ في المُعجَم (<c>deal.create</c>) ولا قاعِدَةَ لَه ← إنشاؤُه صِفر: <c>counted_rule_missing</c>.</item>
-    ///   <item><c>ListingCreated</c> «مَعدودٌ» قَبلَ البَند ٧ ← وَحدَتُه لَيسَت في المُعجَم، ولا قَناةَ مَجرىً إلى المُصَنِّف: الرَمزان.</item>
+    ///   <item><c>ListingCreated</c> «مَعدودٌ» قَبلَ البَند ٧ ← وَحدَتُه لَيسَت في المُعجَم، ولا قَناةَ مَجرىً إلى المُصَنِّف: الرَمزان.
+    ///   ‏(‏2026-11-12، W13-6·٧) صارَ مَعدوداً بِقاعِدَتِه، فَالرَمزانِ نَفسُهُما بِحَدَثٍ «مَعدودٍ» بِوَحدَةٍ خارِجَ المُعجَمِ ولا قاعِدَةَ لَه: <c>ListingEdited</c>.</item>
     ///   <item><c>Deal</c> «غَيرُ مَعدود» والمُصَنِّفُ يَعُدُّه ← <c>uncounted_yields_entry</c> بِكُلِّ شَكل، ووَحدَتُه في المُعجَمِ بِلا صَفّ.</item>
     /// </list>
     /// </summary>
@@ -536,9 +546,9 @@ public class MeterClassificationTests(ITestOutputHelper output)
             ("Tenant counted with no rule",
              Swap(typeof(ACommerce.Kit.Tenants.Tenant), MeterClassification.Counted(typeof(ACommerce.Kit.Tenants.Tenant), "deal.create", MeterCreation.Insert, "حَقنٌ: مَعدودٌ بِلا قاعِدَةٍ في MeterRules.")),
              ["counted_rule_missing:Tenant@Insert"]),
-            ("ListingCreated counted before item 7",
-             Swap(typeof(ACommerce.Kit.Listings.ListingCreated), MeterClassification.Counted(typeof(ACommerce.Kit.Listings.ListingCreated), "listing.create", MeterCreation.StartStream, "حَقنٌ: حَدَثٌ مَعدودٌ قَبلَ قَناتِه.")),
-             ["counted_unit_unknown:ListingCreated->listing.create", "counted_rule_missing:ListingCreated@StartStream"]),
+            ("ListingEdited counted with a unit outside the lexicon and no rule",
+             Swap(typeof(ACommerce.Kit.Listings.ListingEdited), MeterClassification.Counted(typeof(ACommerce.Kit.Listings.ListingEdited), "listing.edit", MeterCreation.StartStream, "حَقنٌ: حَدَثٌ مَعدودٌ بِلا وَحدَةٍ ولا قاعِدَة.")),
+             ["counted_unit_unknown:ListingEdited->listing.edit", "counted_rule_missing:ListingEdited@StartStream"]),
             ("Deal not counted while the rule counts it",
              Swap(typeof(Deal), MeterClassification.NotCounted(typeof(Deal), MeterTypeKind.Document, "حَقنٌ: الصَفقَةُ غَيرُ مَعدودَةٍ والمُصَنِّفُ يَعُدُّها.")),
              ["uncounted_yields_entry:Deal@Insert", "uncounted_yields_entry:Deal@OptimisticStore", "lexicon_unit_without_row:deal.create"]),
@@ -568,11 +578,10 @@ public class MeterClassificationTests(ITestOutputHelper output)
         var runs = await MartenSchemaVerbTests.WithComposedStore(Environments.Production, s => Run(s, all));
         Assert.Empty(Breaches(all, docs.All, events.All, inline, runs, MeterUnitCatalog.Default));
 
-        var withListing = MeterUnitCatalog.From([.. MeterUnitCatalog.Default.Units, new MeterUnit
-        {
-            Code = "listing.create", Side = MeterSides.Operation, Boundary = MeterBoundaries.Persistence, Measure = "count",
-            Feature = "deal_status", Reconcile = MeterReconcilers.DealIds, Source = "حَقنٌ: وَحدَةٌ آتِيَةٌ دَخَلَت المُعجَمَ قَبلَ قَلبِ صَفِّها",
-        }]);
+        // ‏(‏2026-11-12، W13-6·٧) `listing.create` في المُعجَمِ الحَقيقِيِّ الآن، فَالحالُ «وَحدَةٌ دَخَلَت المُعجَمَ قَبلَ قَلبِ صَفِّها» يُصنَعُ بِإعادَةِ صَفِّ
+        // `ListingCreated` إلى ما كانَ عَلَيه قَبلَ البَند ٧ — والرُموزُ الثَلاثَةُ نَفسُها.
+        IReadOnlyList<MeterClassificationRow> unflipped = [.. all.Select(r => r.ClrType == typeof(ACommerce.Kit.Listings.ListingCreated)
+            ? MeterClassification.NotCounted(r.ClrType, MeterTypeKind.Event, "حَقنٌ: صَفُّ الحَدَثِ قَبلَ قَلبِه، ووَحدَتُه في المُعجَم.", "listing.create") : r)];
         var cases = new (string Name, string[] Expected, IReadOnlyList<string> Breaches)[]
         {
             ("document seen, no row", ["unclassified_document:injecteddocument"],
@@ -599,7 +608,7 @@ public class MeterClassificationTests(ITestOutputHelper output)
                       docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),
             ("a later unit enters the lexicon before its rows flip",
              ["lexicon_unit_without_row:listing.create", "later_unit_in_lexicon:Listing->listing.create", "later_unit_in_lexicon:ListingCreated->listing.create"],
-             Breaches(all, docs.All, events.All, inline, runs, withListing)),
+             Breaches(unflipped, docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),
         };
         foreach (var (name, expected, breaches) in cases)
         {

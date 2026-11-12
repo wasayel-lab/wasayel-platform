@@ -15,6 +15,11 @@
 #    P5  `V1.Meter --once` ← «deal.create 1» في سَطرِ السَحب، والصَفحَةُ مِن المَجموع (ذَيل 0)
 #    P6  ثَلاثَةُ طَلَباتٍ والمُجَمِّعُ واقِف ← الصَفحَةُ 4 (ذَيل 3)، ثُمَّ «deal.create 3» والصَفحَةُ 4 (ذَيل 0)؛ والطَلَبُ المَجهولُ لا يُرسَمُ لَه رَقَم
 #
+#  ‏(‏2026-11-12، W13-6·٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصارَ المُعجَمُ خَمسَ وَحَدات** (وَحَداتُ الأَحداث): سَطرُ الإقلاعِ يُقرَأُ بِعَدَدِ صُفوفِ
+#  `meter-units.json` لا بِرَقَمٍ مَنسوخ؛ وإعلاناتُ `PlatformSeed` (تَعمَلُ في كُلِّ إقلاع) تَكتُبُ `listing.create` تَحتَ `_seed` قَبلَ أَوَّلِ طَلَب — فَالدَفتَرُ
+#  قَبلَه سُطورُ بَذرٍ بِعَدَدِ أَحداثِ `ListingCreated` لا صِفر، ولا صَفقَةَ فيه؛ وإعلانُ البائِعِ عَبرَ HTTP سَطرُ `listing.create` بِمَتجَرِه ومالِكِه ومُعَرِّفِ
+#  حَدَثِه؛ وصَفحَةُ المَتجَرِ تَجمَعُ الوَحدَتَين («المَجموعُ» 2 ثُمَّ 5) و«deal.create» وَحدَها 1 ثُمَّ 4؛ وسَطرُ السَحبِ الأَوَّلُ يَحمِلُ الوَحدَتَينِ بِعَدَدَيهِما.
+#
 #  **ولا يُشَغَّلُ عَلى الإنتاج**: يُنشِئُ قاعِدَةً ويَحذِفُها عَلى خادِمِ Postgres مَحَلِّيٍّ وَحدَه (المُضيفُ localhost أَو 127.0.0.1 أَو ::1، والاسمُ `wasayel_…`)،
 #  والدُخولُ بِرَمزِ المُحاكي (Development وَحدَه). ولا يُطبَعُ مِن الاتِّصالِ إلّا المُضيفُ واسمُ القاعِدَة.
 #  **والعَدُّ وَحدَه**: لا سِعرَ في هذا المِلَفّ ولا في ما يَقرَؤُه (القاعِدَة ١٦)؛ وقيمَةُ حَقلِ `price` في استِمارَةِ الإعلانِ بَيانُ المَتجَرِ المَطلوب لا رَقَمُ عَدّ.
@@ -152,9 +157,13 @@ for _ in $(seq 1 240); do
 done
 [ "$ready" = 1 ] || { echo "✗ التَطبيقُ لَم يَجهَز:" >&2; tail -20 "$WORK/app.log" >&2; exit 2; }
 BOOT="$(grep -o '\[meter\] boot.*' "$WORK/app.log" | head -1)"
-check "$([ "$BOOT" = "[meter] boot generation=1 units=1 epochs_new=1" ] && echo 1 || echo 0)" "إقلاعٌ بارِد: «$BOOT» (pid $APP_PID)"
+UNITS="$(jq '.units | length' "$ROOT/libs/core/ACommerce.Platform.Shared/Metering/Definitions/meter-units.json")"
+check "$([ "$UNITS" -gt 0 ] && [ "$BOOT" = "[meter] boot generation=1 units=$UNITS epochs_new=$UNITS" ] && echo 1 || echo 0)" "إقلاعٌ بارِد: «$BOOT» (pid $APP_PID · وَحَداتُ المُعجَم $UNITS)"
 L0="$(q "select count(*) from meter.usage_entry")"; C0="$(q "select count(*) from meter.agg_cursor")"
-check "$([ "$L0" = 0 ] && [ "$C0" = 0 ] && echo 1 || echo 0)" "الدَفتَرُ فارِغٌ قَبلَ أَوَّلِ طَلَب: سُطور $L0 · مُؤَشِّر $C0 (لا بَذرَ صَفَقات)"
+S0="$(q "select count(*) from meter.usage_entry where unit = 'listing.create' and role = '_seed' and entrepreneur = '_seed'")"
+E0="$(q "select count(*) from platform.mt_events where mt_dotnet_type like 'ACommerce.Kit.Listings.ListingCreated,%'")"
+check "$([ "$L0" -gt 0 ] && [ "$L0" = "$S0" ] && [ "$S0" = "$E0" ] && [ "$C0" = 0 ] && echo 1 || echo 0)" \
+    "الدَفتَرُ قَبلَ أَوَّلِ طَلَب: سُطور $L0 كُلُّها listing.create تَحتَ _seed ($S0) بِعَدَدِ أَحداثِ ListingCreated ($E0) · لا صَفقَة · مُؤَشِّر $C0"
 
 # ═══ ١) رائِدُ أَعمالٍ يُنشِئُ مَتجَرَه مِن الاستوديو ════════════════════════
 say "١ · رائِدُ الأَعمال: دُخولٌ ← مُوافَقَة ← استِمارَةُ الإنشاء ← /$SLUG"
@@ -218,6 +227,11 @@ req "$J_VEN" POST "$ACT" -F "title=إعلانُ العَدّ $MARK" -F "descript
 LID="${LOC##*/listings/}"
 check "$([ "$CODE" = 302 ] && [[ "$LID" =~ ^[0-9a-f-]{36}$ ]] && echo 1 || echo 0)" "POST $ACT → $CODE $LOC"
 [[ "$LID" =~ ^[0-9a-f-]{36}$ ]] || die "لَم يُنشَر الإعلان"
+# ‏(W13-6·٧) الإعلانُ عَبرَ بابِه سَطرُ listing.create واحِد: مَتجَرُه ومالِكُه، ومَصدَرُه مُعَرِّفُ حَدَثِ ListingCreated في مَجرى الإعلانِ بِعَينِه.
+LROW="$(q "select e.app || ' · ' || e.entrepreneur || ' · ' || e.source_type from meter.usage_entry e join platform.mt_events ev on ev.id::text = e.source_id where ev.stream_id = '$LID' and e.unit = 'listing.create'")"
+LN="$(q "select count(*) from meter.usage_entry where app = '$SLUG' and unit = 'listing.create'")"
+check "$([ "$LN" = 1 ] && [ "$LROW" = "$SLUG · $OWNER · event" ] && echo 1 || echo 0)" \
+    "listing.create عَبرَ الباب: سُطورُ /$SLUG $LN · «$LROW» — مَصدَرُه حَدَثُ مَجرى $LID"
 
 # ═══ ٣) مُشتَرٍ يَطلُبُ نَقداً ═══════════════════════════════════════════
 say "٣ · المُشتَري: دُخول ← دَورُ customer"
@@ -264,7 +278,7 @@ order 1 || die "الطَلَبُ الأَوَّلُ لَم يَكتَمِل"
 # ‏والسَطرُ في مُعامَلَةِ الصَفقَةِ نَفسِها (writer_xid = xmin) يَقيسُه P1 (`LiveMeterPersistenceProofTests`): هُنا يُكتَبُ صَفُّ الصَفقَةِ ثانِيَةً بَعدَ وِلادَتِها
 # في الطَلَبِ نَفسِه (مَقيس ‏2026-11-12: writer_xid 528473 · xmin الصَفِّ 528475 · mt_last_modified بَعدَ occurred_at بِـ30ms) — فَالمُقارَنَةُ هُنا
 # بِمَصدَرِ السَطرِ (الصَفقَةُ بِعَينِها) والمَتجَرِ والمالِك.
-ROW="$(q "select app || ' · ' || entrepreneur || ' · ' || role || ' · ' || feature || ' · ' || provider || ' · ' || source_type from meter.usage_entry where app = '$SLUG'")"
+ROW="$(q "select app || ' · ' || entrepreneur || ' · ' || role || ' · ' || feature || ' · ' || provider || ' · ' || source_type from meter.usage_entry where app = '$SLUG' and unit = 'deal.create'")"
 ENT="$(q "select string_agg(distinct entrepreneur, ',') from meter.usage_entry where app = '$SLUG'")"
 SRC="$(q "select count(*) from meter.usage_entry e join platform.mt_doc_deal d on d.id::text = e.source_id and d.tenant_id = e.app where e.app = '$SLUG'")"
 check "$([ "$(entries)" = 1 ] && [ "$(deals)" = 1 ] && [ "$SRC" = 1 ] && echo 1 || echo 0)" \
@@ -299,25 +313,26 @@ req "$J_ADM" GET /admin/meter
 check "$([ "$CODE" = 200 ] && [ "$(unit_in "data-meter-app=\"$SLUG\"")" = 1 ] && echo 1 || echo 0)" \
     "GET /admin/meter → $CODE · المَتاجِر «$(attr data-meter-app)» · /$SLUG deal.create $(unit_in "data-meter-app=\"$SLUG\"")"
 P4="$(store_page "$J_ADM")"
-check "$([ "$P4" = "data · absent ·  · 1 · 1" ] && has "$F" "$(ar admin.meter.agg_absent)" && grep -q "data-meter-entrepreneur=\"$OWNER\"" "$F" && echo 1 || echo 0)" \
+check "$([ "$P4" = "data · absent ·  · 2 · 1" ] && has "$F" "$(ar admin.meter.agg_absent)" && grep -q "data-meter-entrepreneur=\"$OWNER\"" "$F" && echo 1 || echo 0)" \
     "P4 · /admin/meter/stores/$SLUG → «$P4» · «$(ar admin.meter.agg_absent)» · رائِدُ الأَعمالِ $OWNER"
 anonymous P4
 
 say "P5 · V1.Meter --once"
 agg_once() { ConnectionStrings__Postgres="$CS" timeout 300 dotnet "$METER_DLL" --once > "$WORK/agg.txt" 2>&1; AGG_EXIT=$?; AGG="$(grep -o '\[meter-agg\] gen .*' "$WORK/agg.txt" | head -1)"; }
 agg_once
-check "$([ "$AGG_EXIT" = 0 ] && [[ "$AGG" == *"· pulled 1 (deal.create 1) ·"* ]] && echo 1 || echo 0)" "P5 · خُروج $AGG_EXIT · $AGG"
+check "$([ "$AGG_EXIT" = 0 ] && [[ "$AGG" == *"· pulled $((L0 + 2)) (deal.create 1 · listing.create $((L0 + 1))) ·"* ]] && echo 1 || echo 0)" \
+    "P5 · خُروج $AGG_EXIT · $AGG (بَذرُ الإعلانات $L0 + إعلانُ البائِع + الطَلَب)"
 P5="$(store_page "$J_ADM")"
-check "$([ "$P5" = "data · ran · 0 · 1 · 1" ] && echo 1 || echo 0)" "P5 · /admin/meter/stores/$SLUG → «$P5» (مِن المَجموع، ذَيل 0)"
+check "$([ "$P5" = "data · ran · 0 · 2 · 1" ] && echo 1 || echo 0)" "P5 · /admin/meter/stores/$SLUG → «$P5» (مِن المَجموع، ذَيل 0)"
 
 say "P6 · ثَلاثَةُ طَلَباتٍ والمُجَمِّعُ واقِف"
 for n in 2 3 4; do order "$n" || die "الطَلَبُ $n لَم يَكتَمِل"; done
 P6A="$(store_page "$J_ADM")"
-check "$([ "$(entries)" = 4 ] && [ "$P6A" = "data · ran · 3 · 4 · 4" ] && echo 1 || echo 0)" "P6 · سُطور $(entries) · قَبلَ السَحب «$P6A» (مَجموع 1 + ذَيل 3)"
+check "$([ "$(entries)" = 4 ] && [ "$P6A" = "data · ran · 3 · 5 · 4" ] && echo 1 || echo 0)" "P6 · سُطور $(entries) · قَبلَ السَحب «$P6A» (مَجموع 2 + ذَيل 3)"
 agg_once
 check "$([ "$AGG_EXIT" = 0 ] && [[ "$AGG" == *"· pulled 3 (deal.create 3) ·"* ]] && echo 1 || echo 0)" "P6 · خُروج $AGG_EXIT · $AGG"
 P6B="$(store_page "$J_ADM")"
-check "$([ "$P6B" = "data · ran · 0 · 4 · 4" ] && echo 1 || echo 0)" "P6 · بَعدَ السَحب «$P6B»"
+check "$([ "$P6B" = "data · ran · 0 · 5 · 4" ] && echo 1 || echo 0)" "P6 · بَعدَ السَحب «$P6B»"
 anonymous P6
 
 PER_UNIT="$(q "select string_agg(unit || ' ' || n || ' (_unresolved ' || u || ' · _seed ' || s || ')', ' · ') from (select unit, count(*) n, count(*) filter (where role = '_unresolved' or entrepreneur = '_unresolved') u, count(*) filter (where role = '_seed') s from meter.usage_entry group by unit) t")"

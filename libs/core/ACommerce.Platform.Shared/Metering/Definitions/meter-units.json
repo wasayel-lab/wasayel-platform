@@ -8,6 +8,42 @@
       "feature": "deal_status",
       "reconcile": "deal_ids",
       "source": "DealsService.StartAsync — Deal stored with VersionFor = null (one deal = one cart line or one listing-page request)"
+    },
+    {
+      "code": "listing.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "listings",
+      "reconcile": "event_ids:ListingCreated",
+      "source": "POST /{slug}/listings/create (MarketplaceTemplateExtensions) — ListingCreated in a StreamAction.Start; one listing = one started stream; app = the stream tenant"
+    },
+    {
+      "code": "offer.submit",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "offer",
+      "reconcile": "event_ids:OfferSubmitted",
+      "source": "POST /{slug}/listings/{id}/offers (MarketplaceTemplateExtensions) — OfferSubmitted in a StreamAction.Start; one offer = one started stream; app = the stream tenant"
+    },
+    {
+      "code": "ticket.open",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "ticket",
+      "reconcile": "event_ids:TicketCreated",
+      "source": "POST /{slug}/support/open and POST /{slug}/listings/{id}/report (MarketplaceTemplateExtensions) — TicketCreated in a StreamAction.Start; a count of opened tickets, not support minutes; app = the stream tenant"
+    },
+    {
+      "code": "member_plan.subscribe",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "subscription",
+      "reconcile": "event_ids:SubscriptionCreated",
+      "source": "PlanSubscribeService.SubscribeAsync — SubscriptionCreated in a StreamAction.Start (a member granted a store plan); app = the stream tenant"
     }
   ]
 }
