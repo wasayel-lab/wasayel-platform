@@ -18,6 +18,10 @@ public sealed class ProviderHttp<TKit>(HttpClient http, ProviderCalls calls)
     public Task<HttpResponseMessage> SendAsync(ProviderCall call, HttpRequestMessage request, CancellationToken ct)
         => calls.InvokeAsync(call, t => http.SendAsync(request, t), Classify, ct);
 
+    /// <summary>‏(‏2026-11-12، W13-6·١٣) <b>طَلَبٌ مُساعِدٌ لا يُعَدّ</b> (رَمزُ OAuth، استِطلاعُ الحالَة) — بِالعَميلِ نَفسِه، والجَوابُ كَما هُوَ.</summary>
+    public Task<HttpResponseMessage> SendHelperAsync(ProviderHelper helper, HttpRequestMessage request, CancellationToken ct)
+        => calls.HelperAsync(helper, t => http.SendAsync(request, t), ct);
+
     /// <summary>
     /// <para>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨؛ التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: <c>HttpClient</c> يَصيرُ مُستَدعِياً لا يُسَجِّل
     /// (<see cref="ProviderCalls.Unrecorded"/>) — فَيَبقى بِناءُ العُدَّةِ في اختِباراتِها بِعَميلٍ خامٍّ كَما كانَ (<c>new BrevoEmailChannel(…, new HttpClient(handler), …)</c>،

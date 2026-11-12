@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Providers.Brevo;
+using ACommerce.Kit.Auth.Providers.Nafath;
 using ACommerce.Kit.Auth.Providers.Smtp;
 using ACommerce.Kit.Auth.Providers.Twilio;
 using ACommerce.Kit.Tenants;
@@ -28,6 +29,11 @@ namespace ACommerce.Platform.Tests;
 // ‏(‏2026-11-12، W13-6·١٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وبابُ البَريدِ بِقَناتَيه**: `POST /{slug}/auth/email/login` في مَتجَرٍ قَناتُه البَريدُ خَلفَ الوَسيطِ الحَقيقِيّ،
 // مَرَّةً بِـBrevo (`AddBrevoEmailChannel` عَلى مُعالِجٍ يُسَجِّل) ومَرَّةً بِـSMTP (`AddSmtpEmailChannel` عَلى خادِمٍ مُزَيَّفٍ في 5200–5249) ⇐ سَطرُ `otp.email.send`
 // واحِدٌ بِالمَتجَرِ ومالِكِه ومُعَرِّفُ طَلَبِه مُعَرِّفُ المُحاوَلَة، والمُزَوِّدُ اسمُ القَناة؛ ورَفضُ Brevo ⇐ `send_failed` ونِيَّةٌ مَرفوضَةٌ وصِفرُ سَطر.
+//
+// ‏(‏2026-11-12، W13-6·١٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصورَةُ المَلَفِّ والإشعارُ الفَوريُّ وبابُ نَفاذ**: `POST /{slug}/me/save` بِصورَةٍ إلى مَخزَنِ S3 المُسَجَّلِ
+// عَلى مُستَمِعٍ مُزَيَّف ⇐ سَطرُ `file.upload` واحِدٌ كَمِّيَّتُه البايتاتُ ومَصدَرُه المِفتاحُ مُستَعاراً؛ وبابُ قَبولِ الصَفقَة (`DealNotices`) لِمُشتَرٍ بِاشتِراكَين ⇐ سَطرُ
+// `push.send` لِلمَقبولِ بِمُعَرِّفِ الإشعارِ المَكتوبِ وعُنوانِه مُستَعاراً، ونِيَّةٌ مَرفوضَةٌ بِلا سَطرٍ لِلمُنتَهي؛ و`POST /{slug}/auth/nafath/login` ثُمَّ `/verify` ⇐ سَطرُ
+// `identity.nafath.start` واحِدٌ ونِيَّةٌ واحِدَة — والرَمزانِ والاستِطلاعُ مُساعِدَةٌ لا نِيَّةَ لَها.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveProviderCallsProofTests(ITestOutputHelper output)
@@ -65,6 +71,22 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
 
     private sealed record EntryRow(string Unit, string App, string Entrepreneur, string Role, string Feature, string Provider, string SourceType,
                                    string SourceId, long Quantity, bool SameTransactionAsIntent);
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٣) سُطورُ وَحدَةٍ في مَتجَرٍ بِمُعَرِّفاتِها — لِلوَحَداتِ الَّتي مُعَرِّفُ طَلَبِها جَديدٌ لا يَعرِفُه الاختِبارُ قَبلَ النِداء.</summary>
+    private static async Task<List<(string Id, EntryRow Row)>> EntriesOfAppAsync(string app, string unit)
+    {
+        await using var conn = new NpgsqlConnection(Cs);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand("select id from meter.usage_entry where app = @a and unit = @u order by id", conn);
+        cmd.Parameters.AddWithValue("a", app);
+        cmd.Parameters.AddWithValue("u", unit);
+        var ids = new List<string>();
+        await using (var r = await cmd.ExecuteReaderAsync())
+            while (await r.ReadAsync()) ids.Add(r.GetString(0));
+        var rows = new List<(string, EntryRow)>();
+        foreach (var id in ids) rows.Add((id, Assert.Single(await EntriesAsync(id))));
+        return rows;
+    }
 
     private static async Task<List<EntryRow>> EntriesAsync(string id)
     {
@@ -340,5 +362,174 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
                          (row.Unit, row.App, row.Entrepreneur, row.Feature, row.Provider, row.SourceId, row.SameTransactionAsIntent));
             Assert.Single(smtp.Messages);
         }
+    }
+
+    // ─── ‏(‏2026-11-12، W13-6·١٣) صورَةُ المَلَفّ، والإشعارُ الفَوريّ، وبابُ نَفاذ ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>صورَةُ المَلَفِّ عَبرَ البابِ الحَقيقِيّ</b>: مَخزَنُ S3 بِتَسجيلِه (<c>AddS3FileStorage</c>) عَلى مُستَمِعٍ مُزَيَّف، والوَسيطُ الحَقيقِيُّ يَفتَحُ الحامِل. الرَفعُ يُقبَل ⇐
+    /// سَطرُ <c>file.upload</c> واحِدٌ بِالمَتجَرِ ومالِكِه ودَورِ <c>_none</c> (مَتجَرٌ بِلا أَدوار) والمِيزَةِ <c>files</c> والمُزَوِّدِ <c>s3</c>، <b>كَمِّيَّتُه البايتاتُ
+    /// المَرفوعَة</b> ومَصدَرُه <c>file_key</c> بِاسمِ المِفتاحِ المُستَعار — ولا يَحمِلُ المِفتاحَ ولا مُعَرِّفَ صاحِبِه — ونِيَّتُه مَقبولَةٌ في مُعامَلَتِه.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_profile_door_counts_one_upload_with_its_bytes_under_a_pseudonym_of_its_key()
+    {
+        if (!Enabled) return;
+        await using var s3 = new NafathS3PushRequestShapeCharacterizationTests.FakeS3();
+        await using var host = LiveTemplateDoorHost.Build(services: s => NafathS3PushRequestShapeCharacterizationTests.AddS3(s, s3), throughResolver: true);
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ الرَفع", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var member = new User
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, FullName = "عُضوُ الرَفع", Phone = "+9665" + Random.Shared.Next(10_000_000, 99_999_999).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            PhoneVerified = true, AcceptedTermsAt = DateTime.UtcNow, AcceptedTermsVersion = ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion,
+        };
+        await using (var s = host.Store.LightweightSession(slug)) { s.Store(member); await s.SaveChangesAsync(); }
+        var token = ACommerce.Kit.Auth.Server.AuthHandlers.MakeToken(member.Id, slug, member.SessionVersion);
+        var png = new byte[1531];
+        png[0] = 0x89; png[1] = 0x50; png[2] = 0x4E; png[3] = 0x47;
+
+        var (status, location) = await host.PostMultipartAsync("/{slug}/me/save", new Dictionary<string, string> { ["slug"] = slug }, slug, token,
+            [("fullName", "اسمٌ بَعدَ الرَفع")], ("avatar", "me.png", "image/png", png));
+        var key = $"tenants/{slug}/avatars/{member.Id}.png";
+        var rows = await EntriesOfAppAsync(slug, OutboundUnits.FileUpload);
+        var intents = await IntentsOfAppAsync(slug);
+        output.WriteLine($"[P13·رَفع] POST /{slug}/me/save ⇒ ({status}, {location}) · نِيّاتُ المَتجَر {string.Join(", ", intents.Select(i => i.Outcome))} · "
+                         + $"{string.Join(" | ", rows.Select(r => $"{r.Id} · {r.Row}"))} · طَلَباتُ المَخزَن {s3.Requests.Count}");
+        Assert.Equal((302, $"/{slug}/me"), (status, location));
+        var (id, row) = Assert.Single(rows);
+        Assert.Equal((OutboundUnits.FileUpload, slug, owner.ToString("D"), MeterSentinels.None, "files", ProviderNames.S3, ProviderCall.FileKeySource,
+                      UsageEntryId.Pseudonym(OutboundUnits.FileUpload, slug, key), 1531L, true),
+                     (row.Unit, row.App, row.Entrepreneur, row.Role, row.Feature, row.Provider, row.SourceType, row.SourceId, row.Quantity, row.SameTransactionAsIntent));
+        Assert.StartsWith($"{OutboundUnits.FileUpload}:{ProviderNames.S3}:", id, StringComparison.Ordinal);
+        foreach (var field in new[] { id, row.SourceId })
+        {
+            Assert.DoesNotContain(member.Id.ToString("D"), field, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("avatars", field, StringComparison.Ordinal);
+        }
+        Assert.Equal(("accepted", id), (Assert.Single(intents).Outcome, intents[0].Id));
+        Assert.Single(s3.Requests);
+    }
+
+    /// <summary>مُعالِجُ خِدمَةِ الإشعار: 201 لِعُنوانٍ و410 لِآخَر — يُسَجِّلُ ما طُرِق.</summary>
+    private sealed class PushAnswers(string accepted) : HttpMessageHandler
+    {
+        public List<string> Seen { get; } = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            lock (Seen) Seen.Add(request.RequestUri!.ToString());
+            return Task.FromResult(new HttpResponseMessage(request.RequestUri!.ToString() == accepted ? HttpStatusCode.Created : HttpStatusCode.Gone));
+        }
+    }
+
+    /// <summary>
+    /// <para><b>الإشعارُ الفَوريُّ عَبرَ بابِ قَبولِ الصَفقَة</b> (<c>DealNotices.NotifyAcceptedAsync</c> مِن حاوِيَةِ المُضيف، وخِدمَتُه المُسَجَّلَةُ بِكاتِبِ القالِب): مُشتَرٍ بِاشتِراكَين،
+    /// الأَوَّلُ تَقبَلُه الخِدمَةُ والثاني مُنتَهٍ (410). ⇐ سَطرُ <c>push.send</c> واحِدٌ مُعَرِّفُ طَلَبِه <c>{مُعَرِّفُ الإشعارِ المَكتوب}:{اسمُ العُنوانِ المُستَعار}</c> بِالمَتجَرِ
+    /// ومالِكِه مِن وَثيقَتِه (لا حامِلَ خارِجَ الطَلَب) والدَورِ <c>_unresolved</c>؛ ونِيَّةٌ مَرفوضَةٌ بِلا سَطرٍ لِلمُنتَهي، والمُنتَهي يُمحى مِن وَثيقَةِ المُشتَري كَما كان.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_accepted_notice_counts_one_push_per_accepted_subscription_under_its_notification_id()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build(throughResolver: true);
+        using var a = new NafathS3PushRequestShapeCharacterizationTests.Subscriber();
+        using var b = new NafathS3PushRequestShapeCharacterizationTests.Subscriber();
+        var answers = new PushAnswers(a.Endpoint);
+        NafathS3PushRequestShapeCharacterizationTests.Wire(host.Services.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>(), answers);
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        var buyer = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ الإشعار", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            s.Store(new User { Id = buyer, TenantSlug = slug, FullName = "مُشتَرٍ", PushSubscriptions = [a.Row(), b.Row()] });
+            await s.SaveChangesAsync();
+        }
+        var deal = new ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, Pattern = "marketplace", ListingTitle = "سِلعَةُ الإشعار", InitiatorId = buyer, InitiatorName = "مُشتَرٍ",
+            CounterpartyId = Guid.NewGuid(), CounterpartyName = "بائِع",
+        };
+        await using (var scope = host.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealNotices>()
+                .NotifyAcceptedAsync(slug, deal, "بائِع", new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()));
+
+        Guid notice;
+        await using (var q = host.Store.QuerySession(slug))
+            notice = Assert.Single(await q.Query<ACommerce.Kit.Notifications.Notification>().Where(n => n.UserId == buyer).ToListAsync()).Id;
+        var accepted = $"{notice:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, slug, a.Endpoint)}";
+        var refused = $"{notice:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, slug, b.Endpoint)}";
+        var rows = await EntriesOfAppAsync(slug, OutboundUnits.PushSend);
+        var intents = await WithinAsync(() => IntentsOfAppAsync(slug), l => l.Count == 2 && l.All(i => i.Outcome != "pending"), TimeSpan.FromSeconds(10));
+        User? after;
+        await using (var q = host.Store.QuerySession(slug)) after = await q.LoadAsync<User>(buyer);
+        output.WriteLine($"[P13·إشعار] ⇒ طُرِق {answers.Seen.Count} · نِيّاتُ المَتجَر {string.Join(", ", intents.Select(i => $"{i.Id}={i.Outcome}"))} · "
+                         + $"{string.Join(" | ", rows.Select(r => $"{r.Id} · {r.Row}"))} · اشتِراكاتٌ باقِيَة {after!.PushSubscriptions.Count}");
+        Assert.Equal(new[] { a.Endpoint, b.Endpoint }, answers.Seen);
+        var (id, row) = Assert.Single(rows);
+        Assert.Equal($"{OutboundUnits.PushSend}:{ProviderNames.WebPush}:{accepted}", id);
+        Assert.Equal((OutboundUnits.PushSend, slug, owner.ToString("D"), MeterSentinels.Unresolved, "notifications", ProviderNames.WebPush, UsageLedgerWriter.RequestSource,
+                      accepted, 1L, true),
+                     (row.Unit, row.App, row.Entrepreneur, row.Role, row.Feature, row.Provider, row.SourceType, row.SourceId, row.Quantity, row.SameTransactionAsIntent));
+        Assert.Equal(new[] { ($"{OutboundUnits.PushSend}:{ProviderNames.WebPush}:{accepted}", "accepted"), ($"{OutboundUnits.PushSend}:{ProviderNames.WebPush}:{refused}", "refused") }
+                         .OrderBy(i => i.Item1, StringComparer.Ordinal),
+                     intents.OrderBy(i => i.Id, StringComparer.Ordinal));
+        Assert.Equal(new[] { a.Endpoint }, after.PushSubscriptions.Select(p => p.Endpoint));
+    }
+
+    /// <summary>
+    /// <para><b>بابُ نَفاذ عَبرَ HTTP</b>: <c>AddNafathChannel</c> عَلى مُعالِجٍ يُجيب، ومَتجَرٌ قَناتُه نَفاذ، والوَسيطُ الحَقيقِيّ. البَدءُ (<c>/auth/nafath/login</c>) ثُمَّ التَأكيدُ
+    /// (<c>/auth/nafath/verify</c>) — أَربَعَةُ طَلَباتٍ تَبلُغُ نَفاذاً (رَمزٌ وبَدءٌ ثُمَّ رَمزٌ واستِطلاع) ⇐ <b>نِيَّةٌ واحِدَةٌ وسَطرُ <c>identity.nafath.start</c> واحِدٌ</b>
+    /// بِالمَتجَرِ ومالِكِه والمِيزَةِ <c>nafath</c> والمُزَوِّدِ <c>nafath</c>: الرَمزانِ والاستِطلاعُ مُساعِدَةٌ لا تُعَدّ.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_nafath_door_counts_the_start_once_and_neither_the_tokens_nor_the_poll()
+    {
+        if (!Enabled) return;
+        var trans = "trans-" + Guid.NewGuid().ToString("N");
+        var seen = new List<string>();
+        var nafath = new Answer((req, _) =>
+        {
+            var path = req.RequestUri!.AbsolutePath;
+            lock (seen) seen.Add($"{req.Method} {path}");
+            var json = path switch
+            {
+                "/oauth/token" => "{\"accessToken\":\"live-token\",\"expiresIn\":3600}",
+                "/api/v1/mfa/request" => $"{{\"transId\":\"{trans}\",\"random\":7}}",
+                _ => "{\"status\":\"COMPLETED\"}",
+            };
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+        });
+        await using var host = LiveTemplateDoorHost.Build(services: s =>
+        {
+            s.ConfigureHttpClientDefaults(c => c.ConfigurePrimaryHttpMessageHandler(() => nafath));
+            s.AddNafathChannel(o => { o.ClientId = "live-client"; o.ClientSecret = "live-secret"; });
+        }, throughResolver: true);
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession())
+        {
+            s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ نَفاذ", OwnerUserId = owner, AuthChannel = AuthChannels.Nafath });
+            await s.SaveChangesAsync();
+        }
+        var route = new Dictionary<string, string> { ["slug"] = slug };
+        var nid = "1" + Random.Shared.NextInt64(100_000_000, 999_999_999).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var (startStatus, startLocation) = await host.PostFormAsync("/{slug}/auth/nafath/login", route, slug, null, ("nid", nid));
+        var (verifyStatus, verifyLocation) = await host.PostFormAsync("/{slug}/auth/nafath/verify", route, slug, null, ("nid", nid), ("attempt", trans));
+        var rows = await EntriesOfAppAsync(slug, OutboundUnits.IdentityNafathStart);
+        var intents = await IntentsOfAppAsync(slug);
+        output.WriteLine($"[P13·نَفاذ] البَدء ({startStatus}, {startLocation}) · التَأكيد ({verifyStatus}, {verifyLocation}) · نَفاذ رَأى {string.Join(", ", seen)} · "
+                         + $"نِيّاتُ المَتجَر {string.Join(", ", intents.Select(i => $"{i.Id}={i.Outcome}"))} · {string.Join(" | ", rows.Select(r => $"{r.Id} · {r.Row}"))}");
+        Assert.Equal(302, startStatus);
+        Assert.Contains($"stage=verify&attempt={trans}&code=07", startLocation, StringComparison.Ordinal);
+        Assert.Equal(302, verifyStatus);
+        Assert.DoesNotContain("err=", verifyLocation, StringComparison.Ordinal);
+        Assert.Equal(new[] { "POST /oauth/token", "POST /api/v1/mfa/request", "POST /oauth/token", "GET /api/v1/mfa/status" }, seen);
+        var (id, row) = Assert.Single(rows);
+        Assert.Equal(("accepted", id), (Assert.Single(intents).Outcome, intents[0].Id));
+        Assert.Equal((OutboundUnits.IdentityNafathStart, slug, owner.ToString("D"), "nafath", ProviderNames.Nafath, UsageLedgerWriter.RequestSource, 1L, true),
+                     (row.Unit, row.App, row.Entrepreneur, row.Feature, row.Provider, row.SourceType, row.Quantity, row.SameTransactionAsIntent));
+        Assert.Equal($"{OutboundUnits.IdentityNafathStart}:{ProviderNames.Nafath}:{row.SourceId}", id);
     }
 }

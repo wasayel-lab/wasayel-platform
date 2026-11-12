@@ -40,8 +40,9 @@ public sealed class UnavailableFileStorage : IFileStorage
     /// جِسمُ إنشاءِ الإعلانِ يَبتَلِع فَشَلَ الصورَةِ ويُتِمُّ الإعلانَ
     /// بِلا صُوَر (تَعليقُه في الكودِ يَقول ذلك مُنذُ كُتِب)، وجِسمُ
     /// المَلَفِّ الشَخصيِّ يُتِمُّ حِفظَ الاسمِ بِلا صورَة.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٣) تَبِعَ التَوقيعَ ولا يَعُدّ — لا يُغادِرُ العَمَلِيَّةَ أَصلاً.</remarks>
     public Task<StoredFile> UploadAsync(
-        string key, Stream content, string contentType, CancellationToken ct = default)
+        ACommerce.Platform.Shared.Metering.ProviderCall call, string key, Stream content, string contentType, CancellationToken ct = default)
         => throw new FileStorageException(Reason);
 
     public Task<Stream?> ReadAsync(string key, CancellationToken ct = default)

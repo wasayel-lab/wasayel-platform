@@ -104,7 +104,8 @@ public sealed class UsageLedgerWriter(IDocumentStore store, IMemoryCache cache, 
         await tx.CommitAsync(CancellationToken.None);
     }
 
-    /// <summary>سَطرُ النِداءِ المَقبول — مُعَرِّفُه مُعَرِّفُ النِيَّة، ومِيزَتُه مِن صَفِّ الوَحدَة، ومَصدَرُه مُعَرِّفُ الطَلَب.</summary>
+    /// <summary>سَطرُ النِداءِ المَقبول — مُعَرِّفُه مُعَرِّفُ النِيَّة، ومِيزَتُه مِن صَفِّ الوَحدَة، ومَصدَرُه مُعَرِّفُ الطَلَب إلّا أَن يُعلِنَ النِداءُ غَيرَه
+    /// (‏W13-6·١٣: الرَفعُ مَصدَرُه المِلَفُّ بِمِفتاحِه المُستَعار — <see cref="ProviderCall.About"/>).</summary>
     internal async Task<UsageEntry> EntryAsync(ProviderCall call, ProviderAcceptance acceptance, MeterScopeView? scope)
     {
         var (entrepreneur, role) = MeterRules.FromScope(call.App, scope);
@@ -112,7 +113,7 @@ public sealed class UsageLedgerWriter(IDocumentStore store, IMemoryCache cache, 
             entrepreneur = call.App == MeterSentinels.Platform ? MeterSentinels.Platform : await OwnerAsync(call.App);
         var feature = MeterUnitCatalog.Default.Find(call.Unit)?.Feature;
         if (string.IsNullOrWhiteSpace(feature) || MeterFeatureAnchors.IsAnchor(feature)) feature = MeterSentinels.Unresolved;
-        return new UsageEntry(call.Id, call.Unit, acceptance.Quantity, call.App, entrepreneur, role, feature, call.Provider, RequestSource, call.RequestId);
+        return new UsageEntry(call.Id, call.Unit, acceptance.Quantity, call.App, entrepreneur, role, feature, call.Provider, call.SourceType ?? RequestSource, call.SourceId ?? call.RequestId);
     }
 
     /// <summary>مالِكُ المَتجَرِ مِن ذاكِرَةِ الحَلّال، وإلّا قِراءَةٌ واحِدَةٌ تَملَؤُها؛ ومَتجَرٌ لا وَثيقَةَ لَه — أَو قيمَةٌ حارِسَة — <c>_unresolved</c>.</summary>

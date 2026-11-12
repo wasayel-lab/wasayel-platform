@@ -1,6 +1,7 @@
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -59,17 +60,36 @@ public sealed class S3FileStorageOptions
 /// تَختَنِق بِه المَخازِنُ المُتَوافِقَةُ الَّتي لا تُنَفِّذ
 /// التَقطيعَ.</item>
 /// </list>
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>كُلُّ فِعلٍ عَلى <c>_client</c> داخِلَ المُستَدعي المَعدود</b> (الطَبَقَةُ ٨-ج تَقيسُه بِعُمقِ الأَقواس):
+/// الرَفعُ نِداءٌ مَعدودٌ (<see cref="OutboundUnits.FileUpload"/>، كَمِّيَّتُه البايتاتُ المَرفوعَة، ومَصدَرُه المِفتاحُ اسماً مُستَعاراً — مِفتاحُ الصورَةِ يَحمِلُ
+/// مُعَرِّفَ صاحِبِها)، والقِراءَةُ والوُجودُ والحَذفُ مُساعِدَةٌ لا تُعَدّ (<see cref="ProviderHelperReasons.StorageRead"/>،
+/// <see cref="ProviderHelperReasons.StorageDelete"/>). والطَلَباتُ هِيَ هِيَ (<c>NafathS3PushRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).</para>
 /// </summary>
 public sealed class S3FileStorage : IFileStorage, IDisposable
 {
     private readonly S3FileStorageOptions _opts;
     private readonly ILogger<S3FileStorage> _logger;
     private readonly IAmazonS3 _client;
+    private readonly ProviderCalls _calls;
 
+    private static readonly ProviderHelper Reading = new(ProviderNames.S3, ProviderHelperReasons.StorageRead);
+    private static readonly ProviderHelper Deleting = new(ProviderNames.S3, ProviderHelperReasons.StorageDelete);
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٣ — التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: الباني القَديمُ يَبني المَخزَنَ بِمُستَدعٍ لا يُسَجِّل (<see cref="ProviderCalls.Unrecorded"/>) —
+    /// فَيَبقى بِناؤُه في اختِباراتِه وسكربتاتِ المُشَغِّلِ كَما كان. <b>ولا يُناديه كودُ الإنتاج</b>: التَسجيلُ (<see cref="S3FileStorageExtensions.AddS3FileStorage"/>)
+    /// يَحُلُّ الباني الأَطوَلَ بِمُستَدعي المُضيف، و<c>MeterTestSeamTests</c> (G6c) يَحمَرُّ عَلى مُنادٍ لِهذا في <c>libs/</c> أَو <c>apps/</c>.</para>
+    /// </summary>
     public S3FileStorage(IOptions<S3FileStorageOptions> opts, ILogger<S3FileStorage> logger)
+        : this(opts, ProviderCalls.Unrecorded, logger)
+    {
+    }
+
+    public S3FileStorage(IOptions<S3FileStorageOptions> opts, ProviderCalls calls, ILogger<S3FileStorage> logger)
     {
         _opts = opts.Value;
         _logger = logger;
+        _calls = calls;
 
         // الحارِسُ هُنا **مُكَرَّرٌ عَمداً** مَعَ حارِسِ الإقلاع في
         // `FileStorageSelection`: ذاكَ يَحرُس التَركيب، وهذا يَحرُس مَن
@@ -102,7 +122,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     public string ProviderName => "S3";
 
     public async Task<StoredFile> UploadAsync(
-        string key, Stream content, string contentType, CancellationToken ct = default)
+        ProviderCall call, string key, Stream content, string contentType, CancellationToken ct = default)
     {
         var safe = NormalizeKey(key);
 
@@ -123,16 +143,19 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
             size = buffer.Length;
         }
 
+        // ‏(‏2026-11-12، W13-6·١٣) الرَفعُ نِداءٌ مَعدود: المَخزَنُ يَسِمُه بِاسمِه، والمَصدَرُ المِفتاحُ المُطَهَّرُ اسماً مُستَعاراً، والقَبولُ عَودَةُ الـPUT
+        // بِكَمِّيَّةِ البايتاتِ المَرفوعَة؛ وما يَرميه الـSDK مَجهولٌ عَلى النِيَّةِ ويُعادُ رَميُه فَيُحَوَّلُ أَدناه كَما كان.
+        var counted = call.By(ProviderNames.S3).About(ProviderCall.FileKeySource, UsageEntryId.Pseudonym(call.Unit, call.App, safe));
         try
         {
-            await _client.PutObjectAsync(new PutObjectRequest
+            await _calls.InvokeAsync(counted, t => _client.PutObjectAsync(new PutObjectRequest
             {
                 BucketName = _opts.Bucket,
                 Key = safe,
                 InputStream = body,
                 ContentType = contentType,
                 DisablePayloadSigning = false,
-            }, ct);
+            }, t), _ => new ProviderAcceptance(ProviderOutcome.Accepted, size), ct);
         }
         catch (AmazonS3Exception ex)
         {
@@ -151,7 +174,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         try
         {
-            var res = await _client.GetObjectAsync(_opts.Bucket, NormalizeKey(key), ct);
+            var res = await _calls.HelperAsync(Reading, t => _client.GetObjectAsync(_opts.Bucket, NormalizeKey(key), t), ct);
             return res.ResponseStream;
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -166,7 +189,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
         // فَالوُجودُ يُسأَلُ عَنه أَوَّلاً لِيَبقى العَقدُ كَما وَصَفَه
         // `IFileStorage` (‏`false` = لَم يَكُن).
         if (!await ExistsAsync(key, ct)) return false;
-        await _client.DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), ct);
+        await _calls.HelperAsync(Deleting, t => _client.DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), t), ct);
         return true;
     }
 
@@ -174,7 +197,7 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         try
         {
-            await _client.GetObjectMetadataAsync(_opts.Bucket, NormalizeKey(key), ct);
+            await _calls.HelperAsync(Reading, t => _client.GetObjectMetadataAsync(_opts.Bucket, NormalizeKey(key), t), ct);
             return true;
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -220,6 +243,9 @@ public static class S3FileStorageExtensions
         this IServiceCollection services, Action<S3FileStorageOptions> configure)
     {
         services.Configure(configure);
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، والحاوِيَةُ تَحُلُّ الباني الأَطوَلَ (ثَلاثَةُ وُسَطاءَ كُلُّها مُسَجَّلَة)
+        // لا مَقعَدَ الاختِبار — يَحرُسُه `MeterCompositionTests` (G6d) عَلى المُضيفِ المُرَكَّب. والسَطرُ أَدناه بِحَرفِه: مِرساةُ مَخزَنِ الكائِناتِ في كاتالوجِ المُزَوِّدين (`ProviderCatalogTests`).
+        services.AddProviderCalls();
         services.AddSingleton<IFileStorage, S3FileStorage>();
         return services;
     }

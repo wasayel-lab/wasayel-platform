@@ -652,7 +652,7 @@ public sealed class DealNotices
         foreach (var (userId, dealId, n, pushBody) in sent)
         {
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, userId);
-            await _push.SendAsync(_store, slug, userId, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
+            await _push.SendAsync(_store, slug, userId, n.Id, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
         }
         return sent.Count;
     }
@@ -668,7 +668,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, AcceptedPushBody(deal, acceptorName, l),
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, AcceptedPushBody(deal, acceptorName, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
     }
 
@@ -690,7 +690,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledPushBody(deal, cancellerName, l),
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, CancelledPushBody(deal, cancellerName, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -714,7 +714,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, CancelledByStorePushBody(deal, l),
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, CancelledByStorePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -735,7 +735,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, ClosedByErasurePushBody(deal, l),
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, ClosedByErasurePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -754,7 +754,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, AcceptedByStorePushBody(deal, l),
+        await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, AcceptedByStorePushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -788,7 +788,7 @@ public sealed class DealNotices
         foreach (var (userId, dealId, n, pushBody) in sent)
         {
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, userId);
-            await _push.SendAsync(_store, slug, userId, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
+            await _push.SendAsync(_store, slug, userId, n.Id, n.Title, pushBody, url: n.RelatedUrl, tag: $"deal-{dealId}", ct: ct);
         }
         foreach (var deal in owed) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         return sent.Count;
@@ -827,7 +827,7 @@ public sealed class DealNotices
                 await s.SaveChangesAsync(ct);
             }
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, deal.InitiatorId);
-            await _push.SendAsync(_store, slug, deal.InitiatorId, n.Title, PaymentExpiredPushBody(deal, l),
+            await _push.SendAsync(_store, slug, deal.InitiatorId, n.Id, n.Title, PaymentExpiredPushBody(deal, l),
                 url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
             buyers++;
             if (told is not null) await told(id);
@@ -865,7 +865,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, vendorId);
-        await _push.SendAsync(_store, slug, vendorId, n.Title, CancelledToVendorPushBody(deal, l),
+        await _push.SendAsync(_store, slug, vendorId, n.Id, n.Title, CancelledToVendorPushBody(deal, l),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -891,7 +891,7 @@ public sealed class DealNotices
         foreach (var n in sent)
         {
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
-            await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+            await _push.SendAsync(_store, slug, n.UserId, n.Id, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         }
         return sent.Count;
     }
@@ -917,7 +917,7 @@ public sealed class DealNotices
         foreach (var n in sent)
         {
             await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
-            await _push.SendAsync(_store, slug, n.UserId, n.Title, DisputeResolvedPushBody(deal, outcome, l), url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+            await _push.SendAsync(_store, slug, n.UserId, n.Id, n.Title, DisputeResolvedPushBody(deal, outcome, l), url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         }
         if (cancelled) await NotifyStoreOwnerAsync(slug, deal, l, ct);
         // (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **واستِئنافُ صَفقَةٍ دُفِعَت أَثناءَ نِزاعِها يُخبِرُ بائِعَها بِالدَفعِ مَرَّةً** بِالأُنبوبِ
@@ -959,7 +959,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, vendorId);
-        await _push.SendAsync(_store, slug, vendorId, n.Title, l.Format("notifications.deal_return_requested.push_body", deal.ListingTitle),
+        await _push.SendAsync(_store, slug, vendorId, n.Id, n.Title, l.Format("notifications.deal_return_requested.push_body", deal.ListingTitle),
             url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         return true;
     }
@@ -999,7 +999,7 @@ public sealed class DealNotices
             await s.SaveChangesAsync(ct);
         }
         await MarketplaceTemplateExtensions.NudgeAsync(_hub, slug, n.UserId);
-        await _push.SendAsync(_store, slug, n.UserId, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
+        await _push.SendAsync(_store, slug, n.UserId, n.Id, n.Title, n.Body, url: n.RelatedUrl, tag: $"deal-{deal.Id}", ct: ct);
         await MailStoreOwnerAsync(slug, storeName, deal, n, l, ct);   // ‏2026-10-30، تَدقيقُ الموجَة ١١ CO3
         return true;
     }

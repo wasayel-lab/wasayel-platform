@@ -31,7 +31,7 @@ internal sealed class RecordingFileStorage(bool throws = false) : IFileStorage
 
     public string ProviderName => "recording";
 
-    public Task<StoredFile> UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default)
+    public Task<StoredFile> UploadAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string key, Stream content, string contentType, CancellationToken ct = default)
         => throw new NotSupportedException("لا رَفعَ في هذا الصَفّ.");
 
     public Task<Stream?> ReadAsync(string key, CancellationToken ct = default)

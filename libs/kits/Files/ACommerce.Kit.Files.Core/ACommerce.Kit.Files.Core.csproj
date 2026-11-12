@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) النِداءُ المَعدودُ في تَوقيعِ الرَفع (`ProviderCall`): Shared بِلا مَرجِعٍ يَعودُ إلى هذه العُدَّةِ فَلا حَلْقَة. -->
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
   </ItemGroup>
 </Project>

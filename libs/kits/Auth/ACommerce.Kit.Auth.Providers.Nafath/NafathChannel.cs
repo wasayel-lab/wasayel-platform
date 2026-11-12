@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,16 +20,23 @@ public sealed class NafathOptions
 /// قَناة نَفاذ الحَقيقِيَّة (KSA). يُرسِل طَلَب MFA لِلمُواطِن — يَنبَثِق في
 /// تَطبيق نَفاذ كَرَمز مُكَوَّن مِن رَقمَين، يَختاره المُستَخدِم لِلمُوافَقَة.
 /// يُلائِم الإنتاج بَعد تَوقيع عَقد مَع يَقين/نَفاذ.
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/>. <b>بَدءُ التَحَقُّقِ نِداءٌ مَعدود</b>
+/// (<see cref="OutboundUnits.IdentityNafathStart"/>، نِيَّةٌ قَبلَه وسَطرٌ حينَ يَقبَلُ نَفاذ)، و<b>رَمزُ OAuth واستِطلاعُ الحالَةِ مُساعِدانِ لا يُعَدّان</b>
+/// (<see cref="ProviderHelperReasons.OauthToken"/>، <see cref="ProviderHelperReasons.StatusPoll"/>) — والطَلَباتُ الثَلاثَةُ هِيَ هِيَ بايتاً
+/// (<c>NafathS3PushRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).</para>
 /// </summary>
 public sealed class NafathChannel : INafathChannel
 {
     private readonly NafathOptions _opts;
-    private readonly HttpClient _http;
+    private readonly ProviderHttp<NafathChannel> _http;
     private readonly ILogger<NafathChannel> _logger;
     // كاش حالَة الـ attempts لِلـ polling. حَيّ في الذاكِرَة (دَقائِق).
     private static readonly ConcurrentDictionary<string, NafathAttemptState> _attempts = new();
 
-    public NafathChannel(IOptions<NafathOptions> opts, HttpClient http, ILogger<NafathChannel> logger)
+    private static readonly ProviderHelper Token = new(ProviderNames.Nafath, ProviderHelperReasons.OauthToken);
+    private static readonly ProviderHelper Poll = new(ProviderNames.Nafath, ProviderHelperReasons.StatusPoll);
+
+    public NafathChannel(IOptions<NafathOptions> opts, ProviderHttp<NafathChannel> http, ILogger<NafathChannel> logger)
     {
         _opts = opts.Value;
         _http = http;
@@ -39,13 +47,13 @@ public sealed class NafathChannel : INafathChannel
 
     public string ChannelName => "Nafath";
 
-    public async Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+    public async Task<NafathStartResult> StartAsync(ProviderCall call, string nationalId, CancellationToken ct)
     {
         var token = await GetAccessTokenAsync(ct);
         using var req = new HttpRequestMessage(HttpMethod.Post, $"{_opts.BaseUrl}/api/v1/mfa/request")
         { Content = JsonContent.Create(new { nationalId, service = "Login" }) };
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        using var resp = await _http.SendAsync(req, ct);
+        using var resp = await _http.SendAsync(call.By(ProviderNames.Nafath), req, ct);
         if (!resp.IsSuccessStatusCode)
         {
             var err = await resp.Content.ReadAsStringAsync(ct);
@@ -64,7 +72,7 @@ public sealed class NafathChannel : INafathChannel
         var token = await GetAccessTokenAsync(ct);
         using var req = new HttpRequestMessage(HttpMethod.Get, $"{_opts.BaseUrl}/api/v1/mfa/status?transId={Uri.EscapeDataString(attemptId)}");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        using var resp = await _http.SendAsync(req, ct);
+        using var resp = await _http.SendHelperAsync(Poll, req, ct);
         if (!resp.IsSuccessStatusCode) return false;
         var dto = await resp.Content.ReadFromJsonAsync<StatusDto>(cancellationToken: ct);
         return dto?.Status == "COMPLETED";
@@ -82,7 +90,9 @@ public sealed class NafathChannel : INafathChannel
             ["client_id"]     = _opts.ClientId,
             ["client_secret"] = _opts.ClientSecret
         });
-        using var resp = await _http.PostAsync($"{_opts.BaseUrl}/oauth/token", form, ct);
+        // كانَ `_http.PostAsync(url, form, ct)` — وهُوَ هذا الطَلَبُ بِعَينِه: ‏POST بِالعُنوانِ والاستِمارَةِ وبِلا رَأس.
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{_opts.BaseUrl}/oauth/token") { Content = form };
+        using var resp = await _http.SendHelperAsync(Token, request, ct);
         if (!resp.IsSuccessStatusCode)
             throw new InvalidOperationException($"Nafath OAuth فَشِل: {(int)resp.StatusCode}");
         var dto = await resp.Content.ReadFromJsonAsync<TokenDto>(cancellationToken: ct)
@@ -104,7 +114,10 @@ public static class NafathExtensions
         this IServiceCollection services, Action<NafathOptions> configure)
     {
         services.Configure(configure);
-        services.AddHttpClient<INafathChannel, NafathChannel>();
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) كانَ `AddHttpClient<INafathChannel, NafathChannel>()`: عَميلٌ مُطَبَّعٌ عابِرٌ بِلا مُهلَةٍ خاصَّة. والآنَ عَميلُها
+        // المُسَمّى يَملِكُه `ProviderHttp` (المُهلَةُ الافتِراضِيَّةُ نَفسُها)، والقَناةُ عابِرَةٌ كَما كانَت — فَرَمزُ OAuth في القَناةِ لا في العَمَلِيَّة كَما كان.
+        services.AddProviderHttp<NafathChannel>();
+        services.AddTransient<INafathChannel, NafathChannel>();
         return services;
     }
 }

@@ -224,4 +224,173 @@ public class ProviderCallsTests(ITestOutputHelper output)
             Assert.Equal(new[] { $"open {id} · اتِّصالات 0 · رَسائِل 0", $"decide {id} Unknown 1 · رَسائِل 0" }, recorder.Log);
         }
     }
+
+    // ─── النِداءُ المُساعِد، ونَفاذ، ومَخزَنُ الكائِنات، والإشعار (‏2026-11-12، W13-6·١٣ — التَصميم §3.4، §6.2) ─────────────────────────────────────
+
+    /// <summary>كاتِبٌ يَحفَظُ النِداءَ نَفسَه (مُعَرِّفَه ومَصدَرَه) والنَتيجَة — ويَسأَلُ السِلكَ عِندَ النِيَّة كَم طَلَباً سَبَقَها.</summary>
+    internal sealed class CallRecorder(Func<int>? wire = null) : OutboundRecorder
+    {
+        public List<string> Log { get; } = new();
+        public List<(ProviderCall Call, ProviderAcceptance? Acceptance)> Calls { get; } = new();
+
+        public override Task OpenAsync(ProviderCall call, CancellationToken ct)
+        {
+            lock (Log) { Log.Add($"open {call.Id}{(wire is null ? "" : $" · سِلك {wire()}")}"); Calls.Add((call, null)); }
+            return Task.CompletedTask;
+        }
+
+        public override Task DecideAsync(ProviderCall call, ProviderAcceptance acceptance)
+        {
+            lock (Log) { Log.Add($"decide {call.Id} {acceptance.Outcome} {acceptance.Quantity}{(wire is null ? "" : $" · سِلك {wire()}")}"); Calls.Add((call, acceptance)); }
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary><b>المُساعِدُ يَمُرُّ ولا يُعَدّ</b>: لا نِيَّةَ ولا نَتيجَة، والجَوابُ والاستِثناءُ كَما هُما؛ والسَبَبُ مِن القائِمَةِ المُغلَقَةِ (تُطبَع) وما خارِجَها يَرمي عِندَ البِناء.</summary>
+    [Fact]
+    public async Task A_helper_call_is_sent_unrecorded_and_its_reason_comes_from_the_closed_list()
+    {
+        output.WriteLine($"[G6] أَسبابُ المُساعِد {ProviderHelperReasons.All.Count}: {string.Join(", ", ProviderHelperReasons.All)}");
+        Assert.Equal(new[] { "oauth_token", "status_poll", "storage_read", "storage_delete" }, ProviderHelperReasons.All);
+        var bad = Assert.Throws<ArgumentException>(() => new ProviderHelper(ProviderNames.Nafath, "metadata_tag"));
+        Assert.Contains("metadata_tag", bad.Message, StringComparison.Ordinal);
+
+        var recorder = new MemoryRecorder();
+        var calls = new ProviderCalls(recorder);
+        var helper = new ProviderHelper(ProviderNames.S3, ProviderHelperReasons.StorageRead);
+        Assert.Equal(7, await calls.HelperAsync(helper, _ => Task.FromResult(7), CancellationToken.None));
+        var boom = new InvalidOperationException("store down");
+        Assert.Same(boom, await Assert.ThrowsAsync<InvalidOperationException>(() => calls.HelperAsync<int>(helper, _ => throw boom, CancellationToken.None)));
+        var handler = new Answer((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden)));
+        using (var response = await new ProviderHttp<ProviderCallsTests>(new HttpClient(handler), calls)
+                   .SendHelperAsync(new ProviderHelper(ProviderNames.Nafath, ProviderHelperReasons.OauthToken), Request(), CancellationToken.None))
+            Assert.Equal((HttpStatusCode.Forbidden, 1), (response.StatusCode, handler.Sent));
+        Assert.Empty(recorder.Log);
+    }
+
+    private static readonly ProviderCall NafathStart = ProviderCall.ForChannel(OutboundUnits.IdentityNafathStart, "w13-calls", "nafath-start-1");
+
+    private static ACommerce.Kit.Auth.Providers.Nafath.NafathChannel Nafath(HttpMessageHandler handler, OutboundRecorder recorder)
+        => new(Options.Create(new ACommerce.Kit.Auth.Providers.Nafath.NafathOptions { ClientId = "c", ClientSecret = "s" }),
+            new ProviderHttp<ACommerce.Kit.Auth.Providers.Nafath.NafathChannel>(new HttpClient(handler), new ProviderCalls(recorder)),
+            NullLogger<ACommerce.Kit.Auth.Providers.Nafath.NafathChannel>.Instance);
+
+    /// <summary>
+    /// <para><b>نَفاذ</b>: الرَمزُ مُساعِدٌ قَبلَ النِيَّة، ثُمَّ النِيَّةُ فَطَلَبُ التَحَقُّقِ فَالنَتيجَة (والقَناةُ تَسِمُ النِداءَ <c>nafath</c>)؛ والاستِطلاعُ بَعدَه مُساعِدٌ
+    /// لا نِيَّةَ لَه؛ وطَلَبٌ مَرفوضٌ (400) ⇐ نَتيجَةٌ مَرفوضَةٌ والقَناةُ تَقولُ «Nafath فَشِل: 400» كَما كانَت.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(200, "Accepted")]
+    [InlineData(400, "Refused")]
+    public async Task Nafath_counts_the_start_and_leaves_the_token_and_the_poll_uncounted(int status, string outcome)
+    {
+        var recorder = new MemoryRecorder();
+        var trans = "trans-" + Guid.NewGuid().ToString("N");
+        var handler = new Answer((req, _) =>
+        {
+            var path = req.RequestUri!.AbsolutePath;
+            lock (recorder.Log) recorder.Log.Add($"send {path}");
+            var (code, json) = path switch
+            {
+                "/oauth/token" => (HttpStatusCode.OK, "{\"accessToken\":\"t\",\"expiresIn\":3600}"),
+                "/api/v1/mfa/request" => ((HttpStatusCode)status, $"{{\"transId\":\"{trans}\",\"random\":7}}"),
+                _ => (HttpStatusCode.OK, "{\"status\":\"COMPLETED\"}"),
+            };
+            return Task.FromResult(new HttpResponseMessage(code) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") });
+        });
+        var channel = Nafath(handler, recorder);
+        var id = $"{OutboundUnits.IdentityNafathStart}:{ProviderNames.Nafath}:nafath-start-1";
+        if (status == 200)
+        {
+            var started = await channel.StartAsync(NafathStart, "1012345678", CancellationToken.None);
+            Assert.True(await channel.IsApprovedAsync(started.AttemptId, CancellationToken.None));
+        }
+        else
+        {
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => channel.StartAsync(NafathStart, "1012345678", CancellationToken.None));
+            Assert.Equal("Nafath فَشِل: 400", ex.Message);
+        }
+        output.WriteLine($"[G6] نَفاذ {status} ⇒ {string.Join(" → ", recorder.Log)}");
+        var expected = new List<string> { "send /oauth/token", $"open {id}", "send /api/v1/mfa/request", $"decide {id} {outcome} 1" };
+        if (status == 200) expected.Add("send /api/v1/mfa/status");
+        Assert.Equal(expected, recorder.Log);
+    }
+
+    private static ACommerce.Kit.Files.Providers.S3.S3FileStorage S3(NafathS3PushRequestShapeCharacterizationTests.FakeS3 s3, OutboundRecorder recorder)
+        => new(Options.Create(new ACommerce.Kit.Files.Providers.S3.S3FileStorageOptions
+            {
+                Endpoint = s3.Url, Bucket = NafathS3PushRequestShapeCharacterizationTests.Bucket, AccessKeyId = NafathS3PushRequestShapeCharacterizationTests.AccessKey,
+                SecretAccessKey = "calls-secret", PublicBaseUrl = NafathS3PushRequestShapeCharacterizationTests.PublicBase,
+            }),
+            new ProviderCalls(recorder), NullLogger<ACommerce.Kit.Files.Providers.S3.S3FileStorage>.Instance);
+
+    /// <summary>
+    /// <para><b>مَخزَنُ الكائِنات</b>: الرَفعُ نِيَّةٌ قَبلَ أَيِّ <c>PUT</c> ثُمَّ مَقبولٌ بِكَمِّيَّةِ البايتاتِ بَعدَه، والنِداءُ مَوسومٌ <c>s3</c> ومَصدَرُه المِفتاحُ
+    /// اسماً مُستَعاراً؛ وعُطلُ المَخزَنِ (500) ⇐ نِيَّةٌ واحِدَةٌ لِثَلاثِ مُحاوَلاتِ الـSDK ونَتيجَةٌ مَجهولَة، والبابُ يَرى <c>FileStorageException</c> كَما كان؛
+    /// والوُجودُ والقِراءَةُ والحَذفُ لا نِيَّةَ لَها.</para>
+    /// </summary>
+    [Fact]
+    public async Task S3_counts_the_put_with_its_bytes_once_per_upload_and_leaves_reads_and_deletes_uncounted()
+    {
+        await using var s3 = new NafathS3PushRequestShapeCharacterizationTests.FakeS3();
+        var recorder = new CallRecorder(() => s3.Requests.Count);
+        using var storage = S3(s3, recorder);
+        var key = $"tenants/w13-calls/avatars/{Guid.NewGuid()}.png";
+        var bytes = new byte[1531];
+        var call = ProviderCall.ForChannel(OutboundUnits.FileUpload, "w13-calls", "upload-1");
+        await storage.UploadAsync(call, key, new MemoryStream(bytes), "image/png");
+        var id = $"{OutboundUnits.FileUpload}:{ProviderNames.S3}:upload-1";
+        output.WriteLine($"[G6] S3 ⇒ {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { $"open {id} · سِلك 0", $"decide {id} Accepted 1531 · سِلك 1" }, recorder.Log);
+        var decided = recorder.Calls[^1].Call;
+        Assert.Equal((ProviderCall.FileKeySource, UsageEntryId.Pseudonym(OutboundUnits.FileUpload, "w13-calls", key)), (decided.SourceType, decided.SourceId));
+
+        Assert.True(await storage.ExistsAsync(key));
+        Assert.NotNull(await storage.ReadAsync(key));
+        Assert.True(await storage.DeleteAsync(key));
+        Assert.Equal(2, recorder.Log.Count);
+
+        recorder.Log.Clear();
+        s3.Requests.Clear();
+        s3.Forced["PUT"] = HttpStatusCode.InternalServerError;
+        var failed = ProviderCall.ForChannel(OutboundUnits.FileUpload, "w13-calls", "upload-2");
+        var ex = await Assert.ThrowsAsync<ACommerce.Kit.Files.FileStorageException>(() => storage.UploadAsync(failed, key, new MemoryStream(bytes), "image/png"));
+        var failedId = $"{OutboundUnits.FileUpload}:{ProviderNames.S3}:upload-2";
+        output.WriteLine($"[G6] S3 500 ⇒ {ex.GetType().Name} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { $"open {failedId} · سِلك 0", $"decide {failedId} Unknown 1 · سِلك 3" }, recorder.Log);
+    }
+
+    /// <summary>
+    /// <para><b>الإشعار</b>: سَطرٌ لِكُلِّ اشتِراكٍ بِمُعَرِّفِ <c>{notificationId}:{Pseudonym(endpoint)}</c> — نِيَّةٌ قَبلَ الطَلَب، ومَقبولٌ (201) أَو مَرفوضٌ (410، والاشتِراكُ يُمحى
+    /// كَما كان) أَو مَجهولٌ (500، ويُكتَبُ سَطرُ التَحذيرِ كَما كان)؛ والإشعارُ نَفسُه لِلاشتِراكِ نَفسِه يُعطي المُعَرِّفَ نَفسَه.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(201, "Accepted")]
+    [InlineData(410, "Refused")]
+    [InlineData(500, "Unknown")]
+    public async Task Push_counts_each_subscription_under_the_notification_id_and_the_endpoint_pseudonym(int status, string outcome)
+    {
+        using var a = new NafathS3PushRequestShapeCharacterizationTests.Subscriber();
+        var push = new NafathS3PushRequestShapeCharacterizationTests.PushRecorder { Status = (HttpStatusCode)status };
+        var recorder = new CallRecorder(() => push.Requests.Count);
+        var keys = WebPush.VapidHelper.GenerateVapidKeys();
+        var cfg = Microsoft.Extensions.Configuration.MemoryConfigurationBuilderExtensions.AddInMemoryCollection(new Microsoft.Extensions.Configuration.ConfigurationBuilder(), new Dictionary<string, string?>
+        {
+            ["WebPush:PublicKey"] = keys.PublicKey, ["WebPush:PrivateKey"] = keys.PrivateKey,
+        }).Build();
+        var service = new ACommerce.Templates.Customer.Marketplace.Services.WebPushService(cfg,
+            NullLogger<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>.Instance, new ProviderCalls(recorder));
+        NafathS3PushRequestShapeCharacterizationTests.Wire(service, push);
+        var world = new DocWorld();
+        var user = Guid.NewGuid();
+        var notice = Guid.NewGuid();
+        world.Put(new ACommerce.Kit.Auth.User { Id = user, TenantSlug = "w13-calls", PushSubscriptions = [a.Row()] });
+        await service.SendAsync(world.Store, "w13-calls", user, notice, "عُنوان", "مَتن");
+
+        var id = $"{OutboundUnits.PushSend}:{ProviderNames.WebPush}:{notice:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, "w13-calls", a.Endpoint)}";
+        output.WriteLine($"[G6] الإشعار {status} ⇒ {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { $"open {id} · سِلك 0", $"decide {id} {outcome} 1 · سِلك 1" }, recorder.Log);
+        Assert.Equal(status == 410, world.Stored.OfType<ACommerce.Kit.Auth.User>().Any(u => u.PushSubscriptions.Count == 0));
+        Assert.DoesNotContain(a.Endpoint, id, StringComparison.Ordinal);
+    }
 }

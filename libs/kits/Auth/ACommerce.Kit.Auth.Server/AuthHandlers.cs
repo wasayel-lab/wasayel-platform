@@ -523,7 +523,11 @@ public static class AuthHandlers
         if (!TryConsumeSendQuota($"{tenantCtx.Slug}|nafath:{cmd.NationalId?.Trim()}")
             || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited: try again in an hour");
-        var result = await channel.StartAsync(cmd.NationalId, ct);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) البَدءُ نِداءٌ مَعدود: المَتجَرُ، ومُعَرِّفُ نِداءٍ جَديد — مُعَرِّفُ المُحاوَلَةِ جَوابُ نَفاذٍ لا يُعرَفُ قَبلَه
+        // (التَصميم §6.2). والاستِطلاعُ في بابِ التَأكيدِ مُساعِدٌ لا يُعَدّ.
+        var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
+            ACommerce.Platform.Shared.Metering.OutboundUnits.IdentityNafathStart, tenantCtx.Slug, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId());
+        var result = await channel.StartAsync(call, cmd.NationalId, ct);
         EvictExpiredAttempts();
         Attempts[result.AttemptId] = new AuthAttempt(
             result.AttemptId, tenantCtx.Slug, cmd.NationalId, "",

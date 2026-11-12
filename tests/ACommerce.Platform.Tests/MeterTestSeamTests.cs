@@ -20,6 +20,11 @@ namespace ACommerce.Platform.Tests;
 // `HttpClient → ProviderHttp<TKit>` (`op_Implicit`، أَوَّلُ مُستَهلِكٍ لَه بِناءُ Brevo في اختِباراتِها). والتَحويلُ عامٌّ عَلى نَوعٍ عامّ، فَالمُنادي يُشيرُ إلى
 // `ProviderHttp<BrevoEmailChannel>.op_Implicit` لا إلى التَعريف — فَالمُطابَقَةُ بِالوَحدَةِ ومُعَرِّفِ البَيانِ الوَصفِيّ (`MetadataToken`) لا بِالكائِن. والمُنادي المَأذونُ
 // الثالِث: جِسمُ التَحويلِ نَفسُه يَقرَأُ `Unrecorded`. أَمّا `IEmailOtpChannel` فَلا مَقعَدَ لَه: تَوقيعاه يَحمِلانِ `ProviderCall` ولا أَخَ بِدونِه — النِسيانُ خَطَأُ بِناء.
+//
+// ‏(‏2026-11-12، W13-6·١٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ودَخَلَها بانِيا عُدَّتَيِ الـSDK القَديمان**: `S3FileStorage(IOptions, ILogger)` و`WebPushService(IConfiguration,
+// ILogger)` — يَبنِيانِ بِـ`ProviderCalls.Unrecorded` فَتَبقى بُناتُهُما في الاختِباراتِ وسكربتاتِ المُشَغِّلِ كَما كانَت، والتَسجيلانِ في الإنتاجِ يَحُلّانِ الباني
+// الأَطوَلَ بِمُستَدعي المُضيف. والمُنادي المَأذونُ الرابِعُ والخامِس: جِسما البانِيَينِ القَديمَينِ نَفسُهُما يَقرَآنِ `Unrecorded`. و`INafathChannel` و`IFileStorage`
+// بِلا مَقعَد: `StartAsync` و`UploadAsync` يَحمِلانِ `ProviderCall` في التَوقيعِ نَفسِه.
 
 public class MeterTestSeamTests(ITestOutputHelper output)
 {
@@ -109,6 +114,8 @@ public class MeterTestSeamTests(ITestOutputHelper output)
             // ‏(‏2026-11-12، W13-6·١٢) مَقعَدا المُستَدعي: المُستَدعي الَّذي لا يُسَجِّل، والتَحويلُ مِن عَميلٍ خامٍّ إلَيه.
             typeof(ProviderCalls).GetProperty(nameof(ProviderCalls.Unrecorded))!.GetMethod!,
             typeof(ProviderHttp<>).GetMethods(BindingFlags.Public | BindingFlags.Static).Single(m => m.Name == "op_Implicit"),
+            // ‏(‏2026-11-12، W13-6·١٣) بانِيا عُدَّتَيِ الـSDK القَديمانِ — بِلا مُستَدعٍ يُسَجِّل.
+            OldSdkConstructors[0], OldSdkConstructors[1],
         };
         foreach (var asm in assemblies)
         {
@@ -123,6 +130,17 @@ public class MeterTestSeamTests(ITestOutputHelper output)
         }
         return seams;
     }
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٣) البانِيانِ القَديمانِ لِعُدَّتَيِ الـSDK — يَبنِيانِ بِـ<see cref="ProviderCalls.Unrecorded"/>.</summary>
+    internal static readonly ConstructorInfo[] OldSdkConstructors =
+    [
+        typeof(ACommerce.Kit.Files.Providers.S3.S3FileStorage).GetConstructor(
+            [typeof(Microsoft.Extensions.Options.IOptions<ACommerce.Kit.Files.Providers.S3.S3FileStorageOptions>),
+             typeof(Microsoft.Extensions.Logging.ILogger<ACommerce.Kit.Files.Providers.S3.S3FileStorage>)])!,
+        typeof(ACommerce.Templates.Customer.Marketplace.Services.WebPushService).GetConstructor(
+            [typeof(Microsoft.Extensions.Configuration.IConfiguration),
+             typeof(Microsoft.Extensions.Logging.ILogger<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>)])!,
+    ];
 
     /// <summary>‏(‏2026-11-12، W13-6·١٢) مِفتاحُ الطَريقَة: وَحدَتُها ومُعَرِّفُ بَيانِها الوَصفِيّ — يُطابِقُ طَريقَةَ النَوعِ العامِّ ونَظيرَتَها عَلى نَوعٍ مُغلَق.</summary>
     internal static (Module Module, int Token) Key(MethodBase m) => (m.Module, m.MetadataToken);
@@ -140,16 +158,18 @@ public class MeterTestSeamTests(ITestOutputHelper output)
         var refs = assemblies.SelectMany(a => References(a, n => bodies += n)).Where(r => seamSet.Contains(Key(r.Callee))).ToList();
         static string Name(MethodBase m) => $"{m.DeclaringType?.FullName}.{m.Name}";
         // المَأذون: الجِسمُ الافتِراضِيُّ لِلأَخِ ذي ProviderCall في الواجِهَةِ نَفسِها يُمَرِّرُ إلى المَقعَد (القَنَواتُ المُزَيَّفَةُ ومُحاكي التَطوير)؛
-        // و(W13-6·١٢) جِسمُ التَحويلِ مِن HttpClient يَقرَأُ ProviderCalls.Unrecorded.
-        var sanctioned = refs.Where(r => r.Caller.DeclaringType == typeof(IOtpChannel) || IsConversion(r.Caller)).ToList();
+        // و(W13-6·١٢) جِسمُ التَحويلِ مِن HttpClient يَقرَأُ ProviderCalls.Unrecorded؛ و(W13-6·١٣) جِسما البانِيَينِ القَديمَينِ يَقرَآنِه.
+        var oldConstructors = OldSdkConstructors.Select(Key).ToHashSet();
+        var sanctioned = refs.Where(r => r.Caller.DeclaringType == typeof(IOtpChannel) || IsConversion(r.Caller) || oldConstructors.Contains(Key(r.Caller))).ToList();
         var callers = refs.Except(sanctioned).ToList();
         output.WriteLine($"[G6c] تَجميعات {assemblies.Count} · أَجسام {bodies} · مَقاعِد {seams.Count} ({string.Join(", ", seams.Select(Name))})");
         output.WriteLine($"[G6c] مَأذون {sanctioned.Count} ({string.Join(", ", sanctioned.Select(r => $"{Name(r.Caller)}→{r.Callee.Name}"))}) · مُنادونَ في libs/apps {callers.Count}");
         foreach (var c in callers) output.WriteLine($"  ✗ {Name(c.Caller)} → {Name(c.Callee)}");
         Assert.True(assemblies.Count >= 40 && bodies > 10_000, $"أَداةٌ عَمياء: {assemblies.Count} تَجميعاً و{bodies} جِسماً.");
-        Assert.True(seams.Count >= 6, $"أَداةٌ عَمياء: {seams.Count} مَقعَداً (الأَخَوانِ وتَنفيذاتُهُما في Twilio والمُحاكي، ومَقعَدا المُستَدعي).");
-        Assert.True(sanctioned.Count == 3, $"أَداةٌ عَمياء: المُنادي المَأذونُ {sanctioned.Count} لا 3 — قارِئُ الـIL لا يَرى النِداء.");
+        Assert.True(seams.Count >= 8, $"أَداةٌ عَمياء: {seams.Count} مَقعَداً (الأَخَوانِ وتَنفيذاتُهُما في Twilio والمُحاكي، ومَقعَدا المُستَدعي، والبانِيانِ القَديمان).");
+        Assert.True(sanctioned.Count == 5, $"أَداةٌ عَمياء: المُنادي المَأذونُ {sanctioned.Count} لا 5 — قارِئُ الـIL لا يَرى النِداء.");
         Assert.Contains(sanctioned, r => IsConversion(r.Caller) && r.Callee.Name == "get_Unrecorded");
+        Assert.All(OldSdkConstructors, c => Assert.Contains(sanctioned, r => Key(r.Caller) == Key(c) && r.Callee.Name == "get_Unrecorded"));
         Assert.True(callers.Count == 0, "مُنادٍ في كودِ الإنتاجِ لِمَقعَدِ الاختِبار — يُرسِلُ بِلا ProviderCall: "
                                         + string.Join(", ", callers.Select(c => $"{Name(c.Caller)}→{c.Callee.Name}")));
     }

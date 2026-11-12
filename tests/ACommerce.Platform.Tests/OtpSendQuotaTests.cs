@@ -45,7 +45,7 @@ public class OtpSendQuotaTests(ITestOutputHelper output)
     {
         public int Started;
         public string ChannelName => "counting-nafath";
-        public Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+        public Task<NafathStartResult> StartAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string nationalId, CancellationToken ct)
         {
             Interlocked.Increment(ref Started);
             return Task.FromResult(new NafathStartResult(Guid.NewGuid().ToString("N"), "42", 0));

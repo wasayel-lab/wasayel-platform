@@ -359,7 +359,7 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         private readonly List<string> _keys = [];
         public IReadOnlyList<string> Keys { get { lock (_keys) return [.. _keys]; } }
         public string ProviderName => "recording-uploads";
-        public async Task<ACommerce.Kit.Files.StoredFile> UploadAsync(string key, Stream content, string contentType, CancellationToken ct = default)
+        public async Task<ACommerce.Kit.Files.StoredFile> UploadAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string key, Stream content, string contentType, CancellationToken ct = default)
         {
             using var copy = new MemoryStream();
             await content.CopyToAsync(copy, ct);

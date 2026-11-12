@@ -68,6 +68,17 @@ public sealed class ProviderCalls(OutboundRecorder? recorder)
         return result;
     }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٣ — التَصميم §6.1) <b>النِداءُ المُساعِدُ يَمُرُّ ولا يُعَدّ</b>: لا نِيَّةَ ولا سَطرَ ولا نَتيجَة — والنِداءُ كَما هُوَ بِجَوابِه
+    /// واستِثنائِه. فائِدَتُه أَن يَكونَ فِعلُ الـSDK داخِلَ وُسَطاءِ المُستَدعي فَتَراه الطَبَقَةُ ٨-ج، وأَن يَحمِلَ سَبَبَه مِن القائِمَةِ المُغلَقَة
+    /// (<see cref="ProviderHelperReasons"/>) فَيُقرَأَ لِماذا لَم يُعَدّ. مُستَهلِكاه الأَوَّلانِ: نَفاذ (الرَمزُ والاستِطلاع) ومَخزَنُ الكائِنات (القِراءَةُ والحَذف).</para>
+    /// </summary>
+    public Task<T> HelperAsync<T>(ProviderHelper helper, Func<CancellationToken, Task<T>> send, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(helper);
+        return send(ct);
+    }
+
     /// <summary>ما يَفلِتُ مِن كاتِبٍ وَعَدَ أَلّا يَرمي: سَطرٌ بِاسمِه، ولا يَبلُغُ النِداء.</summary>
     private static async Task Quietly(ProviderCall call, Func<Task> write)
     {

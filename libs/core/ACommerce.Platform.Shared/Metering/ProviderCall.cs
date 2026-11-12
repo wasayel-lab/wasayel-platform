@@ -32,6 +32,64 @@ public sealed record ProviderCall(string Unit, string Provider, string App, stri
 
     /// <summary>القَناةُ تَسِمُ النِداءَ بِاسمِها.</summary>
     public ProviderCall By(string provider) => this with { Provider = provider };
+
+    // ─── مَصدَرُ السَطرِ حينَ لا يَكونُ مُعَرِّفَ الطَلَب (‏2026-11-12، W13-6·١٣ — التَصميم §6.2) ─────────────────────────────────────────
+    // **مُعَرِّفُ الطَلَبِ مِفتاحُ العَمَلِيَّة، والمَصدَرُ ما عُدّ** — يَتَساوَيانِ في كُلِّ وَحدَةٍ إلّا الرَفع: كُلُّ رَفعٍ عَمَلِيَّةٌ (مُعَرِّفُ نِداءٍ جَديد، فَإعادَةُ
+    // الرَفعِ رَفعٌ ثانٍ) والمَعدودُ المِلَفُّ نَفسُه — ومِفتاحُه يَحمِلُ مُعَرِّفَ شَخص (`tenants/{slug}/avatars/{userId}.{ext}`)، فَلا يَدخُلُ الدَفتَرَ إلّا اسماً
+    // مُستَعاراً (`UsageEntryId.Pseudonym`). مُستَهلِكُه الأَوَّلُ في وَقتِ التَشغيل `S3FileStorage.UploadAsync`؛ والكاتِبُ يَقرَؤُه وإلّا فَالطَلَب.
+
+    /// <summary>نَوعُ المَصدَرِ إن لَم يَكُن الطَلَب — <c>null</c> ⇐ الطَلَب.</summary>
+    public string? SourceType { get; init; }
+
+    /// <summary>مُعَرِّفُ المَصدَرِ إن لَم يَكُن مُعَرِّفَ الطَلَب.</summary>
+    public string? SourceId { get; init; }
+
+    /// <summary>‏(W13-6·١٣) نَوعُ مَصدَرِ الرَفع: المِلَفُّ بِمِفتاحِه المُستَعار.</summary>
+    public const string FileKeySource = "file_key";
+
+    /// <summary>النِداءُ نَفسُه ومَصدَرُه غَيرُ الطَلَب.</summary>
+    public ProviderCall About(string sourceType, string sourceId) => this with { SourceType = sourceType, SourceId = sourceId };
+}
+
+/// <summary>
+/// <para><b>نِداءٌ مُساعِدٌ لا يُعَدّ</b> (‏2026-11-12، W13-6·١٣ — التَصميم §3.4 «Helpers, not counted»، §6.1): ما يُغادِرُ العَمَلِيَّةَ لِيَخدُمَ عَمَلِيَّةً
+/// مَعدودَةً أَو قِراءَةً — رَمزُ OAuth، واستِطلاعُ الحالَة، وقِراءَةُ المَخزَنِ وحَذفُه. يَمُرُّ بِالمُستَدعي (<see cref="ProviderCalls.HelperAsync{T}"/>،
+/// <see cref="ProviderHttp{TKit}.SendHelperAsync"/>) فَتَراه الطَبَقَةُ ٨-ج داخِلَه، ولا نِيَّةَ لَه ولا سَطر.</para>
+/// <para><b>والسَبَبُ مِن قائِمَةٍ مُغلَقَة</b> (<see cref="ProviderHelperReasons"/>): سَبَبٌ خارِجَها يَرمي عِندَ البِناء — فَلا يَصيرُ «مُساعِداً» ما لا اسمَ لَه.</para>
+/// </summary>
+public sealed record ProviderHelper
+{
+    public ProviderHelper(string provider, string reason)
+    {
+        if (!ProviderHelperReasons.All.Contains(reason, StringComparer.Ordinal))
+            throw new ArgumentException($"سَبَبُ النِداءِ المُساعِدِ «{reason}» خارِجَ القائِمَة: {string.Join("، ", ProviderHelperReasons.All)}.", nameof(reason));
+        Provider = provider;
+        Reason = reason;
+    }
+
+    public string Provider { get; }
+    public string Reason { get; }
+}
+
+/// <summary>
+/// <para><b>أَسبابُ النِداءِ المُساعِد — قائِمَةٌ مُغلَقَةٌ تُطبَع</b> (التَصميم §3.4). تَدخُلُها الأَسبابُ مَعَ أَوَّلِ مُنادٍ لَها (القاعِدَة ١): نَفاذ (الرَمزُ
+/// والاستِطلاع) ومَخزَنُ الكائِنات (القِراءَةُ والحَذف) في البَند ١٣؛ و<c>metadata_tag</c> (ميسّر) و<c>catalog_product</c> (PayPal) في البَند ١٤.</para>
+/// </summary>
+public static class ProviderHelperReasons
+{
+    /// <summary>رَمزُ وُصولِ OAuth قَبلَ النِداء — <c>NafathChannel</c>.</summary>
+    public const string OauthToken = "oauth_token";
+
+    /// <summary>استِطلاعُ حالَةِ عَمَلِيَّةٍ عُدَّت عِندَ بَدئِها — <c>NafathChannel.IsApprovedAsync</c>.</summary>
+    public const string StatusPoll = "status_poll";
+
+    /// <summary>قِراءَةُ المَخزَنِ (الجَلبُ والوُجود) — <c>S3FileStorage</c>.</summary>
+    public const string StorageRead = "storage_read";
+
+    /// <summary>حَذفٌ مِن المَخزَن — <c>S3FileStorage.DeleteAsync</c>.</summary>
+    public const string StorageDelete = "storage_delete";
+
+    public static readonly IReadOnlyList<string> All = [OauthToken, StatusPoll, StorageRead, StorageDelete];
 }
 
 /// <summary>نَتيجَةُ النِداءِ الصادِر — ثَلاث: <b>قُبِل</b> (يُكتَبُ السَطر)، و<b>رُفِض</b> (4xx، ومِنه 429)، و<b>مَجهول</b> (5xx، أَو مُهلَتُنا، أَو إلغاءُ المُنادي، أَو

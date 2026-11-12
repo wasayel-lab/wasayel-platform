@@ -48,4 +48,65 @@ public class MeterPrivacyTests(ITestOutputHelper output)
                 Assert.DoesNotContain(person.ToString("N"), field, StringComparison.OrdinalIgnoreCase);
             }
     }
+
+    // ─── الصادِر (‏2026-11-12، W13-6·١٣ — التَصميم §2 «Privacy»: مِفتاحُ المِلَفِّ وعُنوانُ الاشتِراكِ لا يَدخُلانِ إلّا مُستَعارَين) ─────────────────────────
+
+    /// <summary><b>مِفتاحُ الصورَةِ لا يَدخُلُ الدَفتَرَ</b>: رَفعُ صورَةِ مَلَفٍّ شَخصِيٍّ (المِفتاحُ <c>tenants/{slug}/avatars/{userId}.png</c>) — مُعَرِّفُ النِداءِ وطَلَبُه ومَصدَرُه
+    /// لا تَحمِلُ المِفتاحَ ولا مُعَرِّفَ صاحِبِه بِأَيِّ صيغَة، والمَصدَرُ اسمُ المِفتاحِ المُستَعارُ بِحَرفِه.</summary>
+    [Fact]
+    public async Task An_avatar_upload_carries_neither_its_key_nor_its_owner_id_in_the_ledger_ids()
+    {
+        await using var s3 = new NafathS3PushRequestShapeCharacterizationTests.FakeS3();
+        var recorder = new ProviderCallsTests.CallRecorder();
+        using var storage = new ACommerce.Kit.Files.Providers.S3.S3FileStorage(
+            Microsoft.Extensions.Options.Options.Create(new ACommerce.Kit.Files.Providers.S3.S3FileStorageOptions
+            {
+                Endpoint = s3.Url, Bucket = NafathS3PushRequestShapeCharacterizationTests.Bucket, AccessKeyId = NafathS3PushRequestShapeCharacterizationTests.AccessKey,
+                SecretAccessKey = "privacy-secret", PublicBaseUrl = NafathS3PushRequestShapeCharacterizationTests.PublicBase,
+            }),
+            new ProviderCalls(recorder), Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Kit.Files.Providers.S3.S3FileStorage>.Instance);
+        var user = Guid.NewGuid();
+        var key = $"tenants/store-a/avatars/{user}.png";
+        await storage.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, "store-a", ProviderCall.FreshRequestId()), key, new MemoryStream(new byte[64]), "image/png");
+
+        var (call, acceptance) = recorder.Calls[^1];
+        output.WriteLine($"[G17] رَفع ⇒ {call.Id} · مَصدَر {call.SourceType}:{call.SourceId} · {acceptance?.Quantity} بايتاً");
+        foreach (var field in new[] { call.Id, call.RequestId, call.SourceId! })
+        {
+            Assert.DoesNotContain(user.ToString("D"), field, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(user.ToString("N"), field, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("avatars", field, StringComparison.Ordinal);
+        }
+        Assert.Equal((ProviderCall.FileKeySource, UsageEntryId.Pseudonym(OutboundUnits.FileUpload, "store-a", key)), (call.SourceType, call.SourceId));
+    }
+
+    /// <summary><b>عُنوانُ الاشتِراكِ لا يَدخُلُ الدَفتَر</b> (يَحمِلُ مُعَرِّفَ مُتَصَفِّحِ صاحِبِه عِندَ خِدمَةِ الإشعار): مُعَرِّفُ الإرسالِ الإشعارُ واسمُ العُنوانِ المُستَعار.</summary>
+    [Fact]
+    public async Task A_push_id_carries_the_subscription_endpoint_only_as_a_pseudonym()
+    {
+        using var subscriber = new NafathS3PushRequestShapeCharacterizationTests.Subscriber();
+        var recorder = new ProviderCallsTests.CallRecorder();
+        var keys = WebPush.VapidHelper.GenerateVapidKeys();
+        var cfg = Microsoft.Extensions.Configuration.MemoryConfigurationBuilderExtensions.AddInMemoryCollection(new Microsoft.Extensions.Configuration.ConfigurationBuilder(),
+            new Dictionary<string, string?> { ["WebPush:PublicKey"] = keys.PublicKey, ["WebPush:PrivateKey"] = keys.PrivateKey }).Build();
+        var service = new ACommerce.Templates.Customer.Marketplace.Services.WebPushService(cfg,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>.Instance, new ProviderCalls(recorder));
+        NafathS3PushRequestShapeCharacterizationTests.Wire(service, new NafathS3PushRequestShapeCharacterizationTests.PushRecorder());
+        var world = new DocWorld();
+        var user = Guid.NewGuid();
+        var notice = Guid.NewGuid();
+        world.Put(new ACommerce.Kit.Auth.User { Id = user, TenantSlug = "store-a", PushSubscriptions = [subscriber.Row()] });
+        await service.SendAsync(world.Store, "store-a", user, notice, "t", "b");
+
+        var call = recorder.Calls[^1].Call;
+        output.WriteLine($"[G17] إشعار ⇒ {call.Id}");
+        var token = subscriber.Endpoint[(subscriber.Endpoint.LastIndexOf('/') + 1)..];
+        foreach (var field in new[] { call.Id, call.RequestId })
+        {
+            Assert.DoesNotContain(subscriber.Endpoint, field, StringComparison.Ordinal);
+            Assert.DoesNotContain(token, field, StringComparison.Ordinal);
+            Assert.DoesNotContain(user.ToString("N"), field, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.Equal($"{notice:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, "store-a", subscriber.Endpoint)}", call.RequestId);
+    }
 }

@@ -13,8 +13,9 @@ namespace ACommerce.Platform.Tests;
 public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
 {
     /// <summary><b>سَقفُ القائِمَة</b> — تَتَقَلَّصُ ولا تَنمو: 12 عِندَ البَند ١١ (خَرَجَ Twilio ودَخَلَ <c>ProviderHttp.cs</c>)، ويَنزِلُ مَعَ كُلِّ عُدَّةٍ تُرَحَّل.
-    /// ‏(‏2026-11-12، W13-6·١٢) <b>11</b>: خَرَجَ Brevo (عَميلُه <c>ProviderHttp</c>)، وبَقِيَ SMTP بِحَقلِه <c>client</c> — أَوَّلُ سَطرٍ تَقيسُه قاعِدَةُ الفِعل.</summary>
-    internal const int AllowListCeiling = 11;
+    /// ‏(‏2026-11-12، W13-6·١٢) <b>11</b>: خَرَجَ Brevo (عَميلُه <c>ProviderHttp</c>)، وبَقِيَ SMTP بِحَقلِه <c>client</c> — أَوَّلُ سَطرٍ تَقيسُه قاعِدَةُ الفِعل.
+    /// ‏(‏2026-11-12، W13-6·١٣) <b>10</b>: خَرَجَ نَفاذ (عَميلُه <c>ProviderHttp</c>)، وصارَ لِـS3 والإشعارِ حَقلُهُما <c>_client</c> — فَقاعِدَةُ الفِعلِ تَقيسُ ثَلاثَةَ أَسطُر.</summary>
+    internal const int AllowListCeiling = 10;
 
     internal static readonly Regex RawTypes = new(
         @"\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(",
@@ -117,6 +118,16 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var smtp = scans.Single(x => x.File.EndsWith("/SmtpEmailChannel.cs", StringComparison.Ordinal));
         output.WriteLine($"  SMTP · الحَقل {allowed.Single(a => a.File == smtp.File).Field} · وُصول {smtp.Accesses} · خارِجَ المُستَدعي {smtp.Outside}");
         Assert.Equal(("client", 4, 0), (allowed.Single(a => a.File == smtp.File).Field, smtp.Accesses, smtp.Outside));
+        // ‏(‏2026-11-12، W13-6·١٣) نَفاذ خارِجَها، وS3 والإشعارُ فيها بِحَقلِ كُلٍّ: أَفعالُ S3 الأَربَعَة (الرَفعُ مَعدوداً، والجَلبُ والوُجودُ والحَذفُ مُساعِدَة)
+        // وفِعلُ الإشعارِ الواحِدُ مَفحوصَةٌ ولا واحِدَ خارِجَ المُستَدعي.
+        Assert.DoesNotContain(allowed, a => a.File.EndsWith("/NafathChannel.cs", StringComparison.Ordinal));
+        foreach (var (name, accesses) in new[] { ("/S3FileStorage.cs", 4), ("/WebPushService.cs", 1) })
+        {
+            var scan = scans.Single(x => x.File.EndsWith(name, StringComparison.Ordinal));
+            var field = allowed.Single(a => a.File == scan.File).Field;
+            output.WriteLine($"  {name.TrimStart('/')} · الحَقل {field} · وُصول {scan.Accesses} · خارِجَ المُستَدعي {scan.Outside}");
+            Assert.Equal(("_client", accesses, 0), (field, scan.Accesses, scan.Outside));
+        }
         Assert.All(allowed, a => Assert.False(string.IsNullOrWhiteSpace(a.Reason), $"سَطرٌ بِلا سَبَب: {a.File}"));
         Assert.True(violations.Count == 0, "الطَبَقَةُ ٨-ج حَمراء: " + string.Join(" | ", violations));
     }
@@ -153,7 +164,9 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
     }
 
     /// <summary><b>الحَقنُ المَقيس</b>: نُسخَةٌ مِن قَناةِ Twilio في مِجَلَّدِ عُدَّةٍ تَحمِلُ <c>new HttpClient()</c> ⇐ خَرق؛ وسَطرٌ في القائِمَةِ لِمِلَفٍّ لا يُسَمّي نَوعاً خامّاً
-    /// ⇐ إعفاءٌ مَيِّت؛ وحَقلُ SDK يُسَمّى لِمِلَفٍّ لَم يُلَفَّ فِعلُه (S3 اليَوم) ⇐ فِعلٌ خارِجَ المُستَدعي.</summary>
+    /// ⇐ إعفاءٌ مَيِّت؛ وحَقلُ SDK يُسَمّى لِمِلَفٍّ لَم يُلَفَّ فِعلُه ⇐ فِعلٌ خارِجَ المُستَدعي.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٣) كانَ صَفُّ الحَقلِ يُسَمّي <c>_client</c> لِـS3 «اليَوم» — ولُفَّ فِعلُه في هذا البَندِ فَصارَ الحَقلُ في القائِمَةِ نَفسِها.
+    /// فَصارَ الحَقنُ فِعلاً قَبلَ المُستَدعي في نُسخَةٍ مِن S3 الحَقيقِيِّ ومِن خِدمَةِ الإشعارِ الحَقيقِيَّة، كَصَفِّ SMTP.</remarks>
     [Fact]
     public void Each_injected_breach_turns_the_layer_red()
     {
@@ -170,12 +183,21 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var dead = allowed.Append(new Allowed(twilio.File, "-", "injected")).ToList();
         Assert.Equal([$"dead_exemption:{twilio.File}"], Violations(ScanAll(sources, dead), dead));
 
-        var s3 = allowed.Single(a => a.File.EndsWith("/S3FileStorage.cs", StringComparison.Ordinal));
-        var verb = allowed.Select(a => a == s3 ? a with { Field = "_client" } : a).ToList();
-        var verbBreach = Violations(ScanAll(sources, verb), verb);
-        output.WriteLine($"[8-ج] الحَقن: {string.Join(" · ", raw.Concat(Violations(ScanAll(sources, dead), dead)).Concat(verbBreach))}");
-        Assert.Single(verbBreach);
-        Assert.StartsWith($"sdk_verb_outside_invoker:{s3.File}", verbBreach[0], StringComparison.Ordinal);
+        // ‏(‏2026-11-12، W13-6·١٣) فِعلُ S3 يُنادى قَبلَ المُستَدعي في نُسخَةٍ مِن المَخزَنِ الحَقيقِيّ، وفِعلُ الإشعارِ قَبلَ مُستَدعيه ⇐ خَرقٌ عَلى سَطرِ كُلٍّ بِعَدَدِه.
+        foreach (var (name, verbAnchor, before, count) in new[]
+                 {
+                     ("/S3FileStorage.cs", "await _calls.InvokeAsync(counted,", "await _client.ListBucketsAsync(ct);\n        ", "1/5"),
+                     ("/WebPushService.cs", "var refused = await _calls.InvokeAsync<", "_client.SetVapidDetails(_vapid);\n                ", "1/2"),
+                 })
+        {
+            var file = sources.Single(x => x.File.EndsWith(name, StringComparison.Ordinal));
+            Assert.Single(Regex.Matches(file.Code, Regex.Escape(verbAnchor)));
+            var injected = sources.Select(x => x == file ? (x.File, x.Code.Replace(verbAnchor, before + verbAnchor, StringComparison.Ordinal)) : x).ToList();
+            var verbBreach = Violations(ScanAll(injected, allowed), allowed);
+            output.WriteLine($"[8-ج] حَقنُ {name.TrimStart('/')}: {string.Join(" · ", verbBreach)}");
+            Assert.Equal([$"sdk_verb_outside_invoker:{file.File} ({count})"], verbBreach);
+        }
+        output.WriteLine($"[8-ج] الحَقن: {string.Join(" · ", raw.Concat(Violations(ScanAll(sources, dead), dead)))}");
 
         // ‏(‏2026-11-12، W13-6·١٢) وفِعلُ MailKit يُنادى قَبلَ المُستَدعي في نُسخَةٍ مِن قَناةِ SMTP الحَقيقِيَّة ⇐ خَرقٌ عَلى سَطرِها بِعَدَدِه.
         var smtp = sources.Single(x => x.File.EndsWith("/SmtpEmailChannel.cs", StringComparison.Ordinal));

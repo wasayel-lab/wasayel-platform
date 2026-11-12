@@ -5,6 +5,7 @@ using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Billing;
 using ACommerce.Templates.Customer.Marketplace.Gates;
@@ -132,6 +133,9 @@ public static class MarketplaceTemplateExtensions
         // مُستَثمِر.
         _ = ACommerce.Kit.Theme.ThemeCatalog.Default;
         _ = ACommerce.Kit.Theme.ThemePresetCatalog.Preload();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، فَتَحُلُّ الحاوِيَةُ باني الخِدمَةِ الأَطوَلَ (ثَلاثَةُ وُسَطاءَ
+        // كُلُّها مُسَجَّلَة) لا مَقعَدَ الاختِبار — يَحرُسُه `MeterCompositionTests` (G6d). والسَطرُ الَّذي تَحتَه بِحَرفِه (يَقرَؤُه `WebPushVapidKeysTests`).
+        ACommerce.Platform.Shared.Metering.ProviderCallsExtensions.AddProviderCalls(services);
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
@@ -204,6 +208,11 @@ public static class MarketplaceTemplateExtensions
         // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) **كاتِبُ الصادِر** هُنا لا في العُدَد: يَملِكُ القاعِدَةَ وذاكِرَةَ المَتاجِر، والعُدَدُ تَعرِفُ
         // مُستَدعيها المَعدودَ وَحدَه (`ProviderCalls` يَسأَلُ الحاوِيَةَ عَنه). مُضيفٌ بِلا القالِبِ يَبقى بِلا كاتِب — ويُحَمِّرُه G6d عَلى المُضيفِ المُرَكَّب.
         services.AddSingleton<ACommerce.Platform.Shared.Metering.OutboundRecorder, Services.Metering.UsageLedgerWriter>();
+        // ‏(‏2026-11-12، W13-6·١٣) وذاكِرَتُه مَعَه: الكاتِبُ يَقرَأُ `IMemoryCache` وكانَ يَأتيه مِن `AddPlatformMultiTenancy` وَحدَه — فَلَمّا صارَت خِدمَةُ الإشعارِ
+        // (مُفرَدُ القالِبِ الَّذي يَبلُغُه `DealNotices` في مُعالِجاتِ Wolverine) تَطلُبُ المُستَدعيَ المَعدود، صارَ مُضيفٌ بِتَركيبِ القالِبِ وَحدَه بِلا ذاكِرَةٍ لا يَبني
+        // مُعالِجَ المُهلَة (مَقيس: `LiveScheduledExpiryProofTests` «Unable to resolve service for type 'IMemoryCache' while attempting to activate
+        // 'UsageLedgerWriter'» ومُحاوَلاتٌ 0). و`AddMemoryCache` يُضيفُ إن غابَ ولا يَستَبدِل — فَفي مُضيفِ الإنتاجِ هِيَ ذاكِرَةُ الحَلّالِ نَفسُها.
+        services.AddMemoryCache();
 
         // ─── شَكلُ وَثيقَتَي الـAPI في Marten ────────────────────────────
         // <b>هُنا لا في `HostingExtensions`</b>: الاعتِمادُ يَمشي مِن
@@ -909,7 +918,8 @@ public static class MarketplaceTemplateExtensions
                         var ext = ct.Split('/')[1].Replace("jpeg", "jpg");
                         var key = $"tenants/{slug}/avatars/{userId}.{ext}";
                         await using var stream = avatar.OpenReadStream();
-                        var stored = await files.UploadAsync(key, stream, ct);
+                        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) الرَفعُ نِداءٌ مَعدود: المَتجَرُ ومُعَرِّفُ نِداءٍ جَديد (رَفعٌ ثانٍ رَفعٌ آخَر)؛ والمِفتاحُ لا يَدخُلُ الدَفتَرَ إلّا مُستَعاراً.
+                        var stored = await files.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, slug, ProviderCall.FreshRequestId()), key, stream, ct);
                         newAvatarUrl = stored.PublicUrl;
                     }
                     catch (ACommerce.Kit.Files.FileStorageException) { /* الاسمُ يُحفَظ، والصورَةُ لا */ }
@@ -1258,7 +1268,8 @@ public static class MarketplaceTemplateExtensions
                 {
                     await using var stream = f.OpenReadStream();
                     var key = $"tenants/{slug}/listings/{id}/{photoUrls.Count}.{ext}";
-                    var stored = await files.UploadAsync(key, stream, f.ContentType);
+                    // ‏(‏2026-11-12، W13-6·١٣) كُلُّ صورَةٍ رَفعٌ مَعدودٌ بِمُعَرِّفِ نِداءٍ جَديد.
+                    var stored = await files.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, slug, ProviderCall.FreshRequestId()), key, stream, f.ContentType);
                     photoUrls.Add(stored.PublicUrl);
                 }
                 catch { /* صَورَة فاشِلَة لا تَكسِر الإعلان */ }
@@ -1276,7 +1287,8 @@ public static class MarketplaceTemplateExtensions
             // (الإلحاق بِنُسخَة مُتَوَقَّعَة). الخاسِر يُعيد القِراءَة
             // مَرَّةً واحِدَة، فَإن نَفِدَ الرَصيد فَالجَواب <b>مَنع
             // صَريح بِرِسالَتِه</b> لا فَشَل غامِض ولا خَمسُمِئَة.
-            var nudged = new HashSet<Guid>();
+            // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) لِكُلِّ مُستَخدِمٍ أَوَّلُ إشعارٍ كُتِبَ لَه — مُعَرِّفُه مِفتاحُ الإرسالِ المَعدود (كانَ `HashSet<Guid>` بِالمُستَخدِمِ وَحدَه).
+            var nudged = new Dictionary<Guid, Guid>();
             var quotaExhausted = false;
 
             async Task<bool> AttemptAsync()
@@ -1325,9 +1337,10 @@ public static class MarketplaceTemplateExtensions
                 foreach (var ss in savedSearches)
                 {
                     if (!ss.Matches(newListing)) continue;
+                    var matchNotice = Guid.NewGuid();
                     s.Store(new ACommerce.Kit.Notifications.Notification
                     {
-                        Id = Guid.NewGuid(),
+                        Id = matchNotice,
                         UserId = ss.UserId,
                         Type = "saved_search_match",
                         Title = l.Format("notifications.saved_search.title", ss.Label),
@@ -1335,7 +1348,7 @@ public static class MarketplaceTemplateExtensions
                         RelatedUrl = $"/{slug}/listings/{id}",
                         At = DateTime.UtcNow
                     });
-                    nudged.Add(ss.UserId);
+                    nudged.TryAdd(ss.UserId, matchNotice);
                 }
 
                 try
@@ -1360,10 +1373,10 @@ public static class MarketplaceTemplateExtensions
             if (quotaExhausted)
                 return Results.Redirect(Link(req, slug, $"create-listing?err=quota"));
 
-            foreach (var uid in nudged)
+            foreach (var (uid, matchNotice) in nudged)
             {
                 await NudgeAsync(hub, slug, uid);
-                await push.SendAsync(store, slug, uid,
+                await push.SendAsync(store, slug, uid, matchNotice,
                     l["notifications.saved_search.push_title"],
                     title,
                     url: $"/{slug}/listings/{id}",
@@ -1677,9 +1690,10 @@ public static class MarketplaceTemplateExtensions
             s.Store(conv);
 
             // إشعار لِلسائِق بِأَنّ عَرضَه قُبِلَ.
+            var acceptedNotice = Guid.NewGuid();
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = acceptedNotice,
                 UserId = offer.OffererId,
                 Type = "offer_accepted",
                 Title = l["notifications.offer_accepted.title"],
@@ -1691,7 +1705,7 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             // أَخطِر السائِق فَوراً — الإشعار + المُحادَثَة ظَهَرا.
             await NudgeAsync(hub, slug, offer.OffererId);
-            await push.SendAsync(store, slug, offer.OffererId,
+            await push.SendAsync(store, slug, offer.OffererId, acceptedNotice,
                 l["notifications.offer_accepted.title"],
                 l.Format("notifications.offer_accepted.push_body", acceptorName, offer.Price),
                 url: $"/{slug}/chats/{conv.Id}",
@@ -1780,9 +1794,10 @@ public static class MarketplaceTemplateExtensions
             s.Store(match);
 
             // أَخطِر الراكِب — السائِق وَصَل.
+            var arrivedNotice = Guid.NewGuid();
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = arrivedNotice,
                 UserId = ParseListingOwnerId(listing) ?? Guid.Empty,
                 Type = "driver_arrived",
                 Title = l["notifications.driver_arrived.title"],
@@ -1796,7 +1811,7 @@ public static class MarketplaceTemplateExtensions
             if (ownerGuid.HasValue)
             {
                 await NudgeAsync(hub, slug, ownerGuid.Value);
-                await push.SendAsync(store, slug, ownerGuid.Value,
+                await push.SendAsync(store, slug, ownerGuid.Value, arrivedNotice,
                     l["notifications.driver_arrived.title"],
                     l.Format("notifications.driver_arrived.body", match.OffererName),
                     url: $"/{slug}/listings/{listingId}",
@@ -2295,11 +2310,12 @@ public static class MarketplaceTemplateExtensions
                                n.Type == "chat_message" &&
                                n.RelatedUrl == $"/{slug}/chats/{conversationId}" &&
                                n.At > since);
+            var chatNotice = Guid.NewGuid();
             if (!hasRecent)
             {
                 s.Store(new ACommerce.Kit.Notifications.Notification
                 {
-                    Id = Guid.NewGuid(),
+                    Id = chatNotice,
                     UserId = recipientId,
                     Type = "chat_message",
                     Title = l.Format("notifications.chat_message.title", senderName),
@@ -2314,7 +2330,7 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             await NudgeAsync(hub, slug, recipientId);
             if (!hasRecent)
-                await push.SendAsync(store, slug, recipientId,
+                await push.SendAsync(store, slug, recipientId, chatNotice,
                     l.Format("notifications.chat_message.title", senderName),
                     conv.LastMessage ?? "—",
                     url: $"/{slug}/chats/{conversationId}",
@@ -4726,11 +4742,13 @@ public static class MarketplaceTemplateExtensions
         if (admins.Count == 0) return;
 
         var now = DateTime.UtcNow;
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) إشعارُ كُلِّ مُديرٍ بِمُعَرِّفِه — مِفتاحُ إرسالِه المَعدود.
+        var notices = admins.ToDictionary(a => a.Id, _ => Guid.NewGuid());
         foreach (var admin in admins)
         {
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = notices[admin.Id],
                 UserId = admin.Id,
                 Type = type,
                 Title = title,
@@ -4745,7 +4763,7 @@ public static class MarketplaceTemplateExtensions
             foreach (var admin in admins) await NudgeAsync(hub, slug, admin.Id);
         if (push is not null)
             foreach (var admin in admins)
-                await push.SendAsync(store, slug, admin.Id, title, body,
+                await push.SendAsync(store, slug, admin.Id, notices[admin.Id], title, body,
                     url: relatedUrl, tag: $"admin-{type}-{Guid.NewGuid():N}");
     }
 

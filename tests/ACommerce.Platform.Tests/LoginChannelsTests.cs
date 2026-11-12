@@ -166,7 +166,7 @@ public class LoginChannelsTests(ITestOutputHelper output)
     internal sealed class ApprovingNafath : ACommerce.Kit.Auth.INafathChannel
     {
         public string ChannelName => "approving";
-        public Task<ACommerce.Kit.Auth.NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+        public Task<ACommerce.Kit.Auth.NafathStartResult> StartAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string nationalId, CancellationToken ct)
             => Task.FromResult(new ACommerce.Kit.Auth.NafathStartResult(Guid.NewGuid().ToString("N"), "00", 0));
         public Task<bool> IsApprovedAsync(string attemptId, CancellationToken ct) => Task.FromResult(true);
     }

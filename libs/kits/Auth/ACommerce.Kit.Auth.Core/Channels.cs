@@ -81,7 +81,11 @@ public interface INafathChannel
     /// <summary>بَدء طَلَب تَحَقُّق. يُعيد رَقم العَرض الذي يَختاره
     /// المُستَخدِم في تَطبيق نَفاذ، ومُهلَة المُحاولَة الـ auto-verify
     /// (للـ mock).</summary>
-    Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct);
+    /// <remarks>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨؛ التَصميم §6.1) <paramref name="call"/> بِوَحدَةِ <see cref="OutboundUnits.IdentityNafathStart"/> أَوَّلَ
+    /// الوُسَطاءِ في التَوقيعِ نَفسِه، ولا أَخَ بِدونِه — نِسيانُه خَطَأُ بِناء (القاعِدَة ٦)؛ وما مِن مِلَفِّ تَوصيفٍ يُنَفِّذُ هذه الواجِهَة (مَقيس: قَنَواتُها
+    /// المُزَيَّفَةُ في أَربَعَةِ اختِباراتٍ عادِيَّةٍ تَبِعَت التَوقيع). المُنادي (بابُ البَدء) يَحمِلُ المَتجَرَ ومُعَرِّفَ نِداءٍ جَديد، والقَناةُ تَسِمُه بِاسمِها.
+    /// والاستِطلاعُ (<see cref="IsApprovedAsync"/>) مُساعِدٌ لا يُعَدُّ فَتَوقيعُه كَما كان.</remarks>
+    Task<NafathStartResult> StartAsync(ProviderCall call, string nationalId, CancellationToken ct);
 
     /// <summary>هَل المُستَخدِم وافَق على الطَلَب؟ يَرجَع false حتى يَنتَهي
     /// المُستَخدِم. في Mock: يَرُدّ true بَعد <c>AutoApproveAfter</c>.</summary>

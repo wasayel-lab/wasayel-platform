@@ -221,7 +221,7 @@ public class PushSubscriptionDoorTests(ITestOutputHelper output)
         user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription { Endpoint = "https://internal.example.invalid/hook", P256dh = p256dh, Auth = auth });
         world.Put(user);
 
-        await NewSender().SendAsync(world.Store, "theme-demo", user.Id, "t", "b");
+        await NewSender().SendAsync(world.Store, "theme-demo", user.Id, Guid.NewGuid(), "t", "b");
 
         Assert.Empty(world.Read<User>(user.Id.ToString())!.PushSubscriptions);
         Assert.Equal(1, world.SaveCalls);

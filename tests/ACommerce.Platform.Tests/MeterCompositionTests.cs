@@ -1,6 +1,9 @@
 using System.Reflection;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Providers.Brevo;
+using ACommerce.Kit.Auth.Providers.Nafath;
+using ACommerce.Kit.Files;
+using ACommerce.Kit.Files.Providers.S3;
 using ACommerce.Kit.Auth.Providers.Smtp;
 using ACommerce.Kit.Auth.Providers.Twilio;
 using ACommerce.Platform.Hosting;
@@ -25,6 +28,10 @@ namespace ACommerce.Platform.Tests;
 // تَحمِلُ `ProviderCalls` لا `ProviderHttp`، فَلا يَراها حَلُّ `ProviderHttp<…>`). والقَناةُ الواحِدَةُ يَختارُها الإعداد، فَيُرَكَّبُ كُلُّ فَرعٍ في مُضيفِه؛ ومَعَ
 // العُمَلاءِ **تُحَلُّ القَناتانِ نَفسُهُما** (`IOtpChannel` و`IEmailOtpChannel`) ويُقرَأُ كُلُّ مُستَدعٍ مَعدودٍ في حُقولِهِما — وعُدَّةٌ بِلا مُستَدعٍ أَو بِمُستَدعٍ
 // لا يُسَجِّلُ حَمراء.
+//
+// ‏(‏2026-11-12، W13-6·١٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ونَفاذٌ ومَخزَنُ الكائِناتِ وخِدمَةُ الإشعار**: فَرعُ `AuthChannelProvider.Nafath` (`AddNafathChannel`،
+// عَميلُه `ProviderHttp`) وفَرعُ `FileStorageChoice.S3` (`AddS3FileStorage`، عُدَّةُ SDK تَحمِلُ `ProviderCalls`) في `Program.cs`، و`WebPushService` في القالِب —
+// والثَلاثُ تُسَجَّلُ بِبانٍ أَطوَلَ تَختارُه الحاوِيَةُ لا بِمَصنَع، فَهذا الصَفُّ هُوَ ما يَرى أَنّها اختارَت الباني الَّذي يُسَجِّل (لا مَقعَدَ الاختِبار).
 
 public class MeterCompositionTests(ITestOutputHelper output)
 {
@@ -46,6 +53,9 @@ public class MeterCompositionTests(ITestOutputHelper output)
         builder.Services.AddTwilioSmsChannel(o => { o.AccountSid = "AC0"; o.AuthToken = "t"; o.FromNumber = "+15005550006"; });
         if (email == "brevo") builder.Services.AddBrevoEmailChannel(o => { o.ApiKey = "k"; o.From = "no-reply@wasayel.test"; });
         else builder.Services.AddSmtpEmailChannel(o => { o.Host = "127.0.0.1"; o.From = "no-reply@wasayel.test"; });
+        // ‏(‏2026-11-12، W13-6·١٣) فَرعا `AuthChannelProvider.Nafath` و`FileStorageChoice.S3` بِحَرفِ نِدائَيهِما، والإعدادُ وَهمِيّ.
+        builder.Services.AddNafathChannel(o => { o.ClientId = "c"; o.ClientSecret = "s"; });
+        builder.Services.AddS3FileStorage(o => { o.Endpoint = "http://127.0.0.1:1"; o.Bucket = "b"; o.AccessKeyId = "k"; o.SecretAccessKey = "s"; o.PublicBaseUrl = "https://files.wasayel.test"; });
         var services = builder.Services;
         return (builder.Build(), services);
     }
@@ -60,7 +70,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
     /// <summary>‏(‏2026-11-12، W13-6·١٢) <b>العُدَدُ الصادِرَةُ نَفسُها</b>: القَناتانِ مَحلولَتَين، وكُلُّ مُستَدعٍ مَعدودٍ في حُقولِ كُلٍّ مِنهُما (<c>ProviderCalls</c> أَو
     /// <c>ProviderHttp&lt;…&gt;</c>) — فَعُدَّةُ SDK تُرى كَعُدَّةِ HTTP. والعُدَّةُ تُسَجِّلُ إن كانَ لَها مُستَدعٍ واحِدٌ عَلى الأَقَلِّ وكُلُّ مُستَدعِياتِها تُسَجِّل.</summary>
     private static IReadOnlyList<(string Kit, int Invokers, bool Recording)> OutboundKits(IServiceProvider services)
-        => new[] { typeof(IOtpChannel), typeof(IEmailOtpChannel) }.Select(services.GetService).OfType<object>()
+        => new[] { typeof(IOtpChannel), typeof(IEmailOtpChannel), typeof(INafathChannel), typeof(IFileStorage),
+                   typeof(ACommerce.Templates.Customer.Marketplace.Services.WebPushService) }.Select(services.GetService).OfType<object>()
             .Select(kit =>
             {
                 var invokers = kit.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -76,6 +87,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
         Assert.Contains("builder.Services.AddTwilioSmsChannel(", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddBrevoEmailChannel(", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddSmtpEmailChannel(", program, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddNafathChannel(", program, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddS3FileStorage(", program, StringComparison.Ordinal);
         Assert.Contains("AddCustomerMarketplaceTemplate", program, StringComparison.Ordinal);
 
         foreach (var email in EmailBranches)
@@ -93,7 +106,11 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.True(descriptors.IsService(typeof(IOtpChannel)));
             Assert.True(descriptors.IsService(typeof(IEmailOtpChannel)));
             Assert.True(clients.Count > 0, "أَداةٌ عَمياء: صِفرُ عَميلٍ صادِرٍ في المُضيفِ المُرَكَّب.");
-            Assert.True(kits.Count == 2, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 2 ({email}).");
+            // ‏(W13-6·١٣) خَمسٌ لا اثنَتان: والنَفاذُ والمَخزَنُ وخِدمَةُ الإشعار.
+            Assert.True(kits.Count == 5, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 5 ({email}).");
+            Assert.Contains(clients, c => c.Kit == nameof(NafathChannel));
+            Assert.Equal(new[] { "NafathChannel", "S3FileStorage", "WebPushService" },
+                         kits.Select(k => k.Kit).Where(k => k is "NafathChannel" or "S3FileStorage" or "WebPushService"));
             Assert.IsType<UsageLedgerWriter>(recorder);
             Assert.True(clients.All(c => c.Recording), "عَميلٌ صادِرٌ لا يُسَجِّلُ في المُضيفِ المُرَكَّب: " + string.Join(", ", clients.Where(c => !c.Recording).Select(c => c.Kit)));
             Assert.True(kits.All(k => k.Recording), "عُدَّةٌ صادِرَةٌ بِلا مُستَدعٍ يُسَجِّلُ في المُضيفِ المُرَكَّب: " + string.Join(", ", kits.Where(k => !k.Recording).Select(k => k.Kit)));
@@ -115,7 +132,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
                              + string.Join(", ", kits.Select(k => $"{k.Kit}({k.Invokers})={k.Recording}")));
             Assert.NotEmpty(clients);
             Assert.All(clients, c => Assert.False(c.Recording));
-            Assert.Equal(2, kits.Count);
+            // ‏(W13-6·١٣) أَربَعٌ لا اثنَتان: والنَفاذُ والمَخزَن — وخِدمَةُ الإشعارِ يُسَجِّلُها القالِبُ فَلا تُرى بِدونِه.
+            Assert.Equal(4, kits.Count);
             Assert.All(kits, k => Assert.Equal((1, false), (k.Invokers, k.Recording)));
         }
     }

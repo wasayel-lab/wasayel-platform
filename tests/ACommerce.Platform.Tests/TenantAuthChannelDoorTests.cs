@@ -287,7 +287,7 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
     private sealed class FakeNafath : INafathChannel
     {
         public string ChannelName => "fake-nafath";
-        public Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+        public Task<NafathStartResult> StartAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string nationalId, CancellationToken ct)
             => Task.FromResult(new NafathStartResult("a", "00", 0));
         public Task<bool> IsApprovedAsync(string attemptId, CancellationToken ct)
             => Task.FromResult(false);

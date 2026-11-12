@@ -1,5 +1,6 @@
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,10 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <see cref="BootLogPrefix"/> <c>configured</c> أَو <c>ephemeral</c> — تَقرَؤُه بَوّابَةُ الإقلاعِ (الكُتلَة <c>webpush_keys</c> في
 /// <c>scripts/verify-production-boot.sh</c>) فَتُنَبِّهُ ولا تُفشِل. والتَوليدُ عِندَ الغِيابِ باقٍ كَما كان: الإشعاراتُ تَعمَلُ في
 /// التَطويرِ بِلا إعداد، والتَطبيقُ لا يَكتُبُ مِفتاحاً عَلى قُرصٍ ولا في القاعِدَة.</para>
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>كُلُّ إرسالٍ نِداءٌ مَعدود</b>: فِعلُ <c>_client</c> داخِلَ <see cref="ProviderCalls.InvokeAsync{T}"/>
+/// (الطَبَقَةُ ٨-ج تَقيسُه)، سَطرُ <see cref="OutboundUnits.PushSend"/> لِكُلِّ اشتِراكٍ قَبِلَته الخِدمَة، ومُعَرِّفُ طَلَبِه
+/// <c>{notificationId}:{Pseudonym(endpoint)}</c> — الإشعارُ المَكتوبُ قَبلَه وعُنوانُ الاشتِراكِ اسماً مُستَعاراً (التَصميم §6.2). و4xx (ومِنه 404/410 الَّذي يَمحو
+/// الاشتِراك) مَرفوضٌ عَلى النِيَّة، وما سِواه مِن رَميٍ مَجهول — والمَحوُ واللوغُ كَما كانا (<c>NafathS3PushRequestShapeCharacterizationTests</c>).</para>
 /// </summary>
 public sealed class WebPushService
 {
@@ -43,12 +48,24 @@ public sealed class WebPushService
     private readonly WebPushClient _client = new();
     private readonly VapidDetails _vapid;
     private readonly ILogger<WebPushService> _log;
+    private readonly ProviderCalls _calls;
     public string PublicKey => _vapid.PublicKey;
     public bool IsConfigured { get; }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٣ — التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: الباني القَديمُ بِمُستَدعٍ لا يُسَجِّل (<see cref="ProviderCalls.Unrecorded"/>) — فَتَبقى بُناةُ
+    /// الخِدمَةِ في الاختِباراتِ (‏15 مَوضِعاً في 12 مِلَفّاً) كَما كانَت. <b>ولا يُناديه كودُ الإنتاج</b>: تَسجيلُ القالِبِ يَحُلُّ الباني الأَطوَلَ بِمُستَدعي المُضيف،
+    /// و<c>MeterTestSeamTests</c> (G6c) يَحمَرُّ عَلى مُنادٍ لِهذا في <c>libs/</c> أَو <c>apps/</c>.</para>
+    /// </summary>
     public WebPushService(IConfiguration cfg, ILogger<WebPushService> log)
+        : this(cfg, log, ProviderCalls.Unrecorded)
+    {
+    }
+
+    public WebPushService(IConfiguration cfg, ILogger<WebPushService> log, ProviderCalls calls)
     {
         _log = log;
+        _calls = calls;
         var section = cfg.GetSection("WebPush");
         var subject = section["Subject"] ?? "mailto:admin@acommerce.local";
         var pub     = section["PublicKey"];
@@ -82,8 +99,11 @@ public sealed class WebPushService
     /// لا تَرمي إن كانَ هناك خَطَأ في إرسال فَردي (نُسَجِّله فَقَط). إن كانَ
     /// الاشتِراك مُنتَهي (HTTP 404/410) نَحذِفه مِن User doc.
     /// </summary>
+    /// <param name="notificationId">‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) <b>مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَ الإرسال</b> — مِفتاحُ العَمَلِيَّةِ المَعدودَة:
+    /// كُلُّ اشتِراكٍ نِداءٌ بِمُعَرِّفِ <c>{notificationId}:{Pseudonym(endpoint)}</c>، فَالإشعارُ نَفسُه لِلاشتِراكِ نَفسِه سَطرٌ واحِدٌ وإن أُعيد. وفي التَوقيعِ
+    /// لا في الجِسم (القاعِدَة ٦): نِسيانُه خَطَأُ بِناء. والمَتجَرُ <paramref name="tenantSlug"/> نَفسُه.</param>
     public async Task SendAsync(
-        IDocumentStore store, string tenantSlug, Guid userId,
+        IDocumentStore store, string tenantSlug, Guid userId, Guid notificationId,
         string title, string body, string? url = null, string? tag = null,
         CancellationToken ct = default)
     {
@@ -108,7 +128,20 @@ public sealed class WebPushService
             try
             {
                 var ps = new WebPush.PushSubscription(sub.Endpoint, sub.P256dh, sub.Auth);
-                await _client.SendNotificationAsync(ps, payload, _vapid, ct);
+                // ‏(‏2026-11-12، W13-6·١٣) النِداءُ المَعدود: رَفضُ الخِدمَةِ (4xx) يَعودُ قيمَةً فَيُعَدُّ مَرفوضاً ثُمَّ يُرمى بِحالِه (فَالمَحوُ واللوغُ أَدناه كَما كانا)،
+                // وما سِواه يَخرُجُ مِن المُستَدعي مَجهولاً.
+                var call = new ProviderCall(OutboundUnits.PushSend, ProviderNames.WebPush, tenantSlug,
+                    $"{notificationId:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, tenantSlug, sub.Endpoint)}");
+                var refused = await _calls.InvokeAsync<WebPushException?>(call, async t =>
+                {
+                    try
+                    {
+                        await _client.SendNotificationAsync(ps, payload, _vapid, t);
+                        return null;
+                    }
+                    catch (WebPushException ex) when ((int)ex.StatusCode is >= 400 and <= 499) { return ex; }
+                }, r => new ProviderAcceptance(r is null ? ProviderOutcome.Accepted : ProviderOutcome.Refused), ct);
+                if (refused is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(refused);
             }
             catch (WebPushException ex) when (
                 ex.StatusCode == System.Net.HttpStatusCode.Gone ||

@@ -125,6 +125,33 @@
       "feature": "email_otp",
       "reconcile": "intents",
       "source": "BrevoEmailChannel.SendNoticeAsync through ProviderHttp or SmtpEmailChannel.SendNoticeAsync through ProviderCalls.InvokeAsync — one entry when accepted; request id = the notification id written before the send (AccountContacts.NoticeLinkedAsync, DealNotices.MailStoreOwnerAsync); app = the store slug"
+    },
+    {
+      "code": "identity.nafath.start",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "nafath",
+      "reconcile": "intents",
+      "source": "NafathChannel.StartAsync through ProviderHttp — one entry when Nafath answers the MFA request 2xx; request id = a fresh call id (the attempt id is Nafath's answer, known only after); app = the store slug (AuthHandlers.RequestNafathHandler); the OAuth token and the status poll are helpers, not counted"
+    },
+    {
+      "code": "file.upload",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "bytes",
+      "feature": "files",
+      "reconcile": "intents",
+      "source": "S3FileStorage.UploadAsync — PutObjectAsync inside ProviderCalls.InvokeAsync; one entry per accepted put, quantity = the bytes put; request id = a fresh call id (a re-upload is a new upload); source = a pseudonym of the object key (the avatar key carries a user id); app = the store slug (POST /{slug}/me/save, POST /{slug}/listings/create); reads, existence checks and deletes are helpers, not counted"
+    },
+    {
+      "code": "push.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "notifications",
+      "reconcile": "intents",
+      "source": "WebPushService.SendAsync — SendNotificationAsync inside ProviderCalls.InvokeAsync, one entry per subscription the push service accepted; request id = {notificationId}:{pseudonym of the endpoint} (the notification written before the push); app = the store slug"
     }
   ]
 }
