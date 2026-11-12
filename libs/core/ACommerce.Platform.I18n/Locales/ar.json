@@ -2633,6 +2633,8 @@
   "meter.unit.member_join": "عُضوٌ يَنضَمُّ إلى مَتجَر",
   "meter.unit.review_create": "تَقييمٌ جَديد",
   "meter.unit.chat_message": "رِسالَةُ مُحادَثَة",
+  "meter.unit.otp_sms_send": "رَمزُ دُخولٍ بِرِسالَةٍ قَصيرَة",
+  "meter.unit.notice_sms_send": "إشعارٌ بِرِسالَةٍ قَصيرَة",
   "admin.home.meter_cta": "العَدُّ الداخِلِيّ — عَمَلِيّاتُ كُلِّ مَتجَر",
   "admin.nav.meter": "العَدّ",
   "admin.meter.topbar": "العَدُّ الداخِلِيّ",

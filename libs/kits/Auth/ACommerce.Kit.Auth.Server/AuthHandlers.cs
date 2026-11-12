@@ -376,9 +376,13 @@ public static class AuthHandlers
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, cmd.Phone, code, AuthKind.PhoneOtp);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) النِداءُ مَعدودٌ في تَوقيعِه: المَتجَرُ ومُعَرِّفُ المُحاوَلَةِ (يَسبِقُ الإرسال) — فَإعادَةُ الإرسالِ
+        // بِالمُحاوَلَةِ نَفسِها سَطرٌ واحِد، والقَناةُ تَسِمُه بِاسمِها.
+        var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
+            ACommerce.Platform.Shared.Metering.OutboundUnits.OtpSmsSend, tenantCtx.Slug, attemptId);
         // الحارِسُ في الأُنبوبِ لا في كُلِّ مُزَوِّد — راجِع `OtpSendGuard`.
         await OtpSendGuard.SendWithinAsync(
-            token => channel.SendOtpAsync(to, code, token), ct);
+            token => channel.SendOtpAsync(call, to, code, token), ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
             DisplayCode: channel.DevHintCode ?? "",

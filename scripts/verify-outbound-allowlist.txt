@@ -1,0 +1,21 @@
+# scripts/verify-outbound-allowlist.txt — مَن يَحِقُّ لَه أَن يُسَمّيَ عَميلاً صادِراً خامّاً في libs/ (الطَبَقَة ٨-ج، ADR-051 §١٨).
+#
+# الصيغَة: <المَسار>|<حَقلُ الـSDK أَو ->|<السَبَب>
+#   الحَقلُ إن سُمِّيَ: كُلُّ وُصولٍ إلى عُضوٍ فيه (عَدا Dispose) يَقَعُ داخِلَ وُسَطاءِ InvokeAsync( أَو HelperAsync( — وإلّا أَحمَر.
+#   و«-»: المِلَفُّ يُسَمّي النَوعَ ولَم يُرَحَّل بَعدُ إلى المُستَدعي المَعدود (بَندُه في الموجَة ١٣ مَذكورٌ في سَبَبِه).
+#
+# **القائِمَةُ تَتَقَلَّصُ ولا تَنمو** (القاعِدَة ٢): وُلِدَت بِالاثنَي عَشَرَ المَقيسَةِ عِندَ 0f788af، خَرَجَ مِنها TwilioSmsChannel.cs ودَخَلَها ProviderHttp.cs
+# في الكوميتِ نَفسِه (W13-6·١١) فَبَقِيَت 12؛ ثُمَّ 11 (Brevo)، 10 (نَفاذ)، 7 (ميسّر وPayPal وPaddle)، 5 (OTO والنَماذِج). وسَقفُها في
+# OutboundInvokerBoundaryTests. وسَطرٌ لِمِلَفٍّ لا يُسَمّي نَوعاً خامّاً (إعفاءٌ مَيِّت) أَحمَر.
+libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs|-|المُستَدعي المَعدودُ نَفسُه: المالِكُ الوَحيدُ لِـHttpClient في العُدَد، يَبنيه مِن IHttpClientFactory
+libs/kits/Auth/ACommerce.Kit.Auth.Providers.Brevo/BrevoEmailChannel.cs|-|بَريدُ HTTPS — يُرَحَّلُ إلى ProviderHttp في البَند ١٢
+libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|-|MailKit SmtpClient — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٢
+libs/kits/Auth/ACommerce.Kit.Auth.Providers.Nafath/NafathChannel.cs|-|نَفاذ — يُرَحَّلُ إلى ProviderHttp في البَند ١٣
+libs/kits/Files/ACommerce.Kit.Files.Providers.S3/S3FileStorage.cs|-|AWS IAmazonS3 — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٣
+libs/templates/ACommerce.Templates.Customer.Marketplace/Services/WebPushService.cs|-|WebPushClient — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٣
+libs/kits/Payments/ACommerce.Kit.Payments.Core/MoyasarClient.cs|-|ميسّر — يُرَحَّلُ إلى ProviderHttp في البَند ١٤
+libs/kits/Payments/ACommerce.Kit.Payments.Providers.PayPal/PayPalPaymentProvider.cs|-|PayPal — يُرَحَّلُ إلى ProviderHttp في البَند ١٤
+libs/kits/Payments/ACommerce.Kit.Payments.Providers.Paddle/PaddlePaymentProvider.cs|-|Paddle — يُرَحَّلُ إلى ProviderHttp في البَند ١٤
+libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs|-|OTO — يُرَحَّلُ إلى ProviderHttp في البَند ١٥
+libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentBackends.cs|-|خَلفِيّاتُ نَماذِجِ اللُغَةِ الثَلاث — تُرَحَّلُ إلى ProviderHttp في البَند ١٥
+libs/kits/Realtime/ACommerce.Kit.Realtime.Client/RealtimeClient.cs|-|مَركَزُنا نَحنُ (/realtime) لا مُزَوِّد، وصِفرُ مُستَهلِكٍ يَحقِنُه — دَينُ القاعِدَة ١ لا إعفاء مُزَوِّد

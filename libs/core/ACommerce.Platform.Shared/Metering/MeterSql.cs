@@ -53,6 +53,43 @@ public static class MeterSql
     /// <summary>نافِذَةُ وَحدَةٍ يَعرِفُها هذا الإقلاع — مَرَّةً واحِدَة؛ والصَفُّ القائِمُ لا يُمَسّ.</summary>
     public const string EnsureEpoch = "insert into meter.unit_epoch (unit) values (@u) on conflict (unit) do nothing";
 
+    // ═══ الصادِر (‏2026-11-12، W13-6·١١ — ADR-051 §١٨؛ التَصميم §6.2) ═══════════════════════════════════════════════════════════════
+    // نِيَّةٌ تُعلَنُ قَبلَ النِداءِ في مُعامَلَتِها، ونَتيجَتُها بَعدَه — والمَقبولُ سَطرٌ ونَتيجَةٌ في مُعامَلَةٍ واحِدَة. والمَجهولُ عَلى النِيَّةِ لا في السَطر:
+    // السَطرُ لا يَتَغَيَّر، فَلا يُكتَبُ ما قَد يَنقَلِبُ. كاتِبُها الوَحيدُ `UsageLedgerWriter` في القالِب.
+
+    /// <summary>نِيَّاتُ الصادِر — صَفٌّ لِكُلِّ نِداءٍ مَعدودٍ بِمُعَرِّفِ سَطرِه (<c>{unit}:{provider}:{requestId}</c>)، ونَتيجَتُه مُعجَمٌ مُغلَق: تولَدُ
+    /// <c>pending</c>، وتَنتَهي <c>accepted</c> أَو <c>refused</c> أَو <c>unknown</c>.</summary>
+    public const string OutboundIntent = "outbound_intent";
+
+    /// <summary>النِيَّةُ قَبلَ النِداء — مَرَّةً؛ والمُعَرِّفُ القائِمُ (إعادَةٌ بِالطَلَبِ نَفسِه) لا يُمَسّ، ولا تَرجِعُ نَتيجَتُه <c>pending</c>.</summary>
+    public const string IntentOpen =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome) values (@id, @unit, @provider, @app, @request, 'pending') "
+        + "on conflict (id) do nothing";
+
+    /// <summary>المَقبول — في مُعامَلَةِ سَطرِه: مِن المُعَلَّقِ أَو المَجهول (فَالمَجهولُ ثُمَّ المَقبولُ بِالمُعَرِّفِ نَفسِه سَطرٌ واحِد)، ونِيَّةٌ لَم تُكتَب
+    /// (تَعَذَّرَت قَبلَ النِداء) تُكتَبُ مَقبولَةً — فَلا سَطرَ بِلا نِيَّة.</summary>
+    public const string IntentAccept =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome, decided_at) "
+        + "values (@id, @unit, @provider, @app, @request, 'accepted', transaction_timestamp()) "
+        + "on conflict (id) do update set outcome = 'accepted', decided_at = transaction_timestamp() "
+        + "where meter.outbound_intent.outcome in ('pending', 'unknown')";
+
+    /// <summary>المَرفوضُ والمَجهول: مِن المُعَلَّقِ وَحدَه — فَلا يُكتَبُ فَوقَ مَقبولٍ ولا فَوقَ نَتيجَةٍ سَبَقَت؛ ونِيَّةٌ لَم تُكتَب تُكتَبُ بِنَتيجَتِها.</summary>
+    public const string IntentDecide =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome, decided_at) "
+        + "values (@id, @unit, @provider, @app, @request, @outcome, transaction_timestamp()) "
+        + "on conflict (id) do update set outcome = excluded.outcome, decided_at = transaction_timestamp() "
+        + "where meter.outbound_intent.outcome = 'pending'";
+
+    /// <summary><see cref="Insert"/> بِعَلاماتِ Npgsql المَوضِعِيَّة (<c>$1…$11</c>) — الجُملَةُ نَفسُها بِحَرفِها لِكاتِبٍ عَلى اتِّصالِه لا عَلى جَلسَة.</summary>
+    public static readonly string InsertPositional = Positional(Insert);
+
+    private static string Positional(string sql)
+    {
+        var n = 0;
+        return System.Text.RegularExpressions.Regex.Replace(sql, @"\?", _ => "$" + ++n);
+    }
+
     // ═══ المُجَمِّعُ المُستَقِلّ (‏2026-11-12، W13-6·٤ — ADR-051 §١٢؛ التَصميم §10) ═══════════════════════════════════════════════════
     // جَدوَلاهُ يُعلَنانِ في الميزَةِ نَفسِها فَيُنشِئُهُما إقلاعُ التَطبيق — **والمُجَمِّعُ لا يُنشِئُ شَيئاً**. وجُمَلُ كِتابَتِهِما الثَلاث
     // (`AggUpsertRange` و`AggCursorSet` و`AggRebuild`) لا يُناديها إلّا `apps/V1.Meter` — يَحرُسُه `MeterIndependenceTests` (G10).

@@ -292,4 +292,130 @@ fi
 
 echo "✅ Layer 8b green — $PROV_FILES تَعريفاً كُلُّها في الفِهرِس، وصِفرُ إحالَةِ عُدَّة."
 
+# ═══════════════════════════════════════════════════════════════════════
+#  الطَبَقَة ٨-ج — لا عَميلَ صادِراً خامّاً خارِجَ قائِمَتِه (‏2026-11-12، W13-6·١١ — ADR-051 §١٨)
+# ───────────────────────────────────────────────────────────────────────
+#  رَأسُ ٨-ب يُسَمّي الحَدَّ «لا SDK خارِجيّاً يُنادى مُباشَرَةً» ويَقيسُ البَياناتِ وَحدَها. وهذه تَقيسُ الكود — فَكُلُّ نِداءٍ يُغادِرُ العَمَلِيَّةَ
+#  يَمُرُّ بِالمُستَدعي المَعدودِ (`ProviderHttp`/`ProviderCalls`) أَو يَحمَرّ:
+#
+#    ١. النَوع: مِلَفٌّ في libs/ يُسَمّي كودُه (بِلا تَعليقاتٍ ولا نُصوص) نَوعَ عَميلٍ خامٍّ أَو `.CreateClient(` وهُوَ لَيسَ في القائِمَة.
+#    ٢. الفِعل: في مِلَفٍّ مُدرَجٍ بِحَقلِ SDK، وُصولٌ إلى عُضوٍ فيه (عَدا Dispose) خارِجَ وُسَطاءِ `InvokeAsync(` أَو `HelperAsync(` — بِعُمقِ الأَقواس.
+#    ٣. الإعفاءُ المَيِّت: سَطرٌ في القائِمَةِ لِمِلَفٍّ غائِبٍ أَو لا يُسَمّي نَوعاً خامّاً.
+#
+#  ولا رَقَمَ طَبَقَةٍ جَديد: داخِلَ ٨ فَلا تَتَغَيَّرُ أَسماءُ الطَبَقاتِ التِسع. وحارِسُ العَمى كَما فَوقَه: العَدَدُ يُطبَع، وصِفرُ مِلَفٍّ أَو صِفرُ رَمزٍ يُحمِر.
+#  وتَوأَمُها في الاختِبارات: `OutboundInvokerBoundaryTests` (المُصَنِّفُ نَفسُه بِـC#، والحَقنُ المَقيس).
+# ═══════════════════════════════════════════════════════════════════════
+
+OUT_ALLOW="$SCRIPT_DIR/verify-outbound-allowlist.txt"
+
+echo ""
+echo "═══════════════════════════════════════════════"
+echo "   Layer 8c — outbound clients only through the metered invoker"
+echo "═══════════════════════════════════════════════"
+echo ""
+
+if [ ! -f "$OUT_ALLOW" ]; then
+    echo "  ✗ BLIND CHECK: $(wsl_rel "$OUT_ALLOW") غائِب — لا قائِمَةَ يُقاسُ عَلَيها." >&2
+    exit 1
+fi
+
+cat > "$TMP/outbound.pl" <<'PERL'
+use strict; use warnings;
+use open ':std', ':encoding(UTF-8)';
+my %field;
+{ open(my $fh, '<:encoding(UTF-8)', shift @ARGV) or die "allow-list"; while (<$fh>) { chomp; next if /^\s*(#|$)/; my ($p, $f) = split /\|/; $field{$p} = $f if defined $f && $f ne '-'; } close $fh; }
+my $root = shift @ARGV;
+my $TYPES = qr/\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(/;
+sub strip {
+    my $s = shift;
+    $s =~ s{("""[\s\S]*?"""|\@"(?:""|[^"])*"|\$?"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])'|//[^\n]*|/\*[\s\S]*?\*/)}{ my $t = $1; ($t =~ m{^/[/*]}) ? " " : '""' }ge;
+    return $s;
+}
+sub inside_invoke {
+    my ($s, $at) = @_;
+    my $depth = 0;
+    for (my $i = $at - 1; $i >= 0; $i--) {
+        my $c = substr($s, $i, 1);
+        if ($c eq ')') { $depth++; }
+        elsif ($c eq '(') {
+            if ($depth > 0) { $depth--; next; }
+            return 1 if substr($s, 0, $i) =~ /\b(?:InvokeAsync|HelperAsync)\s*(?:<[^<>()]*>)?\s*\z/;
+        }
+    }
+    return 0;
+}
+for my $f (@ARGV) {
+    open(my $fh, '<:encoding(UTF-8)', $f) or next;
+    local $/; my $raw = <$fh>; close $fh;
+    my $s = strip($raw);
+    my $tokens = () = $s =~ /$TYPES/g;
+    my ($acc, $bad) = (0, 0);
+    (my $rel = $f) =~ s{^\Q$root\E/}{};
+    $rel =~ s{\\}{/}g;
+    if (my $fld = $field{$rel}) {
+        while ($s =~ /\b\Q$fld\E\s*\.\s*(\w+)/g) {
+            my ($m, $pos) = ($1, $-[0]);
+            next if $m eq 'Dispose';
+            $acc++;
+            $bad++ unless inside_invoke($s, $pos);
+        }
+    }
+    print "$rel|$tokens|$acc|$bad\n";
+}
+PERL
+
+find "$ROOT/libs" -name '*.cs' -not -path '*/bin/*' -not -path '*/obj/*' | sort > "$TMP/out-files.txt"
+OUT_SCANNED=$(wc -l < "$TMP/out-files.txt" | tr -d ' ')
+xargs -a "$TMP/out-files.txt" -d '\n' perl "$TMP/outbound.pl" "$OUT_ALLOW" "$ROOT" > "$TMP/out-raw.txt"
+grep -vE '^[[:space:]]*(#|$)' "$OUT_ALLOW" | cut -d'|' -f1 | sort > "$TMP/out-allowed.txt" || true
+
+OUT_NAMING=$(awk -F'|' '$2 > 0' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
+OUT_TOKENS=$(awk -F'|' '{ n += $2 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_ACCESSES=$(awk -F'|' '{ n += $3 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_ALLOWED=$(wc -l < "$TMP/out-allowed.txt" | tr -d ' ')
+OUT_VIOL=0
+
+echo "--- Measurement ---"
+echo "  .cs files scanned under libs/:   $OUT_SCANNED"
+echo "  files naming a raw client type:  $OUT_NAMING"
+echo "  raw client type tokens:          $OUT_TOKENS"
+echo "  SDK member accesses checked:     $OUT_ACCESSES"
+echo "  allow-listed files:              $OUT_ALLOWED"
+
+if [ "$OUT_SCANNED" -eq 0 ] || [ "$OUT_TOKENS" -eq 0 ]; then
+    echo "  ✗ BLIND CHECK: $OUT_SCANNED مِلَفّاً و$OUT_TOKENS رَمزاً — «صِفرُ مُخالَفَة» مِن أَداةٍ لَم تَرَ شَيئاً." >&2
+    exit 1
+fi
+
+while IFS='|' read -r file tokens acc bad; do
+    [ -z "$file" ] && continue
+    if [ "$tokens" -gt 0 ] && ! grep -qxF "$file" "$TMP/out-allowed.txt"; then
+        echo "  ✗ RAW CLIENT outside the allow-list: $file ($tokens رَمزاً) — مَرِّرهُ بِـProviderHttp أَو ProviderCalls."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    if [ "$bad" -gt 0 ]; then
+        echo "  ✗ SDK VERB outside InvokeAsync/HelperAsync: $file ($bad مِن $acc وُصولاً)"
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+done < "$TMP/out-raw.txt"
+
+while read -r file; do
+    [ -z "$file" ] && continue
+    row=$(grep -F "$file|" "$TMP/out-raw.txt" | head -1)
+    tokens=$(echo "$row" | cut -d'|' -f2)
+    if [ -z "$row" ] || [ "${tokens:-0}" -eq 0 ]; then
+        echo "  ✗ DEAD EXEMPTION: $file مُدرَجٌ ولا يُسَمّي نَوعاً خامّاً (أَو غائِب) — احذِف سَطرَه، فَالقائِمَةُ تَتَقَلَّص."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+done < "$TMP/out-allowed.txt"
+
+echo "  violations:                      $OUT_VIOL"
+echo ""
+if [ "$OUT_VIOL" -gt 0 ]; then
+    echo "Layer 8c red — نِداءٌ يُغادِرُ العَمَلِيَّةَ بِلا عَدّ، أَو قائِمَةٌ لا تَصِفُ المُستَودَع."
+    exit 1
+fi
+
+echo "✅ Layer 8c green — $OUT_NAMING مِلَفّاً يُسَمّي عَميلاً خامّاً كُلُّها في القائِمَة ($OUT_ALLOWED)، وصِفرُ مُخالَفَة."
+
 exit 0

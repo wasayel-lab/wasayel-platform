@@ -166,7 +166,10 @@ public class LiveMeterUnresolvedCeilingProofTests(ITestOutputHelper output)
                 .ThenBy(m => m.Key.Dimension, StringComparer.Ordinal).Select(m => $"{m.Key.Dimension} {m.Key.Unit} {m.Value}")));
 
             Assert.True(perUnit.Values.Sum(v => v.Rows) > 0, "أَداةٌ عَمياء: صِفرُ سَطرٍ في الدَفتَر — الرِحلَةُ لَم تَكتُب أَو كَتَبَت في غَيرِ القاعِدَةِ الجَديدَة.");
-            Assert.All(units, u => Assert.True(perUnit.GetValueOrDefault(u).Rows > 0 || u == "member_plan.subscribe",
+            // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) **ووَحَداتُ الصادِرِ خارِجَ هذه الرِحلَة**: قَناةُ رُموزِها هُنا مُلتَقِطٌ في العَمَلِيَّةِ (`CaptureSms`) لا يُغادِرُها، فَلا
+            // نِداءَ صادِراً يُعَدّ؛ وبابُ الرَمزِ عَبرَ Twilio المُسَجَّلِ يَمشيه `LiveProviderCallsProofTests` (P11) بِسَطرِه ونِيَّتِه. وكُلُّ وَحدَةِ حِفظٍ تَبقى مُلزَمَةً هُنا كَما كانَت.
+            var outbound = MeterUnitCatalog.Default.Units.Where(u => u.Boundary == MeterBoundaries.Outbound).Select(u => u.Code).ToHashSet(StringComparer.Ordinal);
+            Assert.All(units, u => Assert.True(perUnit.GetValueOrDefault(u).Rows > 0 || u == "member_plan.subscribe" || outbound.Contains(u),
                 $"أَداةٌ عَمياء: الرِحلَةُ لَم تَبلُغ {u}."));
             Assert.True(breaches.Count == 0, "سَقفُ _unresolved:\n" + string.Join("\n", breaches));
         }

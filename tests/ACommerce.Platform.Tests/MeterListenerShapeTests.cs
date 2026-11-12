@@ -95,6 +95,8 @@ public class MeterListenerShapeTests(ITestOutputHelper output)
         var objects = store.Storage.AllObjects().Select(o => o.Identifier.QualifiedName).Where(n => n.StartsWith("meter.", StringComparison.Ordinal)).ToList();
         output.WriteLine($"[G4] مُستَمِعو المَخزَنِ المُرَكَّب {listeners.Count}: {string.Join(", ", listeners)} · كائِناتُ meter {objects.Count}: {string.Join(", ", objects)}");
         Assert.Equal(new[] { nameof(UsageListener) }, listeners);
-        Assert.Equal(new[] { "meter.agg_cursor", "meter.agg_daily", "meter.generation", "meter.unit_epoch", "meter.usage_entry" }, objects.Order(StringComparer.Ordinal));
+        // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) ونِيَّاتُ الصادِرِ جَدوَلٌ سادِسٌ في الميزَةِ نَفسِها (لا كائِنَ جَديدٌ خارِجَ `meter`).
+        Assert.Equal(new[] { "meter.agg_cursor", "meter.agg_daily", "meter.generation", "meter.outbound_intent", "meter.unit_epoch", "meter.usage_entry" },
+                     objects.Order(StringComparer.Ordinal));
     }
 }

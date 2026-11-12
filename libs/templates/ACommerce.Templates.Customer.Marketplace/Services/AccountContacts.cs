@@ -1,5 +1,6 @@
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Auth.Server;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
@@ -68,7 +69,7 @@ public static class AccountContacts
                         value, emailChannel.DevHintCode, emailChannel.SendOtpAsync, ct), null);
             return phoneChannel is null ? new(null, Unavailable)
                 : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.AddPhone, ContactLink.Subject(userId, value),
-                    AuthHandlers.PhoneDestination(value), phoneChannel.DevHintCode, phoneChannel.SendOtpAsync, ct), null);
+                    AuthHandlers.PhoneDestination(value), phoneChannel.DevHintCode, PhoneCode(phoneChannel, slug), ct), null);
         }
         catch (Exception) { return new(null, SendFailed); }
     }
@@ -136,7 +137,7 @@ public static class AccountContacts
     {
         var title = Text(AddedTitleKey);
         var body = Text(AddedBodyKey, ContactLink.Mask(kind, value));
-        await RecordAsync(store, slug, user.Id, title, body, AddedAction, kind, now, ct);
+        var noticeId = await RecordAsync(store, slug, user.Id, title, body, AddedAction, kind, now, ct);
 
         var other = ContactLink.Other(kind);
         var to = ContactLink.Contact(user, other);
@@ -151,26 +152,36 @@ public static class AccountContacts
                 return ContactLink.Email;
             }
             if (phoneChannel is null) return "none";
-            await OtpSendGuard.SendWithinAsync(t => phoneChannel.SendNoticeAsync(AuthHandlers.PhoneDestination(to), body, t), ct);
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) الإشعارُ نِداءٌ مَعدود: مُعَرِّفُ طَلَبِه مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَه (التَصميم §6.2).
+            var call = ProviderCall.ForChannel(OutboundUnits.NoticeSmsSend, slug, noticeId.ToString("N"));
+            await OtpSendGuard.SendWithinAsync(t => phoneChannel.SendNoticeAsync(call, AuthHandlers.PhoneDestination(to), body, t), ct);
             return ContactLink.Phone;
         }
         catch (Exception) { return "failed"; }
     }
 
-    /// <summary>الإشعارُ في التَطبيقِ وسَطرُ التَدقيق — لِلرَبطِ والحَذف. والتَدقيقُ بِالمُعَرِّفِ والنَوعِ وَحدَهُما (لا اسمَ ولا وَسيلَة).</summary>
-    private static async Task RecordAsync(IDocumentStore store, string slug, Guid userId, string title, string body, string action, string kind,
+    /// <summary>الإشعارُ في التَطبيقِ وسَطرُ التَدقيق — لِلرَبطِ والحَذف. والتَدقيقُ بِالمُعَرِّفِ والنَوعِ وَحدَهُما (لا اسمَ ولا وَسيلَة).
+    /// ‏(‏2026-11-12، W13-6·١١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ويُعيدُ مُعَرِّفَ الإشعار: مُعَرِّفُ طَلَبِ رِسالَتِه الصادِرَة.</summary>
+    private static async Task<Guid> RecordAsync(IDocumentStore store, string slug, Guid userId, string title, string body, string action, string kind,
         DateTime now, CancellationToken ct)
     {
+        var id = Guid.NewGuid();
         await using (var s = store.LightweightSession(slug))
         {
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(), UserId = userId, Type = NoticeType, Title = title, Body = body, RelatedUrl = $"/{slug}/me", At = now,
+                Id = id, UserId = userId, Type = NoticeType, Title = title, Body = body, RelatedUrl = $"/{slug}/me", At = now,
             });
             await s.SaveChangesAsync(ct);
         }
         await new Audit.AuditWriter(store).WriteAsync(slug, userId, "", action, "User", userId.ToString(), note: kind, ct: ct);
+        return id;
     }
+
+    /// <summary>‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) رَمزُ الرَبطِ أَو الحَذفِ بِالجَوّالِ نِداءٌ مَعدود: مَتجَرُه، ومُعَرِّفُ طَلَبِه مُعَرِّفُ نِداءٍ جَديد
+    /// (المُحاوَلَةُ تولَدُ داخِلَ <see cref="AuthHandlers.RequestContactCodeAsync"/> فَلا يَراها المُنادي، وكُلُّ طَلَبِ رَمزٍ عَمَلِيَّتُه).</summary>
+    private static Func<string, string, CancellationToken, Task> PhoneCode(IOtpChannel channel, string slug)
+        => (to, code, ct) => channel.SendOtpAsync(ProviderCall.ForChannel(OutboundUnits.OtpSmsSend, slug, ProviderCall.FreshRequestId()), to, code, ct);
 
     // ─── حَذفُ الوَسيلَةِ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) ───────────────────────────────
 
@@ -197,7 +208,7 @@ public static class AccountContacts
                         emailChannel.DevHintCode, emailChannel.SendOtpAsync, ct), null);
             return phoneChannel is null ? new(null, Unavailable)
                 : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.RemoveContact, subject, AuthHandlers.PhoneDestination(to),
-                    phoneChannel.DevHintCode, phoneChannel.SendOtpAsync, ct), null);
+                    phoneChannel.DevHintCode, PhoneCode(phoneChannel, slug), ct), null);
         }
         catch (Exception) { return new(null, SendFailed); }
     }

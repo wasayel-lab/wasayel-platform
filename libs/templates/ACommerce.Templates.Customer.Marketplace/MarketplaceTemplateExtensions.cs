@@ -201,6 +201,9 @@ public static class MarketplaceTemplateExtensions
         // طَلَبَين (‏POST ثُمَّ تَحويلٌ ثُمَّ تَصيير)، والكاش تَحتَه
         // هُوَ نَفسُ `IMemoryCache` المُسَجَّل في المِنَصَّة.
         services.AddSingleton<Services.Api.ApiKeyRevealStore>();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) **كاتِبُ الصادِر** هُنا لا في العُدَد: يَملِكُ القاعِدَةَ وذاكِرَةَ المَتاجِر، والعُدَدُ تَعرِفُ
+        // مُستَدعيها المَعدودَ وَحدَه (`ProviderCalls` يَسأَلُ الحاوِيَةَ عَنه). مُضيفٌ بِلا القالِبِ يَبقى بِلا كاتِب — ويُحَمِّرُه G6d عَلى المُضيفِ المُرَكَّب.
+        services.AddSingleton<ACommerce.Platform.Shared.Metering.OutboundRecorder, Services.Metering.UsageLedgerWriter>();
 
         // ─── شَكلُ وَثيقَتَي الـAPI في Marten ────────────────────────────
         // <b>هُنا لا في `HostingExtensions`</b>: الاعتِمادُ يَمشي مِن

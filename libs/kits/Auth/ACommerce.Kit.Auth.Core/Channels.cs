@@ -1,3 +1,5 @@
+using ACommerce.Platform.Shared.Metering;
+
 namespace ACommerce.Kit.Auth;
 
 // ─── Provider Contracts ───────────────────────────────────────────────
@@ -23,6 +25,19 @@ public interface IOtpChannel
     /// <b>القَناةُ الحَيَّةُ نَفسُها تُمَدّ</b> (القاعِدَة ٨) — لا تُحيا <c>INotificationChannel</c> ذاتُ التَنفيذِ الصِفريّ. يَرمي عِندَ الفَشَلِ كَأَخيه.</para>
     /// </summary>
     Task SendNoticeAsync(string phone, string text, CancellationToken ct);
+
+    // ─── النِداءُ المَعدود (‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨؛ التَصميم §6.1) ─────────────────────────────────────────
+    // **`ProviderCall` أَوَّلَ الوُسَطاء**: المُنادي يَحمِلُ المَتجَرَ ومُعَرِّفَ الطَلَب، والقَناةُ تَسِمُه بِاسمِها وتُرسِلُه بِمُستَدعيها المَعدود — فَكُلُّ
+    // مُنادٍ في `libs/` و`apps/` يُنادي هذَينِ لا أَخَوَيهِما أَعلاه (يَحرُسُه `MeterTestSeamTests`، G6c).
+    // **والأَخَوانِ بِلا `ProviderCall` يَبقَيانِ لِسَبَبٍ مَقيس** (القاعِدَة ٣): قَنَواتُ الاختِبارِ المُزَيَّفَةُ تُنَفِّذُهُما — ومِنها مِلَفُّ تَوصيفٍ لا يُعَدَّلُ
+    // حَرفُه (`LiveMeterJourneyFootprintCharacterizationProofTests`) — ومُحاكي التَطوير (`MockSmsChannel`) الَّذي لا يُغادِرُ العَمَلِيَّة. فَلِهذَينِ
+    // تَنفيذٌ افتِراضِيٌّ يُمَرِّرُ إلَيهِما، ومَن يُغادِرُ العَمَلِيَّةَ (Twilio) يُنَفِّذُهُما هُوَ ويَعُدّ.
+
+    /// <summary>أَرسِل الرَمزَ بِنِداءٍ مَعدود — <paramref name="call"/> بِوَحدَةِ <see cref="OutboundUnits.OtpSmsSend"/>.</summary>
+    Task SendOtpAsync(ProviderCall call, string phone, string code, CancellationToken ct) => SendOtpAsync(phone, code, ct);
+
+    /// <summary>أَرسِل الإشعارَ بِنِداءٍ مَعدود — <paramref name="call"/> بِوَحدَةِ <see cref="OutboundUnits.NoticeSmsSend"/>.</summary>
+    Task SendNoticeAsync(ProviderCall call, string phone, string text, CancellationToken ct) => SendNoticeAsync(phone, text, ct);
 }
 
 /// <summary>قَناة OTP عَبر البَريد الإلِكترونيّ (SMTP، Mock، …). نَفس

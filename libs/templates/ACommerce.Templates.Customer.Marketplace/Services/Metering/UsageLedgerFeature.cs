@@ -71,5 +71,15 @@ public sealed class UsageLedgerFeature : FeatureSchemaBase
         daily.AddColumn("entries", "bigint").NotNull();
         daily.AddColumn("quantity", "bigint").NotNull();
         yield return daily;
+
+        // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨؛ التَصميم §4 و§6.2) نِيَّاتُ الصادِر: صَفٌّ قَبلَ كُلِّ نِداءٍ مَعدودٍ بِمُعَرِّفِ سَطرِه، ونَتيجَتُه بَعدَه.
+        // يَكتُبُها `UsageLedgerWriter` وَحدَه؛ والمَتجَرُ عَمودٌ لا جُزءٌ مِن المِفتاح (COR-4).
+        var intent = new Table(Name(MeterSql.OutboundIntent));
+        intent.AddColumn("id", "text").AsPrimaryKey();
+        foreach (var column in new[] { "unit", "provider", "app", "request_id", "outcome" })
+            intent.AddColumn(column, "text").NotNull();
+        intent.AddColumn("created_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
+        intent.AddColumn("decided_at", "timestamp with time zone");
+        yield return intent;
     }
 }

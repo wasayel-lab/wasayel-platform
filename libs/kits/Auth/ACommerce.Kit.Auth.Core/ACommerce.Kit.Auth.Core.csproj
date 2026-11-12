@@ -1,2 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) النِداءُ المَعدودُ في تَوقيعِ القَناة (`ProviderCall`): أَوَّلُ مَرجِعٍ لِهذه العُدَّة، وShared بِلا مَرجِعٍ
+       يَعودُ إلَيها فَلا حَلْقَة. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+  </ItemGroup>
 </Project>

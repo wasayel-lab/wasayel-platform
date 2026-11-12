@@ -66,8 +66,9 @@ public class ContactNoticeTests(ITestOutputHelper output)
     [Fact]
     public void Each_channel_sends_a_notice_and_each_live_provider_implements_it()
     {
-        var sms = typeof(IOtpChannel).GetMethods().Where(m => m.Name.StartsWith("Send", StringComparison.Ordinal)).Select(m => m.Name).Order().ToList();
-        var email = typeof(IEmailOtpChannel).GetMethods().Where(m => m.Name.StartsWith("Send", StringComparison.Ordinal)).Select(m => m.Name).Order().ToList();
+        // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) والقَناةُ بِأَخَوَينِ لِكُلِّ فِعل: بِـ`ProviderCall` (النِداءُ المَعدود) وبِدونِه (مَقعَدُ الاختِبار، G6c) — فَالأَسماءُ بِلا تَكرار.
+        var sms = typeof(IOtpChannel).GetMethods().Where(m => m.Name.StartsWith("Send", StringComparison.Ordinal)).Select(m => m.Name).Distinct().Order().ToList();
+        var email = typeof(IEmailOtpChannel).GetMethods().Where(m => m.Name.StartsWith("Send", StringComparison.Ordinal)).Select(m => m.Name).Distinct().Order().ToList();
         // مَصدَرُ المُزَوِّدينَ الخَمسَة لا أَنواعُهم: مَشروعُ الاختِبارِ لا يُرَجِّعُ Twilio ولا MockSms، والتَطبيقُ يُرَجِّعُ الخَمسَة.
         var providers = new[] { "Twilio/TwilioSmsChannel.cs", "MockSms/MockSmsChannel.cs", "Smtp/SmtpEmailChannel.cs", "Brevo/BrevoEmailChannel.cs", "MockEmail/MockEmailChannel.cs" };
         var declaring = providers.Count(f => System.Text.RegularExpressions.Regex.IsMatch(

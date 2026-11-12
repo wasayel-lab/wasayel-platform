@@ -50,9 +50,18 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     internal static readonly IReadOnlyDictionary<string, string> PinnedUnlisted = new Dictionary<string, string>(StringComparer.Ordinal);
 
     // ‏(2026-10-29، د20): وعَميلا SMTP وS3 — المَحمولُ حَقلاً (`IAmazonS3 _client;`) والمُنشَأُ مَحَلِّيّاً (`using var c = new SmtpClient {`).
+    // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) **وعُدَّةٌ تَحمِلُ المُستَدعيَ المَعدودَ عَميلٌ صادِر** (`ProviderHttp<TwilioSmsChannel> _http;`): كانَت Twilio تَحمِلُ `HttpClient`،
+    // وصارَت تَحمِلُ `ProviderHttp<…>` — فَبِلا هذا الشَكلِ يَعمى الجَردُ عَنها ويَحمَرُّ سَطرُها «لَم يَعُد في الكود» وهِيَ تُرسِلُ كَما كانَت.
     private static readonly Regex HoldsClient = new(
-        @"(?<!\w)(?:(?:HttpClient|WebPushClient|SmtpClient|IAmazonS3|AmazonS3Client)\s+[_A-Za-z]\w*\s*[;=,)]|new\s+(?:SmtpClient|AmazonS3Client)\s*[({])",
+        @"(?<!\w)(?:(?:HttpClient|WebPushClient|SmtpClient|IAmazonS3|AmazonS3Client|ProviderHttp<\w+>)\s+[_A-Za-z]\w*\s*[;=,)]|new\s+(?:SmtpClient|AmazonS3Client)\s*[({])",
         RegexOptions.Compiled);
+
+    /// <summary>‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) <b>المُستَدعي المَعدودُ لَيسَ جِهَة</b>: <c>ProviderHttp</c> يَحمِلُ <c>HttpClient</c> لِيَملِكَه عَن العُدَد، ولا يُرسِلُ
+    /// إلّا ما تُرسِلُه عُدَّةٌ تَحمِلُه — وكُلُّ عُدَّةٍ تُسَمّى بِاسمِها أَعلاه. فَيُستَثنى بِاسمِه، ويَحمَرُّ الاستِثناءُ إن لَم يَعُد يَحمِلُ عَميلاً (صَفُّ الجَرد).</summary>
+    internal static readonly IReadOnlyDictionary<string, string> Invokers = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["ProviderHttp"] = "libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs",
+    };
     private static readonly Regex TypeDecl = new(@"\b(?:class|record)\s+(\w+)", RegexOptions.Compiled);
 
     /// <summary>كُلُّ صِنفٍ في <c>libs</c> يَحمِلُ عَميلَ شَبَكَةٍ صادِراً — بِاسمِه ومِلَفِّه.</summary>
@@ -82,7 +91,10 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     [Fact]
     public void Every_outbound_client_is_either_named_in_the_privacy_share_list_or_pinned_as_unlisted()
     {
-        var clients = OutboundClients();
+        var all = OutboundClients();
+        // ‏(‏2026-11-12، W13-6·١١) المُستَدعي المَعدودُ يُستَثنى بِاسمِه ومِلَفِّه — والاستِثناءُ حَيٌّ: يَراه الجَردُ يَحمِلُ عَميلاً.
+        foreach (var (type, file) in Invokers) Assert.Contains((type, file), all);
+        var clients = all.Where(c => !(Invokers.TryGetValue(c.Type, out var f) && f == c.File.Replace('\\', '/'))).ToList();
         var names = clients.Select(c => c.Type).ToHashSet(StringComparer.Ordinal);
         output.WriteLine($"عُمَلاءُ صادِرونَ في libs: {clients.Count} · مُسَمَّونَ في السِياسَة: {names.Count(Listed.ContainsKey)}" +
                          $" · مُثَبَّتونَ غَيرَ مُسَمَّين: {names.Count(PinnedUnlisted.ContainsKey)} ({string.Join(", ", PinnedUnlisted.Keys)})");
@@ -119,6 +131,9 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
     [InlineData("// SmtpClient.Timeout وَحدَه لا يَكفي", false)]
     [InlineData("services.AddHttpClient<MoyasarClient>(c => c.Timeout = t);", false)]
     [InlineData("_http.SendAsync(req)", false)]
+    // ‏(‏2026-11-12، W13-6·١١) العُدَّةُ الَّتي تَحمِلُ المُستَدعيَ المَعدود — مَقيسٌ: Twilio بَعدَ تَبديلِها كانَت تَخرُجُ مِن الجَردِ بِلا هذا الشَكل.
+    [InlineData("private readonly ProviderHttp<TwilioSmsChannel> _http;", true)]
+    [InlineData("services.AddProviderHttp<TwilioSmsChannel>();", false)]
     public void The_client_pattern_sees_what_it_counts(string code, bool holds)
         => Assert.Equal(holds, HoldsClient.IsMatch(code));
 

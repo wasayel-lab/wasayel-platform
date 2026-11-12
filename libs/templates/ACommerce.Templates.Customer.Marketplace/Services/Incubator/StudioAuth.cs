@@ -70,10 +70,15 @@ public sealed class StudioAuth
     /// (‏<c>null</c> مَع مُزَوِّدٍ فِعليّ). يَرمي <see cref="InvalidOperationException"/>
     /// عِندَ تَجاوُزِ الحَدّ، ويُمَرِّرُ ما تَرميه القَناةُ عِندَ فَشَلِ
     /// الإرسال.</summary>
+    /// <remarks>‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) <b>النِداءُ مَعدود</b>: المَتجَرُ المَنَصَّةُ نَفسُها (<c>_platform</c>)، ومُعَرِّفُ الطَلَبِ مُعَرِّفُ نِداءٍ
+    /// جَديد — فَكُلُّ إرسالٍ عَمَلِيَّتُه (التَصميم §6.2).</remarks>
     public static async Task<string?> SendPhoneCodeAsync(
         IOtpChannel channel, string phone, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Phone, phone, channel.DevHintCode,
-            (code, token) => channel.SendOtpAsync(AuthHandlers.PhoneDestination(phone), code, token), ct);
+            (code, token) => channel.SendOtpAsync(
+                ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.OtpSmsSend,
+                    ACommerce.Platform.Shared.Metering.MeterSentinels.Platform, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId()),
+                AuthHandlers.PhoneDestination(phone), code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
     public static async Task<string?> SendEmailCodeAsync(
