@@ -507,4 +507,80 @@ public class LiveMeterAggregatorProofTests(ITestOutputHelper output)
         Assert.DoesNotContain(run.Lines, x => PullLine.IsMatch(x));
         Assert.Equal("0", await TextAsync(l.Cs, "select count(*) from pg_namespace where nspname = 'meter'"));
     }
+
+    // ─── (٨) جَلسَةُ القُفلِ تَموتُ والمُجَمِّعُ حَيّ ⇐ لا يُضاعِفُ الثاني ولا إعادَةُ 40001، والأَوَّلُ يَخرُجُ 3 (مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2) ──────────
+    //
+    // ‏صَفُّ (٤) يُثبِتُ أَنّ القُفلَ يُسَلسِلُ مُجَمِّعَين — لا أَنّ الصَفحَةَ صادِقَةٌ حينَ يَسقُطُ القُفلُ تَحتَ مُجَمِّعٍ حَيّ. و`--interval` يَترُكُ اتِّصالَ القُفلِ
+    // خامِلاً طولَ التَشغيل، فَمُهلَةُ خُمولٍ أَو وَسيطُ اتِّصالاتٍ أَو انقِطاعٌ يَقتُلُه ولا يَدري المُجَمِّع. فَهُنا يُقتَلُ بِعَينِه (`pg_terminate_backend`) وصَفحَةُ أ
+    // واقِفَةٌ عِندَ المَجاميع، ويَأخُذُ ب القُفلَ ويَقِفُ عِندَها، ثُمَّ يَتَسابَقان: الخاسِرُ يُرَدُّ بِـ40001 ويُعادُ مَرَّة — **فَإن أَعادَ بِمُؤَشِّرٍ في ذاكِرَتِه
+    // ضاعَفَ المَدى** (مَقيسٌ عِندَ 1e1e8ff: «سُطورُ الدَفتَر 10 · مَجاميع 20»). والمَطلوب: المَجاميعُ = الدَفتَر، وكُلُّ سَطرٍ سُحِبَ مَرَّةً عَبرَ المُجَمِّعَين،
+    // وأ يَخرُجُ 3 بِسَطرِ «lock lost» قَبلَ صَفحَتِه التالِيَة.
+
+    [Fact]
+    public async Task When_the_lock_session_dies_under_a_live_runner_a_second_runner_and_the_40001_retry_still_total_the_ledger()
+    {
+        if (!Enabled) return;
+        await using var l = await Ledger.CreateAsync(output);
+        await EntriesAsync(l.Cs, "w13-a", 3);
+        var a = Start(l.Cs, "--interval", "1");
+        Run? b = null;
+        try
+        {
+            async Task UntilAsync(Func<Task<bool>> done, string what)
+            {
+                var ok = false;
+                for (var i = 0; i < 600 && !(ok = await done()); i++) await Task.Delay(100);
+                Assert.True(ok, $"{what} — لَم يَحدُث في 60 ثانِيَة:\n" + string.Join("\n", a.Snapshot().Concat(b?.Snapshot() ?? [])));
+            }
+            Task<string> WaitingOnAggAsync() => TextAsync(l.Cs,
+                "select count(*) from pg_stat_activity where datname = current_database() and application_name = @app "
+                + "and wait_event_type = 'Lock' and query like '%agg_daily%'", ("app", MeterSql.AggregatorApplicationName));
+
+            // ‏أ يَسحَبُ الثَلاثَةَ الأُولى (فَيَقومُ صَفُّ المُؤَشِّر)، ثُمَّ جَدوَلُ المَجاميعِ مَقفولٌ وعَشَرَةُ سُطورٍ تُودَع — فَتَقِفُ صَفحَةُ أ التالِيَةُ عِندَه.
+            await UntilAsync(() => Task.FromResult(a.Snapshot().Any(x => PullLine.IsMatch(x) && x.Contains("pulled 3 (deal.create 3)", StringComparison.Ordinal))),
+                "سَحبُ أ الأَوَّل");
+            await using var holder = await OpenAsync(l.Cs);
+            await using var hold = await holder.BeginTransactionAsync();
+            await ExecAsync(holder, hold, "lock table meter.agg_daily in share mode");
+            await EntriesAsync(l.Cs, "w13-a", 10);
+            await UntilAsync(async () => await WaitingOnAggAsync() == "1", "صَفحَةُ أ تَقِفُ عِندَ المَجاميع");
+
+            // ‏جَلسَةُ قُفلِ أ تُقتَل — وأ حَيٌّ في صَفحَتِه.
+            var lockPid = await TextAsync(l.Cs, MeterSql.AggregatorLockHolder);
+            Assert.Equal("True", await TextAsync(l.Cs, "select pg_terminate_backend(@p)", ("p", int.Parse(lockPid, CultureInfo.InvariantCulture))));
+            output.WriteLine($"[G8·lost] قُتِلَت جَلسَةُ قُفلِ أ (pid {lockPid}) وصَفحَتُه واقِفَةٌ عِندَ agg_daily");
+
+            // ‏ب يَأخُذُ القُفلَ ويَقِفُ عِندَ المَجاميعِ نَفسِها — فَالصَفحَتانِ رَأَتا المُؤَشِّرَ نَفسَه قَبلَ أَن تُودِعَ أَيٌّ مِنهُما.
+            b = Start(l.Cs, "--once", "--wait", "30");
+            await UntilAsync(async () => await WaitingOnAggAsync() == "2", "صَفحَةُ ب تَقِفُ عِندَ المَجاميعِ أَيضاً");
+            await hold.RollbackAsync();
+
+            var rb = await FinishAsync(b, "G8·lost B");
+            b = null;
+            var ledger = await TextAsync(l.Cs, "select count(*) from meter.usage_entry");
+            var entries = await TextAsync(l.Cs, "select coalesce(sum(entries), 0) from meter.agg_daily");
+            output.WriteLine($"[G8·lost] سُطورُ الدَفتَر {ledger} · مَجاميعُ agg_daily {entries}");
+            Assert.Equal(0, rb.Code);
+            Assert.Equal(("13", "13"), (ledger, entries));
+            Assert.Equal(await LedgerTotalsAsync(l.Cs), await AggAsync(l.Cs));
+
+            var ra = await FinishAsync(a, "G8·lost A");
+            Assert.Equal(3, ra.Code);
+            Assert.Contains(ra.Lines, x => x.StartsWith($"[meter-agg] lock lost — the lock session (pid {lockPid}) ", StringComparison.Ordinal));
+
+            // ‏كُلُّ سَطرٍ سُحِبَ مَرَّةً عَبرَ المُجَمِّعَين، والخاسِرُ رُدَّ مَرَّةً وقَرَأَ المُؤَشِّرَ المَخزونَ لا الَّذي في ذاكِرَتِه.
+            var all = ra.Lines.Concat(rb.Lines).ToArray();
+            var pulled = all.Where(x => PullLine.IsMatch(x)).Sum(x => long.Parse(PullLine.Match(x).Groups["ops"].Value, CultureInfo.InvariantCulture));
+            var retried = all.Count(x => x == "[meter-agg] page retried once after 40001 (serialization failure)");
+            var moved = all.Count(x => x.StartsWith("[meter-agg] cursor moved outside this runner — ", StringComparison.Ordinal));
+            output.WriteLine($"[G8·lost] سُحِبَ عَبرَ المُجَمِّعَين {pulled} · رَدُّ 40001 {retried} · مُؤَشِّرٌ قُرِئَ مِن المَخزون {moved} · أ خَرَجَ {ra.Code} · ب خَرَجَ {rb.Code}");
+            Assert.Equal((13L, 1, 1), (pulled, retried, moved));
+        }
+        finally
+        {
+            foreach (var run in new[] { a, b })
+                if (run is not null)
+                    try { if (!run.Process.HasExited) run.Process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+        }
+    }
 }

@@ -19,6 +19,11 @@ namespace ACommerce.V1.Meter;
 // خَرَجَ 2 مُسَمِّياً مُمسِكَه. **ولا يَتَقَدَّمُ فَوقَ تَراجُع** (R4): مُؤَشِّرٌ أَو سَطرٌ في الجيلِ الجاري فَوقَ العُنقودِ ⇐ الخُروج 4 حَتّى يُقلِعَ التَطبيقُ
 // فَيَفتَحَ جيلاً. **ولا يُنشِئُ شَيئاً**: دَفتَرٌ غائِبٌ ⇐ «لا شَيءَ يُسحَب» والخُروج 0.
 //
+// **وكُلُّ صَفحَةٍ تَتَحَقَّقُ مِن نَفسِها لا مِن القُفل** (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2): تَقرَأُ المُؤَشِّرَ المَخزونَ في لَقطَتِها وتَسحَبُ
+// مِنه — لا مِمّا في الذاكِرَة — وتُودِعُ تَقَدُّمَه بِشَرطِ ما قَرَأَت (`MeterSql.AggCursorSet`)، فَإعادَةُ 40001 تَقرَؤُه مِن جَديد؛ وتُسأَلُ جَلسَةُ القُفلِ قَبلَ
+// كُلِّ صَفحَة، وجَلسَةٌ مَيِّتَةٌ ⇐ الخُروج 3. كانَ القُفلُ وَحدَه يَضمَنُ «مَرَّةً واحِدَة»، و`--interval` يَترُكُ اتِّصالَه خامِلاً: قُتِلَ فَأَخَذَ ثانٍ القُفلَ،
+// وأُعيدَت صَفحَةُ الأَوَّلِ بَعدَ 40001 بِمُؤَشِّرٍ قَديمٍ فَجُمِعَ المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 23»).
+//
 // **ولا سِعرَ هُنا** (القاعِدَة ١٦): يَعُدُّ السُطورَ ويَجمَعُ الكَمِّيّات، ويَطبَعُ التَشغيلَ والحُضورَ مُنفَصِلَين — والتَأكيدُ لِكُلِّ وَحدَةٍ لا لِلمَجموع.
 
 /// <summary>رُموزُ الخُروج — كُلُّ ما سِوى الصِفرِ يُحمِرُّ سكربتاً يُناديه، فَلا يَخضَرُّ صامِتاً (COR-8، COR-9، R4).</summary>
@@ -29,7 +34,8 @@ public static class ExitCodes
     public const int Failure = 1;
     /// <summary><c>--once</c>: مُعامَلَةٌ عَلى العُنقودِ تُمسِكُ الأُفُقَ أَكثَرَ مِن المُهلَة وسُطورٌ أُودِعَت قَبلَ البَدءِ تَنتَظِرُ تَحتَه.</summary>
     public const int HorizonHeld = 2;
-    /// <summary><c>--once</c>: مُجَمِّعٌ آخَرُ يُمسِكُ القُفلَ أَكثَرَ مِن المُهلَة.</summary>
+    /// <summary><c>--once</c>: مُجَمِّعٌ آخَرُ يُمسِكُ القُفلَ أَكثَرَ مِن المُهلَة — أَو (في الوَضعَين) جَلسَةُ قُفلِ هذا المُجَمِّعِ ماتَت تَحتَه، فَلا يَسحَبُ
+    /// صَفحَةً بَعدَها (‏2026-11-12، M6A-CNT-2): ما أُودِعَ قَبلَها قائِم، ومُجَمِّعٌ آخَرُ قَد يُمسِكُ القُفلَ الآن.</summary>
     public const int LockHeld = 3;
     /// <summary>المُؤَشِّرُ أَو سَطرٌ في الجيلِ الجاري فَوقَ العُنقود: قاعِدَةٌ استُعيدَت ولَم يُقلِعِ التَطبيقُ عَلَيها.</summary>
     public const int XidRegression = 4;
@@ -108,6 +114,8 @@ public sealed class Aggregator
     private readonly AggregatorOptions _options;
     private readonly TextWriter _out;
     private readonly MeterUnitCatalog _catalog = MeterUnitCatalog.Default;
+    private NpgsqlConnection? _lock;
+    private int _lockPid;
 
     public Aggregator(string connectionString, AggregatorOptions options, TextWriter output)
     {
@@ -135,9 +143,37 @@ public sealed class Aggregator
         // ‏اتِّصالُ القُفلِ يَبقى مَفتوحاً إلى آخِرِ التَشغيل — جَلسَتُه هِيَ القُفل.
         await using var lockConnection = await OpenAsync(ct);
         if (!await LockAsync(lockConnection, ct)) return ExitCodes.LockHeld;
+        (_lock, _lockPid) = (lockConnection, lockConnection.ProcessID);
 
-        return _options.Once ? await OnceAsync(work, ct) : await IntervalAsync(work, ct);
+        try
+        {
+            return _options.Once ? await OnceAsync(work, ct) : await IntervalAsync(work, ct);
+        }
+        catch (LockLostException e)
+        {
+            Line($"lock lost — the lock session (pid {_lockPid}) {e.Message} — another aggregator may hold the lock now; "
+                 + "pages committed before stand, nothing more is pulled");
+            return ExitCodes.LockHeld;
+        }
     }
+
+    /// <summary><b>جَلسَةُ القُفلِ تُسأَلُ قَبلَ كُلِّ صَفحَة</b> (M6A-CNT-2): نِداءٌ عَلى جَلسَةٍ مَيِّتَةٍ يَرمي، وجَلسَةٌ حَيَّةٌ بِلا قُفلٍ تُجيبُ <c>false</c>.
+    /// والصَفحَةُ لا تَتَّكِئُ عَلى هذا وَحدَه — جَلسَةٌ تَموتُ بَعدَ السُؤالِ يَحرُسُها شَرطُ المُؤَشِّرِ في الصَفحَةِ نَفسِها.</summary>
+    private async Task EnsureLockAsync(CancellationToken ct)
+    {
+        bool held;
+        try { held = await ScalarAsync(_lock!, MeterSql.AggregatorLockHeldHere, ct) is true; }
+        catch (Exception e) when (e is NpgsqlException or InvalidOperationException or IOException)
+        {
+            throw new LockLostException($"ended ({e.GetType().Name}: {e.Message.Split('\n')[0]})");
+        }
+        if (!held) throw new LockLostException("no longer holds the lock");
+    }
+
+    private sealed class LockLostException(string message) : Exception(message);
+
+    /// <summary>المُؤَشِّرُ المَخزونُ تَغَيَّرَ بَينَ قِراءَةِ الصَفحَةِ وإيداعِها — فَتَتَراجَعُ ولا تَكتُبُ شَيئاً.</summary>
+    private sealed class CursorMovedException(string message) : Exception(message);
 
     // ─── القُفل ───────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -238,32 +274,39 @@ public sealed class Aggregator
     {
         while (true)
         {
+            await EnsureLockAsync(ct);
             var page = await PageAsync(conn, cursor, ct);
             tally.Generation = page.Generation;
             tally.Horizon = page.Horizon;
+            // ‏المُؤَشِّرُ ما قَرَأَتهُ الصَفحَةُ وأَودَعَته — لا ما في الذاكِرَة (صَفحَةٌ خالِيَةٌ تُعيدُ المَخزونَ كَما قَرَأَته).
+            cursor = page.Last;
             if (page.Units.Count == 0) return cursor;
             tally.Pages++;
             foreach (var unit in page.Units) tally.Add(unit);
-            cursor = page.Last;
             if (page.Units.Count < _options.Page) return cursor;
         }
     }
 
-    private sealed record Page(int Generation, string Horizon, Cursor Last, IReadOnlyList<string> Units);
+    private sealed record Page(int Generation, string Horizon, Cursor From, Cursor Last, IReadOnlyList<string> Units);
 
     private async Task<Page> PageAsync(NpgsqlConnection conn, Cursor cursor, CancellationToken ct)
     {
         for (var attempt = 1; ; attempt++)
         {
+            // ‏الإعادَةُ تَقرَأُ المُؤَشِّرَ المَخزونَ مِن جَديدٍ في لَقطَتِها (PageOnceAsync) — فَلا تَجمَعُ مَدىً أَودَعَه غَيرُها.
             try { return await PageOnceAsync(conn, cursor, ct); }
             catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.SerializationFailure && attempt == 1)
             {
                 Line("page retried once after 40001 (serialization failure)");
             }
+            catch (CursorMovedException e) when (attempt == 1)
+            {
+                Line($"page retried once — {e.Message}");
+            }
         }
     }
 
-    private async Task<Page> PageOnceAsync(NpgsqlConnection conn, Cursor cursor, CancellationToken ct)
+    private async Task<Page> PageOnceAsync(NpgsqlConnection conn, Cursor expected, CancellationToken ct)
     {
         await using var tx = await conn.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
 
@@ -276,6 +319,11 @@ public sealed class Aggregator
             generation = r.GetInt32(0);
             horizon = r.GetString(1);
         }
+
+        // ‏المُؤَشِّرُ المَخزونُ في لَقطَةِ هذه الصَفحَة — مِنه تَسحَب، وبِشَرطِه تُودِع. وما في الذاكِرَةِ لِلمُقارَنَةِ وَحدَها.
+        var cursor = await ReadCursorAsync(conn, ct, tx);
+        if (cursor != expected)
+            Line($"cursor moved outside this runner — memory {expected} · stored {cursor}; paging from the stored cursor");
 
         var keys = new List<(Cursor Key, string Unit)>();
         await using (var cmd = new NpgsqlCommand(MeterSql.PageKeys, conn, tx))
@@ -291,7 +339,7 @@ public sealed class Aggregator
         if (keys.Count == 0)
         {
             await tx.CommitAsync(ct);
-            return new Page(generation, horizon, cursor, []);
+            return new Page(generation, horizon, cursor, cursor, []);
         }
 
         var last = keys[^1].Key;
@@ -303,11 +351,13 @@ public sealed class Aggregator
         }
         await using (var move = new NpgsqlCommand(MeterSql.AggCursorSet, conn, tx))
         {
+            Bind(move, cursor);
             BindLast(move, last);
-            await move.ExecuteNonQueryAsync(ct);
+            if (await move.ExecuteNonQueryAsync(ct) != 1)
+                throw new CursorMovedException($"the stored cursor is no longer {cursor} — this page rolled back without writing");
         }
         await tx.CommitAsync(ct);
-        return new Page(generation, horizon, last, keys.Select(k => k.Unit).ToList());
+        return new Page(generation, horizon, cursor, last, keys.Select(k => k.Unit).ToList());
     }
 
     private async Task<bool> PendingAsync(NpgsqlConnection conn, Cursor cursor, string t0, CancellationToken ct)
@@ -382,9 +432,9 @@ public sealed class Aggregator
         cmd.Parameters.AddWithValue("li", c.Id);
     }
 
-    private async Task<Cursor> ReadCursorAsync(NpgsqlConnection conn, CancellationToken ct)
+    private async Task<Cursor> ReadCursorAsync(NpgsqlConnection conn, CancellationToken ct, NpgsqlTransaction? tx = null)
     {
-        await using var cmd = new NpgsqlCommand(MeterSql.AggCursorRead, conn);
+        await using var cmd = new NpgsqlCommand(MeterSql.AggCursorRead, conn, tx);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         return await r.ReadAsync(ct) ? new Cursor(r.GetInt32(0), r.GetString(1), r.GetString(2)) : Cursor.Start;
     }

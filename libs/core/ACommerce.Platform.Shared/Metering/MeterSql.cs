@@ -89,6 +89,16 @@ public static class MeterSql
         + "and ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('" + AggregatorLockName + "')::bigint "
         + "and l.pid <> pg_backend_pid() limit 1";
 
+    /// <summary>
+    /// <para><b>هل ما زالَت هذه الجَلسَةُ تُمسِكُ القُفل؟</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2) — يُسأَلُ عَلى اتِّصالِ القُفلِ قَبلَ كُلِّ صَفحَة.
+    /// <c>--interval</c> يَترُكُ ذلك الاتِّصالَ خامِلاً طولَ التَشغيل، فَمُهلَةُ خُمولٍ أَو وَسيطُ اتِّصالاتٍ أَو انقِطاعٌ يُنهي جَلسَتَه فَيَسقُطُ القُفلُ ولا يَدري
+    /// المُجَمِّع: نِداءٌ عَلى جَلسَةٍ مَيِّتَةٍ يَرمي، وجَلسَةٌ حَيَّةٌ بِلا قُفلٍ تُجيبُ <c>false</c> — وكِلاهُما «القُفلُ ضاع».</para>
+    /// </summary>
+    public const string AggregatorLockHeldHere =
+        "select exists(select 1 from pg_locks l where l.locktype = 'advisory' and l.granted and l.objsubid = 1 and l.pid = pg_backend_pid() "
+        + "and l.database = (select d.oid from pg_database d where d.datname = current_database()) "
+        + "and ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('" + AggregatorLockName + "')::bigint)";
+
     /// <summary>المُؤَشِّرُ المَحفوظ، أَو لا صَفّ (لَم يَعمَلِ المُجَمِّعُ بَعد).</summary>
     public const string AggCursorRead = "select after_gen, after_xid::text, after_id from meter.agg_cursor where singleton";
 
@@ -133,11 +143,18 @@ public static class MeterSql
         + "on conflict (day, app, entrepreneur, role, feature, provider, unit) do update "
         + "set entries = meter.agg_daily.entries + excluded.entries, quantity = meter.agg_daily.quantity + excluded.quantity";
 
-    /// <summary>المُؤَشِّرُ يَتَقَدَّمُ إلى آخِرِ مَفاتيحِ الصَفحَة — في مُعامَلَةِ مَجاميعِها نَفسِها: يُودَعانِ مَعاً أَو لا يُودَعُ أَحَدُهُما.</summary>
+    /// <summary>
+    /// <para>المُؤَشِّرُ يَتَقَدَّمُ إلى آخِرِ مَفاتيحِ الصَفحَة — في مُعامَلَةِ مَجاميعِها نَفسِها: يُودَعانِ مَعاً أَو لا يُودَعُ أَحَدُهُما.</para>
+    /// <para><b>وبِشَرطِ ما قَرَأَتهُ الصَفحَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2): يَتَقَدَّمُ مِن <c>(@g, @x, @i)</c> — المُؤَشِّرِ المَخزونِ الَّذي
+    /// قَرَأَتهُ الصَفحَةُ في لَقطَتِها (<see cref="AggCursorRead"/>) — أَو يُولَدُ إن لَم يَكُن صَفّ؛ وإلّا لا يَكتُبُ شَيئاً (صِفرُ صُفوفٍ ⇐ تَتَراجَعُ الصَفحَة).
+    /// كانَ يَكتُبُ بِلا شَرطٍ فَوقَ ما كَتَبَه غَيرُه، فَصَفحَةٌ أُعيدَت بَعدَ 40001 بِمُؤَشِّرٍ في الذاكِرَةِ جَمَعَت المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 ·
+    /// مَجاميعُ agg_daily 23»). وفي <c>REPEATABLE READ</c> صَفٌّ حَدَّثَه غَيرُها بَعدَ لَقطَتِها يَرُدُّه 40001 قَبلَ الشَرط — والشَرطُ لِما سِوى ذلك.</para>
+    /// </summary>
     public const string AggCursorSet =
         "insert into meter.agg_cursor (singleton, after_gen, after_xid, after_id, pulled_at) values (true, @lg, @lx::xid8, @li, transaction_timestamp()) "
         + "on conflict (singleton) do update set after_gen = excluded.after_gen, after_xid = excluded.after_xid, "
-        + "after_id = excluded.after_id, pulled_at = excluded.pulled_at";
+        + "after_id = excluded.after_id, pulled_at = excluded.pulled_at "
+        + "where (meter.agg_cursor.after_gen, meter.agg_cursor.after_xid, meter.agg_cursor.after_id) = (@g, @x::xid8, @i)";
 
     /// <summary><b>إعادَةُ البِناء</b> = تَفريغُ المَجاميعِ وحَذفُ المُؤَشِّرِ في مُعامَلَةٍ واحِدَةٍ تَحتَ القُفل؛ ثُمَّ اللَحاقُ كَأَوَّلِ تَشغيل.</summary>
     public const string AggRebuild = "truncate meter.agg_daily; delete from meter.agg_cursor";
