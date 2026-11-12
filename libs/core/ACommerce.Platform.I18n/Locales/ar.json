@@ -2632,6 +2632,7 @@
   "meter.unit.studio_account_create": "حِسابُ رائِدِ أَعمالٍ جَديد",
   "meter.unit.member_join": "عُضوٌ يَنضَمُّ إلى مَتجَر",
   "meter.unit.review_create": "تَقييمٌ جَديد",
+  "meter.unit.chat_message": "رِسالَةُ مُحادَثَة",
   "admin.home.meter_cta": "العَدُّ الداخِلِيّ — عَمَلِيّاتُ كُلِّ مَتجَر",
   "admin.nav.meter": "العَدّ",
   "admin.meter.topbar": "العَدُّ الداخِلِيّ",

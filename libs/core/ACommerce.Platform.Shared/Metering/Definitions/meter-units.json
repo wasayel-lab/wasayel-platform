@@ -80,6 +80,15 @@
       "feature": "reviews",
       "reconcile": "review_ids",
       "source": "ReviewsService.SubmitAsync — Review in Inserts; app = the session tenant; source = the review id"
+    },
+    {
+      "code": "chat.message",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "chat",
+      "reconcile": "message_ids",
+      "source": "POST /{slug}/chats/{conversationId}/send (MarketplaceTemplateExtensions) and the sample conversations of the test and appearance seeders — Message in Inserts (one message = one send); app = the session tenant; source = the message id"
     }
   ]
 }

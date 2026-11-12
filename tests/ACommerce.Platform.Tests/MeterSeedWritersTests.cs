@@ -234,7 +234,7 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new Deal", "Deal", Fate.SeedBirth),
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new Deal", "Deal", Fate.SeedBirth),
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new Conversation", "Conversation", Fate.NotCounted),
-        new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new Message", "Message", Fate.NotCounted),                    // البَند ٩ يَقلِبُه
+        new(Seed + "AppearanceBaselineSeeder.cs", "s.Insert(new Message", "Message", Fate.SeedBirth),                   // قُلِبَ في البَند ٩ خَلفَ حارِسِ المُحادَثَة
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new TenantRoleDefinition", "TenantRoleDefinition", Fate.NotCounted),
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Events.StartStream<Listing>(events.ToArray", "ListingCreated", Fate.SeedBirth), // مُعلَن: قائِمَةٌ أَوَّلُها ListingCreated
         new(Seed + "AppearanceBaselineSeeder.cs", "s.Store(new User", "User", Fate.SeedBirth),
@@ -261,7 +261,7 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         new(Seed + "TestDataSeeder.cs", "s.Events.StartStream<Listing>(ev", "ListingCreated", Fate.SeedBirth),
         new(Seed + "TestDataSeeder.cs", "s.Store(new Notification", "Notification", Fate.NotCounted),
         new(Seed + "TestDataSeeder.cs", "s.Store(new Conversation", "Conversation", Fate.NotCounted),
-        new(Seed + "TestDataSeeder.cs", "s.Store(new Message", "Message", Fate.NotCounted),                               // البَند ٩ يَقلِبُه
+        new(Seed + "TestDataSeeder.cs", "s.Insert(new Message", "Message", Fate.SeedBirth),                              // قُلِبَ في البَند ٩ — مُعَرِّفٌ جَديد
         new(Seed + "TestDataSeeder.cs", "s.Store(new Deal", "Deal", Fate.SeedBirth),
         new(Seed + "TestDataSeeder.cs", "s.Store(new Deal", "Deal", Fate.SeedBirth),
         // ─── StudioOwnershipSeeder: يَتامى قُرِئوا في جَلسَةِ قِراءَةٍ ويُكتَبونَ في أُخرى — Tenant لا يُعَدُّ إلّا مِن Inserts، فَهذا تَحديثٌ لا وِلادَة ───
@@ -391,6 +391,28 @@ public class MeterSeedWritersTests(ITestOutputHelper output)
         output.WriteLine($"[G18·حَقن] الأَصل {real.Count} خَرقاً · المَحقون {breaches.Count}: {string.Join(" | ", breaches)}");
         Assert.Empty(real);
         Assert.Contains(breaches, b => b.StartsWith("store_of_insert_counted:" + file + ":", StringComparison.Ordinal) && b.EndsWith(":Tenant", StringComparison.Ordinal));
+        Assert.Equal(["stale_pin", "store_of_insert_counted", "unpinned_write"], breaches.Select(CodeOf).Distinct().Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·٩) <b>والحَقنُ نَفسُه لِلرِسالَة</b>: نُسخَةٌ مِن <c>TestDataSeeder.cs</c> تَعودُ فيها رَسائِلُ المُحادَثَةِ المَبذورَةِ إلى
+    /// <c>Store(new Message</c> — وِلادَةٌ لا يَراها المُستَمِعُ بَعدَ أَن صارَت <c>Message</c> تُعَدُّ مِن <c>Inserts</c> — تَحمَرُّ بِالرُموزِ الثَلاثَةِ نَفسِها.</summary>
+    [Fact]
+    public void An_injected_Store_of_a_new_Message_in_a_copy_of_the_test_data_seeder_is_red()
+    {
+        const string file = Seed + "TestDataSeeder.cs";
+        var text = File.ReadAllText(Path.Combine(Root, file));
+        const string born = "s.Insert(new Message";
+        var at = text.IndexOf(born, StringComparison.Ordinal);
+        Assert.True(at > 0, "وِلادَةُ الرِسالَةِ في بَذرِ الاختِبارِ غائِبَة — الأَداةُ عَمياء.");
+        var injected = text[..at] + "s.Store(new Message" + text[(at + born.Length)..];
+        var counted = CountedTypes(MeterClassification.All);
+        var pins = Pinned.Where(p => p.File == file).ToList();
+        var real = Breaches(Scan(file, Group.Seeder, text), pins, counted, [], [file]);
+        var breaches = Breaches(Scan(file, Group.Seeder, injected), pins, counted, [], [file]);
+        output.WriteLine($"[G18·حَقن·رِسالَة] الأَصل {real.Count} خَرقاً · المَحقون {breaches.Count}: {string.Join(" | ", breaches)}");
+        Assert.Empty(real);
+        Assert.Equal(MeterCreation.Insert, counted["Message"]);
+        Assert.Contains(breaches, b => b.StartsWith("store_of_insert_counted:" + file + ":", StringComparison.Ordinal) && b.EndsWith(":Message", StringComparison.Ordinal));
         Assert.Equal(["stale_pin", "store_of_insert_counted", "unpinned_write"], breaches.Select(CodeOf).Distinct().Order(StringComparer.Ordinal));
     }
 

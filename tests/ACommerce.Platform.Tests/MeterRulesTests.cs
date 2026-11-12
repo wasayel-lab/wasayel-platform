@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.Reviews;
@@ -326,6 +327,33 @@ public class MeterRulesTests(ITestOutputHelper output)
         Assert.Empty(ClassifyIn("store-a", null, new PendingDocument(review, Created: false)));
     }
 
+    /// <summary>‏(‏2026-11-12، W13-6·٩) <b><c>chat.message</c></b>: رِسالَةٌ في <c>Inserts</c> سَطرٌ واحِدٌ في مَتجَرِ الجَلسَةِ بِمُعَرِّفِ الرِسالَة — لا المُرسِلُ ولا
+    /// المُحادَثَة؛ ورائِدُ الأَعمالِ والدَورُ مِن حامِلِ المَتجَرِ نَفسِه، وحامِلُ البَذرِ لِكُلِّ مَتجَر؛ ورِسالَتانِ بِالجِسمِ نَفسِه سَطران؛ والمُستَأجِرُ الافتِراضِيُّ
+    /// <c>_unresolved</c>. وتَحديثُها (<c>Store</c> رِسالَةٍ قائِمَة) صِفر.</summary>
+    [Fact]
+    public void A_message_in_inserts_is_one_chat_message_entry_in_the_session_store_keyed_by_the_message_id()
+    {
+        var conversation = Guid.NewGuid();
+        var message = new Message { Id = Guid.NewGuid(), ConversationId = conversation, SenderId = Guid.NewGuid(), Body = "مَرحَباً" };
+        var owner = Guid.NewGuid().ToString("D");
+        var e = Assert.Single(ClassifyIn("store-a", new MeterScopeView("store-a", owner, "customer", false), new PendingDocument(message, Created: true)));
+        output.WriteLine($"[rules·وَثيقَة] {e}");
+        Assert.Equal((MeterRules.ChatMessage, 1L, "store-a", $"chat.message:store-a:{message.Id:D}", owner, "customer", "chat", MeterSentinels.None,
+                      MeterRules.MessageSource, message.Id.ToString("D")),
+                     (e.Unit, e.Quantity, e.App, e.Id, e.Entrepreneur, e.Role, e.Feature, e.Provider, e.SourceType, e.SourceId));
+        foreach (var other in new[] { message.SenderId, conversation })
+            Assert.DoesNotContain(other.ToString("D"), e.Id + " " + e.SourceId, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(ClassifyIn("store-a", null, new PendingDocument(message, Created: false)));
+
+        var again = new Message { Id = Guid.NewGuid(), ConversationId = conversation, SenderId = message.SenderId, Body = message.Body };
+        Assert.Equal(2, ClassifyIn("store-a", null, new PendingDocument(message, true), new PendingDocument(again, true)).Select(x => x.Id).Distinct().Count());
+        var seeded = Assert.Single(ClassifyIn("ejar", SeedScope, new PendingDocument(message, true)));
+        Assert.Equal(("ejar", MeterSentinels.Seed, MeterSentinels.Seed), (seeded.App, seeded.Entrepreneur, seeded.Role));
+        var otherStore = Assert.Single(ClassifyIn("store-b", new MeterScopeView("store-a", owner, "customer", false), new PendingDocument(message, true)));
+        Assert.Equal(("store-b", MeterSentinels.Unresolved, MeterSentinels.Unresolved), (otherStore.App, otherStore.Entrepreneur, otherStore.Role));
+        Assert.Equal(MeterSentinels.Unresolved, Assert.Single(ClassifyIn("*DEFAULT*", null, new PendingDocument(message, true))).App);
+    }
+
     /// <summary><b>حامِلٌ بِلا مَتجَرٍ يَحمِلُ دَوراً</b> (فاعِلُ المَنَصَّة، <c>FillPlatformRole</c>): دَورُه لِكُلِّ مَتجَرٍ يَكتُبُ فيه طَلَبُه، ورائِدُ أَعمالِه لا يُؤخَذُ
     /// أَبَداً — فَوِلادَةُ المَتجَرِ عَلى <c>/admin/tenants/create</c> دَورُها <c>_platform_admin</c> ومالِكُها مِن الوَثيقَة. وحامِلٌ بِمَتجَرٍ يَبقى لِمَتجَرِه، والحامِلُ
     /// الفارِغُ لا يُعطي شَيئاً.</summary>
@@ -356,6 +384,8 @@ public class MeterRulesTests(ITestOutputHelper output)
             (typeof(StudioUser), MeterRules.StudioAccountCreate, MeterCreation.OptimisticStore, "studio.build", MeterReconcilers.StudioUserIds),
             (typeof(User), MeterRules.MemberJoin, MeterCreation.OptimisticStore, "auth", MeterReconcilers.UserIds),
             (typeof(Review), MeterRules.ReviewCreate, MeterCreation.Insert, "reviews", MeterReconcilers.ReviewIds),
+            // ‏(‏2026-11-12، W13-6·٩) وَحدَةُ الرِسالَة.
+            (typeof(Message), MeterRules.ChatMessage, MeterCreation.Insert, "chat", MeterReconcilers.MessageIds),
         ];
         foreach (var (type, code, creation, feature, reconcile) in units)
         {

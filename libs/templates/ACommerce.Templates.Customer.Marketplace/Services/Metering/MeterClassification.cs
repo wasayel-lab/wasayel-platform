@@ -78,6 +78,9 @@ public sealed record MeterClassificationRow(
 /// <para>‏(‏2026-11-12، W13-6·٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ المَعدودُ تِسعَة</b>: قُلِبَت صُفوفُ الوَثائِقِ الأَربَعِ في كوميتِ قاعِدَتِها —
 /// <c>Tenant</c> ← <c>store.create</c> و<c>Review</c> ← <c>review.create</c> بِشَكلِ <see cref="MeterCreation.Insert"/>، و<c>StudioUser</c> ←
 /// <c>studio.account.create</c> و<c>User</c> ← <c>member.join</c> بِشَكلِ <see cref="MeterCreation.OptimisticStore"/> — ودَخَلَت وَحَداتُها المُعجَم.</para>
+/// <para>‏(‏2026-11-12، W13-6·٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ المَعدودُ عَشَرَة</b>: قُلِبَ صَفُّ <c>Message</c> ← <c>chat.message</c> بِشَكلِ
+/// <see cref="MeterCreation.Insert"/> في كوميتِ قاعِدَتِه، بَعدَ أَن صارَ <c>Store</c> الرِسالَةِ <c>Insert</c> في بابِ الإرسالِ وفي البَذرَين؛ ولا وَحدَةَ آتِيَةَ بَعدَه
+/// في صُفوفِ الوَثائِقِ غَيرِ المَعدودَة.</para>
 /// </summary>
 public static class MeterClassification
 {
@@ -97,7 +100,6 @@ public static class MeterClassification
     private const MeterTypeKind Doc = MeterTypeKind.Document;
     private const MeterTypeKind Ev = MeterTypeKind.Event;
 
-    private const string Item9 = "يُعَدُّ مِن البَند ٩ (chat.message)، بَعدَ تَوصيفِ الإرسالِ وتَحويلِ Store إلى Insert في نُقطَتِه وفي البَذر.";
     private const string Presence = "جانِبُ التِقنِيَة: يُعَدُّ حُضوراً لِكُلِّ مَتجَرٍ في كُلِّ يَوم (البَند ١٩) لا عَمَلِيَّةً عِندَ الحِفظ — فَالحِفظُ لا يَعُدُّه.";
     private const string Transition = "انتِقالٌ لا وِلادَة: الانتِقالاتُ وَحدَةٌ لاحِقَةٌ بِمُعَرِّفِ مَوضِعِها في المَجرى (التَصميم §5.6 و§15).";
     private const string Billing = "سِجِلُّ فَوتَرَةِ المَنَصَّةِ عِندَ مُزَوِّدِها: التَحصيلُ خارِجَ الموجَة (قَرارُ المالِك «لا تهتم كثيرا بطريقة التحصيل»)، ونِداءاتُ المُزَوِّدِ نَفسُها تُعَدُّ عَلى حَدِّ الصادِر (البَند ١٤).";
@@ -135,6 +137,10 @@ public static class MeterClassification
         Counted(typeof(Review), "review.create", MeterCreation.Insert,
             "MeterRules.Classify: Review في Inserts — المَوضِعُ ReviewsService.SubmitAsync (ReviewsService.cs:43)؛ والمَتجَرُ مُستَأجِرُ الجَلسَة، " +
             "والمَصدَرُ مُعَرِّفُ التَقييم لا الكاتِبُ ولا المُقَيَّم. والرَدُّ والإخفاءُ (Store) لا يُعَدّان."),
+        Counted(typeof(Message), "chat.message", MeterCreation.Insert,
+            "MeterRules.Classify: Message في Inserts — المَوضِعُ POST /{slug}/chats/{conversationId}/send (MTE:2279، Store ← Insert في البَند ٩) " +
+            "وبَذرا الاختِبارِ (TestDataSeeder.cs:198 بِمُعَرِّفٍ جَديد) والمَظهَرِ (AppearanceBaselineSeeder.cs:563 خَلفَ حارِسِ مُحادَثَتِه)؛ والمَتجَرُ مُستَأجِرُ الجَلسَة، " +
+            "والمَصدَرُ مُعَرِّفُ الرِسالَة لا المُرسِلُ ولا المُحادَثَة. وStore رِسالَةٍ قائِمَةٍ لا يُعَدّ."),
 
         // ═══ المُشتَقّ — لَقَطاتُ الإسقاطِ المُباشِر ══════════════════════
         Derived(typeof(Listing), "listing.create",
@@ -145,9 +151,6 @@ public static class MeterClassification
             "لَقطَةُ مَجرى التَذكِرَةِ يَكتُبُها الإسقاطُ المُباشِر؛ والوَحدَةُ حَدَثُ TicketCreated."),
         Derived(typeof(Subscription), "member_plan.subscribe",
             "لَقطَةُ مَجرى اشتِراكِ العُضوِ يَكتُبُها الإسقاطُ المُباشِر؛ والوَحدَةُ حَدَثُ SubscriptionCreated."),
-
-        // ═══ وَثائِقُ تُعَدُّ في بُنودٍ تالِيَة ══════════════════════════════
-        NotCounted(typeof(Message), Doc, Item9, "chat.message"),
 
         // ═══ وَثائِقُ لا تُعَدّ — بِسَبَبِها ═════════════════════════════════
         NotCounted(typeof(Conversation), Doc, "وِعاءُ الرَسائِل: الرِسالَةُ هِيَ الوَحدَة (البَند ٩)، والمُحادَثَةُ تُحَدَّثُ مَعَ كُلِّ رِسالَةٍ فَعَدُّها يُكَرِّرُها."),

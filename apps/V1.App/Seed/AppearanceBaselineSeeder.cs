@@ -558,8 +558,9 @@ public static class AppearanceBaselineSeeder
                     LastMessage = msgs[^1].Body, LastAt = EjarFixturesAt.AddMinutes(30),
                     OwnerUnread = 0, PartnerUnread = 2, CreatedAt = EjarFixturesAt,
                 });
+                // ‏(‏2026-11-12، W13-6·٩) `Insert` خَلفَ حارِسِ المُحادَثَة: الرِسائِلُ تُكتَبُ مَعَها في الحِفظِ نَفسِه، فَغِيابُها غِيابُهُنّ — وتُعَدُّ `chat.message` تَحتَ `_seed`.
                 for (var i = 0; i < msgs.Length; i++)
-                    s.Store(new Message
+                    s.Insert(new Message
                     {
                         Id = EjarChatMessageIds[i], ConversationId = EjarChatId,
                         SenderId = msgs[i].Sender.Id, Body = msgs[i].Body, SentAt = EjarFixturesAt.AddMinutes(msgs[i].Minutes),

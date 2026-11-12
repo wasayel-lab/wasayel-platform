@@ -26,6 +26,9 @@ namespace ACommerce.Platform.Tests;
 // والأَعضاءُ وحِسابُ المُشرِف. والدَورُ `_seed` لِكُلِّ سَطر؛ أَمّا رائِدُ الأَعمالِ فَمِن الوَثيقَةِ حَيثُ تَحمِلُه (التَصميم §5.4، الخُطوَةُ ١): `store.create` مالِكُ
 // المَتجَرِ لَحظَةَ وِلادَتِه — والمَبذورَةُ تولَدُ بِلا مالِكٍ ثُمَّ يُسنَدُ (`_unowned`) — و`studio.account.create` الحِسابُ نَفسُه. فَـ«الدَفتَرُ كُلُّه `_seed`»
 // صارَ بِالدَور، ورائِدُ الأَعمالِ `_seed` لِما سِوى الوَحدَتَين.
+//
+// ‏(‏2026-11-12، W13-6·٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ورَسائِلُ المُحادَثاتِ المَبذورَة** (`TestDataSeeder` و`AppearanceBaselineSeeder`، قُلِبَت `Insert`):
+// سُطورُ `chat.message` تَحتَ `_seed` بِعَدَدِ `mt_doc_message` — فَالبَذرُ وَحدَه يَكتُبُ الرَسائِلَ في قاعِدَةٍ جَديدَة.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveMeterBootProofTests(ITestOutputHelper output)
@@ -171,8 +174,11 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
                             await One("select count(*) from platform.mt_doc_studiouser"));
             var members = (await One("select count(*) from meter.usage_entry where unit = 'member.join' and entrepreneur = '_seed'"),
                            await One("select count(*) from platform.mt_doc_user"));
+            // ‏(W13-6·٩) رَسائِلُ البَذر: سَطرٌ لِكُلِّ رِسالَةٍ تَحتَ `_seed`، ومَصدَرُه مُعَرِّفُها.
+            var messages = (await One("select count(*) from meter.usage_entry e join platform.mt_doc_message m on m.id::text = e.source_id where e.unit = 'chat.message' and e.entrepreneur = '_seed' and e.app = m.tenant_id"),
+                            await One("select count(*) from platform.mt_doc_message"));
             output.WriteLine($"[boot] وَحَداتُ الوَثائِق (سُطور/وَثائِق): store.create {stores.Item1}/{stores.Item2} · studio.account.create {accounts.Item1}/{accounts.Item2} · "
-                + $"member.join {members.Item1}/{members.Item2} · رائِدُ أَعمالٍ غَيرُ _seed في «{notSeedOwner}»");
+                + $"member.join {members.Item1}/{members.Item2} · chat.message {messages.Item1}/{messages.Item2} · رائِدُ أَعمالٍ غَيرُ _seed في «{notSeedOwner}»");
             output.WriteLine($"[boot] وَحَداتُ الأَحداث (أَحداثُ الوِلادَة/سُطورُ _seed): {string.Join(" · ", births.Select(b => $"{b.Unit} {b.Events}/{b.Seeds}"))} · "
                 + $"الدَفتَرُ {allRows} · مِنها _seed {allSeed}");
 
@@ -185,6 +191,8 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
             Assert.Equal(stores.Item2, stores.Item1);
             Assert.Equal(accounts.Item2, accounts.Item1);
             Assert.Equal(members.Item2, members.Item1);
+            Assert.Equal(messages.Item2, messages.Item1);
+            Assert.True(long.Parse(messages.Item1) >= 1, $"أَداةٌ عَمياء: {messages.Item1} رِسالَةً مَبذورَة.");
             Assert.True(long.Parse(stores.Item1) >= 3 && long.Parse(accounts.Item1) >= 1 && long.Parse(members.Item1) >= 1,
                         $"أَداةٌ عَمياء: مَتاجِر {stores.Item1} · حِسابات {accounts.Item1} · أَعضاء {members.Item1}.");
             Assert.Equal("ejar|_seed|_seed|1", seededRow);

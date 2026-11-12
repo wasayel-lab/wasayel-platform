@@ -193,8 +193,9 @@ public static class TestDataSeeder
             (a.Id,     "مُمتاز، مَتى يُمكِن المُعايَنَة؟",                95),
             (bUser.Id, "تَمام، نَتَّفِق على المَوعِد غَداً.",            90),
         };
+        // ‏(‏2026-11-12، W13-6·٩) `Insert` بِمُعَرِّفٍ جَديدٍ لِكُلِّ رِسالَة (وخَلفَ حارِسِ المُحادَثَةِ أَعلاه) — فَتُعَدُّ `chat.message` تَحتَ `_seed`.
         foreach (var (sender, body, mins) in msgs)
-            s.Store(new Message
+            s.Insert(new Message
             {
                 Id = Guid.NewGuid(), ConversationId = convId,
                 SenderId = sender, Body = body, SentAt = now.AddMinutes(-mins)

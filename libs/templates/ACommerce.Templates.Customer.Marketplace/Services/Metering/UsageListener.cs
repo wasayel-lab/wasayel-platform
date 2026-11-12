@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
 using ACommerce.Kit.Reviews;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
@@ -26,6 +27,8 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 /// و<c>User</c> و<c>StudioUser</c> — مِن <c>Updates</c> و<c>Inserts</c> مَعاً و«وِلادَةٌ» = <c>VersionFor == null</c> (D6)؛ وما بِلا تَزامُنٍ تَفاؤُلِيٍّ —
 /// <c>Tenant</c> و<c>Review</c> — مِن <c>Inserts</c> وَحدَها، فَـ<c>Store</c> مِنها (تَحديثٌ أَو كِتابَةُ نَسخٍ قائِم) لا يَبلُغُ المُصَنِّفَ أَصلاً: نُسخَتُها لا
 /// تُمَيِّزُ الوِلادَة. ولِذلكَ قُلِبَت وِلاداتُ <c>Tenant</c> الثَلاثُ في البَذرِ <c>Insert</c>. ويَخرُجُ مُبَكِّراً حينَ لا وِلادَةَ ولا مَجرىً يَبدَأ.</para>
+/// <para>‏(‏2026-11-12، W13-6·٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و<c>Message</c> مِن <c>Inserts</c> وَحدَها</b> كَـ<c>Tenant</c> و<c>Review</c>: لا تَزامُنَ تَفاؤُلِيّاً
+/// لَها، فَقُلِبَ <c>Store</c>ها <c>Insert</c> في بابِ الإرسالِ وفي البَذرَين (خَلفَ تَوصيفِ البابِ <c>LiveChatMessageSendCharacterizationProofTests</c>).</para>
 /// </summary>
 public sealed class UsageListener : DocumentSessionListenerBase
 {
@@ -45,6 +48,7 @@ public sealed class UsageListener : DocumentSessionListenerBase
         Optimistic(changes.UpdatesFor<StudioUser>().Concat(changes.InsertsFor<StudioUser>()));
         documents.AddRange(changes.InsertsFor<Tenant>().Select(t => new PendingDocument(t, Created: true)));
         documents.AddRange(changes.InsertsFor<Review>().Select(r => new PendingDocument(r, Created: true)));
+        documents.AddRange(changes.InsertsFor<Message>().Select(m => new PendingDocument(m, Created: true)));
         var streams = MeterRules.StreamsOf(changes.Streams());
         if (!documents.Any(d => d.Created) && !streams.Any(s => s.Started)) return;
 

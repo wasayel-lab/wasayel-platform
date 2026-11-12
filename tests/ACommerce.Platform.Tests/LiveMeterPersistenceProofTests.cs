@@ -800,4 +800,84 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         Assert.Equal("store.create 1", perUnit);
         Assert.Equal(0L, leaks);
     }
+
+    // ═══ ‏(‏2026-11-12، W13-6·٩) `chat.message` بِبابِ الإرسالِ الحَقيقِيّ — بَعدَ أَن صارَ `Store` الرِسالَةِ `Insert` خَلفَ تَوصيفِه (09859e2) ═══
+    // (التَصميم §3.4 و§5.2 و§13 P1). الحامِلُ يَفتَحُه الصَفُّ قَبلَ كُلِّ بابٍ كَما يَفتَحُه الوَسيطُ لِمَتجَرٍ بِلا أَدوار (صَفّا G16 وG5).
+
+    /// <summary><b><c>chat.message</c></b>: كُلُّ إرسالٍ بِالبابِ سَطرٌ واحِدٌ في مَتجَرِه بِمُعَرِّفِ الرِسالَة — رائِدُ أَعمالِه مالِكُ المَتجَرِ مِن الحامِل — و<c>writer_xid</c>
+    /// = <c>xmin</c> صَفِّ الرِسالَة؛ والإرسالُ الثاني بِالجِسمِ نَفسِه سَطرٌ ثانٍ (النَقرَتانِ رِسالَتان)؛ والجِسمُ الفارِغُ لا رِسالَةَ ولا سَطر؛ و<c>Store</c> رِسالَةٍ قائِمَةٍ
+    /// (بِلا سَطرِ وِلادَة) صِفر؛ ولا سَطرَ يَحمِلُ مُعَرِّفَ المُرسِلِ ولا المُحادَثَة.</summary>
+    [Fact]
+    public async Task Each_sent_message_is_one_chat_message_entry_in_the_messages_transaction_and_a_store_of_an_existing_message_is_none()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ المُحادَثَة", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        User Member(string name) => new()
+        {
+            Id = Guid.NewGuid(), TenantSlug = slug, FullName = name, Phone = NewPhone(), PhoneVerified = true,
+            AcceptedTermsAt = DateTime.UtcNow, AcceptedTermsVersion = ACommerce.Templates.Customer.Marketplace.Gates.TermsPolicy.CurrentVersion,
+        };
+        var buyer = Member("مُشتَري العَدّ");
+        var seller = Member("بائِعُ العَدّ");
+        var conv = new ACommerce.Kit.Chat.Conversation
+        {
+            Id = Guid.NewGuid(), OwnerId = buyer.Id, OwnerName = buyer.FullName, PartnerId = seller.Id, PartnerName = seller.FullName, LastAt = DateTime.UtcNow,
+        };
+        await using (var s = host.Store.LightweightSession(slug)) { s.Store(buyer, seller); s.Store(conv); await s.SaveChangesAsync(); }
+        void Resolve() => MeterScope.Open().Fill(slug, entrepreneur: MeterScope.OwnerOf(owner), role: MeterSentinels.None);
+        var route = new Dictionary<string, string> { ["slug"] = slug, ["conversationId"] = conv.Id.ToString() };
+        var token = AuthHandlers.MakeToken(buyer.Id, slug, buyer.SessionVersion);
+        async Task<List<ACommerce.Kit.Chat.Message>> MessagesAsync()
+        {
+            await using var q = host.Store.QuerySession(slug);
+            return [.. (await q.Query<ACommerce.Kit.Chat.Message>().ToListAsync()).OrderBy(m => m.SentAt)];
+        }
+        async Task<string> PerUnitAsync() => Convert.ToString(await ScalarAsync(
+            "select coalesce(string_agg(unit || ' ' || n, ' · ' order by unit), '') from (select unit, count(*) n from meter.usage_entry where app = @a group by unit) t", ("a", slug))) ?? "";
+
+        Resolve();
+        var first = await host.PostFormAsync("/{slug}/chats/{conversationId:guid}/send", route, slug, token, ("body", "هَل ما زالَ مُتاحاً؟"));
+        var one = Assert.Single(await MessagesAsync());
+        var firstRows = await DocEntriesAsync(MeterRules.ChatMessage, one.Id.ToString("D"), "mt_doc_message", one.Id);
+        Resolve();
+        var second = await host.PostFormAsync("/{slug}/chats/{conversationId:guid}/send", route, slug, token, ("body", "هَل ما زالَ مُتاحاً؟"));
+        Resolve();
+        var blank = await host.PostFormAsync("/{slug}/chats/{conversationId:guid}/send", route, slug, token, ("body", "   "));
+        var messages = await MessagesAsync();
+        var two = messages[^1];
+        var secondRows = await DocEntriesAsync(MeterRules.ChatMessage, two.Id.ToString("D"), "mt_doc_message", two.Id);
+        var afterSends = await PerUnitAsync();
+        var leaks = Convert.ToInt64(await ScalarAsync(
+            "select count(*) from meter.usage_entry where app = @a and (position(@b in id) > 0 or position(@b in source_id) > 0 or position(@c in id) > 0 or position(@c in source_id) > 0)",
+            ("a", slug), ("b", buyer.Id.ToString("D")), ("c", conv.Id.ToString("D"))));
+
+        // ‏Store رِسالَةٍ قائِمَةٍ بِلا سَطرِ وِلادَة: تَحديثٌ لا وِلادَة (دَرسُ M6A-CNT-1).
+        await ForgetBirthAsync(MeterRules.ChatMessage, one.Id.ToString("D"));
+        Resolve();
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            var stored = (await s.LoadAsync<ACommerce.Kit.Chat.Message>(one.Id))!;
+            stored.Body = "—";
+            s.Store(stored);
+            await s.SaveChangesAsync();
+        }
+        var afterUpdate = await UnitEntriesAsync(MeterRules.ChatMessage, one.Id.ToString("D"));
+
+        output.WriteLine($"[P1·رِسالَة] الإرسال ⇒ {first} · «{string.Join(" | ", firstRows)}» · الثاني ⇒ {second} · «{string.Join(" | ", secondRows)}» · الفارِغ ⇒ {blank}");
+        output.WriteLine($"[P1·رِسالَة] رَسائِل {messages.Count} · لِكُلِّ وَحدَةٍ في /{slug}: {afterSends} · سُطورٌ تَحمِلُ مُعَرِّفَ المُرسِلِ أَو المُحادَثَة {leaks} · بَعدَ Store رِسالَةٍ بِلا سَطر {afterUpdate}");
+
+        var back = (302, $"/{slug}/chats/{conv.Id}");
+        Assert.Equal([back, back, back], new[] { first, second, blank });
+        Assert.Equal(2, messages.Count);
+        Assert.NotEqual(one.Id, two.Id);
+        var ownerId = owner.ToString("D");
+        Assert.Equal(new DocRow(MeterRules.ChatMessage, slug, ownerId, MeterSentinels.None, MeterRules.MessageSource, one.Id.ToString("D"), true), Assert.Single(firstRows));
+        Assert.Equal(new DocRow(MeterRules.ChatMessage, slug, ownerId, MeterSentinels.None, MeterRules.MessageSource, two.Id.ToString("D"), true), Assert.Single(secondRows));
+        Assert.Equal("chat.message 2 · member.join 2 · store.create 1", afterSends);   // العُضوانِ وُلِدا في هذا الصَفِّ بِلا نُسخَة
+        Assert.Equal(0L, leaks);
+        Assert.Equal(0L, afterUpdate);
+    }
 }

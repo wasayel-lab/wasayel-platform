@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.Reviews;
@@ -53,6 +54,10 @@ public sealed record PendingSnapshot(string SessionTenant, IReadOnlyList<Pending
 /// الإدراجِ وِلادَةً، و<c>Store</c> نَوعٍ بِلا تَزامُنٍ تَفاؤُلِيٍّ لا يَبلُغُه أَصلاً.</para>
 /// <para>‏(‏2026-11-12، W13-6·٨) <b>والدَورُ مِن حامِلٍ بِلا مَتجَر</b>: حامِلٌ لَم يَملَأه مَتجَرٌ ويَحمِلُ دَوراً (مُشرِفُ المَنَصَّة، <c>FillPlatformRole</c>)
 /// دَورُه لِكُلِّ كِتابَةٍ في طَلَبِه — ورائِدُ الأَعمالِ لا يُؤخَذُ مِنه أَبَداً (<see cref="FromScope"/>).</para>
+/// <para>‏(‏2026-11-12، W13-6·٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَت عَشراً بِـ<c>chat.message</c></b> (التَصميم §3.4 و§5.2): <c>Message</c> في <c>Inserts</c>
+/// سَطرٌ واحِد، مَتجَرُه مُستَأجِرُ الجَلسَةِ (الوَثيقَةُ مُقتَرِنَة) ومَصدَرُه <b>مُعَرِّفُ الرِسالَة</b> — لا المُرسِلُ ولا المُحادَثَة، فَالنَقرَتانِ رِسالَتانِ وسَطران.
+/// وقُلِبَ <c>Store</c> الرِسالَةِ <c>Insert</c> في بابِ الإرسالِ وفي البَذرَينِ خَلفَ تَوصيفِ البابِ (<c>LiveChatMessageSendCharacterizationProofTests</c>)،
+/// فَـ<c>Store</c> رِسالَةٍ قائِمَةٍ لا يَبلُغُ المُصَنِّفَ أَصلاً.</para>
 /// </summary>
 public static class MeterRules
 {
@@ -86,6 +91,12 @@ public static class MeterRules
 
     /// <summary>مَصدَرُ <c>review.create</c> — ومُعَرِّفُه مُعَرِّفُ التَقييم (لا الكاتِبُ ولا المُقَيَّم).</summary>
     public const string ReviewSource = "review";
+
+    // ‏(‏2026-11-12، W13-6·٩) وَحدَةُ الرِسالَةِ ومَصدَرُها.
+    public const string ChatMessage = "chat.message";
+
+    /// <summary>مَصدَرُ <c>chat.message</c> — ومُعَرِّفُه مُعَرِّفُ الرِسالَة (لا المُرسِلُ ولا المُحادَثَة).</summary>
+    public const string MessageSource = "message";
 
     /// <summary><b>الحَدَثُ الَّذي يولَدُ بِه مَجراه وَحدَةً</b> — بِالنَوعِ لا بِاسمِه (إعادَةُ تَسمِيَةٍ تَكسِرُ البِناء). وقارِئُ مُطابَقَةِ كُلِّ وَحدَةٍ في المُعجَمِ
     /// <c>event_ids:{النَوع}</c> بِهذا النَوعِ نَفسِه (<c>MeterRulesTests</c>).</summary>
@@ -123,6 +134,8 @@ public static class MeterRules
                     => MemberEntry(unit, SessionApp(pending.SessionTenant), member, scope),
                 Review review when catalog.Find(ReviewCreate) is { } unit
                     => Entry(unit, SessionApp(pending.SessionTenant), ReviewSource, review.Id.ToString("D"), scope),
+                Message message when catalog.Find(ChatMessage) is { } unit
+                    => Entry(unit, SessionApp(pending.SessionTenant), MessageSource, message.Id.ToString("D"), scope),
                 _ => null,
             };
             if (entry is not null && seen.Add(entry.Id)) entries.Add(entry);

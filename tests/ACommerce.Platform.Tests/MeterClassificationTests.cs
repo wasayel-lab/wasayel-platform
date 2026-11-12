@@ -590,8 +590,10 @@ public class MeterClassificationTests(ITestOutputHelper output)
              Breaches(all, [.. docs.All, "injecteddocument"], events.All, inline, runs, MeterUnitCatalog.Default)),
             ("event seen, no row", ["unclassified_event:InjectedEvent"],
              Breaches(all, docs.All, [.. events.All, "InjectedEvent"], inline, runs, MeterUnitCatalog.Default)),
-            ("row removed", ["unclassified_document:message"],
-             Breaches([.. all.Where(r => r.ClrType != typeof(ACommerce.Kit.Chat.Message))], docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),
+            // ‏(‏2026-11-12، W13-6·٩) صَفُّ `Message` صارَ مَعدوداً (`chat.message`)، فَحَذفُه يُعطي مَعَ رَمزِه `lexicon_unit_without_row` — فَالحَذفُ بِصَفٍّ لا يَعُدُّ
+            // ولا يَعُدُّه شَيء: `Conversation`، والرَمزُ نَفسُه وَحدَه.
+            ("row removed", ["unclassified_document:conversation"],
+             Breaches([.. all.Where(r => r.ClrType != typeof(ACommerce.Kit.Chat.Conversation))], docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),
             ("row for an unseen type", ["stale_row:InjectedDocument"],
              Breaches([.. all, MeterClassification.NotCounted(typeof(InjectedDocument), MeterTypeKind.Document, "حَقنٌ: صَفٌّ لِنَوعٍ لا تَراهُ أَداة.")],
                       docs.All, events.All, inline, runs, MeterUnitCatalog.Default)),

@@ -2274,7 +2274,9 @@ public static class MarketplaceTemplateExtensions
                 Id = Guid.NewGuid(), ConversationId = conversationId,
                 SenderId = userId, Body = body, SentAt = DateTime.UtcNow
             };
-            s.Store(msg);
+            // ‏(‏2026-11-12، W13-6·٩ — تَوصيفُه 09859e2) `Insert` لا `Store`: الرِسالَةُ تولَدُ هُنا بِمُعَرِّفٍ جَديدٍ في كُلِّ إرسال، وعَدُّها (`chat.message`)
+            // يَقرَأُ وِلادَتَها مِن `Inserts` وَحدَها — و`Store` إدراجٌ-أَو-تَحديثٌ لا يُمَيِّزُها. وما يَكتُبُه البابُ بِحَرفِه (التَوصيفُ أَخضَرُ بِلا مَسّ).
+            s.Insert(msg);
             conv.LastMessage = body.Length > 100 ? body[..100] : body;
             conv.LastAt = msg.SentAt;
             // أَنشِئ إشعاراً لِلطَّرَف الآخَر — يَظهَر في /notifications +
