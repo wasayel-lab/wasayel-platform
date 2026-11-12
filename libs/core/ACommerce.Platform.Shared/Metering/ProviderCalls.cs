@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
 namespace ACommerce.Platform.Shared.Metering;
 
 /// <summary>
@@ -29,6 +32,13 @@ public sealed class ProviderCalls(OutboundRecorder? recorder)
 {
     /// <summary>هَل يُكتَبُ ما يَمُرُّ هُنا؟</summary>
     public bool IsRecording => recorder is not null;
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨؛ التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: مُستَدعٍ لا يُسَجِّل — يَبني بِه اختِبارٌ عُدَّةً بِلا مُضيف (التَحويلُ
+    /// <c>HttpClient → ProviderHttp</c>، وقَناةُ SMTP في اختِباراتِ المُهلَة). <b>لا يُناديه كودُ الإنتاج</b>: <c>MeterTestSeamTests</c> (G6c) يَقرَأُ الـIL المَبنِيَّ
+    /// ويَحمَرُّ عَلى مُنادٍ في <c>libs/</c> أَو <c>apps/</c>، والمُضيفُ المُرَكَّبُ يَبني مُستَدعيَه بِكاتِبِه (<see cref="ProviderCallsExtensions.AddProviderCalls"/>).</para>
+    /// </summary>
+    public static ProviderCalls Unrecorded { get; } = new(null);
 
     public async Task<T> InvokeAsync<T>(ProviderCall call, Func<CancellationToken, Task<T>> send, Func<T, ProviderAcceptance> accepted, CancellationToken ct)
     {
@@ -66,5 +76,19 @@ public sealed class ProviderCalls(OutboundRecorder? recorder)
         {
             Console.Error.WriteLine($"[meter] outbound-recorder-threw unit={call.Unit} app={call.App} request={call.RequestId}: {ex.GetType().Name}");
         }
+    }
+}
+
+/// <summary>تَسجيلُ المُستَدعي المَعدودِ المُفرَد — لِعُدَّةٍ بِـSDK تَلُفُّ أَفعالَها بِه (SMTP)، ويُسَجِّلُه <see cref="ProviderHttpExtensions.AddProviderHttp{TKit}"/> لِعُدَدِ HTTP.</summary>
+public static class ProviderCallsExtensions
+{
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٢) <see cref="ProviderCalls"/> مُفرَدٌ بِكاتِبِ المُضيفِ إن سُجِّل (<see cref="OutboundRecorder"/>، يُسَجِّلُه القالِب) — مَرَّةً واحِدَة،
+    /// فَعُدَدُ HTTP وعُدَدُ SDK تَتَشارَكُه. مُستَهلِكاه: <c>AddProviderHttp</c> و<c>AddSmtpEmailChannel</c>.</para>
+    /// </summary>
+    public static IServiceCollection AddProviderCalls(this IServiceCollection services)
+    {
+        services.TryAddSingleton(sp => new ProviderCalls(sp.GetService<OutboundRecorder>()));
+        return services;
     }
 }

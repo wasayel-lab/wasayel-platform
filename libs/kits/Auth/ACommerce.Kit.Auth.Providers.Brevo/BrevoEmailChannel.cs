@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using ACommerce.Platform.I18n;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -59,6 +60,10 @@ public sealed class BrevoEmailOptions
 /// قَناةُ OTP بَريديَّةٌ فِعليَّةٌ عَبر واجِهَةِ Brevo الحَرفِيَّة. لا
 /// تَعرِف شَيئاً عَن تَوليدِ الرَمزِ ولا تَخزينِه ولا حُدودِ مُعَدَّلِه —
 /// ذلِكَ كُلُّه في <c>AuthHandlers</c> المُشتَرَك، تَماماً كَقَناةِ SMTP.
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/> — المُستَدعي المَعدودُ الَّذي
+/// يَكتُبُ نِيَّةً قَبلَ الإرسالِ وسَطراً حينَ تَقبَلُ Brevo — ورَأسُ <c>api-key</c> عَلى الطَلَبِ لا عَلى العَميل، والجِسمُ <c>JsonContent</c> نَفسُه الَّذي كانَ
+/// يَبنيه <c>PostAsJsonAsync</c>؛ فَالطَلَبُ الَّذي يَبلُغُ Brevo هُوَ هُوَ بايتاً (<c>EmailRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).
+/// والقَناةُ تَسِمُ النِداءَ بِاسمِها (<see cref="ProviderNames.Brevo"/>).</para>
 /// </summary>
 public sealed class BrevoEmailChannel : IEmailOtpChannel
 {
@@ -72,11 +77,11 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
     public const string ApiKeyHeader = "api-key";
 
     private readonly BrevoEmailOptions _opts;
-    private readonly HttpClient _http;
+    private readonly ProviderHttp<BrevoEmailChannel> _http;
     private readonly ILogger<BrevoEmailChannel> _logger;
 
     public BrevoEmailChannel(
-        IOptions<BrevoEmailOptions> opts, HttpClient http, ILogger<BrevoEmailChannel> logger)
+        IOptions<BrevoEmailOptions> opts, ProviderHttp<BrevoEmailChannel> http, ILogger<BrevoEmailChannel> logger)
     {
         _opts = opts.Value;
         _http = http;
@@ -85,8 +90,7 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
             throw new InvalidOperationException("Brevo ApiKey غَير مُعَرَّف (Auth:Email:ApiKey).");
         if (string.IsNullOrWhiteSpace(_opts.From))
             throw new InvalidOperationException("Brevo From غَير مُعَرَّف (Auth:Email:From).");
-        if (!_http.DefaultRequestHeaders.Contains(ApiKeyHeader))
-            _http.DefaultRequestHeaders.Add(ApiKeyHeader, _opts.ApiKey);
+        // ‏(‏2026-11-12، W13-6·١٢) رَأسُ المِفتاحِ كانَ هُنا عَلى `DefaultRequestHeaders`، وصارَ عَلى الطَلَب (`PostAsync`): العَميلُ يَملِكُه المُستَدعي المَعدود.
     }
 
     public string ChannelName => "Brevo";
@@ -94,16 +98,16 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
     /// <summary><c>null</c> — قَناةُ إنتاج: لا كودَ مَعروضٌ في الواجِهَة.</summary>
     public string? DevHintCode => null;
 
-    public Task SendOtpAsync(string email, string code, CancellationToken ct)
-        => PostAsync(email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
+    public Task SendOtpAsync(ProviderCall call, string email, string code, CancellationToken ct)
+        => PostAsync(call, email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
             OtpEmailMessage.Text(code), OtpEmailMessage.Html(code), "كود", ct);
 
     /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) إشعارٌ بِالبَريدِ التَعامُلِيِّ نَفسِه (<see cref="Endpoint"/>) — نَفسُ المُرسِلِ والمُهلَةِ والرَمي، ونَصٌّ
     /// عادِيٌّ بِلا HTML (<c>textContent</c> وَحدَه).</summary>
-    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
-        => PostAsync(email, subject, text, null, "إشعار", ct);
+    public Task SendNoticeAsync(ProviderCall call, string email, string subject, string text, CancellationToken ct)
+        => PostAsync(call, email, subject, text, null, "إشعار", ct);
 
-    private async Task PostAsync(string email, string subject, string text, string? html, string what, CancellationToken ct)
+    private async Task PostAsync(ProviderCall call, string email, string subject, string text, string? html, string what, CancellationToken ct)
     {
         // الرِسالَةُ مِن `OtpEmailMessage` — **نَفسُها** الَّتي يُرسِلُها
         // SMTP، لا نُسخَةٌ مِنها. والعُنوانُ مِن القامُوسِ بِالعَرَبِيَّةِ
@@ -129,7 +133,10 @@ public sealed class BrevoEmailChannel : IEmailOtpChannel
 
         try
         {
-            using var resp = await _http.PostAsJsonAsync(Endpoint, payload, cts.Token);
+            // ‏(‏2026-11-12، W13-6·١٢) ما كانَ `PostAsJsonAsync(Endpoint, payload)` يَبنيه بِحَرفِه — `POST` و`JsonContent.Create(payload)` — ومَعَه الرَأس.
+            using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint) { Content = JsonContent.Create(payload) };
+            request.Headers.Add(ApiKeyHeader, _opts.ApiKey);
+            using var resp = await _http.SendAsync(call.By(ProviderNames.Brevo), request, cts.Token);
             if (!resp.IsSuccessStatusCode)
             {
                 var body = await resp.Content.ReadAsStringAsync(cts.Token);
@@ -167,11 +174,13 @@ public static class BrevoEmailExtensions
     /// <see cref="IEmailOtpChannel"/> — نَفسُ نَمَطِ
     /// <c>AddTwilioSmsChannel</c>: عَميلٌ مُطَبَّعٌ بِمُهلَة، والخِياراتُ
     /// مِن التَهيئَةِ في التَطبيقِ المُضيف.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) كانَ <c>AddHttpClient&lt;IEmailOtpChannel, BrevoEmailChannel&gt;(…)</c>: عَميلٌ مُطَبَّعٌ عابِر. والآنَ عَميلُها
+    /// المُسَمّى يَملِكُه <c>ProviderHttp</c> بِالمُهلَةِ نَفسِها، والقَناةُ عابِرَةٌ كَما كانَت.</remarks>
     public static IServiceCollection AddBrevoEmailChannel(
         this IServiceCollection services, Action<BrevoEmailOptions> configure)
     {
         services.Configure(configure);
-        services.AddHttpClient<IEmailOtpChannel, BrevoEmailChannel>((sp, client) =>
+        services.AddProviderHttp<BrevoEmailChannel>((sp, client) =>
         {
             var opts = sp.GetRequiredService<IOptions<BrevoEmailOptions>>().Value;
             // سَقفٌ احتِياطيٌّ لَو سَقَطَ الرَمز — **ضِعفُ** نافِذَةِ
@@ -179,6 +188,7 @@ public static class BrevoEmailExtensions
             // رِسالَةُ الخَطَإ بَدَلَ أَن تَتَبَدَّلَ بِسِباق.
             client.Timeout = OtpSendGuard.Timeout(opts.TimeoutSeconds) * 2;
         });
+        services.AddTransient<IEmailOtpChannel, BrevoEmailChannel>();
         return services;
     }
 }

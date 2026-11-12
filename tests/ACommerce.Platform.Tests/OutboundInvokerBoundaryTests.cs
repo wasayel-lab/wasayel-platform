@@ -12,8 +12,9 @@ namespace ACommerce.Platform.Tests;
 
 public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
 {
-    /// <summary><b>سَقفُ القائِمَة</b> — تَتَقَلَّصُ ولا تَنمو: 12 عِندَ البَند ١١ (خَرَجَ Twilio ودَخَلَ <c>ProviderHttp.cs</c>)، ويَنزِلُ مَعَ كُلِّ عُدَّةٍ تُرَحَّل.</summary>
-    internal const int AllowListCeiling = 12;
+    /// <summary><b>سَقفُ القائِمَة</b> — تَتَقَلَّصُ ولا تَنمو: 12 عِندَ البَند ١١ (خَرَجَ Twilio ودَخَلَ <c>ProviderHttp.cs</c>)، ويَنزِلُ مَعَ كُلِّ عُدَّةٍ تُرَحَّل.
+    /// ‏(‏2026-11-12، W13-6·١٢) <b>11</b>: خَرَجَ Brevo (عَميلُه <c>ProviderHttp</c>)، وبَقِيَ SMTP بِحَقلِه <c>client</c> — أَوَّلُ سَطرٍ تَقيسُه قاعِدَةُ الفِعل.</summary>
+    internal const int AllowListCeiling = 11;
 
     internal static readonly Regex RawTypes = new(
         @"\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(",
@@ -111,6 +112,11 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         Assert.True(allowed.Count <= AllowListCeiling, $"القائِمَةُ نَمَت: {allowed.Count} فَوقَ السَقف {AllowListCeiling} — تَتَقَلَّصُ ولا تَنمو.");
         Assert.Contains(allowed, a => a.File.EndsWith("/Metering/ProviderHttp.cs", StringComparison.Ordinal));
         Assert.DoesNotContain(allowed, a => a.File.EndsWith("/TwilioSmsChannel.cs", StringComparison.Ordinal));
+        // ‏(‏2026-11-12، W13-6·١٢) Brevo خارِجَها، وSMTP فيها بِحَقلِه: أَفعالُ MailKit الأَربَعَةُ مَفحوصَةٌ ولا واحِدَ خارِجَ المُستَدعي.
+        Assert.DoesNotContain(allowed, a => a.File.EndsWith("/BrevoEmailChannel.cs", StringComparison.Ordinal));
+        var smtp = scans.Single(x => x.File.EndsWith("/SmtpEmailChannel.cs", StringComparison.Ordinal));
+        output.WriteLine($"  SMTP · الحَقل {allowed.Single(a => a.File == smtp.File).Field} · وُصول {smtp.Accesses} · خارِجَ المُستَدعي {smtp.Outside}");
+        Assert.Equal(("client", 4, 0), (allowed.Single(a => a.File == smtp.File).Field, smtp.Accesses, smtp.Outside));
         Assert.All(allowed, a => Assert.False(string.IsNullOrWhiteSpace(a.Reason), $"سَطرٌ بِلا سَبَب: {a.File}"));
         Assert.True(violations.Count == 0, "الطَبَقَةُ ٨-ج حَمراء: " + string.Join(" | ", violations));
     }
@@ -170,6 +176,15 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         output.WriteLine($"[8-ج] الحَقن: {string.Join(" · ", raw.Concat(Violations(ScanAll(sources, dead), dead)).Concat(verbBreach))}");
         Assert.Single(verbBreach);
         Assert.StartsWith($"sdk_verb_outside_invoker:{s3.File}", verbBreach[0], StringComparison.Ordinal);
+
+        // ‏(‏2026-11-12، W13-6·١٢) وفِعلُ MailKit يُنادى قَبلَ المُستَدعي في نُسخَةٍ مِن قَناةِ SMTP الحَقيقِيَّة ⇐ خَرقٌ عَلى سَطرِها بِعَدَدِه.
+        var smtp = sources.Single(x => x.File.EndsWith("/SmtpEmailChannel.cs", StringComparison.Ordinal));
+        const string anchor = "await _calls.InvokeAsync(";
+        Assert.Single(Regex.Matches(smtp.Code, Regex.Escape(anchor)));
+        var early = sources.Select(x => x == smtp ? (x.File, x.Code.Replace(anchor, "await client.NoOpAsync(cts.Token);\n            " + anchor, StringComparison.Ordinal)) : x).ToList();
+        var mailBreach = Violations(ScanAll(early, allowed), allowed);
+        output.WriteLine($"[8-ج] حَقنُ SMTP: {string.Join(" · ", mailBreach)}");
+        Assert.Equal([$"sdk_verb_outside_invoker:{smtp.File} (1/5)"], mailBreach);
     }
 
     /// <summary>والطَبَقَةُ في السكربتِ والتَوأَمُ هُنا يَقرَآنِ القائِمَةَ نَفسَها والأَنواعَ نَفسَها — نَصٌّ في السكربتِ لا يَتَباعَدُ عَن هذا المِلَفِّ صامِتاً.</summary>

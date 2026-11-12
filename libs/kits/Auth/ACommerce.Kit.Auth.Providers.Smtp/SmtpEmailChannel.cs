@@ -1,4 +1,5 @@
 using ACommerce.Platform.I18n;
+using ACommerce.Platform.Shared.Metering;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,15 +49,22 @@ public sealed class SmtpEmailOptions
 /// قَناة OTP بَريديَّة فِعليَّة عَبر MailKit. تُرسِل رِسالَة نَصّ + HTML
 /// بِسيطَة تَحمِل الرَمز، ولا تَعرِف شَيئاً عَن تَوليده أَو تَخزينه —
 /// ذلِك كُلُّه في <c>AuthHandlers</c> المُشتَرَك مَع قَناة الهاتِف.
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) <b>أَفعالُ MailKit داخِلَ المُستَدعي المَعدود</b>: الاتِّصالُ والاعتِمادُ والإرسالُ والانصِرافُ وُسَطاءُ
+/// <see cref="ProviderCalls.InvokeAsync{T}"/> — نِيَّةٌ قَبلَها، والنِداءُ <b>مَقبولٌ حينَ يَعودُ <c>SendAsync</c></b> (التَصميم §6.2؛ والانصِرافُ بَعدَه لا يَرمي:
+/// وَثيقَةُ MailKit لا تُعلِنُ لِـ<c>DisconnectAsync</c> إلّا <c>ObjectDisposedException</c>)، وما يُرمى مَجهولٌ ويُعادُ رَميُه كَما هُوَ فَتُحَوِّلُه القَناةُ كَما كانَت.
+/// والطَبَقَةُ ٨-ج تُحَمِّرُ وُصولاً إلى <c>client</c> خارِجَ وُسَطائِه. والحِوارُ والرِسالَةُ هُما هُما (<c>EmailRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ
+/// التَبديلِ ولَم يُمَسّ). والقَناةُ تَسِمُ النِداءَ بِاسمِها (<see cref="ProviderNames.Smtp"/>).</para>
 /// </summary>
 public sealed class SmtpEmailChannel : IEmailOtpChannel
 {
     private readonly SmtpEmailOptions _opts;
+    private readonly ProviderCalls _calls;
     private readonly ILogger<SmtpEmailChannel> _logger;
 
-    public SmtpEmailChannel(IOptions<SmtpEmailOptions> opts, ILogger<SmtpEmailChannel> logger)
+    public SmtpEmailChannel(IOptions<SmtpEmailOptions> opts, ProviderCalls calls, ILogger<SmtpEmailChannel> logger)
     {
         _opts = opts.Value;
+        _calls = calls;
         _logger = logger;
         if (string.IsNullOrWhiteSpace(_opts.Host))
             throw new InvalidOperationException("SMTP Host غَير مُعَرَّف (Auth:Email:Host).");
@@ -69,16 +77,16 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
     /// <summary><c>null</c> — قَناة إنتاج: لا كود مَعروض في الواجِهَة.</summary>
     public string? DevHintCode => null;
 
-    public Task SendOtpAsync(string email, string code, CancellationToken ct)
-        => DeliverAsync(email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
+    public Task SendOtpAsync(ProviderCall call, string email, string code, CancellationToken ct)
+        => DeliverAsync(call, email, LocaleCatalog.Text(LocaleCatalog.Arabic, OtpEmailMessage.SubjectKey),
             new BodyBuilder { TextBody = OtpEmailMessage.Text(code), HtmlBody = OtpEmailMessage.Html(code) }, "كود", ct);
 
     /// <summary>‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) إشعارٌ بِالنَقلِ نَفسِه — نَفسُ المُهلَةِ والرَمي، ونَصٌّ عادِيٌّ بِلا HTML.</summary>
-    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
-        => DeliverAsync(email, subject, new BodyBuilder { TextBody = text }, "إشعار", ct);
+    public Task SendNoticeAsync(ProviderCall call, string email, string subject, string text, CancellationToken ct)
+        => DeliverAsync(call, email, subject, new BodyBuilder { TextBody = text }, "إشعار", ct);
 
     /// <summary>النَقلُ الواحِدُ لِلرَمزِ والإشعار. <paramref name="what"/> وَسمُ سَطرِ السِجِلِّ وَحدَه — لا يَبلُغُ المُستَخدِم.</summary>
-    private async Task DeliverAsync(string email, string subject, BodyBuilder content, string what, CancellationToken ct)
+    private async Task DeliverAsync(ProviderCall call, string email, string subject, BodyBuilder content, string what, CancellationToken ct)
     {
         var msg = new MimeMessage();
         msg.From.Add(ParseFrom());
@@ -124,11 +132,16 @@ public sealed class SmtpEmailChannel : IEmailOtpChannel
         using var client = new SmtpClient { Timeout = (int)window.TotalMilliseconds * 2 };
         try
         {
-            await client.ConnectAsync(_opts.Host, _opts.Port, security, cts.Token);
-            if (!string.IsNullOrEmpty(_opts.Username))
-                await client.AuthenticateAsync(_opts.Username, _opts.Password, cts.Token);
-            await client.SendAsync(msg, cts.Token);
-            await client.DisconnectAsync(quit: true, cts.Token);
+            // ‏(‏2026-11-12، W13-6·١٢) الأَفعالُ الأَربَعَةُ بِحَرفِها وتَرتيبِها ورَمزِها داخِلَ المُستَدعي المَعدود — مَقبولٌ حينَ تَعودُ كُلُّها، أَي حينَ يَعودُ الإرسال.
+            await _calls.InvokeAsync(call.By(ProviderNames.Smtp), async t =>
+            {
+                await client.ConnectAsync(_opts.Host, _opts.Port, security, t);
+                if (!string.IsNullOrEmpty(_opts.Username))
+                    await client.AuthenticateAsync(_opts.Username, _opts.Password, t);
+                var reply = await client.SendAsync(msg, t);
+                await client.DisconnectAsync(quit: true, t);
+                return reply;
+            }, _ => new ProviderAcceptance(ProviderOutcome.Accepted), cts.Token);
             _logger.LogInformation("[Smtp] أُرسِلَ {What} لِـ {Email}", what, email);
         }
         // **والحُكمُ لِرَمزِنا لا لِنَوعِ الاستِثناء** — بِقياسٍ حَيّ:
@@ -169,10 +182,13 @@ public static class SmtpEmailExtensions
     /// <summary>يُسَجِّل قَناة SMTP كَتَنفيذ لِـ <see cref="IEmailOtpChannel"/>.
     /// الإعدادات تُمَرَّر مِن التَهيئَة في التَّطبيق المُضيف — نَفس نَمَط
     /// <c>AddUnifonicSmsChannel</c>.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) ومَعَها مُستَدعيها المَعدود (<see cref="ProviderCallsExtensions.AddProviderCalls"/>): مُفرَدٌ بِكاتِبِ المُضيفِ
+    /// إن سُجِّل — والقَناةُ مُفرَدٌ كَما كانَت.</remarks>
     public static IServiceCollection AddSmtpEmailChannel(
         this IServiceCollection services, Action<SmtpEmailOptions> configure)
     {
         services.Configure(configure);
+        services.AddProviderCalls();
         services.AddSingleton<IEmailOtpChannel, SmtpEmailChannel>();
         return services;
     }

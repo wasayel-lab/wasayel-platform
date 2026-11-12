@@ -81,10 +81,14 @@ public sealed class StudioAuth
                 AuthHandlers.PhoneDestination(phone), code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) والنِداءُ مَعدودٌ كَأَخيه: <c>_platform</c> ومُعَرِّفُ نِداءٍ جَديد.</remarks>
     public static async Task<string?> SendEmailCodeAsync(
         IEmailOtpChannel channel, string email, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Email, email, channel.DevHintCode,
-            (code, token) => channel.SendOtpAsync(email, code, token), ct);
+            (code, token) => channel.SendOtpAsync(
+                ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.OtpEmailSend,
+                    ACommerce.Platform.Shared.Metering.MeterSentinels.Platform, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId()),
+                email, code, token), ct);
 
     /// <summary><b>والرَمزُ يُمَرَّر ولا يُلتَقَط</b>: كانَ الـ<c>ct</c>
     /// مَحبوساً في المُغلَق (‏<c>closure</c>) بَينَما المُهلَةُ تُقاس على

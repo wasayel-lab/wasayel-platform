@@ -53,6 +53,9 @@ file sealed class SilentHandler : HttpMessageHandler
 
 public class BrevoEmailChannelTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) النِداءُ المَعدودُ في تَوقيعِ القَناة — والقَناةُ هُنا تُبنى بِعَميلٍ خامٍّ يَصيرُ مُستَدعِياً لا يُسَجِّل.</summary>
+    private static readonly ACommerce.Platform.Shared.Metering.ProviderCall Call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", "brevo-tests", "r1");
+
     private static BrevoEmailChannel Channel(
         HttpMessageHandler handler, string apiKey = "test-key", string fromName = "وَسايِل",
         int timeoutSeconds = 10)
@@ -73,7 +76,7 @@ public class BrevoEmailChannelTests
     public async Task Send_PostsToTheBrevoEndpoint_WithTheApiKeyHeader()
     {
         var handler = new CapturingHandler(HttpStatusCode.Created);
-        await Channel(handler, apiKey: "brevo-secret").SendOtpAsync(
+        await Channel(handler, apiKey: "brevo-secret").SendOtpAsync(Call,
             "owner@wasayel.test", "483920", CancellationToken.None);
 
         Assert.NotNull(handler.Request);
@@ -94,7 +97,7 @@ public class BrevoEmailChannelTests
     public async Task Send_CarriesTheRecipient_TheCode_AndTheSender()
     {
         var handler = new CapturingHandler(HttpStatusCode.Created);
-        await Channel(handler).SendOtpAsync("owner@wasayel.test", "483920", CancellationToken.None);
+        await Channel(handler).SendOtpAsync(Call, "owner@wasayel.test", "483920", CancellationToken.None);
 
         using var doc = JsonDocument.Parse(handler.Body!);
         var root = doc.RootElement;
@@ -117,7 +120,7 @@ public class BrevoEmailChannelTests
     public async Task Send_UsesTheSharedMessage_NotACopy()
     {
         var handler = new CapturingHandler(HttpStatusCode.Created);
-        await Channel(handler).SendOtpAsync("owner@wasayel.test", "483920", CancellationToken.None);
+        await Channel(handler).SendOtpAsync(Call, "owner@wasayel.test", "483920", CancellationToken.None);
 
         using var doc = JsonDocument.Parse(handler.Body!);
         Assert.Equal(OtpEmailMessage.Text("483920"),
@@ -134,7 +137,7 @@ public class BrevoEmailChannelTests
     public async Task Send_OmitsTheSenderName_WhenItIsBlank()
     {
         var handler = new CapturingHandler(HttpStatusCode.Created);
-        await Channel(handler, fromName: "   ").SendOtpAsync(
+        await Channel(handler, fromName: "   ").SendOtpAsync(Call,
             "owner@wasayel.test", "483920", CancellationToken.None);
 
         using var doc = JsonDocument.Parse(handler.Body!);
@@ -153,7 +156,7 @@ public class BrevoEmailChannelTests
     {
         var handler = new CapturingHandler(status, "{\"message\":\"nope\"}");
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Channel(handler).SendOtpAsync("owner@wasayel.test", "483920", CancellationToken.None));
+            Channel(handler).SendOtpAsync(Call, "owner@wasayel.test", "483920", CancellationToken.None));
         Assert.Contains(((int)status).ToString(), ex.Message);
     }
 
@@ -164,7 +167,7 @@ public class BrevoEmailChannelTests
     {
         var handler = new CapturingHandler(HttpStatusCode.Unauthorized);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Channel(handler, apiKey: "xkeysib-super-secret").SendOtpAsync(
+            Channel(handler, apiKey: "xkeysib-super-secret").SendOtpAsync(Call,
                 "owner@wasayel.test", "483920", CancellationToken.None));
         Assert.DoesNotContain("xkeysib", ex.Message);
     }
@@ -176,7 +179,7 @@ public class BrevoEmailChannelTests
     {
         var sw = Stopwatch.StartNew();
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            Channel(new SilentHandler(), timeoutSeconds: 2).SendOtpAsync(
+            Channel(new SilentHandler(), timeoutSeconds: 2).SendOtpAsync(Call,
                 "owner@wasayel.test", "483920", CancellationToken.None));
         sw.Stop();
 

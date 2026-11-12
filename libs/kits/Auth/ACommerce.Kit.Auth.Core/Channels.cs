@@ -47,11 +47,18 @@ public interface IOtpChannel
 /// <c>AuthHandlers</c>.</summary>
 public interface IEmailOtpChannel
 {
+    // ─── النِداءُ المَعدود (‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨؛ التَصميم §6.1) ─────────────────────────────────────────
+    // **`ProviderCall` أَوَّلَ الوُسَطاءِ في التَوقيعِ نَفسِه، فَنِسيانُه خَطَأُ بِناء** (القاعِدَة ٦): كانَ الفِعلانِ بِلا `ProviderCall` وصارا بِه، ولا أَخَ بِلا
+    // `ProviderCall` يَبقى — بِخِلافِ `IOtpChannel` أَعلاه، لِسَبَبٍ مَقيس: لا مِلَفَّ تَوصيفٍ يُنَفِّذُ هذه الواجِهَة (قَنَواتُها المُزَيَّفَةُ في اختِباراتٍ عادِيَّةٍ
+    // تَبِعَت التَوقيع، وتَوصيفُ الطَلَبِ `EmailRequestShapeCharacterizationTests` يَمُرُّ بِالأَبوابِ لا بِالفِعلَين). المُنادي يَحمِلُ المَتجَرَ ومُعَرِّفَ الطَلَب،
+    // والقَناةُ تَسِمُه بِاسمِها.
+
     /// <summary>اسم القَناة (للتَشخيص فقط).</summary>
     string ChannelName { get; }
 
     /// <summary>أَرسِل الكود للمُستَخدِم. يَرمي عند فَشَل الإرسال.</summary>
-    Task SendOtpAsync(string email, string code, CancellationToken ct);
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢) <paramref name="call"/> بِوَحدَةِ <see cref="OutboundUnits.OtpEmailSend"/>.</remarks>
+    Task SendOtpAsync(ProviderCall call, string email, string code, CancellationToken ct);
 
     /// <summary>الكود المُتَوَقَّع في وَضع التَطوير (لإظهاره في الواجهَة).
     /// <c>null</c> في الإنتاج.</summary>
@@ -62,7 +69,8 @@ public interface IEmailOtpChannel
     /// وَقتِ التَشغيل: إشعارُ رَبطِ وَسيلَةٍ وحَذفِها (<c>AccountContacts</c>)، وبَريدُ مالِ صاحِبِ المَتجَر (CO3، تَيّارُ F3) — يَستَعمِلُها ولا يَمَسُّ العُدَّة.
     /// يَرمي عِندَ الفَشَلِ كَأَخيه.</para>
     /// </summary>
-    Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct);
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢) <paramref name="call"/> بِوَحدَةِ <see cref="OutboundUnits.NoticeEmailSend"/>، ومُعَرِّفُ طَلَبِه مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَه.</remarks>
+    Task SendNoticeAsync(ProviderCall call, string email, string subject, string text, CancellationToken ct);
 }
 
 /// <summary>قَناة تَحَقُّق نَفاذ (Nafath، Yakeen-Pro، Mock، …).</summary>

@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using ACommerce.Kit.Auth;
+using ACommerce.Platform.Shared.Metering;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -14,6 +15,11 @@ namespace ACommerce.Platform.Tests;
 // مُعَرِّفِ طَلَب. والمُنادي يُقرَأُ مِن **الـIL المَبنِيّ** لا مِن النَصّ: `SendOtpAsync` اسمٌ يَحمِلُه `IEmailOtpChannel` أَيضاً بِثَلاثَةِ وُسَطاء، والنَصُّ لا يُمَيِّزُ
 // الواجِهَة؛ والـIL يَحمِلُ الطَريقَةَ بِعَينِها (نِداءً أَو تَحويلاً إلى مُفَوَّض). والمُنادي المَأذونُ واحِد: جِسمُ الأَخِ ذي `ProviderCall` الافتِراضِيُّ في الواجِهَةِ نَفسِها.
 // والمَقاعِدُ الآتِيَةُ (التَحويلُ مِن `HttpClient` و`ProviderCalls.Unrecorded` وبُناةُ SDK القَديمَة) تَدخُلُ هذه القائِمَةَ مَعَ أَوَّلِ مُستَهلِكٍ لَها (البُنودُ ١٢–١٥).
+//
+// ‏(‏2026-11-12، W13-6·١٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **دَخَلَها مَقعَدا المُستَدعي**: `ProviderCalls.Unrecorded` (مُستَدعٍ لا يُسَجِّل) والتَحويلُ الضِمنِيُّ
+// `HttpClient → ProviderHttp<TKit>` (`op_Implicit`، أَوَّلُ مُستَهلِكٍ لَه بِناءُ Brevo في اختِباراتِها). والتَحويلُ عامٌّ عَلى نَوعٍ عامّ، فَالمُنادي يُشيرُ إلى
+// `ProviderHttp<BrevoEmailChannel>.op_Implicit` لا إلى التَعريف — فَالمُطابَقَةُ بِالوَحدَةِ ومُعَرِّفِ البَيانِ الوَصفِيّ (`MetadataToken`) لا بِالكائِن. والمُنادي المَأذونُ
+// الثالِث: جِسمُ التَحويلِ نَفسُه يَقرَأُ `Unrecorded`. أَمّا `IEmailOtpChannel` فَلا مَقعَدَ لَه: تَوقيعاه يَحمِلانِ `ProviderCall` ولا أَخَ بِدونِه — النِسيانُ خَطَأُ بِناء.
 
 public class MeterTestSeamTests(ITestOutputHelper output)
 {
@@ -98,7 +104,12 @@ public class MeterTestSeamTests(ITestOutputHelper output)
             typeof(IOtpChannel).GetMethod(nameof(IOtpChannel.SendOtpAsync), [typeof(string), typeof(string), typeof(CancellationToken)])!,
             typeof(IOtpChannel).GetMethod(nameof(IOtpChannel.SendNoticeAsync), [typeof(string), typeof(string), typeof(CancellationToken)])!,
         };
-        var seams = new List<MethodBase>(declared);
+        var seams = new List<MethodBase>(declared)
+        {
+            // ‏(‏2026-11-12، W13-6·١٢) مَقعَدا المُستَدعي: المُستَدعي الَّذي لا يُسَجِّل، والتَحويلُ مِن عَميلٍ خامٍّ إلَيه.
+            typeof(ProviderCalls).GetProperty(nameof(ProviderCalls.Unrecorded))!.GetMethod!,
+            typeof(ProviderHttp<>).GetMethods(BindingFlags.Public | BindingFlags.Static).Single(m => m.Name == "op_Implicit"),
+        };
         foreach (var asm in assemblies)
         {
             Type[] types;
@@ -113,24 +124,32 @@ public class MeterTestSeamTests(ITestOutputHelper output)
         return seams;
     }
 
+    /// <summary>‏(‏2026-11-12، W13-6·١٢) مِفتاحُ الطَريقَة: وَحدَتُها ومُعَرِّفُ بَيانِها الوَصفِيّ — يُطابِقُ طَريقَةَ النَوعِ العامِّ ونَظيرَتَها عَلى نَوعٍ مُغلَق.</summary>
+    internal static (Module Module, int Token) Key(MethodBase m) => (m.Module, m.MetadataToken);
+
+    private static bool IsConversion(MethodBase m)
+        => m.Name == "op_Implicit" && m.DeclaringType is { IsGenericType: true } t && t.GetGenericTypeDefinition() == typeof(ProviderHttp<>);
+
     [Fact]
     public void No_production_code_calls_the_ProviderCall_less_channel_seam()
     {
         var assemblies = ProductionAssemblies();
         var seams = Seams(assemblies);
-        var seamSet = seams.ToHashSet();
+        var seamSet = seams.Select(Key).ToHashSet();
         var bodies = 0;
-        var refs = assemblies.SelectMany(a => References(a, n => bodies += n)).Where(r => seamSet.Contains(r.Callee)).ToList();
+        var refs = assemblies.SelectMany(a => References(a, n => bodies += n)).Where(r => seamSet.Contains(Key(r.Callee))).ToList();
         static string Name(MethodBase m) => $"{m.DeclaringType?.FullName}.{m.Name}";
-        // المَأذون: الجِسمُ الافتِراضِيُّ لِلأَخِ ذي ProviderCall في الواجِهَةِ نَفسِها يُمَرِّرُ إلى المَقعَد (القَنَواتُ المُزَيَّفَةُ ومُحاكي التَطوير).
-        var sanctioned = refs.Where(r => r.Caller.DeclaringType == typeof(IOtpChannel)).ToList();
+        // المَأذون: الجِسمُ الافتِراضِيُّ لِلأَخِ ذي ProviderCall في الواجِهَةِ نَفسِها يُمَرِّرُ إلى المَقعَد (القَنَواتُ المُزَيَّفَةُ ومُحاكي التَطوير)؛
+        // و(W13-6·١٢) جِسمُ التَحويلِ مِن HttpClient يَقرَأُ ProviderCalls.Unrecorded.
+        var sanctioned = refs.Where(r => r.Caller.DeclaringType == typeof(IOtpChannel) || IsConversion(r.Caller)).ToList();
         var callers = refs.Except(sanctioned).ToList();
         output.WriteLine($"[G6c] تَجميعات {assemblies.Count} · أَجسام {bodies} · مَقاعِد {seams.Count} ({string.Join(", ", seams.Select(Name))})");
         output.WriteLine($"[G6c] مَأذون {sanctioned.Count} ({string.Join(", ", sanctioned.Select(r => $"{Name(r.Caller)}→{r.Callee.Name}"))}) · مُنادونَ في libs/apps {callers.Count}");
         foreach (var c in callers) output.WriteLine($"  ✗ {Name(c.Caller)} → {Name(c.Callee)}");
         Assert.True(assemblies.Count >= 40 && bodies > 10_000, $"أَداةٌ عَمياء: {assemblies.Count} تَجميعاً و{bodies} جِسماً.");
-        Assert.True(seams.Count >= 4, $"أَداةٌ عَمياء: {seams.Count} مَقعَداً (الأَخَوانِ وتَنفيذاتُهُما في Twilio والمُحاكي).");
-        Assert.True(sanctioned.Count == 2, $"أَداةٌ عَمياء: المُنادي المَأذونُ {sanctioned.Count} لا 2 — قارِئُ الـIL لا يَرى النِداء.");
+        Assert.True(seams.Count >= 6, $"أَداةٌ عَمياء: {seams.Count} مَقعَداً (الأَخَوانِ وتَنفيذاتُهُما في Twilio والمُحاكي، ومَقعَدا المُستَدعي).");
+        Assert.True(sanctioned.Count == 3, $"أَداةٌ عَمياء: المُنادي المَأذونُ {sanctioned.Count} لا 3 — قارِئُ الـIL لا يَرى النِداء.");
+        Assert.Contains(sanctioned, r => IsConversion(r.Caller) && r.Callee.Name == "get_Unrecorded");
         Assert.True(callers.Count == 0, "مُنادٍ في كودِ الإنتاجِ لِمَقعَدِ الاختِبار — يُرسِلُ بِلا ProviderCall: "
                                         + string.Join(", ", callers.Select(c => $"{Name(c.Caller)}→{c.Callee.Name}")));
     }

@@ -1020,7 +1020,10 @@ public sealed class DealNotices
                 to = (await q.LoadAsync<StudioUser>(n.UserId, ct))?.Email;
             if (string.IsNullOrWhiteSpace(to)) return false;
             var (subject, text) = OwnerEmailFor(storeName, deal, n, l);
-            await OtpSendGuard.SendWithinAsync(t => email.SendNoticeAsync(to, subject, text, t), ct);
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) البَريدُ نِداءٌ مَعدود: المَتجَرُ، ومُعَرِّفُ طَلَبِه مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَه (التَصميم §6.2).
+            var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
+                ACommerce.Platform.Shared.Metering.OutboundUnits.NoticeEmailSend, slug, n.Id.ToString("N"));
+            await OtpSendGuard.SendWithinAsync(t => email.SendNoticeAsync(call, to, subject, text, t), ct);
             return true;
         }
         catch (Exception e)

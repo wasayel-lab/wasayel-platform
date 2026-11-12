@@ -33,8 +33,8 @@ public class DealOwnerEmailTests(ITestOutputHelper output)
         public string? DevHintCode => null;
         public Exception? Throws;
         public readonly List<(string To, string Subject, string Text)> Notices = new();
-        public Task SendOtpAsync(string email, string code, CancellationToken ct) => Task.CompletedTask;
-        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
+        public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct) => Task.CompletedTask;
+        public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct)
         {
             if (Throws is not null) throw Throws;
             Notices.Add((email, subject, text));

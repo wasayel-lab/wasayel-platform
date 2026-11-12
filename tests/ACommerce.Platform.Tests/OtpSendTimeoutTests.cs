@@ -176,7 +176,7 @@ public class SmtpEmailChannelTimeoutTests(Xunit.Abstractions.ITestOutputHelper o
             From = "no-reply@wasayel.test",
             FromName = "وَسايِل",
             TimeoutSeconds = timeoutSeconds
-        }), NullLogger<SmtpEmailChannel>.Instance);
+        }), ACommerce.Platform.Shared.Metering.ProviderCalls.Unrecorded, NullLogger<SmtpEmailChannel>.Instance);
 
     [Fact]
     public void DefaultTimeoutOption_IsTheGuardDefault()
@@ -234,7 +234,7 @@ public class SmtpEmailChannelTimeoutTests(Xunit.Abstractions.ITestOutputHelper o
         try
         {
             var sw = Stopwatch.StartNew();
-            var send = Channel(port, timeoutSeconds).SendOtpAsync("owner@wasayel.test", "123456", CancellationToken.None);
+            var send = Channel(port, timeoutSeconds).SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", "timeout-tests", "r1"), "owner@wasayel.test", "123456", CancellationToken.None);
             Assert.True(await accepted.Task.WaitAsync(TimeSpan.FromSeconds(60)), "الاتِّصالُ لَم يُقبَل — لا يُقاسُ قَطعُ الحارِس.");
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => send.WaitAsync(TimeSpan.FromSeconds(60)));
             sw.Stop();
@@ -270,7 +270,7 @@ public class SmtpEmailChannelTimeoutTests(Xunit.Abstractions.ITestOutputHelper o
         var sw = Stopwatch.StartNew();
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             Channel(port, timeoutSeconds: 10)
-                .SendOtpAsync("owner@wasayel.test", "123456", CancellationToken.None));
+                .SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", "timeout-tests", "r1"), "owner@wasayel.test", "123456", CancellationToken.None));
         sw.Stop();
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(8), $"تَأَخَّرَ الرَفض: {sw.Elapsed}");
     }
@@ -288,9 +288,9 @@ file sealed class HangingEmailChannel : IEmailOtpChannel
     public string ChannelName => "Hanging";
     public string? DevHintCode => null;
     // تَتَجاهَل رَمزَها عَمداً — تُمَثِّل مُزَوِّداً بِلا مُهلَة.
-    public Task SendOtpAsync(string email, string code, CancellationToken ct)
+    public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct)
         => Task.Delay(TimeSpan.FromSeconds(60), CancellationToken.None);
-    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
+    public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
 }
 
 public class OtpSendPipelineTimeoutTests

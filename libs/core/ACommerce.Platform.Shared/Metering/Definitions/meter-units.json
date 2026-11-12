@@ -107,6 +107,24 @@
       "feature": "sms_otp",
       "reconcile": "intents",
       "source": "TwilioSmsChannel.SendNoticeAsync through ProviderHttp — one entry when Twilio answers 2xx; request id = the notification id written before the send (AccountContacts.NoticeLinkedAsync); app = the store slug"
+    },
+    {
+      "code": "otp.email.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "email_otp",
+      "reconcile": "intents",
+      "source": "BrevoEmailChannel.SendOtpAsync through ProviderHttp (one entry when Brevo answers 2xx) or SmtpEmailChannel.SendOtpAsync through ProviderCalls.InvokeAsync (one entry when MailKit SendAsync returned); request id = the attempt id (store door, AuthHandlers.RequestEmailOtpHandler) or a fresh call id (studio door StudioAuth.SendEmailCodeAsync, contact codes AccountContacts); app = the store slug or _platform"
+    },
+    {
+      "code": "notice.email.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "email_otp",
+      "reconcile": "intents",
+      "source": "BrevoEmailChannel.SendNoticeAsync through ProviderHttp or SmtpEmailChannel.SendNoticeAsync through ProviderCalls.InvokeAsync — one entry when accepted; request id = the notification id written before the send (AccountContacts.NoticeLinkedAsync, DealNotices.MailStoreOwnerAsync); app = the store slug"
     }
   ]
 }

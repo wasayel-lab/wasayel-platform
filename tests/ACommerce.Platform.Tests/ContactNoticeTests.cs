@@ -157,9 +157,9 @@ public class LiveContactNoticeProofTests(ITestOutputHelper output)
         public string? Code;
         public string ChannelName => "capture";
         public string? DevHintCode => null;
-        public Task SendOtpAsync(string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
+        public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
         public readonly List<(string To, string Subject, string Text)> Notices = new();
-        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) { Notices.Add((email, subject, text)); return Task.CompletedTask; }
+        public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct) { Notices.Add((email, subject, text)); return Task.CompletedTask; }
     }
 
     internal sealed class CaptureSms : IOtpChannel

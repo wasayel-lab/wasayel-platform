@@ -66,7 +66,7 @@ public static class AccountContacts
             if (kind == ContactLink.Email)
                 return emailChannel is null ? new(null, Unavailable)
                     : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.AddEmail, ContactLink.Subject(userId, value),
-                        value, emailChannel.DevHintCode, emailChannel.SendOtpAsync, ct), null);
+                        value, emailChannel.DevHintCode, EmailCode(emailChannel, slug), ct), null);
             return phoneChannel is null ? new(null, Unavailable)
                 : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.AddPhone, ContactLink.Subject(userId, value),
                     AuthHandlers.PhoneDestination(value), phoneChannel.DevHintCode, PhoneCode(phoneChannel, slug), ct), null);
@@ -148,7 +148,9 @@ public static class AccountContacts
             if (other == ContactLink.Email)
             {
                 if (emailChannel is null) return "none";
-                await OtpSendGuard.SendWithinAsync(t => emailChannel.SendNoticeAsync(to, title, body, t), ct);
+                // ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) وبِالبَريدِ نِداءٌ مَعدودٌ بِمُعَرِّفِ الإشعارِ نَفسِه.
+                var mail = ProviderCall.ForChannel(OutboundUnits.NoticeEmailSend, slug, noticeId.ToString("N"));
+                await OtpSendGuard.SendWithinAsync(t => emailChannel.SendNoticeAsync(mail, to, title, body, t), ct);
                 return ContactLink.Email;
             }
             if (phoneChannel is null) return "none";
@@ -183,6 +185,11 @@ public static class AccountContacts
     private static Func<string, string, CancellationToken, Task> PhoneCode(IOtpChannel channel, string slug)
         => (to, code, ct) => channel.SendOtpAsync(ProviderCall.ForChannel(OutboundUnits.OtpSmsSend, slug, ProviderCall.FreshRequestId()), to, code, ct);
 
+    /// <summary>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) ونَظيرُه بِالبَريد: <see cref="OutboundUnits.OtpEmailSend"/> بِمَتجَرِه ومُعَرِّفِ نِداءٍ جَديد — كانَ المُفَوَّضُ
+    /// <c>emailChannel.SendOtpAsync</c> نَفسَه، وتَوقيعُه صارَ يَحمِلُ <c>ProviderCall</c>.</summary>
+    private static Func<string, string, CancellationToken, Task> EmailCode(IEmailOtpChannel channel, string slug)
+        => (to, code, ct) => channel.SendOtpAsync(ProviderCall.ForChannel(OutboundUnits.OtpEmailSend, slug, ProviderCall.FreshRequestId()), to, code, ct);
+
     // ─── حَذفُ الوَسيلَةِ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) ───────────────────────────────
 
     /// <summary>
@@ -205,7 +212,7 @@ public static class AccountContacts
             if (remaining == ContactLink.Email)
                 return emailChannel is null ? new(null, Unavailable)
                     : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.RemoveContact, subject, to,
-                        emailChannel.DevHintCode, emailChannel.SendOtpAsync, ct), null);
+                        emailChannel.DevHintCode, EmailCode(emailChannel, slug), ct), null);
             return phoneChannel is null ? new(null, Unavailable)
                 : new(await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.RemoveContact, subject, AuthHandlers.PhoneDestination(to),
                     phoneChannel.DevHintCode, PhoneCode(phoneChannel, slug), ct), null);

@@ -439,10 +439,13 @@ public static class AuthHandlers
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, email, code, AuthKind.EmailOtp);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) النِداءُ مَعدودٌ في تَوقيعِه كَأَخيهِ في الجَوّال: المَتجَرُ ومُعَرِّفُ المُحاوَلَة.
+        var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
+            ACommerce.Platform.Shared.Metering.OutboundUnits.OtpEmailSend, tenantCtx.Slug, attemptId);
         // نَفسُ الحارِس — والعِلَّةُ المَقيسَةُ كانَت هُنا بِالضَبط:
         // ‏`POST /{slug}/auth/email/login` عَلِقَ ‏90+ ثانِيَة بِلا رَدّ.
         await OtpSendGuard.SendWithinAsync(
-            token => channel.SendOtpAsync(email, code, token), ct);
+            token => channel.SendOtpAsync(call, email, code, token), ct);
         return new OtpRequestResult(
             AttemptId: attemptId,
             DisplayCode: channel.DevHintCode ?? "",

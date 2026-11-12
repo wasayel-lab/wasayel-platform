@@ -280,8 +280,8 @@ public class TenantAuthChannelDoorTests(ITestOutputHelper output)
     {
         public string ChannelName => "fake-email";
         public string? DevHintCode => null;
-        public Task SendOtpAsync(string email, string code, CancellationToken ct) => Task.CompletedTask;
-        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
+        public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct) => Task.CompletedTask;
+        public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     private sealed class FakeNafath : INafathChannel

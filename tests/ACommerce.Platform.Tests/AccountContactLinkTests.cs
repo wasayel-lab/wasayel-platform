@@ -161,8 +161,8 @@ public class AccountContactLinkTests(ITestOutputHelper output)
         public string? To;
         public string ChannelName => "capture";
         public string? DevHintCode => null;
-        public Task SendOtpAsync(string email, string code, CancellationToken ct) { To = email; Code = code; return Task.CompletedTask; }
-        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
+        public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct) { To = email; Code = code; return Task.CompletedTask; }
+        public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>رَمزُ الرَبطِ لا يُدخِل ورَمزُ الدُخولِ لا يَربِط: المُحاوَلَةُ بِنَوعِ <c>AddEmail</c> ومَوضوعِ الحِسابِ والوَسيلَة، والدُخولُ بِالبَريدِ
@@ -174,14 +174,14 @@ public class AccountContactLinkTests(ITestOutputHelper output)
         var user = Guid.NewGuid();
         var channel = new CapturingEmail();
         var subject = ContactLink.Subject(user, "sara@example.com");
-        var id = await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.AddEmail, subject, "sara@example.com", null, channel.SendOtpAsync, default);
+        var id = await AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.AddEmail, subject, "sara@example.com", null, (to, code, ct) => channel.SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", slug, "link-test"), to, code, ct), default);
         Assert.Equal("sara@example.com", channel.To);
         Assert.Equal(subject, AuthHandlers.SubjectOf(slug, id, AuthHandlers.AuthKind.AddEmail));
         Assert.Null(AuthHandlers.SubjectOf(slug, id, AuthHandlers.AuthKind.EmailOtp));
         Assert.False(AuthHandlers.ConsumeAttempt(slug, "sara@example.com", channel.Code!, AuthHandlers.AuthKind.EmailOtp));
         Assert.True(AuthHandlers.ConsumeAttempt(slug, subject, channel.Code!, AuthHandlers.AuthKind.AddEmail));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.EmailOtp, subject, "sara@example.com", null, channel.SendOtpAsync, default));
+            AuthHandlers.RequestContactCodeAsync(slug, AuthHandlers.AuthKind.EmailOtp, subject, "sara@example.com", null, (to, code, ct) => channel.SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", slug, "link-test"), to, code, ct), default));
     }
 
     [Fact]
@@ -215,8 +215,8 @@ public class LiveAccountContactLinkProofTests(ITestOutputHelper output)
         public string? Code;
         public string ChannelName => "capture";
         public string? DevHintCode => null;
-        public Task SendOtpAsync(string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
-        public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
+        public Task SendOtpAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string code, CancellationToken ct) { Code = code; return Task.CompletedTask; }
+        public Task SendNoticeAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string email, string subject, string text, CancellationToken ct) => Task.CompletedTask;
     }
 
     /// <summary>مَتجَرُ جَوّالٍ قَناةُ بَريدِه مُسَجَّلَة — يَعرِضُ الاثنَين (‏2026-10-29، A2).</summary>

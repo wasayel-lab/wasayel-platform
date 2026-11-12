@@ -8,6 +8,12 @@ public static class ProviderNames
 {
     /// <summary>قَناةُ الرَسائِلِ القَصيرَةِ عَبرَ Twilio (اعتِمادُ المَنَصَّة).</summary>
     public const string Twilio = "twilio";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٢) قَناةُ البَريدِ عَبرَ واجِهَةِ Brevo عَلى ‏443.</summary>
+    public const string Brevo = "brevo";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٢) قَناةُ البَريدِ عَبرَ خادِمِ SMTP المَضبوط (MailKit).</summary>
+    public const string Smtp = "smtp";
 }
 
 /// <summary>رُموزُ الوَحَداتِ الصادِرَةِ الَّتي يَبنيها مُنادٍ في وَقتِ التَشغيل — بِحَرفِ صُفوفِها في المُعجَم.</summary>
@@ -18,4 +24,10 @@ public static class OutboundUnits
 
     /// <summary>إشعارٌ بِالرَسائِلِ القَصيرَة — <c>IOtpChannel.SendNoticeAsync</c>.</summary>
     public const string NoticeSmsSend = "notice.sms.send";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٢) رَمزُ دُخولٍ بِالبَريد — <c>IEmailOtpChannel.SendOtpAsync</c>.</summary>
+    public const string OtpEmailSend = "otp.email.send";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٢) إشعارٌ بِالبَريد — <c>IEmailOtpChannel.SendNoticeAsync</c>.</summary>
+    public const string NoticeEmailSend = "notice.email.send";
 }

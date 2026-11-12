@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Providers.Brevo;
+using ACommerce.Kit.Auth.Providers.Smtp;
 using ACommerce.Kit.Auth.Providers.Twilio;
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
@@ -22,6 +24,10 @@ namespace ACommerce.Platform.Tests;
 // بِالمُعَرِّفِ نَفسِه ⇐ سَطرٌ واحِد؛ والطَلَبُ نَفسُه تَحتَ حامِلَين ⇐ سَطرٌ واحِد؛ وقاعِدَةٌ لا تُجيبُ ⇐ النِداءُ يَمضي. ثُمَّ **P11 عَبرَ البابِ الحَقيقِيّ**:
 // `POST /{slug}/auth/phone/login` خَلفَ وَسيطِ المُستَأجِرِ الحَقيقِيِّ وTwilio المُسَجَّلِ بِـ`AddTwilioSmsChannel` عَلى مُعالِجٍ يُسَجِّل — سَطرُ `otp.sms.send` بِالمَتجَرِ
 // ورائِدِ أَعمالِه؛ والقَبولُ بَعدَ مُهلَةِ `OtpSendGuard` ⇐ `send_failed` ونِيَّةٌ مَجهولَةٌ وصِفرُ سَطر.
+//
+// ‏(‏2026-11-12، W13-6·١٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وبابُ البَريدِ بِقَناتَيه**: `POST /{slug}/auth/email/login` في مَتجَرٍ قَناتُه البَريدُ خَلفَ الوَسيطِ الحَقيقِيّ،
+// مَرَّةً بِـBrevo (`AddBrevoEmailChannel` عَلى مُعالِجٍ يُسَجِّل) ومَرَّةً بِـSMTP (`AddSmtpEmailChannel` عَلى خادِمٍ مُزَيَّفٍ في 5200–5249) ⇐ سَطرُ `otp.email.send`
+// واحِدٌ بِالمَتجَرِ ومالِكِه ومُعَرِّفُ طَلَبِه مُعَرِّفُ المُحاوَلَة، والمُزَوِّدُ اسمُ القَناة؛ ورَفضُ Brevo ⇐ `send_failed` ونِيَّةٌ مَرفوضَةٌ وصِفرُ سَطر.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveProviderCallsProofTests(ITestOutputHelper output)
@@ -255,5 +261,84 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
         Assert.Empty(await EntriesAsync(Assert.Single(unknown).Id));
         Assert.Equal(2, seen.Count);
         Assert.All(seen, r => Assert.Equal("POST /2010-04-01/Accounts/AC0/Messages.json Basic", r));
+    }
+
+    /// <summary>
+    /// <para><b>بابُ رَمزِ البَريدِ عَبرَ HTTP بِقَناتَيه</b> (‏2026-11-12، W13-6·١٢): مَتجَرٌ قَناتُه البَريد، والوَسيطُ الحَقيقِيُّ يَفتَحُ الحامِلَ ويَملَؤُه. Brevo يَقبَل ⇐
+    /// التَحويلُ إلى التَحَقُّق، والنِيَّةُ مَقبولَة، وسَطرُ <c>otp.email.send</c> واحِدٌ بِالمَتجَرِ ومالِكِه والمِيزَةِ <c>email_otp</c> ومُعَرِّفُ طَلَبِه مُعَرِّفُ المُحاوَلَة؛
+    /// وBrevo يَرفُضُ (400) ⇐ <c>send_failed</c> ونِيَّةٌ مَرفوضَةٌ وصِفرُ سَطر. ثُمَّ SMTP عَلى خادِمٍ مُزَيَّف ⇐ السَطرُ نَفسُه والمُزَوِّدُ <c>smtp</c> والرِسالَةُ سُلِّمَت.</para>
+    /// </summary>
+    [Fact]
+    public async Task The_email_code_door_counts_one_accepted_send_on_brevo_and_on_smtp()
+    {
+        if (!Enabled) return;
+        var status = HttpStatusCode.Created;
+        var seen = new List<string>();
+        var brevo = new Answer((req, _) =>
+        {
+            lock (seen) seen.Add($"{req.Method} {req.RequestUri} {string.Join(",", req.Headers.Select(h => h.Key))}");
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent("{}", Encoding.UTF8, "application/json") });
+        });
+        string Email() => $"w13o-{Guid.NewGuid():N}"[..18] + "@wasayel.test";
+        async Task<(string Slug, string Owner)> StoreAsync(LiveTemplateDoorHost host)
+        {
+            var slug = NewSlug();
+            var owner = Guid.NewGuid();
+            await using var s = host.Store.LightweightSession();
+            s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ البَريد", OwnerUserId = owner, AuthChannel = AuthChannels.Email });
+            await s.SaveChangesAsync();
+            return (slug, owner.ToString("D"));
+        }
+
+        await using (var host = LiveTemplateDoorHost.Build(services: s =>
+               {
+                   s.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => brevo));
+                   s.AddBrevoEmailChannel(o => { o.ApiKey = "live-proof"; o.From = "no-reply@wasayel.test"; });
+               }, throughResolver: true))
+        {
+            var (slug, owner) = await StoreAsync(host);
+            var route = new Dictionary<string, string> { ["slug"] = slug };
+            var (code, location) = await host.PostFormAsync("/{slug}/auth/email/login", route, slug, null, ("email", Email()));
+            var attempt = Uri.UnescapeDataString(location.Split("attempt=")[1].Split('&')[0]);
+            var id = $"{OutboundUnits.OtpEmailSend}:{ProviderNames.Brevo}:{attempt}";
+            var rows = await EntriesAsync(id);
+            output.WriteLine($"[P12] Brevo ⇒ ({code}, {location}) · النِيَّة {await OutcomeAsync(id)} · {string.Join(" | ", rows)} · المُعالِج {string.Join(", ", seen)}");
+            Assert.Equal(302, code);
+            Assert.Contains("stage=verify", location, StringComparison.Ordinal);
+            Assert.Equal("accepted", await OutcomeAsync(id));
+            var row = Assert.Single(rows);
+            Assert.Equal((OutboundUnits.OtpEmailSend, slug, owner, "email_otp", ProviderNames.Brevo, UsageLedgerWriter.RequestSource, attempt, 1L, true),
+                         (row.Unit, row.App, row.Entrepreneur, row.Feature, row.Provider, row.SourceType, row.SourceId, row.Quantity, row.SameTransactionAsIntent));
+            Assert.Equal(new[] { "POST https://api.brevo.com/v3/smtp/email api-key" }, seen);
+
+            status = HttpStatusCode.BadRequest;
+            var (refusedCode, refusedLocation) = await host.PostFormAsync("/{slug}/auth/email/login", route, slug, null, ("email", Email()));
+            var intents = await WithinAsync(() => IntentsOfAppAsync(slug), l => l.Count == 2 && l.All(i => i.Outcome != "pending"), TimeSpan.FromSeconds(10));
+            var refused = intents.Where(i => i.Outcome == "refused").ToList();
+            output.WriteLine($"[P12] Brevo 400 ⇒ ({refusedCode}, {refusedLocation}) · نِيّاتُ المَتجَر {string.Join(", ", intents.Select(i => i.Outcome))}");
+            Assert.Equal(302, refusedCode);
+            Assert.Contains("err=send_failed", refusedLocation, StringComparison.Ordinal);
+            Assert.Equal(new[] { "accepted", "refused" }, intents.Select(i => i.Outcome).Order(StringComparer.Ordinal));
+            Assert.Empty(await EntriesAsync(Assert.Single(refused).Id));
+        }
+
+        await using var smtp = new EmailRequestShapeCharacterizationTests.FakeSmtp();
+        await using (var host = LiveTemplateDoorHost.Build(services: s =>
+                         s.AddSmtpEmailChannel(o => { o.Host = "127.0.0.1"; o.Port = smtp.Port; o.From = "no-reply@wasayel.test"; }), throughResolver: true))
+        {
+            var (slug, owner) = await StoreAsync(host);
+            var (code, location) = await host.PostFormAsync("/{slug}/auth/email/login", new Dictionary<string, string> { ["slug"] = slug }, slug, null, ("email", Email()));
+            var attempt = Uri.UnescapeDataString(location.Split("attempt=")[1].Split('&')[0]);
+            var id = $"{OutboundUnits.OtpEmailSend}:{ProviderNames.Smtp}:{attempt}";
+            var rows = await EntriesAsync(id);
+            output.WriteLine($"[P12] SMTP ⇒ ({code}, {location}) · النِيَّة {await OutcomeAsync(id)} · {string.Join(" | ", rows)} · رَسائِلُ الخادِم {smtp.Messages.Count}");
+            Assert.Equal(302, code);
+            Assert.Contains("stage=verify", location, StringComparison.Ordinal);
+            Assert.Equal("accepted", await OutcomeAsync(id));
+            var row = Assert.Single(rows);
+            Assert.Equal((OutboundUnits.OtpEmailSend, slug, owner, "email_otp", ProviderNames.Smtp, attempt, true),
+                         (row.Unit, row.App, row.Entrepreneur, row.Feature, row.Provider, row.SourceId, row.SameTransactionAsIntent));
+            Assert.Single(smtp.Messages);
+        }
     }
 }

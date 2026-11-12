@@ -5,11 +5,10 @@
 #   و«-»: المِلَفُّ يُسَمّي النَوعَ ولَم يُرَحَّل بَعدُ إلى المُستَدعي المَعدود (بَندُه في الموجَة ١٣ مَذكورٌ في سَبَبِه).
 #
 # **القائِمَةُ تَتَقَلَّصُ ولا تَنمو** (القاعِدَة ٢): وُلِدَت بِالاثنَي عَشَرَ المَقيسَةِ عِندَ 0f788af، خَرَجَ مِنها TwilioSmsChannel.cs ودَخَلَها ProviderHttp.cs
-# في الكوميتِ نَفسِه (W13-6·١١) فَبَقِيَت 12؛ ثُمَّ 11 (Brevo)، 10 (نَفاذ)، 7 (ميسّر وPayPal وPaddle)، 5 (OTO والنَماذِج). وسَقفُها في
+# في الكوميتِ نَفسِه (W13-6·١١) فَبَقِيَت 12؛ ثُمَّ 11 (Brevo — W13-6·١٢، وSMTP بَقِيَ بِحَقلِه client)، 10 (نَفاذ)، 7 (ميسّر وPayPal وPaddle)، 5 (OTO والنَماذِج). وسَقفُها في
 # OutboundInvokerBoundaryTests. وسَطرٌ لِمِلَفٍّ لا يُسَمّي نَوعاً خامّاً (إعفاءٌ مَيِّت) أَحمَر.
 libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs|-|المُستَدعي المَعدودُ نَفسُه: المالِكُ الوَحيدُ لِـHttpClient في العُدَد، يَبنيه مِن IHttpClientFactory
-libs/kits/Auth/ACommerce.Kit.Auth.Providers.Brevo/BrevoEmailChannel.cs|-|بَريدُ HTTPS — يُرَحَّلُ إلى ProviderHttp في البَند ١٢
-libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|-|MailKit SmtpClient — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٢
+libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|client|MailKit SmtpClient — أَفعالُه الأَربَعَةُ (الاتِّصالُ والاعتِمادُ والإرسالُ والانصِراف) داخِلَ وُسَطاءِ InvokeAsync مُنذُ البَند ١٢
 libs/kits/Auth/ACommerce.Kit.Auth.Providers.Nafath/NafathChannel.cs|-|نَفاذ — يُرَحَّلُ إلى ProviderHttp في البَند ١٣
 libs/kits/Files/ACommerce.Kit.Files.Providers.S3/S3FileStorage.cs|-|AWS IAmazonS3 — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٣
 libs/templates/ACommerce.Templates.Customer.Marketplace/Services/WebPushService.cs|-|WebPushClient — يُلَفُّ فِعلُه بِـInvokeAsync في البَند ١٣

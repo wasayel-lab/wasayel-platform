@@ -1,3 +1,4 @@
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -24,14 +25,15 @@ public sealed class MockEmailChannel : IEmailOtpChannel, IDevelopmentStubChannel
     public string ChannelName => "MockEmail";
     public string? DevHintCode => FixedCode;
 
-    public Task SendOtpAsync(string email, string code, CancellationToken ct)
+    // ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) التَوقيعُ يَحمِلُ `ProviderCall` كَكُلِّ قَناة، والمُحاكي لا يُغادِرُ العَمَلِيَّةَ فَلا يَعُدّ: النِداءُ يُقبَلُ ولا يُستَعمَل.
+    public Task SendOtpAsync(ProviderCall call, string email, string code, CancellationToken ct)
     {
         _logger.LogInformation("[MockEmail] أَرسَلنا الكود {Code} إلى {Email}", code, email);
         return Task.CompletedTask;
     }
 
     /// <summary>‏(‏2026-10-29، A3) الإشعارُ يُكتَبُ في السِجِلِّ كَالرَمز — لا بَريدَ حَقيقِيَّ في التَطوير.</summary>
-    public Task SendNoticeAsync(string email, string subject, string text, CancellationToken ct)
+    public Task SendNoticeAsync(ProviderCall call, string email, string subject, string text, CancellationToken ct)
     {
         _logger.LogInformation("[MockEmail] إشعارٌ إلى {Email}: {Subject} — {Text}", email, subject, text);
         return Task.CompletedTask;

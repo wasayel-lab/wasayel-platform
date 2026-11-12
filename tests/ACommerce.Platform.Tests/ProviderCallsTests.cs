@@ -1,5 +1,8 @@
 using System.Net;
+using ACommerce.Kit.Auth.Providers.Smtp;
 using ACommerce.Platform.Shared.Metering;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -155,5 +158,70 @@ public class ProviderCallsTests(ITestOutputHelper output)
             _ => throw new FormatException("unreadable answer"), CancellationToken.None);
         Assert.Equal(7, result);
         Assert.Equal(new[] { $"open {Call.Id}", $"decide {Call.Id} Unknown 1" }, recorder.Log);
+    }
+
+    // ─── عُدَّةُ SDK: أَفعالُ MailKit داخِلَ المُستَدعي (‏2026-11-12، W13-6·١٢ — التَصميم §6.2 «SMTP → SendAsync returned») ─────────────────────
+
+    /// <summary>كاتِبٌ يَسأَلُ الخادِمَ المُزَيَّفَ عِندَ النِيَّةِ: كَم اتِّصالاً رَأى قَبلَها — فَـ«النِيَّةُ قَبلَ النِداء» مَقيسَةٌ عَلى السِلكِ لا عَلى تَرتيبِ السُطور.</summary>
+    private sealed class WireRecorder(EmailRequestShapeCharacterizationTests.FakeSmtp smtp) : OutboundRecorder
+    {
+        public List<string> Log { get; } = new();
+
+        public override Task OpenAsync(ProviderCall call, CancellationToken ct)
+        {
+            lock (Log) Log.Add($"open {call.Id} · اتِّصالات {smtp.Connections} · رَسائِل {smtp.Messages.Count}");
+            return Task.CompletedTask;
+        }
+
+        public override Task DecideAsync(ProviderCall call, ProviderAcceptance acceptance)
+        {
+            lock (Log) Log.Add($"decide {call.Id} {acceptance.Outcome} {acceptance.Quantity} · رَسائِل {smtp.Messages.Count}");
+            return Task.CompletedTask;
+        }
+    }
+
+    private static SmtpEmailChannel Smtp(EmailRequestShapeCharacterizationTests.FakeSmtp smtp, OutboundRecorder recorder, int timeoutSeconds = 10)
+        => new(Options.Create(new SmtpEmailOptions { Host = "127.0.0.1", Port = smtp.Port, From = "no-reply@wasayel.test", TimeoutSeconds = timeoutSeconds }),
+            new ProviderCalls(recorder), NullLogger<SmtpEmailChannel>.Instance);
+
+    private static readonly ProviderCall Mail = ProviderCall.ForChannel(OutboundUnits.OtpEmailSend, "w13-calls", "attempt-mail");
+
+    /// <summary><b>قُبِلَ حينَ عادَ الإرسال</b>: النِيَّةُ قَبلَ أَيِّ اتِّصال، والقَبولُ بَعدَ أَن سَلَّمَ الخادِمُ الرِسالَة، والقَناةُ تَسِمُ النِداءَ <c>smtp</c>.</summary>
+    [Fact]
+    public async Task Smtp_is_accepted_when_the_send_returned_and_the_intent_precedes_the_connection()
+    {
+        await using var smtp = new EmailRequestShapeCharacterizationTests.FakeSmtp();
+        var recorder = new WireRecorder(smtp);
+
+        await Smtp(smtp, recorder).SendOtpAsync(Mail, "owner@wasayel.test", "483920", CancellationToken.None);
+
+        var id = $"{OutboundUnits.OtpEmailSend}:{ProviderNames.Smtp}:attempt-mail";
+        output.WriteLine($"[G6] SMTP ⇒ {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { $"open {id} · اتِّصالات 0 · رَسائِل 0", $"decide {id} Accepted 1 · رَسائِل 1" }, recorder.Log);
+    }
+
+    /// <summary><b>رَفضُ المُستَلِمِ وصَمتُ الخادِم</b>: الاستِثناءُ بَعدَ الإرسالِ مَجهولٌ عَلى النِيَّة (لا سَطر)، ويُعادُ رَميُه فَتُحَوِّلُه القَناةُ كَما كانَت.</summary>
+    [Fact]
+    public async Task Smtp_refusal_and_silence_are_unknown_and_the_channel_still_says_why()
+    {
+        var id = $"{OutboundUnits.OtpEmailSend}:{ProviderNames.Smtp}:attempt-mail";
+        await using (var refusing = new EmailRequestShapeCharacterizationTests.FakeSmtp(rejectRecipient: true))
+        {
+            var recorder = new WireRecorder(refusing);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                Smtp(refusing, recorder).SendOtpAsync(Mail, "owner@wasayel.test", "483920", CancellationToken.None));
+            output.WriteLine($"[G6] SMTP 550 ⇒ {ex.Message} · {string.Join(" → ", recorder.Log)}");
+            Assert.Equal("SMTP فَشِل الإرسال: 5.1.1 Mailbox unavailable", ex.Message);
+            Assert.Equal(new[] { $"open {id} · اتِّصالات 0 · رَسائِل 0", $"decide {id} Unknown 1 · رَسائِل 0" }, recorder.Log);
+        }
+        await using (var silent = new EmailRequestShapeCharacterizationTests.FakeSmtp(silent: true))
+        {
+            var recorder = new WireRecorder(silent);
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                Smtp(silent, recorder, timeoutSeconds: 1).SendOtpAsync(Mail, "owner@wasayel.test", "483920", CancellationToken.None));
+            output.WriteLine($"[G6] SMTP صامِت ⇒ {ex.Message} · {string.Join(" → ", recorder.Log)}");
+            Assert.Equal("SMTP " + ACommerce.Kit.Auth.OtpSendGuard.TimeoutMessage(TimeSpan.FromSeconds(1)), ex.Message);
+            Assert.Equal(new[] { $"open {id} · اتِّصالات 0 · رَسائِل 0", $"decide {id} Unknown 1 · رَسائِل 0" }, recorder.Log);
+        }
     }
 }
