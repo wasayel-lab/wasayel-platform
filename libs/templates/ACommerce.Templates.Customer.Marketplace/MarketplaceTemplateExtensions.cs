@@ -4795,8 +4795,12 @@ public static class MarketplaceTemplateExtensions
         // عَلى نُقطَة كِتابَة بِلا دَور. راجِع Gates.EffectiveRole.
         var effectiveRole = await Gates.EffectiveRole.ResolveAsync(
             http, slug, userId, user.ActiveRole);
-        return ACommerce.Kit.Roles.RolePermissions.Has(
+        var allowed = ACommerce.Kit.Roles.RolePermissions.Has(
             tenant.Roles, effectiveRole, permission);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ — شَكلُ
+        // `PermissionFilter` بِعَينِه: لِمَتجَرِه وَحدَه، وأَوَّلُ كاتِبٍ يَفوز. فَعَرضٌ يَمُرُّ مِن هُنا يُعَدُّ `offer.submit` بِدَورِ مُقَدِّمِه لا `_unresolved`.
+        if (allowed) ACommerce.Platform.Shared.Metering.MeterScope.Current?.Fill(slug, role: effectiveRole);
+        return allowed;
     }
 
     /// <summary>

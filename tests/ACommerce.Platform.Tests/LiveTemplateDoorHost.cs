@@ -20,21 +20,26 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
 {
     private readonly WebApplication _app;
     private readonly IReadOnlyList<RouteEndpoint> _endpoints;
+    private readonly bool _throughResolver;
 
     public IDocumentStore Store { get; }
 
     /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤) خِدماتُ المُضيفِ المُرَكَّب — لِرَسمِ صَفحَةٍ بِخِدماتِها هِيَ (<c>HtmlRenderer</c>) لا بِبَدائِل.</summary>
     public IServiceProvider Services => _app.Services;
 
-    private LiveTemplateDoorHost(WebApplication app)
+    private LiveTemplateDoorHost(WebApplication app, bool throughResolver)
     {
         _app = app;
+        _throughResolver = throughResolver;
         Store = app.Services.GetRequiredService<IDocumentStore>();
         _endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>().ToList();
     }
 
     /// <param name="services">‏(‏2026-11-04، الموجَة ١٢ G1 · ٣) بَديلٌ لِخِدمَةٍ بَعدَ تَركيبِ المُضيف — آخِرُ مُسَجَّلٍ هُوَ ما يَحقِنُه البابُ (مَخزَنُ مِلَفّاتٍ يُسَجِّلُ ما يُحذَفُ مَثَلاً).</param>
-    public static LiveTemplateDoorHost Build(Action<StoreOptions>? marten = null, Action<IServiceCollection>? services = null)
+    /// <param name="throughResolver">‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠) كُلُّ بابٍ يَمُرُّ أَوَّلاً بِوَسيطِ المُستَأجِرِ الحَقيقِيّ (<c>TenantResolverMiddleware</c> مِن حاوِيَةِ المُضيفِ،
+    /// وَضعُ المَسارِ كَما يُرَكِّبُه <c>UsePlatformMultiTenancy</c>): أَوَّلُ سَطرٍ فيه يَفتَحُ حامِلَ العَدِّ ويَملَؤُه مِن وَثيقَةِ المَتجَر — ما تَقيسُه رِحلَةُ سَقفِ
+    /// <c>_unresolved</c> (G9). ومُطفَأٌ افتِراضاً: البَراهينُ القائِمَةُ تَرى البابَ كَما رَأَتهُ دائِماً.</param>
+    public static LiveTemplateDoorHost Build(Action<StoreOptions>? marten = null, Action<IServiceCollection>? services = null, bool throughResolver = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -62,7 +67,7 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         services?.Invoke(builder.Services);
         var app = builder.Build();
         ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions.MapCustomerMarketplaceTemplate(app);
-        return new LiveTemplateDoorHost(app);
+        return new LiveTemplateDoorHost(app, throughResolver);
     }
 
     /// <summary>بابُ <c>POST</c> بِنَمَطِ مَسارِه كَما سُجِّل — ويَرمي إن لَم يَكُن واحِداً: أَداةٌ لا تَجِدُ البابَ عَمياء.</summary>
@@ -120,7 +125,7 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         var body = new MemoryStream();
         ctx.Response.Body = body;
         ctx.SetEndpoint(door);
-        await door.RequestDelegate!(ctx);
+        await RunAsync(door, ctx);
         return (ctx.Response.StatusCode, ctx.Response.ContentType ?? "",
                 ctx.Response.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase), body.ToArray());
     }
@@ -173,9 +178,15 @@ internal sealed class LiveTemplateDoorHost : IAsyncDisposable
         arrange?.Invoke(ctx);
         ctx.Response.Body = new MemoryStream();
         ctx.SetEndpoint(door);
-        await door.RequestDelegate!(ctx);
+        await RunAsync(door, ctx);
         return (ctx.Response.StatusCode, ctx.Response.Headers.Location.ToString());
     }
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٠) جِسمُ البابِ بِمُرَشِّحاتِه — وقَبلَه الوَسيطُ الحَقيقِيُّ إن طُلِبَ عِندَ البِناء (<c>throughResolver</c>).</summary>
+    private Task RunAsync(RouteEndpoint door, HttpContext ctx)
+        => _throughResolver
+            ? ActivatorUtilities.CreateInstance<ACommerce.Platform.MultiTenancy.TenantResolverMiddleware>(ctx.RequestServices, door.RequestDelegate!).InvokeAsync(ctx)
+            : door.RequestDelegate!(ctx);
 
     public async ValueTask DisposeAsync() => await _app.DisposeAsync();
 }

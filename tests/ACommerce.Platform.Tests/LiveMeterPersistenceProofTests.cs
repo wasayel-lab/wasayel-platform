@@ -880,4 +880,127 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         Assert.Equal(0L, leaks);
         Assert.Equal(0L, afterUpdate);
     }
+
+    // ═══ ‏(‏2026-11-12، W13-6·١٠) الدَورُ الفَعّالُ في الحامِل — حارِسا الصَلاحِيَّةِ عَبرَ الوَسيطِ الحَقيقِيّ ═══════════════════════════════════════════════
+    // (التَصميم §5.4 و§13؛ ADR-051 §١٧). المُضيفُ بِـ`throughResolver`: كُلُّ بابٍ يَمُرُّ أَوَّلاً بِـ`TenantResolverMiddleware` الحَقيقِيّ، فَالحامِلُ يَفتَحُه
+    // ويَملَؤُه هُوَ (المَتجَرُ ومالِكُه، والدَورُ لِمَن يَحسِبُه في مَتجَرٍ بِأَدوار) — لا الصَفّ.
+
+    /// <summary>
+    /// <para><b><c>offer.submit</c> بِدَورِ مُقَدِّمِه، و<c>listing.create</c> بِالدَورِ الفَعّالِ لا المُخَزَّن</b>: بابُ العَرضِ الحَقيقِيُّ (<c>HasPermissionAsync</c>) لِعَميلٍ
+    /// ثُمَّ لِمُديرِ المَتجَر ⇐ سَطرُ كُلِّ عَرضٍ دَورُه <c>customer</c> ثُمَّ <c>tenant_admin</c> ورائِدُ أَعمالِه المالِكُ و<c>writer_xid</c> = <c>xmin</c> حَدَثِه؛
+    /// وتاجِرٌ بِلا الصَلاحِيَّةِ <c>?err=forbidden</c> ولا عَرضَ ولا سَطر.</para>
+    /// <para>و<c>PermissionFilter</c> الحَقيقِيُّ داخِلَ الوَسيطِ الحَقيقِيِّ وبَعدَه كِتابَةُ النُقطَة (بَدءُ مَجرى الإعلان): التاجِرُ ⇐ <c>vendor</c>، والعَميلُ عَلى
+    /// <c>/{slug}/r/vendor/…</c> ⇐ <c>vendor</c> (الفَعّالُ لا المُخَزَّن)، والعَميلُ بِلا رابِطٍ <c>403</c> والحامِلُ بِلا دَورٍ ولا إعلان؛ ومَتجَرٌ بِلا أَدوارٍ <c>_none</c>
+    /// مِن الوَسيطِ كَما كان (المُرَشِّحُ يَمُرُّ قَبلَ أَن يَحسِب).</para>
+    /// </summary>
+    [Fact]
+    public async Task The_permission_guards_write_the_effective_role_they_accept_into_the_holder_the_real_resolver_opened()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build(throughResolver: true);
+        var (roled, zero) = (NewSlug(), NewSlug());
+        var owner = Guid.NewGuid();
+        ACommerce.Kit.Roles.Role Instantiate(string role, int order)
+            => ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(ACommerce.Kit.Roles.RoleCatalog.Find(role)!, sortOrder: order);
+        await using (var s = host.Store.LightweightSession())
+        {
+            s.Insert(new Tenant { Id = roled, Name = "مَتجَرُ الدَورِ الفَعّال", OwnerUserId = owner,
+                                  Roles = [Instantiate("vendor", 0), Instantiate("customer", 1), Instantiate("tenant_admin", 2)] });
+            s.Insert(new Tenant { Id = zero, Name = "مَتجَرٌ بِلا أَدوار", OwnerUserId = owner });
+            await s.SaveChangesAsync();
+        }
+        User Member(string role) => new() { Id = Guid.NewGuid(), TenantSlug = roled, FullName = "عُضوُ الدَور", Phone = NewPhone(), ActiveRole = role, Role = role };
+        var (seller, buyer, manager) = (Member("vendor"), Member("customer"), Member("tenant_admin"));
+        var listingId = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession(roled))
+        {
+            s.Store(seller, buyer, manager);
+            s.Events.StartStream<ACommerce.Kit.Listings.Listing>(listingId,
+                new ACommerce.Kit.Listings.ListingCreated(listingId, roled, "إعلانُ الدَور", null, 120m, "general", null, null,
+                                                         new() { ["owner_id"] = seller.Id.ToString() }, DateTime.UtcNow));
+            await s.SaveChangesAsync();
+        }
+        var ownerId = owner.ToString("D");
+
+        // ١ · بابُ العَرضِ الحَقيقِيّ.
+        async Task<((int, string) Door, List<EventEntry> Rows)> OfferAsync(User u)
+        {
+            var door = await host.PostFormAsync("/{slug}/listings/{id:guid}/offers",
+                new Dictionary<string, string> { ["slug"] = roled, ["id"] = listingId.ToString() }, roled, AuthHandlers.MakeToken(u.Id, roled, u.SessionVersion),
+                ("price", "110"), ("message", "عَرضُ الدَور"), ("lat", "24.7136"), ("lng", "46.6753"), ("ttl_minutes", "15"));
+            var offers = (await ScalarAsync("select coalesce(string_agg(id::text, ','), '') from platform.mt_doc_offer where tenant_id = @t and data->>'OffererId' = @u",
+                ("t", roled), ("u", u.Id.ToString())))?.ToString() ?? "";
+            var rows = new List<EventEntry>();
+            foreach (var id in offers.Split(',', StringSplitOptions.RemoveEmptyEntries)) rows.AddRange(await StreamEntriesAsync(Guid.Parse(id)));
+            output.WriteLine($"[P1·دَور] العَرضُ مِن {u.ActiveRole} ⇒ {door.Status} {door.Location} · "
+                             + (rows.Count == 0 ? "لا سَطر" : string.Join(" | ", rows.Select(r => $"{r.Unit} role={r.Role} entrepreneur={r.Entrepreneur} writer_xid {r.WriterXid} = xmin {r.EventXmin}"))));
+            return (door, rows);
+        }
+        var byBuyer = await OfferAsync(buyer);
+        var byManager = await OfferAsync(manager);
+        var bySeller = await OfferAsync(seller);
+
+        // ٢ · مُرَشِّحُ النَشرِ الحَقيقِيُّ داخِلَ الوَسيطِ الحَقيقِيّ، وبَعدَه كِتابَةُ النُقطَة.
+        async Task<(int Status, MeterScopeView? Holder, List<EventEntry> Rows)> PublishAsync(string slug, User u, string path)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+            ctx.Request.Method = "POST";
+            ctx.Request.Scheme = "http";
+            ctx.Request.Host = new HostString("localhost");
+            ctx.Request.Path = path;
+            ctx.Request.ContentType = "application/x-www-form-urlencoded";
+            ctx.Request.Form = new FormCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>());
+            var status = 0;
+            MeterScopeView? holder = null;
+            Guid? born = null;
+            var resolver = ActivatorUtilities.CreateInstance<TenantResolverMiddleware>(scope.ServiceProvider, (RequestDelegate)(async c =>
+            {
+                c.Items[ACommerce.Templates.Customer.Marketplace.Gates.GateKeys.SlugItem] = slug;   // ‏ما يَضَعُه `AuthFilter` قَبلَ المُرَشِّح
+                c.Items[ACommerce.Templates.Customer.Marketplace.Gates.GateKeys.UserId] = u.Id;
+                var result = await new ACommerce.Templates.Customer.Marketplace.Gates.PermissionFilter("listing.create").InvokeAsync(
+                    new DefaultEndpointFilterInvocationContext(c), async _ =>
+                    {
+                        var id = Guid.NewGuid();
+                        await using var s = host.Store.LightweightSession(slug);
+                        s.Events.StartStream<ACommerce.Kit.Listings.Listing>(id, new ACommerce.Kit.Listings.ListingCreated(id, slug, "نَشرُ الدَور", null, 1m, "general",
+                            null, null, new() { ["owner_id"] = u.Id.ToString() }, DateTime.UtcNow));
+                        await s.SaveChangesAsync();
+                        born = id;
+                        return Results.Ok();
+                    });
+                holder = MeterScope.View();
+                status = (result as IStatusCodeHttpResult)?.StatusCode ?? 0;
+            }));
+            await resolver.InvokeAsync(ctx);
+            List<EventEntry> rows = born is { } b ? await StreamEntriesAsync(b) : [];
+            output.WriteLine($"[P1·دَور] النَشرُ {path} مِن {(u.ActiveRole.Length == 0 ? "—" : u.ActiveRole)} ⇒ {status} · الحامِل {holder} · "
+                             + (rows.Count == 0 ? "لا سَطر" : string.Join(" | ", rows.Select(r => $"{r.Unit} role={r.Role} entrepreneur={r.Entrepreneur} writer_xid {r.WriterXid} = xmin {r.EventXmin}"))));
+            return (status, holder, rows);
+        }
+        var vendorPublish = await PublishAsync(roled, seller, $"/{roled}/listings/create");
+        var linkPublish = await PublishAsync(roled, buyer, $"/{roled}/r/vendor/listings/create");
+        var refused = await PublishAsync(roled, buyer, $"/{roled}/listings/create");
+        var zeroPublish = await PublishAsync(zero, new User { Id = Guid.NewGuid(), ActiveRole = "" }, $"/{zero}/listings/create");
+
+        var listingBack = $"/{roled}/listings/{listingId}";
+        Assert.Equal((302, $"{listingBack}?offer=submitted"), byBuyer.Door);
+        Assert.Equal((302, $"{listingBack}?offer=submitted"), byManager.Door);
+        Assert.Equal((302, $"{listingBack}?err=forbidden"), bySeller.Door);
+        var b1 = Assert.Single(byBuyer.Rows);
+        var m1 = Assert.Single(byManager.Rows);
+        Assert.Equal((MeterRules.OfferSubmit, roled, ownerId, "customer"), (b1.Unit, b1.App, b1.Entrepreneur, b1.Role));
+        Assert.Equal((MeterRules.OfferSubmit, roled, ownerId, "tenant_admin"), (m1.Unit, m1.App, m1.Entrepreneur, m1.Role));
+        Assert.All(new[] { b1, m1 }, r => Assert.Equal(r.EventXmin, r.WriterXid));
+        Assert.Empty(bySeller.Rows);
+
+        Assert.Equal((200, new MeterScopeView(roled, ownerId, "vendor", false)), (vendorPublish.Status, vendorPublish.Holder));
+        Assert.Equal((MeterRules.ListingCreate, ownerId, "vendor"), (Assert.Single(vendorPublish.Rows).Unit, vendorPublish.Rows[0].Entrepreneur, vendorPublish.Rows[0].Role));
+        Assert.Equal((200, new MeterScopeView(roled, ownerId, "vendor", false)), (linkPublish.Status, linkPublish.Holder));
+        Assert.Equal("vendor", Assert.Single(linkPublish.Rows).Role);
+        Assert.Equal((403, new MeterScopeView(roled, ownerId, null, false)), (refused.Status, refused.Holder));
+        Assert.Empty(refused.Rows);
+        Assert.Equal((200, new MeterScopeView(zero, ownerId, MeterSentinels.None, false)), (zeroPublish.Status, zeroPublish.Holder));
+        Assert.Equal(MeterSentinels.None, Assert.Single(zeroPublish.Rows).Role);
+    }
 }

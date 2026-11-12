@@ -1,6 +1,7 @@
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +56,10 @@ public sealed class PermissionFilter : IEndpointFilter
         if (!RolePermissions.Has(tenant.Roles, effectiveRole, _permission))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ** — كانَ
+        // يُحسَبُ ويُرمى، فَكِتابَةُ النُقطَةِ في مَتجَرٍ بِأَدوارٍ دَورُها `_unresolved`. والحامِلُ يَقبَلُه لِمَتجَرِه وَحدَه وأَوَّلُ كاتِبٍ يَفوز (`MeterScopeHolder.Fill`)؛
+        // وبِلا حامِلٍ لا شَيء. والقَرارُ فَوقَه بِحَرفِه (`LiveRoleDecisionCharacterizationProofTests`).
+        MeterScope.Current?.Fill(slug, role: effectiveRole);
         return await next(ctx);
     }
 }

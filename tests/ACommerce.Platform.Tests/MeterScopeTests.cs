@@ -208,4 +208,67 @@ public class MeterScopeTests(ITestOutputHelper output)
         }
         Assert.False(MeterScope.Open().FillPlatformRole(""));
     }
+
+    // ═══ ‏(‏2026-11-12، W13-6·١٠) شَكلُ `HasPermissionAsync` الحَقيقِيّ قَبلَ `StartStream<Offer>` — صَفُّ المِجَسِّ الأَوَّل (R1) ═══
+    // الحارِسُ يَنتَظِرُ قِراءَتَيه (المَتجَرُ مُجَسَّداً ثُمَّ العُضو) ثُمَّ `EffectiveRole.ResolveAsync` الحَقيقِيّ، ويَكتُبُ الدَورَ الَّذي قَبِلَ بِه في الحامِلِ بِسَطرِه
+    // في `MarketplaceTemplateExtensions` بِحَرفِه؛ ثُمَّ يَبدَأُ البابُ مَجرى العَرضِ ويَحفَظ. والتَوأَمُ نَفسُه بِقيمَةٍ ثابِتَةٍ عَلى `AsyncLocal` يَفقِدُ الدَور
+    // (`_none_yet`) — فَإن صارَ الحامِلُ قيمَةً يَوماً احمَرَّ الصَفّ.
+
+    private static UsageEntry SaveOfferNow(string slug)
+        => Assert.Single(MeterRules.Classify(
+            new PendingSnapshot(slug, [], [new PendingStream(slug, Started: true, [new PendingEvent(Guid.NewGuid(),
+                new ACommerce.Kit.Offers.OfferSubmitted(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "عارِض", 1m, null, 24.7, 46.6,
+                                                        DateTime.UtcNow.AddMinutes(15), DateTime.UtcNow))])]),
+            MeterScope.View(), MeterUnitCatalog.Default));
+
+    private static readonly IReadOnlyList<ACommerce.Kit.Roles.Role> SellerStore =
+        [new ACommerce.Kit.Roles.Role { Slug = "seller", CatalogSlug = "seller", Permissions = ["offer.submit"] }];
+
+    /// <summary>شَكلُ <c>HasPermissionAsync</c> بِسَطرِ مَلئِه: قِراءَتانِ مُنتَظَرَتان، ثُمَّ الدَورُ الفَعّالُ الحَقيقِيّ، ثُمَّ القَرار، ثُمَّ الحامِلُ إن قَبِل.</summary>
+    private static async Task<bool> OfferGuardShapeAsync(HttpContext http, string slug, Guid userId, string storedRole)
+    {
+        await Task.Delay(1);   // LoadTenantWithRolesAsync
+        await Task.Delay(1);   // LoadAsync<User>
+        var effectiveRole = await ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.ResolveAsync(http, slug, userId, storedRole);
+        var allowed = ACommerce.Kit.Roles.RolePermissions.Has(SellerStore, effectiveRole, "offer.submit");
+        if (allowed) MeterScope.Current?.Fill(slug, role: effectiveRole);
+        return allowed;
+    }
+
+    [Fact]
+    public async Task The_role_the_real_offer_guard_shape_computes_after_its_awaits_is_the_offer_entrys_role_at_save_and_an_immutable_value_loses_it()
+    {
+        UsageEntry? offer = null;
+        string immutableRole = "";
+        await Task.Run(async () =>
+        {
+            // ‏المُحَلِّلُ لِمَتجَرٍ بِأَدوار: المَتجَرُ ومالِكُه، والدَورُ لِمَن يَحسِبُه.
+            MeterScope.Open().Fill("store-a", entrepreneur: "owner-a");
+            Assert.True(await OfferGuardShapeAsync(new DefaultHttpContext(), "store-a", Guid.NewGuid(), "seller"));
+            offer = SaveOfferNow("store-a");
+
+            Immutable.Value = new ImmutableScope("store-a", "_none_yet");
+            await ImmutableTwinAsync();
+            immutableRole = Immutable.Value!.Role;
+        });
+        output.WriteLine($"[G16] شَكلُ HasPermissionAsync ← StartStream<Offer>: {offer!.Unit} role at save = {offer.Role} · entrepreneur = {offer.Entrepreneur} "
+                         + $"· التَوأَمُ الثابِت: role at save = {immutableRole}");
+        Assert.Equal((MeterRules.OfferSubmit, "seller", "owner-a"), (offer.Unit, offer.Role, offer.Entrepreneur));
+        Assert.Equal("_none_yet", immutableRole);
+
+        // ‏والمَرفوضُ لا يَكتُب: دَورٌ لا يَحمِلُ الصَلاحِيَّةَ يَترُكُ الحامِلَ كَما فَتَحَه المُحَلِّل.
+        var refused = MeterScope.Open();
+        refused.Fill("store-a", entrepreneur: "owner-a");
+        Assert.False(await OfferGuardShapeAsync(new DefaultHttpContext(), "store-a", Guid.NewGuid(), "buyer"));
+        Assert.Equal(new MeterScopeView("store-a", "owner-a", null, false), refused.View());
+
+        static async Task ImmutableTwinAsync()
+        {
+            await Task.Delay(1);
+            await Task.Delay(1);
+            var effectiveRole = await ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.ResolveAsync(new DefaultHttpContext(), "store-a", Guid.NewGuid(), "seller");
+            if (ACommerce.Kit.Roles.RolePermissions.Has(SellerStore, effectiveRole, "offer.submit"))
+                Immutable.Value = Immutable.Value! with { Role = effectiveRole! };
+        }
+    }
 }
