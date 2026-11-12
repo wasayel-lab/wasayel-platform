@@ -135,7 +135,8 @@ public class MeterScopeTests(ITestOutputHelper output)
         output.WriteLine($"[G16] المُحَلِّل: {noRoles} · {withRoles} · {unowned} · {studio}");
 
         Assert.Equal(new MeterScopeView("store-a", owner.ToString("D"), MeterSentinels.None, false), noRoles);
-        // ‏مَتجَرٌ بِأَدوار: الدَورُ يَبقى لِمَن يَحسِبُه (البَند ١٠) — لا دَورَ المُضيفِ ولا غَيرُه.
+        // ‏مَتجَرٌ بِأَدوار: الدَورُ يَبقى لِمَن يَحسِبُه (البَند ١٠). و«لا دَورَ المُضيف» لا يَقيسُه هذا الصَفّ — نِطاقُه فارِغٌ ومَخزَنُه غائِب، ومُضيفُ الدَورِ يُقرَأُ
+        // طازَجاً مِن المَخزَن — فَمَقيسُه الصَفُّ الحَيُّ `On_store_and_role_hosts_the_resolver_fills_the_owner_and_never_the_host_role` (‏2026-11-12، M6A-SEC-R2-1).
         Assert.Equal(new MeterScopeView("store-r", owner.ToString("D"), null, false), withRoles);
         Assert.Equal(new MeterScopeView("store-u", MeterSentinels.Unowned, MeterSentinels.None, false), unowned);
         // ‏طَلَبٌ بِلا مَتجَر: حامِلٌ مَفتوحٌ فارِغ — لا يَرِثُ ما قَبلَه.

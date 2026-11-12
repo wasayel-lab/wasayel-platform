@@ -1,6 +1,7 @@
 using System.Net;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Hosting;
 using ACommerce.Platform.MultiTenancy;
 using ACommerce.Platform.Shared;
 using ACommerce.Platform.Shared.Metering;
@@ -212,19 +213,24 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         public HttpClient Client { get; }
         private Pipeline(WebApplication app, HttpClient client) { _app = app; Client = client; }
 
-        public static async Task<Pipeline> StartAsync(IDocumentStore store, DealsService deals)
+        /// <param name="baseDomain"><c>null</c> = وَضعُ المَسار (النِطاقُ فارِغ). ومُهَيَّأً (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-SEC-R2-1)
+        /// يُرَكَّبُ الأُنبوبُ كَما يُرَكِّبُه <c>UsePlatformHost</c>: مُقَدِّمَةُ الطَلَبِ (<c>UsePlatformRequestFront</c> — الحاقِنُ بَينَ حارِسِ المُضيفِ وفَحصِ
+        /// <c>Origin</c>) ثُمَّ الحالّ، وقَوالِبُ صَفَحاتِ الدَورِ مِن حاوِيَةِ القالِبِ (<paramref name="rolePages"/>) كَما يُسَجِّلُها.</param>
+        public static async Task<Pipeline> StartAsync(IDocumentStore store, DealsService deals, string? baseDomain = null, RolePageTemplates? rolePages = null)
         {
             for (var attempt = 1; ; attempt++)
             {
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.Logging.ClearProviders();
-                builder.Services.AddSingleton(new SubdomainTenancyOptions());
+                builder.Services.AddSingleton(baseDomain is null ? new SubdomainTenancyOptions() : new SubdomainTenancyOptions { BaseDomain = baseDomain });
+                if (rolePages is not null) builder.Services.AddSingleton(rolePages);
                 builder.Services.AddSingleton(store);
                 builder.Services.AddMemoryCache();
                 using var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
                 l.Start(); var port = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop();
                 var app = builder.Build();
                 app.Urls.Add($"http://127.0.0.1:{port}");
+                if (baseDomain is not null) app.UsePlatformRequestFront();
                 app.UsePlatformMultiTenancy();
                 // ‏جِسمُ الطَلَبِ بَعدَ الوَسيط: المَتجَرُ الَّذي حَلَّه، ووِلادَةُ صَفقَةٍ بِالخِدمَةِ الحَقيقِيَّة.
                 app.Run(async ctx =>
@@ -238,6 +244,14 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
                 catch (IOException) when (attempt < 5) { await app.DisposeAsync(); continue; }
                 return new Pipeline(app, new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}"), Timeout = TimeSpan.FromSeconds(60) });
             }
+        }
+
+        /// <summary>طَلَبُ كِتابَةٍ بِرَأسِ <c>Host</c> — كَما يُرسِلُ المُتَصَفِّحُ «اطلُب» عَلى مُضيفِ المَتجَرِ أَو مُضيفِ الدَور.</summary>
+        public async Task<HttpResponseMessage> PostAsync(string host, string path)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, path) { Content = new FormUrlEncodedContent([]) };
+            req.Headers.Host = host;
+            return await Client.SendAsync(req);
         }
 
         public async ValueTask DisposeAsync()
@@ -289,6 +303,57 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
         Assert.Equal((roled, owner.ToString("D"), MeterSentinels.Unresolved), (c.App, c.Entrepreneur, c.Role));
         var again = await OrderAsync(owned);
         Assert.Equal((owned, owner.ToString("D")), (again.App, again.Entrepreneur));
+    }
+
+    /// <summary>
+    /// <para><b>وَضعُ المُضيف: المُحَلِّلُ يَملَأُ الحامِلَ عَلى مُضيفِ المَتجَرِ ومُضيفِ الدَور — ودَورُ المُضيفِ لا يَدخُلُه</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ
+    /// الثانِيَة · M6A-SEC-R2-1؛ ADR-051 §١١ «ولا دَورَ المُضيف»). الصَفُّ أَعلاه يُرَكِّبُ النِطاقَ فارِغاً فَلا يَقيسُ إلّا المَسار — وحَقنانِ في الوَسيطِ
+    /// بَقِيا أَخضَرَينِ عِندَ المُراجِع: دَورُ المُضيفِ في الحامِل، ومُضيفُ المَتجَرِ بِلا مَلء. وهُنا الأُنبوبُ كَما يُرَكِّبُه <c>Program</c> بِـ
+    /// <c>MultiTenancy__BaseDomain=localhost</c>، ومَتجَرٌ يَحمِلُ دَورَ الكَتالوجِ <c>vendor</c> ولَه مالِكٌ حَقيقِيّ:</para>
+    /// <para>• <c>{slug}.localhost</c> ⇐ رائِدُ الأَعمالِ = <c>Tenant.OwnerUserId</c> (لا <c>_unresolved</c>)؛
+    /// • <c>{slug}-vendor.localhost</c> ⇐ الدَورُ <b>لَيسَ</b> <c>vendor</c> (<c>_unresolved</c> حَتّى يَحسِبَه البَند ١٠)، ورائِدُ الأَعمالِ المالِكُ نَفسُه.
+    /// والصَفقَةُ تولَدُ عَلى مُضيفِ الدَورِ فِعلاً (مَقيسٌ عِندَ المُراجِع: <c>/listings/{id}/deal</c> عَلى <c>ejar-vendor.localhost</c> ⇐ 302 إلى الصَفَقات)،
+    /// فَمَلءُ الحامِلِ بِدَورِ المُضيفِ يَنسِبُ عَمَلِيَّةَ المُشتَري إلى البائِع — ويَسبِقُ الدَورَ الفَعّالَ (أَوَّلُ كاتِبٍ يَفوز).</para>
+    /// </summary>
+    [Fact]
+    public async Task On_store_and_role_hosts_the_resolver_fills_the_owner_and_never_the_host_role()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        await using var scope = host.Services.CreateAsyncScope();
+        var deals = scope.ServiceProvider.GetRequiredService<DealsService>();
+
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession())
+        {
+            s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ المُضيف", OwnerUserId = owner,
+                                  Roles = [new ACommerce.Kit.Roles.Role { Slug = "vendor", CatalogSlug = "vendor" }] });
+            await s.SaveChangesAsync();
+        }
+        // ‏المُضيفانِ يُحَلّانِ كَما يَحُلُّهُما الوَسيط — فَلا يَخضَرُّ الصَفُّ عَلى مُضيفٍ لا يَبلُغُ الحالّ.
+        var storeHost = $"{slug}.localhost";
+        var roleHost = $"{slug}-vendor.localhost";
+        Assert.Equal(slug, TenantResolverMiddleware.StoreSlugFromHost(storeHost, "localhost"));
+        Assert.Equal<(string, string)?>((slug, "vendor"), TenantResolverMiddleware.RoleFromHost(roleHost, "localhost"));
+
+        await using var pipe = await Pipeline.StartAsync(host.Store, deals, baseDomain: "localhost",
+                                                         rolePages: host.Services.GetRequiredService<RolePageTemplates>());
+        async Task<Row> OrderOnAsync(string hostName)
+        {
+            using var res = await pipe.PostAsync(hostName, "/meter-proof");
+            var body = await res.Content.ReadAsStringAsync();
+            Assert.True(res.StatusCode == HttpStatusCode.OK, $"{hostName}: {(int)res.StatusCode} {body}");
+            var row = Assert.Single(await EntriesForAsync(Guid.Parse(body)));
+            output.WriteLine($"[P1] وَضعُ المُضيف {hostName}: app={row.App} · entrepreneur={row.Entrepreneur} · role={row.Role} · generation={row.Generation}");
+            return row;
+        }
+
+        var onStore = await OrderOnAsync(storeHost);
+        Assert.Equal((slug, owner.ToString("D"), MeterSentinels.Unresolved), (onStore.App, onStore.Entrepreneur, onStore.Role));
+        var onRole = await OrderOnAsync(roleHost);
+        Assert.NotEqual("vendor", onRole.Role);
+        Assert.Equal((slug, owner.ToString("D"), MeterSentinels.Unresolved), (onRole.App, onRole.Entrepreneur, onRole.Role));
     }
 
     /// <summary><b>G17 حَيّاً</b>: لا مُعَرِّفَ سَطرٍ ولا مَصدَرَ يَحمِلُ مُعَرِّفَ مُستَخدِمٍ مَخزون — عَلى الدَفتَرِ كُلِّه، بَعدَ صَفقَةٍ مُبادِرُها مُستَخدِمٌ حَقيقِيّ.</summary>
