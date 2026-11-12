@@ -128,7 +128,8 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     }
 
     /// <summary><b>كُلُّ نَصٍّ تَراه العَينُ مِفتاحٌ في القامُوس</b> (القاعِدَة ١١، عَرَبِيٌّ وَحدَه) — والمَفاتيحُ تُقرَأُ مِن الصَفحَتَينِ ورابِطِ <c>AdminHome</c>،
-    /// ولا مِفتاحَ ولا قيمَةَ تُسَمّي سِعراً (القاعِدَة ١٦ — هذه المَوجَةُ عَدٌّ وَحدَه).</summary>
+    /// ولا مِفتاحَ يُسَمّي سِعراً (القاعِدَة ١٦ — هذه المَوجَةُ عَدٌّ وَحدَه). ‏(‏2026-11-12، M6A-RULES-R3-1) <b>والقِيَمُ لا يَقرَؤُها هذا الصَفّ</b> — كانَ
+    /// السَطرُ يَدَّعيها والفَحصُ عَلى أَسماءِ المَفاتيحِ بِمُعجَمٍ إنجليزِيٍّ وَحدَه؛ فَقِيَمُ مَفاتيحِ العَدِّ كُلِّها بِالمُعجَمَينِ في الصَفِّ التالي.</summary>
     [Fact]
     public void Every_visible_string_of_the_meter_pages_is_a_dictionary_key_and_none_names_a_price()
     {
@@ -145,5 +146,38 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         Assert.True(meterKeys.Count >= 10, $"أَداةٌ عَمياء: {meterKeys.Count} مِفتاحاً لِلعَدّ.");
         Assert.Empty(missing);
         Assert.Empty(priced);
+    }
+
+    /// <summary>مَفاتيحُ العَدِّ في القامُوس: <c>meter.*</c> و<c>admin.meter.*</c> و<c>admin.home.meter_cta</c> و<c>admin.nav.meter</c> — مِن مُعجَمِ العَرَبِيَّةِ
+    /// كُلِّه لا مِمّا تَقرَؤُه الصَفحَتان (تَسمِيَةُ الوَحدَةِ تُبنى بِـ<c>MeterUnitCatalog.LabelKey</c> فَلا تَظهَرُ حَرفاً في صَفحَة).</summary>
+    internal static bool IsMeterKey(string key) =>
+        key.StartsWith("meter.", StringComparison.Ordinal) || key.StartsWith("admin.meter.", StringComparison.Ordinal)
+        || key is "admin.home.meter_cta" or "admin.nav.meter";
+
+    /// <summary>ما يُسَمّي سِعراً مِن مُدخَلاتِ القامُوس: <c>لُغَة:مِفتاح</c> — المِفتاحُ بِالمُعجَمِ الإنجليزِيّ، والقيمَةُ بِالمُعجَمَينِ بَعدَ نَزعِ التَشكيل.</summary>
+    internal static IReadOnlyList<string> PricedEntries(IEnumerable<(string Lang, string Key, string Value)> entries) =>
+        [.. entries.Where(e => MeterUnitCatalogTests.PriceIsh.IsMatch(e.Key) || MeterUnitCatalogTests.NamesAPrice(e.Value)).Select(e => $"{e.Lang}:{e.Key}")];
+
+    /// <summary><b>ولا قيمَةَ تَراها العَينُ تُسَمّي سِعراً أَو مَبلَغاً أَو كُلفَةً أَو رَسماً أَو عُملَة</b> (القاعِدَة ١٦، والتَصميم §2) — في كُلِّ لُغَةٍ لَها مِلَفّ،
+    /// بِالمُعجَمِ الإنجليزِيِّ والعَرَبِيّ. والفاحِصُ يُقاسُ أَوَّلاً: عُنوانُ الفِهرِسِ مَحقوناً بِـ«سِعرُ … بِالريال» يُمسَك.</summary>
+    [Fact]
+    public void No_key_or_value_of_the_meter_dictionary_names_a_price_in_either_lexicon()
+    {
+        var entries = LocaleCatalog.Languages
+            .SelectMany(lang => LocaleCatalog.Raw(lang).Where(e => IsMeterKey(e.Key)).Select(e => (Lang: lang, e.Key, e.Value)))
+            .ToList();
+        var priced = PricedEntries(entries);
+        output.WriteLine($"[G11] لُغاتٌ مَفحوصَة {LocaleCatalog.Languages.Count} · مُدخَلاتُ العَدّ "
+                         + string.Join(" · ", LocaleCatalog.Languages.Select(l => $"{l} {entries.Count(e => e.Lang == l)}"))
+                         + $" · تُسَمّي سِعراً {priced.Count}");
+        Assert.True(entries.Count(e => e.Lang == LocaleCatalog.Arabic) >= 20, $"أَداةٌ عَمياء: {entries.Count} مُدخَلاً لِلعَدّ.");
+        Assert.Contains(entries, e => e.Key == "admin.meter.title");
+
+        var injected = entries.Select(e => e.Key == "admin.meter.title" ? e with { Value = "سِعرُ عَمَلِيّاتِ المَتاجِرِ اليَوم بِالريال" } : e).ToList();
+        var caught = PricedEntries(injected);
+        output.WriteLine($"[G11] حَقنُ admin.meter.title ⇐ {string.Join(", ", caught)}");
+        Assert.Equal(["ar:admin.meter.title"], caught);
+
+        Assert.True(priced.Count == 0, "قيمَةٌ أَو مِفتاحٌ يُسَمّي سِعراً في واجِهَةِ العَدّ: " + string.Join(", ", priced));
     }
 }

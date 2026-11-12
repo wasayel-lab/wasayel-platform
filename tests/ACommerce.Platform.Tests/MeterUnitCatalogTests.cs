@@ -3,6 +3,10 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared.Metering;
+using ACommerce.Templates.Customer.Marketplace.Services.Metering;
+using Weasel.Core;
+using Weasel.Postgresql;
+using Weasel.Postgresql.Tables;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -11,10 +15,33 @@ namespace ACommerce.Platform.Tests;
 // ═══ G2 — مُعجَمُ الوَحَداتِ المَضمون: لا سِعرَ فيه، ولا مِفتاحَ مَجهولٌ يَمُرّ، ولِكُلِّ وَحدَةٍ مِفتاحُ قامُوسٍ ومِيزَةٌ مِن مُعجَمٍ قائِم ═══
 // (‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١؛ التَصميم §2 و§3). كُلُّ صَفٍّ يَطبَعُ ما عَدَّه ويَفشَلُ عَلى الصِفر (القاعِدَة ١٠).
 
+// ‏(‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثالِثَة · M6A-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والحارِسُ يُغَطّي ما يَدَّعيه التَصميم §2
+// لا مُجَلَّدَ Shared وَحدَه**: كانَ صَفُّ الانعِكاسِ مَحصوراً في فَضاءِ `Shared/Metering`، فَعَمودُ `amount_sar` في `meter.agg_daily` و`const FeeSar` في
+// `apps/V1.Meter` يَمُرّانِ والمَجموعَةُ كُلُّها خَضراء (مَقيسٌ عِندَ `925305c`). وصارَ: أَعمِدَةُ ميزَةِ الدَفتَرِ وجَداوِلُها مِن `UsageLedgerFeature` نَفسِها،
+// وكُلُّ نَصٍّ ثابِتٍ في `MeterSql`، وأَعضاءُ المُجَمِّعِ المَبنِيِّ وأَعضاءُ أَنواعِ العَدِّ في القالِب — كُلٌّ بِصَفِّه ويَطبَعُ ما عَدَّ، وحَقنُ كُلِّ شَكلٍ يُحَمِّرُه
+// (`The_price_guard_catches_each_injected_shape`). وقِيَمُ القامُوسِ بِالمُعجَمِ العَرَبِيِّ في G11.
+
 public class MeterUnitCatalogTests(ITestOutputHelper output)
 {
     /// <summary>كَلِماتُ السِعرِ المَمنوعَةُ في الاسمِ وفي المِفتاح — بِحَرفِ التَصميم §2 (القاعِدَة ١٦: هذه المَوجَةُ عَدٌّ وَحدَه).</summary>
     internal static readonly Regex PriceIsh = new("(?i)price|amount|cost|fee|currency|sar", RegexOptions.Compiled);
+
+    /// <summary>
+    /// <para><b>كَلِماتُ السِعرِ بِالعَرَبِيَّة</b> — تُطابَقُ عَلى النَصِّ بَعدَ نَزعِ تَشكيلِه (<see cref="Bare"/>)، فَـ«سِعر» و«سعر» واحِد: السِعرُ وجَمعُه وتَسعيرُه،
+    /// والمَبلَغ، والكُلفَةُ والتَكلِفَة، والعُملَة، والريالُ وهَلَلَتُه ورَمزُه. و«رَسم» و«رُسوم» كَلِمَةً تامَّةً (بِسَوابِقِ العَطفِ والجَرِّ والتَعريف) لا مَقطَعاً،
+    /// لِأَنّ «يُرسَم» و«رَسمِيّ» لَيسا رَسماً يُدفَع.</para>
+    /// </summary>
+    internal static readonly Regex PriceIshAr = new(
+        @"سعر|أسعار|اسعار|تسعير|مبلغ|مبالغ|كلفة|تكاليف|عملة|عملات|ريال|هللة|هللات|ر\.س|﷼|(?<!\p{L})[وفبلك]?(?:ال|لل)?(?:رسوم|رسم)(?!\p{L})",
+        RegexOptions.Compiled);
+
+    private static readonly Regex Tashkeel = new("[ؐ-ًؚ-ٰٟۖ-ۭـ‌-‏]", RegexOptions.Compiled);
+
+    /// <summary>النَصُّ بِلا تَشكيلٍ ولا تَطويلٍ ولا عَلاماتِ اتِّجاه.</summary>
+    internal static string Bare(string text) => Tashkeel.Replace(text, "");
+
+    /// <summary>يُسَمّي سِعراً بِأَيٍّ مِن المُعجَمَين؟</summary>
+    internal static bool NamesAPrice(string text) => PriceIsh.IsMatch(text) || PriceIshAr.IsMatch(Bare(text));
 
     private static string UnitsFile() => Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
         "libs", "core", "ACommerce.Platform.Shared", "Metering", "Definitions", "meter-units.json");
@@ -61,6 +88,133 @@ public class MeterUnitCatalogTests(ITestOutputHelper output)
         output.WriteLine($"[G2] مَفاتيحُ المِلَفّ {keys.Count}: {string.Join(", ", keys.Distinct())}");
         Assert.True(keys.Count > 0, "أَداةٌ عَمياء: صِفرُ مِفتاح.");
         Assert.DoesNotContain(keys, k => PriceIsh.IsMatch(k));
+    }
+
+    // ─── (‏2026-11-12، M6A-RULES-R3-1) الأَعمِدَةُ والجُمَلُ وأَعضاءُ المُجَمِّعِ وأَعضاءُ القالِب ─────────────────────────────────────────────────
+
+    /// <summary>كُلُّ جَدوَلٍ وعَمودٍ تُعلِنُه ميزَةُ الدَفتَرِ — <c>جَدوَل.عَمود</c> — مِن الميزَةِ نَفسِها كَما يُنشِئُها الإقلاع، لا مِن نُسخَةٍ مِن أَسمائِها.</summary>
+    internal static IReadOnlyList<string> LedgerNames(IEnumerable<ISchemaObject> objects)
+    {
+        var tables = objects.OfType<Table>().ToList();
+        return [.. tables.Select(t => t.Identifier.Name), .. tables.SelectMany(t => t.Columns.Select(c => $"{t.Identifier.Name}.{c.Name}"))];
+    }
+
+    /// <summary>كُلُّ نَصٍّ ثابِتٍ في <see cref="MeterSql"/> — الثَوابِتُ (<c>const</c>) وقَوائِمُ الأَسماءِ الساكِنَة — بِاسمِ حَقلِه.</summary>
+    internal static IReadOnlyList<(string Field, string Text)> SqlLiterals()
+    {
+        var found = new List<(string, string)>();
+        foreach (var f in typeof(MeterSql).GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+        {
+            var value = f.IsLiteral ? f.GetRawConstantValue() : f.GetValue(null);
+            if (value is string s) found.Add((f.Name, s));
+            else if (value is IEnumerable<string> list) found.AddRange(list.Select(x => (f.Name, x)));
+        }
+        return found;
+    }
+
+    /// <summary>أَسماءُ الأَنواعِ وأَعضائِها — كُلُّ عُضوٍ مُعلَنٍ في النَوعِ نَفسِه، عامٌّ أَو خاصّ، ساكِنٌ أَو لِلنُسخَة، ومِنها الثَوابِت.</summary>
+    internal static IReadOnlyList<string> MemberNames(IEnumerable<Type> types)
+    {
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+        var list = types.ToList();
+        return [.. list.Select(t => t.Name), .. list.SelectMany(t => t.GetMembers(all).Select(m => $"{t.Name}.{m.Name}"))];
+    }
+
+    /// <summary><b>المُجَمِّعُ المَبنِيُّ نَفسُه</b> — مَشروعُ الاختِبارِ لا يُشيرُ إلى <c>V1.Meter</c> (G10، ورُؤوسُ صُفوفِه الحَيَّة)، فَيُقرَأُ الثُنائِيُّ الَّذي يُشَغِّلُه
+    /// <c>LiveMeterAggregatorProofTests</c> بِالتَهيِئَةِ ذاتِها؛ يَبنيه الحَلُّ قَبلَ خُطوَةِ الاختِبار (ci.yml). وغِيابُه أَداةٌ عَمياءُ تَفشَل، لا صَفٌّ يَتَخَطّى.</summary>
+    internal static Assembly AggregatorAssembly()
+    {
+        var tfm = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        var dll = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.Meter", "bin", tfm.Parent!.Name, tfm.Name, "V1.Meter.dll");
+        Assert.True(File.Exists(dll), $"أَداةٌ عَمياء: {dll} غائِب — ابنِ الحَلَّ أَوَّلاً (dotnet build PlatformV1.slnx -c {tfm.Parent!.Name}).");
+        return Assembly.LoadFrom(dll);
+    }
+
+    /// <summary>أَنواعُ العَدِّ في القالِب: فَضاءُ <c>Services.Metering</c> — إلّا أَنواعَ <c>ModelUsageMetering.cs</c> (قِياسُ توكناتِ نَماذِجِ اللُغَةِ وكُلفَتِها
+    /// ‏2026-09-02، مُسَعَّرٌ بِتَصميمِه، والتَصميم §2 يُسَمّي <c>ModelPricingCatalog</c> شَكلَ دَفتَرِ الأَسعارِ القادِم) — وكُلُّ نَوعٍ اسمُه يَبدَأُ بِـ<c>Meter</c>
+    /// في أَيِّ فَضاء (القارِئُ <c>MeterQueries</c> وأَنواعُه، والصَفحَتان). والمُستَثنى يُقرَأُ مِن مِلَفِّه لا مِن قائِمَةٍ تُنسى.</summary>
+    internal static (IReadOnlyList<Type> Scanned, IReadOnlyList<string> Excluded) TemplateMeterTypes()
+    {
+        var model = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Services", "Metering", "ModelUsageMetering.cs"));
+        var excluded = Regex.Matches(WriteEndpointGuardTests.StripComments(model), @"\b(?:class|record(?:\s+(?:struct|class))?|struct|enum|interface)\s+(?<n>[A-Za-z_]\w*)")
+            .Select(m => m.Groups["n"].Value).ToHashSet(StringComparer.Ordinal);
+        var ns = typeof(UsageListener).Namespace;
+        static Type Outer(Type t) { while (t.DeclaringType is not null) t = t.DeclaringType; return t; }
+        var scanned = typeof(UsageListener).Assembly.GetTypes()
+            .Where(t => !t.Name.StartsWith('<') && !Outer(t).Name.StartsWith('<'))
+            .Where(t => (t.Namespace == ns && !excluded.Contains(Outer(t).Name)) || Outer(t).Name.StartsWith("Meter", StringComparison.Ordinal))
+            .ToList();
+        return (scanned, [.. excluded.Order(StringComparer.Ordinal)]);
+    }
+
+    /// <summary><b>لا جَدوَلَ ولا عَمودَ ولا جُملَةَ تُسَمّي سِعراً</b> (التَصميم §2: «No column … is named or means price»): جَداوِلُ <see cref="UsageLedgerFeature"/>
+    /// وأَعمِدَتُها، وكُلُّ نَصٍّ ثابِتٍ في <see cref="MeterSql"/>.</summary>
+    [Fact]
+    public void No_table_column_or_statement_of_the_ledger_names_a_price()
+    {
+        var names = LedgerNames(new UsageLedgerFeature(new PostgresqlMigrator()).Objects);
+        var tables = names.Count(n => !n.Contains('.'));
+        var literals = SqlLiterals();
+        var priced = names.Where(n => PriceIsh.IsMatch(n))
+            .Concat(literals.Where(l => PriceIsh.IsMatch(l.Text)).Select(l => $"MeterSql.{l.Field}")).ToList();
+        output.WriteLine($"[G2] جَداوِلُ الدَفتَر {tables} · أَعمِدَة {names.Count - tables} · نُصوصُ MeterSql الثابِتَة {literals.Count} مِن "
+                         + $"{literals.Select(l => l.Field).Distinct().Count()} حَقلاً · تُسَمّي سِعراً {priced.Count}");
+        Assert.True(tables >= 5 && names.Count - tables >= 30, $"أَداةٌ عَمياء: {tables} جَدوَلاً و{names.Count - tables} عَموداً.");
+        Assert.True(literals.Count >= 30, $"أَداةٌ عَمياء: {literals.Count} نَصّاً ثابِتاً في MeterSql.");
+        Assert.True(priced.Count == 0, "جَدوَلٌ أَو عَمودٌ أَو جُملَةٌ تُسَمّي سِعراً في الدَفتَر: " + string.Join(", ", priced));
+    }
+
+    /// <summary><b>لا عُضوَ في المُجَمِّعِ ولا في أَنواعِ العَدِّ في القالِبِ يُسَمّي سِعراً</b> — صَفُّ <c>Shared/Metering</c> أَعلاه بِمُعجَمِه، عَلى الثُنائِيِّ المَبنِيِّ
+    /// <c>V1.Meter</c> وعَلى المُستَمِعِ والمُصَنِّفِ والإقلاعِ والميزَةِ والقارِئِ والصَفحَتَين.</summary>
+    [Fact]
+    public void No_member_of_the_aggregator_or_of_the_template_meter_names_a_price()
+    {
+        var aggregator = AggregatorAssembly().GetTypes().Where(t => !t.Name.StartsWith('<')).ToList();
+        var (template, excluded) = TemplateMeterTypes();
+        var aggNames = MemberNames(aggregator);
+        var tplNames = MemberNames(template);
+        var priced = aggNames.Concat(tplNames).Where(n => PriceIsh.IsMatch(n)).ToList();
+        output.WriteLine($"[G2] المُجَمِّع (V1.Meter المَبنِيّ): أَنواع {aggregator.Count} · أَسماء {aggNames.Count}");
+        output.WriteLine($"[G2] القالِب: أَنواع {template.Count} ({string.Join(", ", template.Select(t => t.Name).Distinct().Order(StringComparer.Ordinal))}) · أَسماء {tplNames.Count}");
+        output.WriteLine($"[G2] مُستَثنى ModelUsageMetering.cs {excluded.Count}: {string.Join(", ", excluded)} · تُسَمّي سِعراً {priced.Count}");
+        Assert.True(aggregator.Count >= 5 && aggNames.Count > 50, $"أَداةٌ عَمياء: {aggregator.Count} نَوعاً في المُجَمِّع و{aggNames.Count} اسماً.");
+        Assert.Contains(aggregator, t => t.Name == "Aggregator");
+        foreach (var name in new[] { "UsageListener", "MeterRules", "MeterBoot", "UsageLedgerFeature", "MeterQueries", "MeterIndex", "MeterStore" })
+            Assert.Contains(template, t => t.Name == name);
+        Assert.True(excluded.Count >= 5 && template.All(t => !excluded.Contains(t.Name)), $"أَداةٌ عَمياء: المُستَثنى {excluded.Count}.");
+        Assert.True(priced.Count == 0, "عُضوٌ يُسَمّي سِعراً في المُجَمِّعِ أَو في عَدِّ القالِب: " + string.Join(", ", priced));
+    }
+
+    /// <summary>عُضوٌ مَحقونٌ يَقرَؤُه <see cref="MemberNames"/> كَما يَقرَأُ <c>Aggregator</c> — شَكلُ الحَقنِ المُسَمّى في المُلاحَظَة.</summary>
+    private static class InjectedAggregator { public const decimal FeeSar = 0m; }
+
+    /// <summary><b>والحارِسُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠): كُلُّ شَكلٍ مَحقونٍ يَمُرُّ بِالدالَّةِ الَّتي يَمُرُّ بِها الحَقيقِيُّ فَيُمسَك — عَمودٌ في جَدوَلٍ
+    /// مَحقونٍ بِجِوارِ الميزَة، وثابِتٌ في نَوعٍ بِجِوارِ أَنواعِ المُجَمِّع، وعُنوانٌ عَرَبِيٌّ بِالسِعرِ والريال — والكَلِماتُ الَّتي تُشبِهُ السِعرَ ولَيسَت إيّاه لا تُمسَك.</summary>
+    [Fact]
+    public void The_price_guard_catches_each_injected_shape()
+    {
+        var real = new UsageLedgerFeature(new PostgresqlMigrator()).Objects;
+        var extra = new Table(new PostgresqlObjectName(MeterSql.Schema, MeterSql.AggDaily, SchemaUtils.IdentifierUsage.General));
+        extra.AddColumn("amount_sar", "numeric");
+        var column = LedgerNames([.. real, extra]).Where(n => PriceIsh.IsMatch(n)).ToList();
+        var member = MemberNames([.. AggregatorAssembly().GetTypes().Where(t => t.Name == "Aggregator"), typeof(InjectedAggregator)])
+            .Where(n => PriceIsh.IsMatch(n)).ToList();
+        const string title = "سِعرُ عَمَلِيّاتِ المَتاجِرِ اليَوم بِالريال";
+        output.WriteLine($"[G2] حَقنُ العَمود ⇐ {string.Join(", ", column)} · حَقنُ الثابِت ⇐ {string.Join(", ", member)} · حَقنُ العُنوان ⇐ "
+                         + string.Join(", ", PriceIshAr.Matches(Bare(title)).Select(m => m.Value)));
+        Assert.Contains("agg_daily.amount_sar", column);
+        Assert.Contains("InjectedAggregator.FeeSar", member);
+        Assert.True(NamesAPrice(title));
+
+        var priced = new[] { "السِعر", "أَسعارُ الباقات", "تَسعيرُ التِقنِيَة", "مَبلَغُ الطَلَب", "التَكلِفَة", "كُلفَةُ التَشغيل", "رُسومُ الخِدمَة", "رَسمٌ ثابِت",
+                             "بِالرُسوم", "العُملَة", "مِئَةُ ريال", "خَمسونَ هَلَلَة", "١٠ ر.س", "Fee" };
+        var plain = new[] { "يُرسَمُ الجَدوَل", "رَسمِيّ", "عَمَلِيّاتُ المَتاجِر", "المُعامَلَة", "تُبلَغُ بِنَقرَة", "الرَسمِيَّة", "مَرسوم", "عَمَلِيَّةٌ لِكُلِّ سَطر" };
+        var missed = priced.Where(p => !NamesAPrice(p)).ToList();
+        var over = plain.Where(NamesAPrice).ToList();
+        output.WriteLine($"[G2] المُعجَمُ العَرَبِيّ: يُمسِكُ {priced.Length - missed.Count}/{priced.Length} · يُخطِئُ {over.Count}/{plain.Length}");
+        Assert.True(missed.Count == 0, "كَلِمَةُ سِعرٍ لا يُمسِكُها المُعجَم: " + string.Join(", ", missed));
+        Assert.True(over.Count == 0, "كَلِمَةٌ لَيسَت سِعراً يُمسِكُها المُعجَم: " + string.Join(", ", over));
     }
 
     /// <summary><b>مِفتاحٌ مَجهولٌ يَرمي</b> (<c>Disallow</c>): «price» في صَفٍّ لا يُتَجاهَلُ صامِتاً — فَيُفشِلُ الإقلاع (الحَقنُ المُسَمّى في G2).</summary>
