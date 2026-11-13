@@ -56,7 +56,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.." || exit 1
 
-ROOT_PROJECT="apps/V1.App/V1.App.csproj"
+# ‏(‏2026-11-13، الموجَة ١٣ W13-6·٢٢ — ADR-051 §٢٥؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **جَذرانِ لا جَذر**: الـ`Dockerfile` يَنشُرُ
+# مَشروعَينِ — التَطبيقَ والمُجَمِّعَ `apps/V1.Meter` (عَمَلِيَّةٌ ثانِيَةٌ لا يُشيرُ إلَيها التَطبيق، G10) — فَإغلاقُ `V1.App` وَحدَه لا
+# يَبلُغُ مِلَفّاتِ المُجَمِّعِ ويَنكَسِرُ `restore` عَلى الـSpace. المَقيسُ بِهذا السكربتِ قَبلُ وبَعد: «مَشاريع في الإغلاق: 58 · مِلَفّات
+# مَسموحَة: 686» ← «59 · 689» (‏+3: `Aggregator.cs` و`Program.cs` و`V1.Meter.csproj`؛ و`Shared` في الإغلاقِ أَصلاً). والجُذورُ هُنا هِيَ
+# ما يَنشُرُه الـ`Dockerfile` حَرفاً — `MeterDeployReadsTests` يَحمَرُّ إن افتَرَقا.
+ROOT_PROJECTS=(
+    "apps/V1.App/V1.App.csproj"
+    "apps/V1.Meter/V1.Meter.csproj"
+)
 
 # مِلَفّات الجَذر الَّتي يَقرَؤُها البِناء أَو HF — لا مَشاريع.
 ROOT_FILES=(
@@ -79,7 +87,7 @@ fi
 # المَسارات في الـcsproj بِشَرطَة مَقلوبَة (‏`..\..\libs\…`) — تُسَوَّى
 # إلى `/` قَبلَ أَيّ شَيء، ثُمَّ يُطَبَّع المَسار بِـ`realpath --relative-to`.
 declare -A SEEN=()
-QUEUE=("$ROOT_PROJECT")
+QUEUE=("${ROOT_PROJECTS[@]}")
 
 while [ ${#QUEUE[@]} -gt 0 ]; do
     proj="${QUEUE[0]}"
@@ -131,7 +139,7 @@ for prefix in "${FORBIDDEN_PREFIXES[@]}"; do
 done
 [ "$leak" -eq 0 ] || exit 1
 
-echo "[deploy-manifest] مَشاريع في الإغلاق: ${#SEEN[@]} · مِلَفّات مَسموحَة: ${count}" >&2
+echo "[deploy-manifest] جُذور: ${#ROOT_PROJECTS[@]} · مَشاريع في الإغلاق: ${#SEEN[@]} · مِلَفّات مَسموحَة: ${count}" >&2
 printf '%s\n' "$MANIFEST" | awk -F/ '{print (NF==1 ? "(الجَذر)" : $1"/")}' \
     | LC_ALL=C sort | uniq -c | sed 's/^/[deploy-manifest]   /' >&2
 

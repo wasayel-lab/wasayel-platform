@@ -63,6 +63,9 @@ public class DeployManifestGateTests(ITestOutputHelper output)
                  + (extraReference is null ? "" : $"    <ProjectReference Include=\"{extraReference}\" />\n");
         Write("apps/V1.App/V1.App.csproj", "<Project Sdk=\"Microsoft.NET.Sdk.Web\">\n  <ItemGroup>\n" + refs + "  </ItemGroup>\n</Project>\n");
         Write("apps/V1.App/Program.cs", "// app\n");
+        // ‏(‏2026-11-13، W13-6·٢٢) والجَذرُ الثاني — المُجَمِّعُ يُحيلُ إلى المَكتَبَةِ نَفسِها كَما يُحيلُ `V1.Meter` إلى `Shared` الَّذي في إغلاقِ التَطبيقِ أَصلاً.
+        Write("apps/V1.Meter/V1.Meter.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <ProjectReference Include=\"..\\..\\libs\\a\\a.csproj\" />\n  </ItemGroup>\n</Project>\n");
+        Write("apps/V1.Meter/Program.cs", "// meter\n");
         Write("libs/a/a.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
         Write("libs/a/A.cs", "// a\n");
         Write("libs/unreferenced/u.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
@@ -106,10 +109,11 @@ public class DeployManifestGateTests(ITestOutputHelper output)
             Assert.Equal(new[]
             {
                 ".dockerignore", "Directory.Build.props", "Directory.Packages.props", "Dockerfile", "README.md",
-                "apps/V1.App/Program.cs", "apps/V1.App/V1.App.csproj", "libs/a/A.cs", "libs/a/a.csproj",
+                "apps/V1.App/Program.cs", "apps/V1.App/V1.App.csproj", "apps/V1.Meter/Program.cs", "apps/V1.Meter/V1.Meter.csproj",
+                "libs/a/A.cs", "libs/a/a.csproj",
             }, files);
             Assert.DoesNotContain(files, f => Forbidden.Any(p => f.StartsWith(p, StringComparison.Ordinal)));
-            Assert.Contains("مَشاريع في الإغلاق: 2 · مِلَفّات مَسموحَة: 9", err, StringComparison.Ordinal);
+            Assert.Contains("جُذور: 2 · مَشاريع في الإغلاق: 3 · مِلَفّات مَسموحَة: 11", err, StringComparison.Ordinal);
         }
         finally { dir.Delete(recursive: true); }
     }
@@ -150,6 +154,19 @@ public class DeployManifestGateTests(ITestOutputHelper output)
             Assert.Contains("::error::مَشروع مُحالٌ إلَيه غَير مَوجود", err, StringComparison.Ordinal);
         }
         finally { missing.Delete(recursive: true); }
+
+        // ‏(‏2026-11-13، W13-6·٢٢) والرابِعَة: جَذرُ المُجَمِّعِ غائِبٌ مِن الشَجَرَة — رَمزُ 1 يُسَمّيه، لا قائِمَةٌ بِلا مِلَفّاتِه يُبنى مِنها ما لا يُرَمَّم.
+        var noMeter = Scratch(extraReference: null);
+        try
+        {
+            var (rm, ro, re) = Run("git", noMeter.FullName, "rm", "-q", "-r", "--", "apps/V1.Meter");
+            Assert.True(rm == 0, $"git rm خَرَجَ {rm}: {ro} {re}");
+            var (code, outText, err) = Manifest(noMeter);
+            Assert.True(code == 1, $"جَذرُ المُجَمِّعِ غائِب: رَمزُ {code} — {err}");
+            Assert.Contains("::error::مَشروع مُحالٌ إلَيه غَير مَوجود: apps/V1.Meter/V1.Meter.csproj", err, StringComparison.Ordinal);
+            Assert.Equal("", outText);
+        }
+        finally { noMeter.Delete(recursive: true); }
     }
 
     [Fact]
@@ -187,6 +204,7 @@ public class DeployManifestGateTests(ITestOutputHelper output)
         var files = outText.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.True(files.Length > 100, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً في القائِمَة.");
         Assert.Contains("apps/V1.App/V1.App.csproj", files);
+        Assert.Contains("apps/V1.Meter/V1.Meter.csproj", files);   // ‏(‏2026-11-13، W13-6·٢٢) المُجَمِّعُ يَصِلُ الـSpace كَما تَنشُرُه الصورَة
         Assert.Contains("Dockerfile", files);
         var leaked = files.Where(f => Forbidden.Any(p => f.StartsWith(p, StringComparison.Ordinal))).ToList();
         Assert.True(leaked.Count == 0, "تَسَرَّبَ: " + string.Join(", ", leaked.Take(10)));
