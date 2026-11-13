@@ -81,5 +81,13 @@ public sealed class UsageLedgerFeature : FeatureSchemaBase
         intent.AddColumn("created_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
         intent.AddColumn("decided_at", "timestamp with time zone");
         yield return intent;
+
+        // ‏(‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §4 و§8) مُطالَبَةُ لَقطَةِ الحُضور: صَفٌّ لِكُلِّ يَوم، يُكتَبُ مَعَ سُطورِه و`completed_at` في مُعامَلَةٍ واحِدَة —
+        // والمِفتاحُ الفَريدُ يَجعَلُ مُعالِجاً ثانِياً لِليَومِ نَفسِه يَقِفُ ثُمَّ يَخسَر. يَكتُبُها `PresenceSnapshot` وَحدَه.
+        var claim = new Table(Name(MeterSql.PresenceClaim));
+        claim.AddColumn("day", "date").AsPrimaryKey();
+        claim.AddColumn("claimed_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
+        claim.AddColumn("completed_at", "timestamp with time zone");
+        yield return claim;
     }
 }

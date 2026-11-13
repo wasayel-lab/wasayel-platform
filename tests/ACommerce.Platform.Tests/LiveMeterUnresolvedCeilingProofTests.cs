@@ -169,7 +169,11 @@ public class LiveMeterUnresolvedCeilingProofTests(ITestOutputHelper output)
             // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) **ووَحَداتُ الصادِرِ خارِجَ هذه الرِحلَة**: قَناةُ رُموزِها هُنا مُلتَقِطٌ في العَمَلِيَّةِ (`CaptureSms`) لا يُغادِرُها، فَلا
             // نِداءَ صادِراً يُعَدّ؛ وبابُ الرَمزِ عَبرَ Twilio المُسَجَّلِ يَمشيه `LiveProviderCallsProofTests` (P11) بِسَطرِه ونِيَّتِه. وكُلُّ وَحدَةِ حِفظٍ تَبقى مُلزَمَةً هُنا كَما كانَت.
             var outbound = MeterUnitCatalog.Default.Units.Where(u => u.Boundary == MeterBoundaries.Outbound).Select(u => u.Code).ToHashSet(StringComparer.Ordinal);
-            Assert.All(units, u => Assert.True(perUnit.GetValueOrDefault(u).Rows > 0 || u == "member_plan.subscribe" || outbound.Contains(u),
+            // ‏(‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ووَحَداتُ الحُضورِ خارِجَ هذه الرِحلَةِ أَيضاً**: لا يَكتُبُها طَلَبٌ بَل لَقطَةُ اليَوم
+            // (`TakePresenceSnapshot`)، والمُضيفُ هُنا بِلا إقلاعِ تَطبيقٍ ولا مُجَدوِل؛ ويَمشيها `LivePresenceSnapshotProofTests` (G12) بِوَحَداتِها التِسعِ وأَرقامِها، ولا
+            // `_unresolved` في سُطورِها (دَورُها `_system` أَو الدَورُ المَعدود). وكُلُّ وَحدَةِ حِفظٍ تَبقى مُلزَمَة.
+            var presence = MeterUnitCatalog.Default.Units.Where(u => u.Boundary == MeterBoundaries.Presence).Select(u => u.Code).ToHashSet(StringComparer.Ordinal);
+            Assert.All(units, u => Assert.True(perUnit.GetValueOrDefault(u).Rows > 0 || u == "member_plan.subscribe" || outbound.Contains(u) || presence.Contains(u),
                 $"أَداةٌ عَمياء: الرِحلَةُ لَم تَبلُغ {u}."));
             Assert.True(breaches.Count == 0, "سَقفُ _unresolved:\n" + string.Join("\n", breaches));
         }

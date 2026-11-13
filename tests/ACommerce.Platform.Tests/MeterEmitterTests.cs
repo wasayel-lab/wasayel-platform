@@ -22,6 +22,10 @@ namespace ACommerce.Platform.Tests;
 //   ٣. «قِيَمٌ حارِسَة 9 · لَها واضِع 9» — بِأَداةِ `MeterSentinelSetterTests` نَفسِها (الواضِعُ بِشَكلِه لا بِاسمِه).
 //   ٤. «حُقولُ المِتر 3 · لَها قارِئٌ في وَقتِ التَشغيل 3» — مِن الـIL المَبنِيّ (`MeterTestSeamTests.References`)، خارِجَ نَوعِ الحَقلِ نَفسِه (مُساواتُه وطِباعَتُه لَيسَتا
 //      قِراءَة)؛ وسِلسِلَةُ «المُستَمِعُ يَقرَأُ مِتراتِ الوِلادَةِ عِندَ تَركيبِه» حَلقَةً حَلقَة.
+// ‏(‏2026-11-13، W13-6·١٩ — ‏ADR-051 §٢٣؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ودَخَلَت وَحَداتُ الحُضورِ التِسعُ مَعَ مُصدِرِها**: مُصدِرُها يُشَغَّلُ لا يُبحَثُ عَنه —
+//   مُخَطِّطُ اللَقطَةِ (`PresenceReader.Entries`) عَلى مَتاجِرَ مَقروءَةٍ تَحمِلُ كُلَّ ما يُعَدّ (`PresenceReaderTests.Fixture`)، وما يُنتِجُه هُوَ المُصدَر؛ وقارِئا مِترَي
+//   المُزَوِّدِ والدَورِ في وَقتِ التَشغيلِ صارا اللَقطَةَ نَفسَها (دَينُ §٢٠–§٢١ سُدِّد): `PresenceReader.Entries` يَقرَأُ `ProviderDefinition.Meter`، و`PresenceDefinitions`
+//   يُنادي `TenantRoleSet.MeterOf`.
 
 public class MeterEmitterTests(ITestOutputHelper output)
 {
@@ -56,6 +60,11 @@ public class MeterEmitterTests(ITestOutputHelper output)
         return counts;
     }
 
+    /// <summary>‏(W13-6·١٩) وَحَداتُ الحُضورِ الَّتي يُصدِرُها مُخَطِّطُ اللَقطَة — يُشَغَّلُ عَلى مَتاجِرَ تَحمِلُ كُلَّ ما يُعَدُّ لا يُبحَثُ عَن اسمِه.</summary>
+    internal static IReadOnlySet<string> PresenceEmitters()
+        => PresenceReader.Entries(new DateOnly(2026, 11, 13), PresenceReaderTests.Fixture(), PresenceDefinitions.Platform, MeterUnitCatalog.Default)
+            .Select(e => e.Unit).ToHashSet(StringComparer.Ordinal);
+
     /// <summary>وَحَداتُ المُعجَمِ الَّتي لا مُصدِرَ لَها.</summary>
     internal static IReadOnlyList<string> Orphans(IEnumerable<MeterUnit> units, IReadOnlySet<string> emitted)
         => [.. units.Where(u => !emitted.Contains(u.Code)).Select(u => u.Code)];
@@ -79,7 +88,7 @@ public class MeterEmitterTests(ITestOutputHelper output)
         var files = CodeFiles(except: "ProviderNames.cs");
         var sites = OutboundSites(constants.Keys, files);
         var outbound = sites.Where(s => s.Value > 0).Select(s => constants[s.Key]).ToHashSet(StringComparer.Ordinal);
-        var emitted = persistence.Concat(outbound).ToHashSet(StringComparer.Ordinal);
+        var emitted = persistence.Concat(outbound).Concat(PresenceEmitters()).ToHashSet(StringComparer.Ordinal);
 
         int Of(string boundary) => units.Count(u => u.Boundary == boundary && emitted.Contains(u.Code));
         int Total(string boundary) => units.Count(u => u.Boundary == boundary);
@@ -111,6 +120,14 @@ public class MeterEmitterTests(ITestOutputHelper output)
         var sites = OutboundSites(["X", "Y"], [("libs/k/Any.cs", "var c = new ProviderCall(OutboundUnits.X, slug, id); // OutboundUnits.Y\nif (c.Unit == OutboundUnits.Y) { }")]);
         Assert.Equal((1, 0), (sites["X"], sites["Y"]));
         Assert.Equal(0, OutboundSites(["X"], [("libs/t/Services/Queries/Q.cs", "var c = new ProviderCall(OutboundUnits.X, slug, id);")])["X"]);
+
+        // ‏(W13-6·١٩) ووَحدَةُ حُضورٍ في المُعجَمِ لا يُنتِجُها المُخَطِّطُ يَتيمَة.
+        var ghost = new MeterUnit
+        {
+            Code = "presence.ghost", Side = MeterSides.Technology, Boundary = MeterBoundaries.Presence, Measure = MeterMeasures.Count,
+            Feature = "tenants", Reconcile = MeterReconcilers.PresenceClaims, Source = "مِجَسٌّ في الاختِبار",
+        };
+        Assert.Equal(new[] { "presence.ghost" }, Orphans([.. MeterUnitCatalog.Default.Units.Where(u => u.Boundary == MeterBoundaries.Presence), ghost], PresenceEmitters()));
     }
 
     // ─── ٢. bound 4 · pinned 6 ─────────────────────────────────────────
@@ -270,6 +287,14 @@ public class MeterEmitterTests(ITestOutputHelper output)
         Assert.Equal(3, readers.Count);
         Assert.Empty(readers.Where(r => r.Value.Count == 0).Select(r => r.Key));
         Assert.Empty(Readers(typeof(Orphan).GetProperty(nameof(Orphan.Meter))!, references));
+
+        // ‏(W13-6·١٩) ودَينُ §٢٠–§٢١ سُدِّد: لَقطُ الحُضورِ يَقرَأُ مِترَ المُزَوِّدِ، ويُنادي المِترَ المُشتَقَّ لِلدَورِ — قارِئانِ في وَقتِ التَشغيلِ غَيرُ بَوّابَةِ الإقلاع.
+        var meterOf = typeof(ACommerce.Kit.Roles.TenantRoleSet).GetMethod(nameof(ACommerce.Kit.Roles.TenantRoleSet.MeterOf))!;
+        var meterOfCallers = references.Where(r => Same(r.Callee, meterOf) && Owner(r.Caller) != typeof(ACommerce.Kit.Roles.TenantRoleSet))
+            .Select(r => Owner(r.Caller).Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        output.WriteLine($"[G15] قُرّاءُ الحُضور: ProviderDefinition.Meter ← {string.Join(", ", readers["ProviderDefinition.Meter"])} · TenantRoleSet.MeterOf ← {string.Join(", ", meterOfCallers)}");
+        Assert.Contains($"{nameof(PresenceReader)}.{nameof(PresenceReader.Entries)}", readers["ProviderDefinition.Meter"]);
+        Assert.Contains(nameof(PresenceDefinitions), meterOfCallers);
 
         // سِلسِلَةُ «المُستَمِعُ يَقرَأُ مِتراتِ الوِلادَةِ عِندَ تَركيبِه» حَلقَةً حَلقَة: البانِي بِلا وَسيطٍ ← المِلَفّات ← القِراءَة ← مِترُ الانتِقال.
         bool Calls(MethodBase from, MethodBase to) => references.Any(r => Same(r.Callee, to)

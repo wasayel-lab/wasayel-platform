@@ -287,6 +287,87 @@
       "feature": "studio.build",
       "reconcile": "intents",
       "source": "IAgentBackend.CallAsync — the Anthropic, Gemini and Chat-Completions-compatible backends through ProviderHttp; one entry when usage is read from the answer (the tokens were spent, even beside an error), refused on a 4xx without usage, unknown otherwise; request id = a fresh call id per call (each analysis attempt is its own call); app = _platform (the studio design agent AgentService and the admin incubator FeasibilityAnalysisService); ModelCallRecord keeps the per-operation split"
+    },
+    {
+      "code": "presence.store",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "tenants",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store per day for every store not suspended (Tenant.IsSuspended); quantity 1; app = the store, entrepreneur = Tenant.OwnerUserId, role _system"
+    },
+    {
+      "code": "presence.role",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "roles",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per materialised role (Tenant.Roles plus the approved TenantRoleDefinition documents through TenantRoleSet.Materialize) whose derived meter TenantRoleSet.MeterOf(CatalogSlug) names this unit; quantity 1; role = the role slug"
+    },
+    {
+      "code": "presence.authored_role",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "roles",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved tenant-authored role definitions (TenantRoleSet.TenantAuthored); quantity = their count"
+    },
+    {
+      "code": "presence.authored_theme",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "theme",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved TenantThemeDefinition documents; quantity = their count"
+    },
+    {
+      "code": "presence.member_plan",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved TenantPlanDefinition documents; quantity = their count"
+    },
+    {
+      "code": "presence.provider_binding",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "@provider_capability",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per active TenantProviderBinding that is not a vendor entry and whose ProviderDefinition.Meter.Presence is store_binding; quantity 1; provider = its slug, feature = its capability"
+    },
+    {
+      "code": "presence.vendor_binding",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "@provider_capability",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per provider whose ProviderDefinition.Meter.Presence is vendor_binding, quantity = the store's active vendor entries ({capability}:{listing_owner}) on it; the listing owner never enters the ledger"
+    },
+    {
+      "code": "presence.api_key",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "api.call",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with active ApiKeyDocument keys; quantity = their count"
+    },
+    {
+      "code": "presence.auth_channel",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "auth",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store for its sign-in channel (Tenant.AuthChannel); quantity 1; source = the channel"
     }
   ]
 }

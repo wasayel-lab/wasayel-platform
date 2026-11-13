@@ -25,6 +25,11 @@
 #  قَبلَه كُلُّه دَورُه `_seed` ولِكُلِّ وَحدَةٍ وَثائِقُها؛ والدُخولُ الأَوَّلُ إلى الاستوديو سَطرُ `studio.account.create`، والمَتجَرُ سَطرُ `store.create` بِمالِكِه،
 #  والبائِعُ والمُشتَري سَطرا `member.join` بِاسمٍ مُستَعار؛ فَصَفحَةُ المَتجَرِ «المَجموعُ» 5 ثُمَّ 8 و«deal.create» 1 ثُمَّ 4، وسَطرُ السَحبِ الأَوَّلُ بِالوَحَداتِ الخَمس.
 #
+#  ‏(‏2026-11-13، W13-6·١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجانِبُ التِقنِيَة**: الإقلاعُ يُرسِلُ لَقطَةَ حُضورِ اليَومِ (`ApplicationStarted` ← `TakePresenceSnapshot`)
+#  فَتَكتُبُ سُطورَ `presence.*` لِلمَتاجِرِ المَبذورَة. فَصَفُّ P12 يَنتَظِرُ اكتِمالَ مُطالَبَةِ اليَومِ قَبلَ أَيِّ طَلَب — فَلا تَقَعُ اللَقطَةُ بَعدَ وِلادَةِ المَتجَرِ فَتُغَيِّرَ
+#  أَرقامَ صَفحَتِه — ويَطبَعُ سُطورَها لِكُلِّ وَحدَةٍ وصُفوفَ الصُندوق؛ و«الدَفتَرُ قَبلَ أَوَّلِ طَلَب» وسَطرُ السَحبِ يُعَدّانِ لِوَحَداتِ جانِبِ التَشغيلِ مِن المُعجَم
+#  (`side`)، والحُضورُ يَطبَعُه المُجَمِّعُ بَعيداً («presence N»).
+#
 #  **ولا يُشَغَّلُ عَلى الإنتاج**: يُنشِئُ قاعِدَةً ويَحذِفُها عَلى خادِمِ Postgres مَحَلِّيٍّ وَحدَه (المُضيفُ localhost أَو 127.0.0.1 أَو ::1، والاسمُ `wasayel_…`)،
 #  والدُخولُ بِرَمزِ المُحاكي (Development وَحدَه). ولا يُطبَعُ مِن الاتِّصالِ إلّا المُضيفُ واسمُ القاعِدَة.
 #  **والعَدُّ وَحدَه**: لا سِعرَ في هذا المِلَفّ ولا في ما يَقرَؤُه (القاعِدَة ١٦)؛ وقيمَةُ حَقلِ `price` في استِمارَةِ الإعلانِ بَيانُ المَتجَرِ المَطلوب لا رَقَمُ عَدّ.
@@ -164,7 +169,24 @@ done
 BOOT="$(grep -o '\[meter\] boot.*' "$WORK/app.log" | head -1)"
 UNITS="$(jq '.units | length' "$ROOT/libs/core/ACommerce.Platform.Shared/Metering/Definitions/meter-units.json")"
 check "$([ "$UNITS" -gt 0 ] && [ "$BOOT" = "[meter] boot generation=1 units=$UNITS epochs_new=$UNITS" ] && echo 1 || echo 0)" "إقلاعٌ بارِد: «$BOOT» (pid $APP_PID · وَحَداتُ المُعجَم $UNITS)"
-L0="$(q "select count(*) from meter.usage_entry")"; C0="$(q "select count(*) from meter.agg_cursor")"
+# ‏(W13-6·١٩) P12 · لَقطَةُ حُضورِ اليَومِ قَبلَ أَوَّلِ طَلَب: مُطالَبَةٌ واحِدَةٌ مُكتَمِلَة، وسَطرُ `presence.store` لِكُلِّ مَتجَرٍ غَيرِ مُعَلَّق، وسُطورُها لِكُلِّ وَحدَة.
+UNITS_JSON="$ROOT/libs/core/ACommerce.Platform.Shared/Metering/Definitions/meter-units.json"
+OPS="$(jq -r '[.units[] | select(.side == "operation") | "'"'"'" + .code + "'"'"'"] | join(",")' "$UNITS_JSON")"
+TECH="$(jq -r '[.units[] | select(.side == "technology") | "'"'"'" + .code + "'"'"'"] | join(",")' "$UNITS_JSON")"
+CLAIMED=0
+for _ in $(seq 1 120); do
+    [ "$(q "select count(*) from meter.presence_claim where completed_at is not null")" = 1 ] && { CLAIMED=1; break; }
+    sleep 0.5
+done
+PSTORE="$(q "select count(*) from meter.usage_entry where unit = 'presence.store'")"
+PTEN="$(q "select count(*) from platform.mt_doc_tenant where not coalesce((data->>'IsSuspended')::boolean, false)")"
+PUNITS="$(q "select coalesce(string_agg(unit || ' ' || n, ' · ' order by unit), '—') from (select unit, count(*) n from meter.usage_entry where unit in ($TECH) group by unit) t")"
+PENV="$(q "select coalesce(string_agg(status, ',' order by status), '—') from platform.wolverine_incoming_envelopes where message_type like '%TakePresenceSnapshot%'")"
+PLINE=""
+for _ in $(seq 1 20); do PLINE="$(grep -o '\[meter\] presence day=[^(]*' "$WORK/app.log" | head -1)"; [ -n "$PLINE" ] && break; sleep 0.5; done
+check "$([ "$CLAIMED" = 1 ] && [ "$PSTORE" -gt 0 ] && [ "$PSTORE" = "$PTEN" ] && [ -n "$PLINE" ] && echo 1 || echo 0)" \
+    "P12 · مُطالَبَةُ اليَومِ مُكتَمِلَة · presence.store $PSTORE لِمَتاجِرَ غَيرِ مُعَلَّقَة $PTEN · $PUNITS · صُفوفُ الصُندوق [$PENV] · «$PLINE»"
+L0="$(q "select count(*) from meter.usage_entry where unit in ($OPS)")"; C0="$(q "select count(*) from meter.agg_cursor")"
 S0="$(q "select count(*) from meter.usage_entry where unit = 'listing.create' and role = '_seed' and entrepreneur = '_seed'")"
 E0="$(q "select count(*) from platform.mt_events where mt_dotnet_type like 'ACommerce.Kit.Listings.ListingCreated,%'")"
 # ‏(W13-6·٨) ومَتاجِرُ البَذرِ وحِسابُ المُشرِف: سُطورٌ بِعَدَدِ وَثائِقِها، ورائِدُ أَعمالِها مِن الوَثيقَة، والدَورُ `_seed` لِلدَفتَرِ كُلِّه.
@@ -172,7 +194,7 @@ T0="$(q "select count(*) from meter.usage_entry where unit = 'store.create' and 
 TD0="$(q "select count(*) from platform.mt_doc_tenant")"
 A0="$(q "select count(*) from meter.usage_entry where unit = 'studio.account.create' and role = '_seed' and entrepreneur = source_id and app = '_platform'")"
 AD0="$(q "select count(*) from platform.mt_doc_studiouser")"
-R0="$(q "select count(*) from meter.usage_entry where role = '_seed'")"
+R0="$(q "select count(*) from meter.usage_entry where role = '_seed' and unit in ($OPS)")"
 check "$([ "$S0" -gt 0 ] && [ "$S0" = "$E0" ] && [ "$T0" -gt 0 ] && [ "$T0" = "$TD0" ] && [ "$A0" = "$AD0" ] && [ "$L0" = $((S0 + T0 + A0)) ] && [ "$R0" = "$L0" ] && [ "$C0" = 0 ] && echo 1 || echo 0)" \
     "الدَفتَرُ قَبلَ أَوَّلِ طَلَب: سُطور $L0 كُلُّها _seed ($R0) — listing.create $S0 بِعَدَدِ أَحداثِ ListingCreated ($E0) · store.create $T0 بِعَدَدِ المَتاجِر ($TD0) · studio.account.create $A0 بِعَدَدِ الحِسابات ($AD0) · لا صَفقَة · مُؤَشِّر $C0"
 

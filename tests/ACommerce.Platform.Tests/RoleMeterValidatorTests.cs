@@ -35,7 +35,9 @@ public class RoleMeterValidatorTests(ITestOutputHelper output)
         Feature = "tenants", Reconcile = MeterReconcilers.TenantIds, Source = "مِجَسٌّ في الاختِبار",
     };
 
-    private static MeterUnitCatalog With(params MeterUnit[] extra) => MeterUnitCatalog.From([.. MeterUnitCatalog.Default.Units, .. extra]);
+    // ‏(‏2026-11-13، W13-6·١٩) والوَحدَةُ المُضافَةُ تَحِلُّ مَحَلَّ سَمِيِّها في المُعجَم: وَحَداتُ الحُضورِ دَخَلَته، فَإضافَتُها ثانِيَةً كانَت `units_code_duplicate`.
+    private static MeterUnitCatalog With(params MeterUnit[] extra)
+        => MeterUnitCatalog.From([.. MeterUnitCatalog.Default.Units.Where(u => !extra.Any(e => e.Code == u.Code)), .. extra]);
 
     /// <summary>تَعريفُ «خَيّاط» كَما يَكتُبُه الوَكيل، ومَعَه مِفتاحُ مِترٍ بِقيمَةٍ مُعطاة.</summary>
     private static string KhayyatWithMeter(string jsonValue) =>

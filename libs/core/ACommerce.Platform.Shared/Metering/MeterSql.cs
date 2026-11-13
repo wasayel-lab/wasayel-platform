@@ -87,6 +87,32 @@ public static class MeterSql
     /// <summary><see cref="Insert"/> بِعَلاماتِ Npgsql المَوضِعِيَّة (<c>$1…$11</c>) — الجُملَةُ نَفسُها بِحَرفِها لِكاتِبٍ عَلى اتِّصالِه لا عَلى جَلسَة.</summary>
     public static readonly string InsertPositional = Positional(Insert);
 
+    // ═══ الحُضور (‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §4 و§8) ═══════════════════════════════════════════════════════════════
+    // لَقطَةٌ واحِدَةٌ لِكُلِّ يَوم: مُطالَبَةٌ مِفتاحُها اليَومُ تُكتَبُ مَعَ سُطورِها و`completed_at` في مُعامَلَةٍ خامٍ واحِدَة، فَلا يَبقى يَومٌ نِصفَ مَعدود. كاتِبُها
+    // الوَحيدُ `PresenceSnapshot` في القالِب، وسَطرُها كَسَطرِ الحِفظِ إلّا أَنّ `occurred_at` بِدايَةُ يَومِه بِمِنطَقَةِ المَنَصَّة (التَصميم §2) لا لَحظَةُ الكِتابَة.
+
+    /// <summary>مُطالَبَةُ لَقطَةِ الحُضور — صَفٌّ لِكُلِّ يَوم (<see cref="DayZone"/>): <c>day</c> مِفتاحُه، و<c>claimed_at</c>، و<c>completed_at</c> حينَ أُودِعَت سُطورُه.</summary>
+    public const string PresenceClaim = "presence_claim";
+
+    /// <summary>المُطالَبَةُ بِاليَوم — صَفٌّ يَعودُ لِلرابِحِ وَحدَه؛ ومُعالِجٌ ثانٍ يَقِفُ عَلى المِفتاحِ الفَريدِ حَتّى تُودِعَ الأُولى أَو تَتَراجَع، ثُمَّ لا يَعودُ لَه شَيء.</summary>
+    public const string PresenceClaimInsert = "insert into meter.presence_claim (day) values (@day) on conflict (day) do nothing returning day";
+
+    /// <summary>اكتِمالُ اليَوم — في مُعامَلَةِ مُطالَبَتِه وسُطورِه نَفسِها.</summary>
+    public const string PresenceClaimComplete = "update meter.presence_claim set completed_at = transaction_timestamp() where day = @day";
+
+    /// <summary>أَاكتَمَلَت مُطالَبَةُ اليَوم؟ — يَسأَلُه الإقلاعُ قَبلَ أَن يُرسِلَ اليَوم.</summary>
+    public const string PresenceClaimCompleted = "select exists(select 1 from meter.presence_claim where day = @day and completed_at is not null)";
+
+    /// <summary>
+    /// <para><b>سَطرُ الحُضور</b> — أَعمِدَةُ <see cref="Insert"/> بِأَسمائِها، و<c>occurred_at</c> بِدايَةُ اليَومِ بِـ<see cref="DayZone"/> (فَيَقَعُ في دَلوِ يَومِه عِندَ المُجَمِّعِ
+    /// والصَفحَة)، والجيلُ بِتَعبيرِ <see cref="Insert"/> نَفسِه. و<c>ON CONFLICT (id) DO NOTHING</c>: المُعَرِّفُ يَحمِلُ اليَوم، فَإعادَتُه لا تُضاعِف.</para>
+    /// </summary>
+    public const string PresenceInsert =
+        "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, occurred_at, generation) "
+        + "values (@id, @unit, @quantity, @app, @entrepreneur, @role, @feature, @provider, @source_type, @source_id, (@day::timestamp at time zone '" + DayZone + "'), "
+        + "coalesce(nullif(@generation, 0), (select max(g.generation) from meter.generation g), 1)) "
+        + "on conflict (id) do nothing";
+
     private static string Positional(string sql)
     {
         var n = 0;

@@ -232,6 +232,12 @@ switch (FileStorageSelection.Decide(isDev, s3Files))
 // القالَب — يُسَجِّل AuthSession + HttpContextAccessor
 builder.Services.AddCustomerMarketplaceTemplate();
 
+// ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §8) **لَقطَةُ الحُضورِ اليَومِيَّةُ رِسالَةٌ في مُجَدوِلِ Wolverine المَتين** — المُستَهلِكُ الثاني بَعدَ
+// مُهلَةِ الفاتورَة (‏ADR-046): مُعالِجُها يُكتَشَفُ بِنَوعِه وطابورُها بِصُندوقٍ مُستَديم، بِسَطرَي `PresenceSnapshot.Configure` اللَّذَينِ يُناديهِما البُرهانُ الحَيُّ نَفسُهُما.
+// هُنا لا في القالِب: التَطبيقُ وَحدَه يُجَدوِلُها (`ApplicationStarted` أَدناه)، وتَركيبُ القالِبِ يَحمِلُ رِسالَةَ المُهلَةِ وَحدَها (`GatewayInvoiceExpiryTests`).
+Wolverine.HostBuilderExtensions.ConfigureWolverine(builder.Services,
+    ACommerce.Templates.Customer.Marketplace.Services.Metering.PresenceSnapshot.Configure);
+
 var app = builder.Build();
 
 // ─── حارِسُ الإقلاع: لا مُحاكِيَ خارِجَ التَطوير ─────────────────────
@@ -522,5 +528,10 @@ app.MapReadiness();
 
 app.MapRazorComponents<App>()
     .AddPlatformInteractiveServer();
+
+// ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §8) **وعِندَ الإقلاع**: اليَومُ إن لَم تَكتَمِل مُطالَبَتُه، والغَدُ عِندَ بِدايَتِه بِتَوقيتِ الرِياض —
+// والمُكَرَّرُ يَنطَوي عَلى المُطالَبَة. بَعدَ أَن تَبدَأَ خِدماتُ المُضيف (Wolverine) لا قَبلَه، وتَعَذُّرُه سَطرُ `[meter] presence-boot-failed` لا عُطلُ إقلاع.
+app.Lifetime.ApplicationStarted.Register(() =>
+    _ = ACommerce.Templates.Customer.Marketplace.Services.Metering.PresenceSnapshot.ScheduleAtBootAsync(app.Services));
 
 app.Run();

@@ -102,8 +102,12 @@ public static class MeterReconcilers
     public const string Intents = "intents";
     /// <summary>بادِئَةُ قارِئِ الأَحداث: <c>event_ids:{نَوعُ الحَدَث}</c>.</summary>
     public const string EventIdsPrefix = "event_ids:";
+    /// <summary>‏(‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>قارِئُ وَحَداتِ الحُضورِ التِسع</b>: مُطالَبَةُ اليَومِ (<c>meter.presence_claim</c>)
+    /// مَعَ سُطورِه — يَومٌ مُكتَمِلٌ بِسُطورِه، ويَومٌ بِلا مُطالَبَةٍ «لَقطَةٌ غائِبَة». المُصادِقُ يَطلُبُ قارِئاً لِكُلِّ وَحدَة (<c>unit_reconcile_unknown</c>)، وقائِمَةُ
+    /// التَصميمِ (§9) قُرّاءُ مَصادِرِ الحِفظِ والنِيّاتُ وَحدَها؛ ويَبنيه البَند ٢٠ مَعَ إخوَتِه.</summary>
+    public const string PresenceClaims = "presence_claims";
 
-    public static readonly IReadOnlyList<string> Fixed = [DealIds, TenantIds, ReviewIds, UserIds, StudioUserIds, MessageIds, Intents];
+    public static readonly IReadOnlyList<string> Fixed = [DealIds, TenantIds, ReviewIds, UserIds, StudioUserIds, MessageIds, Intents, PresenceClaims];
 
     private static readonly Regex EventIds = new("^event_ids:[A-Z][A-Za-z0-9]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

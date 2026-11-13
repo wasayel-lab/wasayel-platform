@@ -71,7 +71,8 @@ public class FlowMeterTests(ITestOutputHelper output)
     [InlineData("Deal.create")]
     [InlineData("None")]
     [InlineData("none ")]
-    [InlineData("presence.role")]
+    // ‏(‏2026-11-13، W13-6·١٩) `presence.role` دَخَلَت المُعجَمَ حُضوراً فَصارَ رَمزُها `meter_unit_not_persistence` (الصَفُّ أَدناه)؛ ومَكانَها اسمُ حُضورٍ لَيسَ في المُعجَم.
+    [InlineData("presence.roles")]
     public void meter_unit_unknown_fires_on_a_value_that_is_neither_a_unit_nor_none(string meter)
         => Assert.Equal(new[] { "meter_unit_unknown" }, CodesOf(meter));
 

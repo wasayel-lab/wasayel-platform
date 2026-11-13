@@ -221,8 +221,10 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
         var calls = stripped.Sum(f => f.Code.Split("ScheduleAsync(").Length - 1);
         output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Length} · نِداءاتُ الجَدوَلَة: {calls} · في: {string.Join(", ", scheduling)} · وَقتُ الرِسالَة: {sent.Options.ScheduledTime:O}");
         Assert.True(files.Length >= 200, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً.");
-        Assert.Equal(1, calls);
-        Assert.Equal(new[] { "GatewayPayments.cs" }, scheduling);
+        // ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٩ — ADR-051 §٢٣ وسَطرُ ADR-046) **والمُستَهلِكُ الثاني لِلمُجَدوِلِ المَتين**: لَقطَةُ الحُضورِ اليَومِيَّة — مَوضِعُ جَدوَلَتِها الوَحيدُ
+        // `PresenceSnapshot.ScheduleDayAsync`. فَالعَدُّ يَبقى حارِساً: مَوضِعٌ ثالِثٌ أَو مِلَفٌّ ثالِثٌ يُحمِرُّه.
+        Assert.Equal(2, calls);
+        Assert.Equal(new[] { "GatewayPayments.cs", "PresenceSnapshot.cs" }, scheduling.Order(StringComparer.Ordinal));
     }
 
     /// <summary>

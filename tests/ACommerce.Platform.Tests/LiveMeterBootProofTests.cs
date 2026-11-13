@@ -164,10 +164,15 @@ public class LiveMeterBootProofTests(ITestOutputHelper output)
             foreach (var (type, unit) in MeterRules.StreamBirths.OrderBy(b => b.Value, StringComparer.Ordinal))
                 births.Add((unit, await One($"select count(*) from platform.mt_events where mt_dotnet_type like '{type.FullName},%'"),
                             await One($"select count(*) from meter.usage_entry where unit = '{unit}' and role = '_seed' and entrepreneur = '_seed'")));
-            var allRows = await One("select count(*) from meter.usage_entry");
-            var allSeed = await One("select count(*) from meter.usage_entry where role = '_seed'");
+            // ‏(‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **«الدَفتَرُ كُلُّه بَذرٌ» صارَ «جانِبُ التَشغيلِ كُلُّه بَذر»**: الإقلاعُ يُرسِلُ لَقطَةَ
+            // الحُضورِ (`ApplicationStarted`) فَتَكتُبُ سُطورَ جانِبِ التِقنِيَةِ — دَورُها `_system` أَو الدَورُ المَعدود، ورائِدُ أَعمالِها المالِك — إن سَبَقَت الإطفاء.
+            // فَالعَدُّ هُنا لِوَحَداتِ التَشغيلِ مِن المُعجَمِ نَفسِه، وجانِبُ التِقنِيَةِ يَحكُمُ عَلَيه بُرهانُه (`LivePresenceSnapshotProofTests`)، وجانِبُ التَشغيلِ بِأَرقامِه
+            // (`LiveMeterBootOperationsCharacterizationProofTests`، بِلا حَرف).
+            var operations = string.Join(",", MeterUnitCatalog.Default.Units.Where(u => u.Side == MeterSides.Operation).Select(u => $"'{u.Code}'"));
+            var allRows = await One($"select count(*) from meter.usage_entry where unit in ({operations})");
+            var allSeed = await One($"select count(*) from meter.usage_entry where role = '_seed' and unit in ({operations})");
             // ‏(W13-6·٨) رائِدُ الأَعمالِ مِن الوَثيقَةِ لِوَحدَتَين، و`_seed` لِما سِواهُما؛ ولِكُلِّ وَحدَةِ وَثيقَةٍ سُطورٌ بِعَدَدِ وَثائِقِها المَبذورَة.
-            var notSeedOwner = await One("select coalesce(string_agg(distinct unit, ',' order by unit), '') from meter.usage_entry where entrepreneur <> '_seed'");
+            var notSeedOwner = await One($"select coalesce(string_agg(distinct unit, ',' order by unit), '') from meter.usage_entry where entrepreneur <> '_seed' and unit in ({operations})");
             var stores = (await One("select count(*) from meter.usage_entry where unit = 'store.create' and entrepreneur = '_unowned' and source_id = app"),
                           await One("select count(*) from platform.mt_doc_tenant"));
             var accounts = (await One("select count(*) from meter.usage_entry where unit = 'studio.account.create' and entrepreneur = source_id and app = '_platform'"),
