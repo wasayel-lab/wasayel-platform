@@ -8,6 +8,7 @@ using ACommerce.Platform.Providers;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using Marten;
+using Npgsql;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 
@@ -99,14 +100,22 @@ public static class PresenceReader
     public const string AuthChannelSource = "auth_channel";
 
     /// <summary>كُلُّ المَتاجِر، مُرَتَّبَةً بِسلاجِها — والمُعَلَّقُ يُقرَأُ بِوَثيقَتِه وَحدَها (لا سَطرَ لَه).</summary>
+    /// <remarks>(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): <b>والقِراءَةُ لا تُنشِئُ جَدوَلاً</b> — نَوعٌ لا جَدوَلَ لَه
+    /// (<see cref="StoredAsync"/>) لا وَثيقَةَ لَه، فَلا يُسأَلُ عَنه Marten: سُؤالُه يُنشِئُ جَدوَلَه (<c>AutoCreate</c>). كانَت لَقطَةُ الإقلاعِ تُنشِئُ
+    /// <c>mt_doc_apikeydocument</c> و<c>mt_doc_tenantplandefinition</c> و<c>mt_doc_tenantproviderbinding</c> فارِغَةً عَلى قاعِدَةٍ جَديدَة — فَبَصمَةُ البَذرِ
+    /// (<c>LiveMeterSeededFootprintCharacterizationProofTests</c>) حَمراءُ إن سَبَقَت اللَقطَةُ إطفاءَ التَطبيق، وخَضراءُ إن تَأَخَّرَت: سِباقٌ لا حُكم.</remarks>
     public static async Task<IReadOnlyList<PresenceStoreFacts>> ReadAsync(IDocumentStore store, CancellationToken ct = default)
     {
+        var stored = await StoredAsync(store, [typeof(Tenant), typeof(ApiKeyDocument), typeof(TenantRoleDefinition), typeof(TenantThemeDefinition),
+                                               typeof(TenantPlanDefinition), typeof(TenantProviderBinding)], ct);
+        if (!stored.Contains(typeof(Tenant))) return [];
         IReadOnlyList<Tenant> tenants;
-        IReadOnlyList<ApiKeyDocument> keys;
+        IReadOnlyList<ApiKeyDocument> keys = [];
         await using (var q = store.QuerySession())
         {
             tenants = await q.Query<Tenant>().ToListAsync(ct);
-            keys = await q.Query<ApiKeyDocument>().Where(k => k.Status == ApiKeyDocument.StatusActive).ToListAsync(ct);
+            if (stored.Contains(typeof(ApiKeyDocument)))
+                keys = await q.Query<ApiKeyDocument>().Where(k => k.Status == ApiKeyDocument.StatusActive).ToListAsync(ct);
         }
 
         var facts = new List<PresenceStoreFacts>(tenants.Count);
@@ -118,10 +127,14 @@ public static class PresenceReader
                 continue;
             }
             await using var s = store.QuerySession(t.Id);
-            var roleDocs = await s.Query<TenantRoleDefinition>().Where(d => d.Status == ApprovalFlow.Approved).ToListAsync(ct);
-            var themes = await s.Query<TenantThemeDefinition>().Where(d => d.Status == ApprovalFlow.Approved).CountAsync(ct);
-            var plans = await s.Query<TenantPlanDefinition>().Where(d => d.Status == ApprovalFlow.Approved).CountAsync(ct);
-            var bindings = await s.Query<TenantProviderBinding>().Where(b => b.Status == TenantProviderBinding.StatusActive).ToListAsync(ct);
+            IReadOnlyList<TenantRoleDefinition> roleDocs = stored.Contains(typeof(TenantRoleDefinition))
+                ? await s.Query<TenantRoleDefinition>().Where(d => d.Status == ApprovalFlow.Approved).ToListAsync(ct) : [];
+            var themes = stored.Contains(typeof(TenantThemeDefinition))
+                ? await s.Query<TenantThemeDefinition>().Where(d => d.Status == ApprovalFlow.Approved).CountAsync(ct) : 0;
+            var plans = stored.Contains(typeof(TenantPlanDefinition))
+                ? await s.Query<TenantPlanDefinition>().Where(d => d.Status == ApprovalFlow.Approved).CountAsync(ct) : 0;
+            IReadOnlyList<TenantProviderBinding> bindings = stored.Contains(typeof(TenantProviderBinding))
+                ? await s.Query<TenantProviderBinding>().Where(b => b.Status == TenantProviderBinding.StatusActive).ToListAsync(ct) : [];
 
             var set = TenantRoleSet.FromDocuments(t.Id, roleDocs);
             var roles = set.Materialize(t.Roles).Select(r => new PresenceRoleFact(r.Slug, r.CatalogSlug)).ToList();
@@ -130,6 +143,23 @@ public static class PresenceReader
                 keys.Count(k => string.Equals(k.TenantSlug, t.Id, StringComparison.Ordinal))));
         }
         return facts;
+    }
+
+    /// <summary>
+    /// <para><b>أَيُّ هذه الأَنواعِ لَه جَدوَل؟</b> (‏2026-11-13، W13-6·D-R1·٣) — اسمُ جَدوَلِ كُلِّ نَوعٍ مِن تَعيينِ Marten نَفسِه (<c>FindOrResolveDocumentType</c>، لا نُسخَةٌ
+    /// مِن قاعِدَةِ التَسمِيَة)، و<c>to_regclass</c> في جُملَةٍ واحِدَةٍ عَلى اتِّصالِ المَخزَن: قِراءَةُ الكَتالوجِ لا تُنشِئُ شَيئاً.</para>
+    /// </summary>
+    internal static async Task<IReadOnlySet<Type>> StoredAsync(IDocumentStore store, IReadOnlyList<Type> types, CancellationToken ct = default)
+    {
+        var names = types.Select(t => store.Options.FindOrResolveDocumentType(t).TableName.QualifiedName).ToArray();
+        await using var conn = store.Storage.Database.CreateConnection();
+        await conn.OpenAsync(ct);
+        await using var cmd = new NpgsqlCommand("select n from unnest(@names) n where to_regclass(n) is not null", conn);
+        cmd.Parameters.AddWithValue("names", names);
+        var present = new HashSet<string>(StringComparer.Ordinal);
+        await using (var r = await cmd.ExecuteReaderAsync(ct))
+            while (await r.ReadAsync(ct)) present.Add(r.GetString(0));
+        return types.Where((t, i) => present.Contains(names[i])).ToHashSet();
     }
 
     /// <summary>اليَومُ في المُعَرِّفِ ومَصدَرِه — صيغَةُ ISO لِلتاريخ (<c>"O"</c> لِـ<see cref="DateOnly"/> = <c>yyyy-MM-dd</c>) بِثَقافَةٍ ثابِتَة. <b>يَومٌ لا لَحظَة</b>: قُطِعَ بِمِنطَقَةِ

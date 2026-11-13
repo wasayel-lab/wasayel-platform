@@ -617,4 +617,56 @@ public class LivePresenceSnapshotProofTests(ITestOutputHelper output)
         output.WriteLine($"{label}: {rows.Count} مَتجَراً");
         foreach (var r in rows) output.WriteLine($"[P12]     {r}");
     }
+
+    // ─── ٧. القِراءَةُ لا تُنشِئُ جَدوَلاً (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٣؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ) ──────────────────────────
+    // سُؤالُ Marten عَن نَوعٍ يُنشِئُ جَدوَلَه (`AutoCreate`)، فَكانَت لَقطَةُ الإقلاعِ تُنشِئُ جَداوِلَ تَعريفاتٍ فارِغَةً عَلى قاعِدَةٍ جَديدَة — وبَصمَةُ البَذرِ
+    // (`LiveMeterSeededFootprintCharacterizationProofTests`) تَحمَرُّ إن سَبَقَت اللَقطَةُ إطفاءَ التَطبيق: سِباقٌ لا حُكم. هُنا بِلا سِباق: قاعِدَةٌ بِمَتجَرٍ واحِدٍ ولا جَدوَلَ تَعريف.
+
+    [Fact]
+    public async Task A_snapshot_on_a_database_without_definition_tables_counts_them_as_none_and_creates_no_table()
+    {
+        if (!Enabled) return;
+        var (database, cs) = FreshDatabase("ps");
+        await AdminAsync($"create database \"{database}\"");
+        output.WriteLine($"[G12·٧] قاعِدَةٌ جَديدَة: {database}");
+        try
+        {
+            var app = BuildApp(cs);
+            await app.StartAsync();
+            try
+            {
+                var store = app.Services.GetRequiredService<IDocumentStore>();
+                output.WriteLine($"[G12·٧] {(await MeterBoot.EnsureAsync(store)).Line}");
+                await using (var s = store.LightweightSession())
+                {
+                    s.Insert(new Tenant { Id = StoreC, Name = "بِلا", OwnerUserId = Guid.Empty, AuthChannel = "email" });
+                    await s.SaveChangesAsync();
+                }
+                var definitions = new[] { "mt_doc_apikeydocument", "mt_doc_tenantroledefinition", "mt_doc_tenantthemedefinition", "mt_doc_tenantplandefinition", "mt_doc_tenantproviderbinding" };
+                Task<List<string>> Present() => RowsAsync(cs, "select n from unnest(@n) n where to_regclass('platform.' || n) is not null order by n", ("n", definitions));
+                var before = await Present();
+                var day = new DateOnly(2030, 7, 1);
+                var taken = await new PresenceSnapshot(store, app.Services.GetRequiredService<ILogger<PresenceSnapshot>>()).TakeAsync(day, PresenceDefinitions.Platform);
+                var after = await Present();
+                var rows = await DayRowsAsync(cs, day);
+                output.WriteLine($"[G12·٧] جَداوِلُ التَعريفاتِ قَبلَ اللَقطَة [{string.Join(", ", before)}] · بَعدَها [{string.Join(", ", after)}] · {taken.Line}");
+                Print($"سُطورُ {PresenceReader.DayKey(day)}", rows);
+                Assert.Empty(before);
+                Assert.True(taken.Claimed);
+                Assert.Empty(after);
+                Assert.Equal(new[] { $"{StoreC} presence.auth_channel _system _none auth 1", $"{StoreC} presence.store _system _none tenants 1" }, rows);
+            }
+            finally
+            {
+                await app.StopAsync();
+                await app.DisposeAsync();
+            }
+        }
+        finally
+        {
+            NpgsqlConnection.ClearAllPools();
+            await AdminAsync($"drop database if exists \"{database}\" with (force)");
+            output.WriteLine($"[G12·٧] حُذِفَت {database}");
+        }
+    }
 }
