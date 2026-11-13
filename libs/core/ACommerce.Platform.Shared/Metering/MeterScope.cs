@@ -33,6 +33,9 @@ public sealed class MeterScopeHolder
 
     /// <summary>يَملَأُ ما لَم يُملأ لِلمَتجَرِ <paramref name="app"/> — ويُعيدُ <c>false</c> إن كانَ الحامِلُ لِمَتجَرٍ آخَرَ أَو حامِلَ بَذر
     /// (فَلا يُكتَبُ شَيء).</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-3 — ADR-051 §١٩) <b>وهُوَ مالِئُ دَورٍ أَيضاً</b> (بِوَسيطِ <paramref name="role"/>)، فَكُتّابُه مُثَبَّتونَ
+    /// في <c>MeterRoleWritersTests</c> كَكُتّابِ المالِئاتِ المُسَمّاة: الوَسيطُ وحارِسُ إدارَةِ المَتجَرِ وحارِسُ مِلكِيَّةِ الاستوديو ومُعالِجُ المُهلَة — وكاتِبٌ جَديدٌ أَحمَر.
+    /// كانَ «كُتّابُ كُلِّ مالِئِ دَورٍ مُثَبَّتون» (‏<see cref="FillAcceptedRole"/>) يَتَخَطّاه.</remarks>
     public bool Fill(string app, string? entrepreneur = null, string? role = null)
     {
         if (IsSeed || string.IsNullOrEmpty(app)) return false;

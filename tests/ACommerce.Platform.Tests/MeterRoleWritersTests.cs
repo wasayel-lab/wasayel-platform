@@ -16,6 +16,9 @@ namespace ACommerce.Platform.Tests;
 // **والقِراءَةُ مِن الـIL المَبنِيّ** بِقارِئِ G6c نَفسِه (`MeterTestSeamTests.References` عَلى `ProductionAssemblies`): كُلُّ نِداءٍ أَو تَحويلٍ إلى مُفَوَّضٍ لِمالِئٍ
 // مِن `MeterScopeHolder`، والكاتِبُ النَوعُ الخارِجِيُّ لِلجِسم (اللامبدا وآلَةُ الحالَةِ المُتَزامِنَةُ يُنسَبانِ إلى صِنفِهِما) — فَالاسمُ المُستَعارُ والمُفَوَّضُ لا يَخفَيان.
 // ويَطبَعُ ما عَدّ، ويَحمَرُّ عَلى صِفرِ أَجسامٍ أَو صِفرِ كُتّاب، وعَلى كاتِبٍ جَديدٍ أَو غائِبٍ أَو عَدَدٍ تَغَيَّر.
+//
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **و«المالِئاتُ الأَربَعَة» كانَت خَمسَة**: `Fill(app, entrepreneur, role)`
+// يَكتُبُ الدَورَ أَيضاً (الكاتِبُ الأَوَّلُ يَفوز) ولَم يَكُن في الجَدوَل — فَكانَ «كُتّابُ كُلِّ مالِئِ دَورٍ مُثَبَّتون» غَيرَ صادِق. صارَ فيه بِكُتّابِه الأَربَعَة.
 
 public class MeterRoleWritersTests(ITestOutputHelper output)
 {
@@ -47,6 +50,17 @@ public class MeterRoleWritersTests(ITestOutputHelper output)
         [nameof(MeterScopeHolder.FillProvisionalRole)] = new Dictionary<string, int>(StringComparer.Ordinal)
         {
             ["ACommerce.Platform.MultiTenancy.TenantResolverMiddleware"] = 1,
+        },
+        // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-3 — ADR-051 §١٩) والمالِئُ العامُّ بِوَسيطِ دَورِه (الكاتِبُ الأَوَّلُ يَفوز): كانَ خارِجَ الجَدوَل، فَبابٌ
+        // جَديدٌ يَكتُبُ `_provider` أَو أَيَّ دَورٍ بِـ`Fill(slug, role: …)` لا يُحَمِّرُ شَيئاً (مَقيسٌ عِندَ المُراجِع: «مَواضِع 10 · خُروق 0» بِكاتِبَينِ مَحقونَين).
+        // كُتّابُه الأَربَعَة: الوَسيطُ (المَتجَرُ ورائِدُ أَعمالِه بِلا دَور)، وحارِسُ إدارَةِ المَتجَر (دَورُ صاحِبِه)، وحارِسُ مِلكِيَّةِ الاستوديو (`_entrepreneur`)،
+        // ومُعالِجُ المُهلَة (`_system`).
+        [nameof(MeterScopeHolder.Fill)] = new Dictionary<string, int>(StringComparer.Ordinal)
+        {
+            ["ACommerce.Platform.MultiTenancy.TenantResolverMiddleware"] = 1,
+            [$"{Tpl}.Services.TenantAdminGuard"] = 1,
+            [$"{Tpl}.MarketplaceTemplateExtensions"] = 1,
+            [$"{Tpl}.Services.Deals.GatewayInvoiceExpiryHandler"] = 1,
         },
     };
 
@@ -114,6 +128,12 @@ public class MeterRoleWritersTests(ITestOutputHelper output)
         var doubled = writers.Append((nameof(MeterScopeHolder.FillProviderRole), $"{Tpl}.Billing.TenantGatewayEndpoints")).ToList();
         Assert.Equal([$"count_changed:FillProviderRole←{Tpl}.Billing.TenantGatewayEndpoints 1→2"], Violations(doubled));
         output.WriteLine($"[G16·كُتّاب] الحَقن: {Violations(injected)[0]} · {Violations(missing)[0]} · {Violations(doubled)[0]}");
+        // ‏(‏2026-11-13، M6C-RULES-R2-3) وحَقنُ المُراجِعِ بِحَرفِه: بابُ رَبطِ جِهاتِ الاتِّصالِ يَكتُبُ الدَورَ بِالمالِئِ العامّ (`Fill(slug, role: MeterSentinels.Provider)`
+        // و`Fill(slug, role: role)`) ⇐ كاتِبٌ جَديدٌ بِمَوضِعَيه.
+        var viaFill = writers.Append((nameof(MeterScopeHolder.Fill), $"{Tpl}.Services.AccountContacts"))
+                             .Append((nameof(MeterScopeHolder.Fill), $"{Tpl}.Services.AccountContacts")).ToList();
+        Assert.Equal([$"new_writer:Fill←{Tpl}.Services.AccountContacts×2"], Violations(viaFill));
+        output.WriteLine($"[G16·كُتّاب] حَقنُ المالِئِ العامّ: {Violations(viaFill)[0]}");
     }
 
     /// <summary>والقارِئُ يَنسِبُ الجِسمَ إلى صِنفِه: لامبدا البابِ وآلَةُ حالَةِ دالَّةٍ مُتَزامِنَةٍ تَعودانِ إلى النَوعِ الَّذي كُتِبَتا فيه.</summary>
