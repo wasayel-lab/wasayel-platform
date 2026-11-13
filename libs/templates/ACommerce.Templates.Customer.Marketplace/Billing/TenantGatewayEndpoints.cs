@@ -66,7 +66,7 @@ public static class TenantGatewayEndpoints
             async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway, Services.Deals.DealNotices notices, L l) =>
         {
             // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا بَوّابَةُ المَتجَرِ نَفسُها: دَورُ الحامِلِ `_provider` لِمَتجَرِ المَسار — يَحِلُّ مَحَلَّ دَورِ الوَسيطِ المُؤَقَّت.
-            ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, ACommerce.Platform.Shared.Metering.MeterSentinels.Provider);
+            ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillProviderRole(slug);   // ‏(‏2026-11-13، M6C-RULES-R1-4 — ADR-051 §١٩) بِاسمِه: «المَقبولُ» قَرارُ حارِس.
             var secret = await gateway.NoticeSecretAsync(slug, req.HttpContext.RequestAborted);
             var raw = secret is not null ? await new StreamReader(req.Body).ReadToEndAsync(req.HttpContext.RequestAborted) : null;
             var admitted = Services.Deals.GatewayNoticeGate.Admit(secret, raw);

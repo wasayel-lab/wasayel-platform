@@ -67,7 +67,7 @@ public static class OtoShippingEndpoints
             async (string slug, HttpRequest req, Services.Deals.DealShipping shipping, ILogger<Log> log) =>
         {
             // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩) والفاعِلُ هُنا الناقِلُ نَفسُه: دَورُ الحامِلِ `_provider` لِمَتجَرِ المَسار — يَحِلُّ مَحَلَّ دَورِ الوَسيطِ المُؤَقَّت.
-            ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, ACommerce.Platform.Shared.Metering.MeterSentinels.Provider);
+            ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillProviderRole(slug);   // ‏(‏2026-11-13، M6C-RULES-R1-4 — ADR-051 §١٩) بِاسمِه: «المَقبولُ» قَرارُ حارِس.
             var carrier = await shipping.StoreCarrierAsync(slug, req.HttpContext.RequestAborted);
             var raw = carrier == Services.Deals.StoreCarrier.Ready ? await new StreamReader(req.Body).ReadToEndAsync(req.HttpContext.RequestAborted) : null;
             var admitted = Services.Deals.OtoOrderStatusGate.Admit(carrier, raw);

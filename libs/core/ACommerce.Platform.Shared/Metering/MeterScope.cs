@@ -95,7 +95,21 @@ public sealed class MeterScopeHolder
     /// <para>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وكاتِبٌ ثالِث</b>: نُقطَةُ إشعارِ بَوّابَةِ المَتجَرِ (<c>/{slug}/payments/notify</c>) تَضَعُ
     /// <c>_provider</c> — الفاعِلُ هُناكَ المُزَوِّدُ لا عُضوُ المَتجَر، فَيَحِلُّ مَحَلَّ <c>_none</c> المُؤَقَّتِ مِن الوَسيط كَما يَحِلُّ دَورُ الحارِس.</para>
     /// </summary>
-    public bool FillAcceptedRole(string app, string? role)
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-RULES-R1-4 — ADR-051 §١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والكاتِبانِ الحارِسانِ وَحدَهُما ثانِيَةً</b>:
+    /// «كاتِبٌ ثالِث» أَعلاه (بابُ إشعارِ البَوّابَة) ورابِعٌ لَم يُكتَب (بابُ وارِدِ OTO) كانا يَكتُبانِ <c>_provider</c> هُنا، فَصارَ «المَقبولُ» يَعني قَرارَ حارِسٍ أَو بابَ مُزَوِّد —
+    /// وانتَقَلا إلى <see cref="FillProviderRole"/> بِالقَواعِدِ نَفسِها. ومَن يُنادي كُلَّ مالِئِ دَورٍ يُثَبِّتُه <c>MeterRoleWritersTests</c> بِأَنواعِه وعَدَدِ مَواضِعِه، فَكاتِبٌ جَديدٌ أَحمَر.</remarks>
+    public bool FillAcceptedRole(string app, string? role) => FillOverProvisional(app, role);
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-RULES-R1-4 — ADR-051 §١٩) <b>دَورُ المُزَوِّدِ عَلى بابِ إشعارِه</b> — <see cref="MeterSentinels.Provider"/> لِمَتجَرِ
+    /// المَسار: الفاعِلُ هُناكَ المُزَوِّدُ لا عُضوُ المَتجَر. قَواعِدُه قَواعِدُ <see cref="FillAcceptedRole"/> بِحَرفِها (يَحِلُّ مَحَلَّ الدَورِ المُؤَقَّتِ ويَملَأُ غَيرَ المَضبوط،
+    /// ولِمَتجَرِه وَحدَه، و<c>false</c> لِحامِلِ البَذرِ ولِلفارِغ) — وبِاسمٍ مُستَقِلٍّ لِيَبقى «المَقبولُ» قَرارَ حارِسِ صَلاحِيَّةٍ وَحدَه. كاتِباه بابا إشعارِ المَتجَر:
+    /// بَوّابَتُه (<c>/{slug}/payments/notify</c>) وناقِلُه (<c>/{slug}/shipping/oto/order-status</c>)؛ وبابا المَنَصَّةِ (PayPal وPaddle) بِلا مَتجَرٍ فَبِـ<see cref="FillPlatformRole"/>.</para>
+    /// </summary>
+    public bool FillProviderRole(string app) => FillOverProvisional(app, MeterSentinels.Provider);
+
+    /// <summary>دَورٌ يَحِلُّ مَحَلَّ المُؤَقَّتِ أَو يَملَأُ غَيرَ المَضبوط — لِمَتجَرِه وَحدَه. جِسمُ <see cref="FillAcceptedRole"/> كَما كانَ بِحَرفِه.</summary>
+    private bool FillOverProvisional(string app, string? role)
     {
         if (IsSeed || string.IsNullOrEmpty(app) || string.IsNullOrEmpty(role)) return false;
         lock (_gate)

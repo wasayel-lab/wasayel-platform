@@ -329,6 +329,31 @@ public class MeterScopeTests(ITestOutputHelper output)
         Assert.Equal(MeterSentinels.None, lastLeft.Role);
     }
 
+    /// <summary>‏(‏2026-11-13، M6C-RULES-R1-4) <b>دَورُ المُزَوِّدِ بِقَواعِدِ المَقبولِ نَفسِها وبِاسمِه</b>: يَحِلُّ مَحَلَّ <c>_none</c> المُؤَقَّتِ مِن الوَسيطِ ويَملَأُ غَيرَ المَضبوط،
+    /// ولا يَمَسُّ دَوراً كَتَبَه غَيرُه، ولا مَتجَراً آخَر، ولا حامِلَ البَذر.</summary>
+    [Fact]
+    public void The_provider_role_replaces_the_provisional_one_for_its_own_store_like_an_accepted_role()
+    {
+        var h = MeterScope.Open();
+        Assert.True(h.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.True(h.FillProviderRole("store-a"));
+        Assert.Equal(new MeterScopeView("store-a", null, MeterSentinels.Provider, false), h.View());
+        var unset = MeterScope.Open();
+        Assert.True(unset.FillProviderRole("store-z"));
+        Assert.Equal(new MeterScopeView("store-z", null, MeterSentinels.Provider, false), unset.View());
+        var written = MeterScope.Open();
+        Assert.True(written.Fill("store-a", role: "seller"));
+        Assert.True(written.FillProviderRole("store-a"));
+        Assert.Equal("seller", written.View().Role);
+        var cross = MeterScope.Open();
+        Assert.True(cross.FillProvisionalRole("store-a", MeterSentinels.None));
+        Assert.False(cross.FillProviderRole("store-b"));
+        Assert.Equal(MeterSentinels.None, cross.View().Role);
+        Assert.False(MeterScope.Open().FillProviderRole(""));
+        using (MeterScope.Seed()) Assert.False(MeterScope.Current!.FillProviderRole("store-a"));
+        output.WriteLine($"[G16] دَورُ المُزَوِّد: {h.View()} · {unset.View()} · {written.View()} · {cross.View()}");
+    }
+
     [Fact]
     public void Only_the_accepted_role_replaces_the_provisional_one_once_for_its_own_store_and_never_a_role_another_filler_wrote()
     {
