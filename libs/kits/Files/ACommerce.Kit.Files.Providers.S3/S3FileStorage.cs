@@ -60,7 +60,7 @@ public sealed class S3FileStorageOptions
 /// تَختَنِق بِه المَخازِنُ المُتَوافِقَةُ الَّتي لا تُنَفِّذ
 /// التَقطيعَ.</item>
 /// </list>
-/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>كُلُّ فِعلٍ عَلى <c>_client</c> داخِلَ المُستَدعي المَعدود</b> (الطَبَقَةُ ٨-ج تَقيسُه بِعُمقِ الأَقواس):
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) <b>كُلُّ فِعلٍ عَلى <c>_client</c> داخِلَ المُستَدعي المَعدود</b> (الطَبَقَةُ ٨-ج تَقيسُه بِعُمقِ الأَقواس):
 /// الرَفعُ نِداءٌ مَعدودٌ (<see cref="OutboundUnits.FileUpload"/>، كَمِّيَّتُه البايتاتُ المَرفوعَة، ومَصدَرُه المِفتاحُ اسماً مُستَعاراً — مِفتاحُ الصورَةِ يَحمِلُ
 /// مُعَرِّفَ صاحِبِها)، والقِراءَةُ والوُجودُ والحَذفُ مُساعِدَةٌ لا تُعَدّ (<see cref="ProviderHelperReasons.StorageRead"/>،
 /// <see cref="ProviderHelperReasons.StorageDelete"/>). والطَلَباتُ هِيَ هِيَ (<c>NafathS3PushRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).</para>
@@ -243,7 +243,7 @@ public static class S3FileStorageExtensions
         this IServiceCollection services, Action<S3FileStorageOptions> configure)
     {
         services.Configure(configure);
-        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، والحاوِيَةُ تَحُلُّ الباني الأَطوَلَ (ثَلاثَةُ وُسَطاءَ كُلُّها مُسَجَّلَة)
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، والحاوِيَةُ تَحُلُّ الباني الأَطوَلَ (ثَلاثَةُ وُسَطاءَ كُلُّها مُسَجَّلَة)
         // لا مَقعَدَ الاختِبار — يَحرُسُه `MeterCompositionTests` (G6d) عَلى المُضيفِ المُرَكَّب. والسَطرُ أَدناه بِحَرفِه: مِرساةُ مَخزَنِ الكائِناتِ في كاتالوجِ المُزَوِّدين (`ProviderCatalogTests`).
         services.AddProviderCalls();
         services.AddSingleton<IFileStorage, S3FileStorage>();

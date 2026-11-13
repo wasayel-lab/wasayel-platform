@@ -691,7 +691,7 @@ public sealed class VendorShippingService
             var attempt = await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
                 note: RegisterNote, ip: ip, ct: ct);
             // (‏2026-10-13، G5 (xiii)): الرَمزُ مَقصوصاً — القِراءَةُ نَفسُها الَّتي فَتَحَت هذا المَسار (`Input == Register`)، فَلا يَكونُ null هُنا.
-            // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والنِداءُ مَعدودٌ بِمُعَرِّفِ سَطرِ الأَثَرِ الَّذي سَبَقَه — المُحاوَلَةُ نَفسُها.
+            // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والنِداءُ مَعدودٌ بِمُعَرِّفِ سَطرِ الأَثَرِ الَّذي سَبَقَه — المُحاوَلَةُ نَفسُها.
             var registered = await _oto.RegisterVendorAsync(Deals.ShippingCalls.Vendor(tenantSlug, attempt),
                 VendorShippingSurface.MarketplaceTokenOf(_opts)!, sent.ToOto(), ct);
             if (registered.Value is not { } account)
@@ -825,7 +825,7 @@ public sealed class VendorShippingService
 
         // ٢) الوارِدُ بِسِرٍّ جَديدٍ وبِرَمزِ البائِعِ نَفسِه: يُحَدَّثُ تَسجيلُه القائِم، وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد.
         var secret = OtoWebhookSignature.NewSecret();
-        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كُلُّ تَسجيلٍ نِداءٌ مَعدودٌ بِمُعَرِّفٍ جَديد — والتَحديثُ المَردودُ ثُمَّ الإنشاءُ نِداءان.
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كُلُّ تَسجيلٍ نِداءٌ مَعدودٌ بِمُعَرِّفٍ جَديد — والتَحديثُ المَردودُ ثُمَّ الإنشاءُ نِداءان.
         var registered = await _oto.RegisterWebhookAsync(Deals.ShippingCalls.Webhook(tenantSlug), token, inboundUrl, secret, kept?.WebhookId, ct);
         if (!registered.Ok && kept?.WebhookId is not null && registered.Failure!.Code == OtoFailures.Refused)
             registered = await _oto.RegisterWebhookAsync(Deals.ShippingCalls.Webhook(tenantSlug), token, inboundUrl, secret, null, ct);

@@ -81,7 +81,7 @@ public sealed class StudioAuth
                 AuthHandlers.PhoneDestination(phone), code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
-    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) والنِداءُ مَعدودٌ كَأَخيه: <c>_platform</c> ومُعَرِّفُ نِداءٍ جَديد.</remarks>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) والنِداءُ مَعدودٌ كَأَخيه: <c>_platform</c> ومُعَرِّفُ نِداءٍ جَديد.</remarks>
     public static async Task<string?> SendEmailCodeAsync(
         IEmailOtpChannel channel, string email, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Email, email, channel.DevHintCode,

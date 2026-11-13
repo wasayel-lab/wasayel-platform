@@ -38,7 +38,7 @@ public sealed class PaddlePaymentProvider
     /// التَسجيل.</summary>
     public const string HttpClientName = "paddle";
 
-    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §6.1؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٩؛ التَصميم §6.1؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
     // `ProviderHttp<PaddlePaymentProvider>` مالِكُه، والنِداءُ الوَحيدُ يَأخُذُ `ProviderCall` أَوَّلَ وُسَطائِه والعُدَّةُ تَسِمُه بِاسمِها (`ProviderNames.Paddle`).
     private readonly PaddleOptions _opts;
     private readonly ProviderHttp<PaddlePaymentProvider> _http;

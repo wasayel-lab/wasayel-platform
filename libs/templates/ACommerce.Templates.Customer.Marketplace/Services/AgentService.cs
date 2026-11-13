@@ -171,7 +171,7 @@ public sealed class AgentService
         var messages = BuildAbstractMessages(session);
         var tools    = BuildAbstractTools();
 
-        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): النِداءُ مَعدودٌ عَلى المَنَصَّة — وَكيلُ التَصميمِ يَعمَلُ عَلى مُستَوى المَنَصَّةِ لا لِمَتجَر.
+        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): النِداءُ مَعدودٌ عَلى المَنَصَّة — وَكيلُ التَصميمِ يَعمَلُ عَلى مُستَوى المَنَصَّةِ لا لِمَتجَر.
         var resp = await _backend.CallAsync(ModelCalls.Platform(),
             new AgentRequest(system, messages, tools, _model, MaxTokens: 2048), ct);
 

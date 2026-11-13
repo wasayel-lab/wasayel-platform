@@ -25,7 +25,7 @@ public sealed class MockEmailChannel : IEmailOtpChannel, IDevelopmentStubChannel
     public string ChannelName => "MockEmail";
     public string? DevHintCode => FixedCode;
 
-    // ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) التَوقيعُ يَحمِلُ `ProviderCall` كَكُلِّ قَناة، والمُحاكي لا يُغادِرُ العَمَلِيَّةَ فَلا يَعُدّ: النِداءُ يُقبَلُ ولا يُستَعمَل.
+    // ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) التَوقيعُ يَحمِلُ `ProviderCall` كَكُلِّ قَناة، والمُحاكي لا يُغادِرُ العَمَلِيَّةَ فَلا يَعُدّ: النِداءُ يُقبَلُ ولا يُستَعمَل.
     public Task SendOtpAsync(ProviderCall call, string email, string code, CancellationToken ct)
     {
         _logger.LogInformation("[MockEmail] أَرسَلنا الكود {Code} إلى {Email}", code, email);

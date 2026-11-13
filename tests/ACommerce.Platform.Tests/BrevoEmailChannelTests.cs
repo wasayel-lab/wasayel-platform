@@ -53,7 +53,7 @@ file sealed class SilentHandler : HttpMessageHandler
 
 public class BrevoEmailChannelTests
 {
-    /// <summary>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) النِداءُ المَعدودُ في تَوقيعِ القَناة — والقَناةُ هُنا تُبنى بِعَميلٍ خامٍّ يَصيرُ مُستَدعِياً لا يُسَجِّل.</summary>
+    /// <summary>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) النِداءُ المَعدودُ في تَوقيعِ القَناة — والقَناةُ هُنا تُبنى بِعَميلٍ خامٍّ يَصيرُ مُستَدعِياً لا يُسَجِّل.</summary>
     private static readonly ACommerce.Platform.Shared.Metering.ProviderCall Call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel("otp.email.send", "brevo-tests", "r1");
 
     private static BrevoEmailChannel Channel(

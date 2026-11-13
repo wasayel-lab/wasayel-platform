@@ -20,7 +20,7 @@ public sealed class NafathOptions
 /// قَناة نَفاذ الحَقيقِيَّة (KSA). يُرسِل طَلَب MFA لِلمُواطِن — يَنبَثِق في
 /// تَطبيق نَفاذ كَرَمز مُكَوَّن مِن رَقمَين، يَختاره المُستَخدِم لِلمُوافَقَة.
 /// يُلائِم الإنتاج بَعد تَوقيع عَقد مَع يَقين/نَفاذ.
-/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/>. <b>بَدءُ التَحَقُّقِ نِداءٌ مَعدود</b>
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/>. <b>بَدءُ التَحَقُّقِ نِداءٌ مَعدود</b>
 /// (<see cref="OutboundUnits.IdentityNafathStart"/>، نِيَّةٌ قَبلَه وسَطرٌ حينَ يَقبَلُ نَفاذ)، و<b>رَمزُ OAuth واستِطلاعُ الحالَةِ مُساعِدانِ لا يُعَدّان</b>
 /// (<see cref="ProviderHelperReasons.OauthToken"/>، <see cref="ProviderHelperReasons.StatusPoll"/>) — والطَلَباتُ الثَلاثَةُ هِيَ هِيَ بايتاً
 /// (<c>NafathS3PushRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).</para>
@@ -114,7 +114,7 @@ public static class NafathExtensions
         this IServiceCollection services, Action<NafathOptions> configure)
     {
         services.Configure(configure);
-        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) كانَ `AddHttpClient<INafathChannel, NafathChannel>()`: عَميلٌ مُطَبَّعٌ عابِرٌ بِلا مُهلَةٍ خاصَّة. والآنَ عَميلُها
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) كانَ `AddHttpClient<INafathChannel, NafathChannel>()`: عَميلٌ مُطَبَّعٌ عابِرٌ بِلا مُهلَةٍ خاصَّة. والآنَ عَميلُها
         // المُسَمّى يَملِكُه `ProviderHttp` (المُهلَةُ الافتِراضِيَّةُ نَفسُها)، والقَناةُ عابِرَةٌ كَما كانَت — فَرَمزُ OAuth في القَناةِ لا في العَمَلِيَّة كَما كان.
         services.AddProviderHttp<NafathChannel>();
         services.AddTransient<INafathChannel, NafathChannel>();

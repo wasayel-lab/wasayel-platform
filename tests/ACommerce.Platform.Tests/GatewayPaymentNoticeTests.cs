@@ -23,7 +23,7 @@ namespace ACommerce.Platform.Tests;
 
 public class GatewayPaymentNoticeTests(ITestOutputHelper output)
 {
-    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
     /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
     private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.PaymentGatewayWebhookCreate, "test-store", "test-request");
 

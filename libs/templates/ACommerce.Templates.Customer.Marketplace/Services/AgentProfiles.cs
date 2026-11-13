@@ -126,7 +126,7 @@ public sealed class AgentBackendProvider : IAgentBackendProvider
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<BackendKey, IAgentBackend> _backends = new();
 
-    /// <summary>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1) <b>والعَميلُ يُعطى لِكُلِّ خَلفِيَّة</b>: <paramref name="http"/> مِن الحاوِيَة
+    /// <summary>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٩؛ التَصميم §6.1) <b>والعَميلُ يُعطى لِكُلِّ خَلفِيَّة</b>: <paramref name="http"/> مِن الحاوِيَة
     /// (<c>AddProviderHttp&lt;IAgentBackend&gt;</c> في القالِب) — كانَت كُلُّ خَلفِيَّةٍ تَبني عَميلَها بِـ<c>new</c> فَلا يَمُرُّ نِداؤُها بِالمُستَدعي المَعدود.</summary>
     public AgentBackendProvider(ProviderHttp<IAgentBackend> http, IConfiguration cfg)
     {

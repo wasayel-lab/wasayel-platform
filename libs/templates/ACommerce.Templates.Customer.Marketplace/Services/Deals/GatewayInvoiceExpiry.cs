@@ -43,7 +43,7 @@ public static class GatewayInvoiceExpiryHandler
 {
     public static async Task Handle(GatewayInvoiceExpiryDue due, GatewayPayments gateway, DealNotices notices, L l, CancellationToken ct)
     {
-        // (‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §5.4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ولا طالِبَ هُنا فَالحامِلُ يُفتَحُ هُنا** — لا وَسيطَ
+        // (‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٩؛ التَصميم §5.4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ولا طالِبَ هُنا فَالحامِلُ يُفتَحُ هُنا** — لا وَسيطَ
         // مُستَأجِرٍ يَفتَحُه لِرِسالَة، فَكانَ ما تُرسِلُه المُهلَةُ إلى البَوّابَةِ (الجَلبُ والإلغاء) بِلا مَتجَرٍ في النِطاقِ ولا دَور. المَتجَرُ مَتجَرُ الرِسالَة
         // (`due.TenantSlug`)، والدَورُ `_system` — والحامِلُ لِهذا التَنفيذِ وَحدَه: `AsyncLocal` يَعودُ إلى ما قَبلَه حينَ تَعودُ الدالَّة.
         MeterScope.Open().Fill(due.TenantSlug, role: MeterSentinels.SystemJob);

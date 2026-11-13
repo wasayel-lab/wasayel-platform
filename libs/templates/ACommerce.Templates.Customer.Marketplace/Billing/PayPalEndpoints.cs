@@ -73,7 +73,7 @@ public static class PayPalEndpoints
             HttpContext http, IDocumentSession session, PayPalGateway paypal,
             Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
-            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار) — يَحمِلُه نِداءُ التَحَقُّقِ وما يَليه.
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار) — يَحمِلُه نِداءُ التَحَقُّقِ وما يَليه.
             MeterScope.Current?.FillPlatformRole(MeterSentinels.Provider);
             var raw = await new StreamReader(http.Request.Body).ReadToEndAsync(http.RequestAborted);
             var headers = PayPalSurface.HeadersFrom(http.Request);

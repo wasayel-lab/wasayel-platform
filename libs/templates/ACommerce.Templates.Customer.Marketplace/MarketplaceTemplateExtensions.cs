@@ -72,7 +72,7 @@ public static class MarketplaceTemplateExtensions
         services.AddSingleton<
             ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider,
             ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
-        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1) عَميلُ الخَلفِيّاتِ الثَلاثِ واحِدٌ مِن المَصنَعِ بِالمُستَدعي المَعدود — كانَت تَبني ثَلاثَةً بِـ`new`.
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٩؛ التَصميم §6.1) عَميلُ الخَلفِيّاتِ الثَلاثِ واحِدٌ مِن المَصنَعِ بِالمُستَدعي المَعدود — كانَت تَبني ثَلاثَةً بِـ`new`.
         // **بِلا مُهلَةِ عَميل**: المُهلَةُ مِن الطَلَب (`AgentCallBound`، ‏2026-10-24) كَما كانَت عَلى العُمَلاءِ الثَلاثَة.
         ACommerce.Platform.Shared.Metering.ProviderHttpExtensions.AddProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(services,
             (_, client) => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
@@ -137,7 +137,7 @@ public static class MarketplaceTemplateExtensions
         // مُستَثمِر.
         _ = ACommerce.Kit.Theme.ThemeCatalog.Default;
         _ = ACommerce.Kit.Theme.ThemePresetCatalog.Preload();
-        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، فَتَحُلُّ الحاوِيَةُ باني الخِدمَةِ الأَطوَلَ (ثَلاثَةُ وُسَطاءَ
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، فَتَحُلُّ الحاوِيَةُ باني الخِدمَةِ الأَطوَلَ (ثَلاثَةُ وُسَطاءَ
         // كُلُّها مُسَجَّلَة) لا مَقعَدَ الاختِبار — يَحرُسُه `MeterCompositionTests` (G6d). والسَطرُ الَّذي تَحتَه بِحَرفِه (يَقرَؤُه `WebPushVapidKeysTests`).
         ACommerce.Platform.Shared.Metering.ProviderCallsExtensions.AddProviderCalls(services);
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
@@ -922,7 +922,7 @@ public static class MarketplaceTemplateExtensions
                         var ext = ct.Split('/')[1].Replace("jpeg", "jpg");
                         var key = $"tenants/{slug}/avatars/{userId}.{ext}";
                         await using var stream = avatar.OpenReadStream();
-                        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) الرَفعُ نِداءٌ مَعدود: المَتجَرُ ومُعَرِّفُ نِداءٍ جَديد (رَفعٌ ثانٍ رَفعٌ آخَر)؛ والمِفتاحُ لا يَدخُلُ الدَفتَرَ إلّا مُستَعاراً.
+                        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) الرَفعُ نِداءٌ مَعدود: المَتجَرُ ومُعَرِّفُ نِداءٍ جَديد (رَفعٌ ثانٍ رَفعٌ آخَر)؛ والمِفتاحُ لا يَدخُلُ الدَفتَرَ إلّا مُستَعاراً.
                         var stored = await files.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, slug, ProviderCall.FreshRequestId()), key, stream, ct);
                         newAvatarUrl = stored.PublicUrl;
                     }
@@ -1291,7 +1291,7 @@ public static class MarketplaceTemplateExtensions
             // (الإلحاق بِنُسخَة مُتَوَقَّعَة). الخاسِر يُعيد القِراءَة
             // مَرَّةً واحِدَة، فَإن نَفِدَ الرَصيد فَالجَواب <b>مَنع
             // صَريح بِرِسالَتِه</b> لا فَشَل غامِض ولا خَمسُمِئَة.
-            // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) لِكُلِّ مُستَخدِمٍ أَوَّلُ إشعارٍ كُتِبَ لَه — مُعَرِّفُه مِفتاحُ الإرسالِ المَعدود (كانَ `HashSet<Guid>` بِالمُستَخدِمِ وَحدَه).
+            // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) لِكُلِّ مُستَخدِمٍ أَوَّلُ إشعارٍ كُتِبَ لَه — مُعَرِّفُه مِفتاحُ الإرسالِ المَعدود (كانَ `HashSet<Guid>` بِالمُستَخدِمِ وَحدَه).
             var nudged = new Dictionary<Guid, Guid>();
             var quotaExhausted = false;
 
@@ -4746,7 +4746,7 @@ public static class MarketplaceTemplateExtensions
         if (admins.Count == 0) return;
 
         var now = DateTime.UtcNow;
-        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) إشعارُ كُلِّ مُديرٍ بِمُعَرِّفِه — مِفتاحُ إرسالِه المَعدود.
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) إشعارُ كُلِّ مُديرٍ بِمُعَرِّفِه — مِفتاحُ إرسالِه المَعدود.
         var notices = admins.ToDictionary(a => a.Id, _ => Guid.NewGuid());
         foreach (var admin in admins)
         {

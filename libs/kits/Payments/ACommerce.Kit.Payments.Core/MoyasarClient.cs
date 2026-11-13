@@ -110,7 +110,7 @@ public sealed class MoyasarClient
     /// لا رَقَمٌ مُختَرَع: ميسّر لا تَنشُرُ مُهلَة.</summary>
     public const int TimeoutSeconds = 15;
 
-    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٩؛ التَصميم §6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
     // `ProviderHttp<MoyasarClient>` مالِكُه، وكُلُّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّةَ تَأخُذُ `ProviderCall` أَوَّلَ وُسَطائِها (القاعِدَة ٦): المُنادي يَعرِفُ المَتجَرَ وسَبَبَ
     // النِداء، والعُدَّةُ تَسِمُه بِاسمِ المُزَوِّد (`ProviderNames.StoreGateway`). **والإنشاءُ يُعَدُّ عِندَ ‏2xx الـ`POST`** ووَسمُ بَياناتِه (`PUT`) نِداءٌ مُساعِد
     // (`ProviderHelperReasons.MetadataTag`) — فَفاتورَةٌ أُنشِئَت ثُمَّ سَقَطَ وَسمُها سَطرٌ واحِد. والاستِثناءُ يَعودُ كَما هُوَ بَعدَ أَن يُعَدَّ مَجهولاً، فَتَحويلُ

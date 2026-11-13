@@ -25,7 +25,7 @@ namespace ACommerce.Templates.Customer.Marketplace.Services;
 /// <see cref="BootLogPrefix"/> <c>configured</c> أَو <c>ephemeral</c> — تَقرَؤُه بَوّابَةُ الإقلاعِ (الكُتلَة <c>webpush_keys</c> في
 /// <c>scripts/verify-production-boot.sh</c>) فَتُنَبِّهُ ولا تُفشِل. والتَوليدُ عِندَ الغِيابِ باقٍ كَما كان: الإشعاراتُ تَعمَلُ في
 /// التَطويرِ بِلا إعداد، والتَطبيقُ لا يَكتُبُ مِفتاحاً عَلى قُرصٍ ولا في القاعِدَة.</para>
-/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) <b>كُلُّ إرسالٍ نِداءٌ مَعدود</b>: فِعلُ <c>_client</c> داخِلَ <see cref="ProviderCalls.InvokeAsync{T}"/>
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) <b>كُلُّ إرسالٍ نِداءٌ مَعدود</b>: فِعلُ <c>_client</c> داخِلَ <see cref="ProviderCalls.InvokeAsync{T}"/>
 /// (الطَبَقَةُ ٨-ج تَقيسُه)، سَطرُ <see cref="OutboundUnits.PushSend"/> لِكُلِّ اشتِراكٍ قَبِلَته الخِدمَة، ومُعَرِّفُ طَلَبِه
 /// <c>{notificationId}:{Pseudonym(endpoint)}</c> — الإشعارُ المَكتوبُ قَبلَه وعُنوانُ الاشتِراكِ اسماً مُستَعاراً (التَصميم §6.2). و4xx (ومِنه 404/410 الَّذي يَمحو
 /// الاشتِراك) مَرفوضٌ عَلى النِيَّة، وما سِواه مِن رَميٍ مَجهول — والمَحوُ واللوغُ كَما كانا (<c>NafathS3PushRequestShapeCharacterizationTests</c>).</para>
@@ -99,7 +99,7 @@ public sealed class WebPushService
     /// لا تَرمي إن كانَ هناك خَطَأ في إرسال فَردي (نُسَجِّله فَقَط). إن كانَ
     /// الاشتِراك مُنتَهي (HTTP 404/410) نَحذِفه مِن User doc.
     /// </summary>
-    /// <param name="notificationId">‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) <b>مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَ الإرسال</b> — مِفتاحُ العَمَلِيَّةِ المَعدودَة:
+    /// <param name="notificationId">‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) <b>مُعَرِّفُ الإشعارِ المَكتوبِ قَبلَ الإرسال</b> — مِفتاحُ العَمَلِيَّةِ المَعدودَة:
     /// كُلُّ اشتِراكٍ نِداءٌ بِمُعَرِّفِ <c>{notificationId}:{Pseudonym(endpoint)}</c>، فَالإشعارُ نَفسُه لِلاشتِراكِ نَفسِه سَطرٌ واحِدٌ وإن أُعيد. وفي التَوقيعِ
     /// لا في الجِسم (القاعِدَة ٦): نِسيانُه خَطَأُ بِناء. والمَتجَرُ <paramref name="tenantSlug"/> نَفسُه.</param>
     public async Task SendAsync(

@@ -65,7 +65,7 @@ public static class TenantGatewayEndpoints
         app.MapPost("/{slug}/payments/notify",
             async (string slug, HttpRequest req, Services.Deals.GatewayPayments gateway, Services.Deals.DealNotices notices, L l) =>
         {
-            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) والفاعِلُ هُنا بَوّابَةُ المَتجَرِ نَفسُها: دَورُ الحامِلِ `_provider` لِمَتجَرِ المَسار — يَحِلُّ مَحَلَّ دَورِ الوَسيطِ المُؤَقَّت.
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا بَوّابَةُ المَتجَرِ نَفسُها: دَورُ الحامِلِ `_provider` لِمَتجَرِ المَسار — يَحِلُّ مَحَلَّ دَورِ الوَسيطِ المُؤَقَّت.
             ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, ACommerce.Platform.Shared.Metering.MeterSentinels.Provider);
             var secret = await gateway.NoticeSecretAsync(slug, req.HttpContext.RequestAborted);
             var raw = secret is not null ? await new StreamReader(req.Body).ReadToEndAsync(req.HttpContext.RequestAborted) : null;

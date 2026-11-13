@@ -2,7 +2,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
-    <!-- ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٨) مُستَدعيها المَعدود: `ProviderHttp<NafathChannel>` مالِكُ عَميلِها و`AddProviderHttp` تَسجيلُه. -->
+    <!-- ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) مُستَدعيها المَعدود: `ProviderHttp<NafathChannel>` مالِكُ عَميلِها و`AddProviderHttp` تَسجيلُه. -->
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
   </ItemGroup>
 </Project>

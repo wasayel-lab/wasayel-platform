@@ -60,7 +60,7 @@ public sealed class BrevoEmailOptions
 /// قَناةُ OTP بَريديَّةٌ فِعليَّةٌ عَبر واجِهَةِ Brevo الحَرفِيَّة. لا
 /// تَعرِف شَيئاً عَن تَوليدِ الرَمزِ ولا تَخزينِه ولا حُدودِ مُعَدَّلِه —
 /// ذلِكَ كُلُّه في <c>AuthHandlers</c> المُشتَرَك، تَماماً كَقَناةِ SMTP.
-/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/> — المُستَدعي المَعدودُ الَّذي
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٩) <b>بِلا <c>HttpClient</c></b>: عَميلُها <see cref="ProviderHttp{TKit}"/> — المُستَدعي المَعدودُ الَّذي
 /// يَكتُبُ نِيَّةً قَبلَ الإرسالِ وسَطراً حينَ تَقبَلُ Brevo — ورَأسُ <c>api-key</c> عَلى الطَلَبِ لا عَلى العَميل، والجِسمُ <c>JsonContent</c> نَفسُه الَّذي كانَ
 /// يَبنيه <c>PostAsJsonAsync</c>؛ فَالطَلَبُ الَّذي يَبلُغُ Brevo هُوَ هُوَ بايتاً (<c>EmailRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ التَبديلِ ولَم يُمَسّ).
 /// والقَناةُ تَسِمُ النِداءَ بِاسمِها (<see cref="ProviderNames.Brevo"/>).</para>
@@ -174,7 +174,7 @@ public static class BrevoEmailExtensions
     /// <see cref="IEmailOtpChannel"/> — نَفسُ نَمَطِ
     /// <c>AddTwilioSmsChannel</c>: عَميلٌ مُطَبَّعٌ بِمُهلَة، والخِياراتُ
     /// مِن التَهيئَةِ في التَطبيقِ المُضيف.</summary>
-    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) كانَ <c>AddHttpClient&lt;IEmailOtpChannel, BrevoEmailChannel&gt;(…)</c>: عَميلٌ مُطَبَّعٌ عابِر. والآنَ عَميلُها
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) كانَ <c>AddHttpClient&lt;IEmailOtpChannel, BrevoEmailChannel&gt;(…)</c>: عَميلٌ مُطَبَّعٌ عابِر. والآنَ عَميلُها
     /// المُسَمّى يَملِكُه <c>ProviderHttp</c> بِالمُهلَةِ نَفسِها، والقَناةُ عابِرَةٌ كَما كانَت.</remarks>
     public static IServiceCollection AddBrevoEmailChannel(
         this IServiceCollection services, Action<BrevoEmailOptions> configure)

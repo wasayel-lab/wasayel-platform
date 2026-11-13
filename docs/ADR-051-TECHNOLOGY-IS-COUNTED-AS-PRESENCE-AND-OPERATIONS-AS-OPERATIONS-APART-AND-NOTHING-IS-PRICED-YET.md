@@ -344,3 +344,50 @@
 - **`PrivacyShareInventoryTests`** يعدُّ العُدّةَ التي تحملُ `ProviderHttp<…>` عميلًا صادرًا (وإلّا خرجتْ Twilio من الجردِ وهي ترسلُ كما كانت)، ويستثني `ProviderHttp` نفسَه باسمِه وملفِّه: ليس جهة، ولا يرسلُ إلّا ما ترسلُه عُدّةٌ تحملُه.
 
 **المقيس:** 8-ج «‏.cs files scanned under libs/: 350 · files naming a raw client type: 12 · raw client type tokens: 25 · SDK member accesses checked: 0 · allow-listed files: 12 · violations: 0»، وحقنُ `new HttpClient()` في نسخةِ عُدّةٍ وسطرِ Twilio في القائمةِ وحقلِ `_client` لـS3 يحمّرُها كلٌّ بخرقِه. G6 الحيّ: المقبولُ سطرٌ واحدٌ `writer_xid` = `xmin` نيّتِه، والرفضُ صفرٌ و`refused`، والقبولُ بعدَ المهلةِ صفرٌ و`unknown` وسطرُ لوغٍ واحد، والمجهولُ ثمّ المقبولُ سطرٌ واحد، والطلبُ تحتَ حاملَين سطرٌ واحد، وقاعدةٌ غائبةٌ لا تُفشِلُ النداء. P11 عبرَ `POST /{slug}/auth/phone/login` خلفَ الوسيطِ الحقيقيّ: سطرُ `otp.sms.send` بالمتجرِ ومالكِه ومعرِّفُ طلبِه معرِّفُ المحاولة، والقبولُ بعدَ مهلةِ `OtpSendGuard` ⇐ `send_failed` ونيّةٌ مجهولةٌ وصفرُ سطر.
+
+- **‏(‏2026-11-13، مراجعةُ المرحلةِ ج الأولى · M6C-RULES-R1-3 — يُلحَقُ ولا يُعادُ حرفٌ فوقَه) تصحيحٌ لـ«(‏2xx قُبِل · 4xx ومنه 429 رُفِض · ما سواهما واستثناءٌ وإلغاءٌ مجهول …)» في «الأنواع» أعلاه — صار للحكمِ طريقان**: الحالةُ تحكمُ `ProviderHttp.SendAsync(call, request, ct)` وحدَه كما قيل؛ ووُلِدَ في البند ١٥ أخوه `SendAsync<T>(call, request, read, accepted, ct)` يقرأُ الجوابَ قبلَ أن يُطوى ثمّ يحكمُ على ما قُرِئ — ومستهلكُه الأوّلُ نداءُ النموذج: **يُقبَلُ باستهلاكٍ مقيسٍ في جسمِه ولو جاءَ معَ 4xx** (رموزٌ أُكِلَت)، و200 بلا استهلاكٍ مجهول. التفصيلُ والقياسُ في §١٩.
+- **‏(‏2026-11-13، M6C-RULES-R1-3 — يُلحَقُ ولا يُعادُ حرفٌ فوقَه) تصحيحٌ لـ«والمقعدُ الذي يقيسُه G6c اليومَ أخوا `IOtpChannel`» أعلاه — صدقَ يومَ البند ١١ وحدَه**: `ProviderHelper`/`HelperAsync` وُلِدا في البند ١٣ (نفاذ)، والتحويلُ الضمنيُّ و`ProviderCalls.Unrecorded` في البند ١٢ (Brevo)، وG6c عندَ `cc79500` **سبعةَ عشرَ مقعدًا** — جدولُها بسببِ كلٍّ في §١٩. والإحالاتُ «ADR-051 §١٨» التي كتبَتها البنودُ ١٢–١٥ في الكودِ أُعيدَت إلى §١٩ (إلّا ما في ملفّي توصيف: `AnalysisCallBoundTests.cs:64` و`MoyasarCreateResponseChecksTests.cs:29` — لا يُمَسّان، وهذا السطرُ دليلُهما).
+
+## ١٩. إلحاقُ ‏2026-11-13 — W13-6·١٢–١٥: بقيّةُ الصادر — البريدُ ونفاذ والمخزنُ والإشعارُ والدفعُ والشحنُ والنماذج، ومقاعدُ الاختبارِ دَينًا معلَنًا
+
+> يُلحَقُ ولا يُعادُ حرفٌ فوقَه. صفوفُ «١٢» إلى «١٥» في §٧. **كُتِبَ بعدَ الكود — خلافَ القاعدة ١٥، والمراجعةُ قاسَته** (مراجعةُ المرحلةِ ج الأولى · M6C-RULES-R1-3): قراراتُ البنودِ الأربعةِ كانت في تعليقاتِ الكودِ وسجلِّ المؤسّسِ ورسائلِ الكوميتاتِ وحدَها، و82 سطرًا كتبَتها تلك البنودُ تُحيلُ إلى «ADR-051 §١٨» المؤرَّخِ للبند ١١ — أُعيدَت إلى هنا في الكوميتِ نفسِه، إلّا سطرَي ملفَّي التوصيفِ المسمَّيَين في تصحيحِ §١٨.
+
+**العُددُ ونداءاتُها** (كلُّ عُدّةٍ تحملُ `ProviderHttp<TKit>` أو تلفُّ فعلَ الـSDK في `ProviderCalls.InvokeAsync`، و`ProviderCall` أوّلُ وسطاءِ كلِّ عمليّةٍ تغادرُ العمليّة):
+
+| البند | العُدّة | الوحدة ومعرِّفُ الطلب | ما يمرُّ ولا يُعَدّ (`ProviderHelper` بسببِه) |
+|---|---|---|---|
+| ١٢ | Brevo · SMTP | `otp.email.send` (المحاولة؛ الاستوديو والربطُ نداءٌ جديد) · `notice.email.send` (الإشعارُ المكتوبُ قبلَه) | — |
+| ١٣ | نفاذ | `identity.nafath.start` (نداءٌ جديد: معرِّفُ المحاولةِ جوابُ نفاذ) | الرمز `oauth_token` · الاستطلاع `status_poll` |
+| ١٣ | S3 | `file.upload` — الكمّيّةُ بايتات، والمصدرُ `file_key:Pseudonym(unit, app, key)` | الجلبُ والوجود `storage_read` · الحذف `storage_delete` |
+| ١٣ | WebPush | `push.send` — `{notificationId:N}:{Pseudonym(endpoint)}`، و4xx (ومنه 404/410) مرفوض | — |
+| ١٤ | ميسّر | `payment.gateway.invoice.create` عندَ 2xx الإنشاء · `.fetch` ‏`{invoiceId}:{verify\|notice\|expiry\|close}[:{trigger}]` · `.cancel` ‏`{invoiceId}:close` · `.webhook.create` | وسمُ الفاتورة PUT ‏`metadata_tag` |
+| ١٤ | PayPal | `billing.paypal.plan/link/order.create`، `order.capture`، `webhook.verify` — بمفتاحِ `PayPal-Request-Id` نفسِه | الرمز `oauth_token` · المنتج `catalog_product` · `CancelSubscriptionAsync`/`GetInvoiceAsync` ‏`uncalled_member` |
+| ١٤ | Paddle | `billing.paddle.transaction.create` بمرجعِنا | — |
+| ١٥ | OTO | `delivery.order.create` (طلبُنا، المصدر `delivery_order`) · `.status` ‏`{orderId}:{check\|recover\|notice}:{trigger}` · `delivery.vendor.register` (سطرُ التدقيقِ المكتوبُ قبلَه) · `delivery.webhook.register` (نداءٌ جديد) | الرمز `oauth_token` · `CheckOtoDeliveryFeeAsync` ‏`uncalled_member` |
+| ١٥ | الخلفيّاتُ الثلاث | `model.call` (نداءٌ جديدٌ لكلِّ محاولة، الميزة `studio.build`) | — |
+
+ومعها حاملان: معالجُ انتهاءِ الفاتورةِ يفتحُ حاملًا (`due.TenantSlug`، `_system`)، وأبوابُ الإشعارِ الواردِ الأربعةُ دورُها `_provider`. والمعجمُ 10 ← 32 وحدة، كلٌّ بتسميتِه في `ar.json`.
+
+**ما اختلفَ عن التصميمِ (§6.1–§6.2) بالقياس — يُقالُ ولا يُبتلَع:**
+1. **قبولُ نداءِ النموذجِ من استهلاكٍ مقيسٍ في جسمِه لا من حالتِه** (البند ١٥): `ProviderHttp.SendAsync<T>` يقرأُ الجوابَ ثمّ يحكم، و`ModelCalls.Accepted` — استهلاكٌ مقروءٌ ⇐ مقبولٌ ولو 4xx، وإلّا 4xx ⇐ مرفوض، وإلّا مجهول. مقيسٌ في `ProviderCallsTests` بخمسِ حالات (200 باستهلاك، **400 باستهلاك ⇐ مقبول** و`ModelCallRecord.UsageMeasured` كما كان، 200 بلا استهلاك ⇐ مجهول، 401 ⇐ مرفوض، 503 ⇐ مجهول)، والقبولُ بالحالةِ محقونًا يُحمِّرُ صفَّين.
+2. **دورةُ النيّة: المقبولُ وحدَه نهائيّ، والمرفوضُ يُرفَعُ إلى مقبول** (`MeterSql.IntentAccept` … `where outcome in ('pending','unknown','refused')`؛ والتصميمُ كتبَ `('pending','unknown')`): OTO يُجيبُ 401 فيتجدّدُ الرمزُ ويُعادُ الطلبُ **بالنداءِ نفسِه** — والجملةُ القديمةُ مُعادةً تتركُ نيّةً `refused` بجانبِ سطرٍ مقبول (مقيسٌ أحمرَ في الصفِّ الحيّ). والمرفوضُ والمجهولُ لا يكتبانِ فوقَ مقبول.
+3. **قيمةُ المزوّدِ اسمُ العُدّةِ لا سلاجُ الكاتالوج** (`ProviderNames`: `brevo` · `smtp` · `nafath` · `s3` · `webpush` · `moyasar` · `paypal` · `paddle` · `oto` · `anthropic` · `gemini` · `openai_compatible`): `ProviderCatalogTests.No_source_file_outside_the_catalogue_names_a_provider_slug` أحمرُ على السلاجِ في أيِّ ملفٍّ خارجَ الكاتالوج (مقيس: «ProviderNames.cs ← «s3_object_storage»»)، والعمودُ «اسمُ المزوّدِ أو القناة» (التصميم §2). واسمُ العضو `StoreGateway` لا `Moyasar…` لأنّ حارسَ القاعدة ١٦ يمسكُ «sar».
+4. **غرضُ جلبٍ خامس: `close`** (البند ١٤): `GatewayInvoiceCloser` يُنادى من `DealsService.CancelCoreAsync` عندَ كلِّ إلغاءٍ لا من المهلةِ وحدَها (مقيسٌ عندَ الرأس؛ التصميمُ كتبَه تحتَ `expiry`) — فالجلبُ `{invoiceId}:close:{dealId:N}` والإلغاءُ `{invoiceId}:close`، وإعادةُ المهلةِ (1/5/15 ث) سطرٌ واحد.
+5. **`services.AddMemoryCache()` في القالب** بجوارِ تسجيلِ الكاتب (البند ١٣): الكاتبُ يقرأُ `IMemoryCache` ولم يكن يُسجِّلُه إلّا `AddPlatformMultiTenancy`، فمضيفٌ بتركيبِ القالبِ وحدَه لم يبنِ معالجَ المهلة — مقيسٌ أحمر «Unable to resolve service for type 'Microsoft.Extensions.Caching.Memory.IMemoryCache' while attempting to activate '…UsageLedgerWriter'» و«Failed: 4». ويُضيفُ إن غابَ ولا يستبدل، ففي الإنتاجِ هي ذاكرةُ الحلّالِ نفسُها.
+6. **`ProviderCall.Keyed(requestId)` و`About(sourceType, sourceId)`**: مفتاحُ المزوّدِ معرِّفًا حينَ يكونُ له مفتاحٌ يمنعُ التكرار (`PayPal-Request-Id`، مرجعُ Paddle)، والمصدرُ غيرُ المعرِّفِ حينَ يُعَدُّ شيءٌ غيرُ الطلب (`file_key` و`invoice` و`delivery_order`). و`AuditWriter.WriteAsync` صار يعيدُ معرِّفَ سطرِه (معرِّفُ طلبِ تسجيلِ البائع).
+7. **ما بقيَ بلا `ProviderCall` في التوقيع** — كانت «نسيانُه خطأُ بناء» (§6.1)، وصارت في أربعِ واجهاتٍ مقعدًا يحرسُه G6c (الجدولُ أدناه): `IOtpChannel` (البند ١١، §١٨)، و`IAgentBackend.CallAsync(req, ct)` (البند ١٥ — `SessionCircuitTests` توصيفٌ من موجةٍ سابقةٍ ينفّذُه، وTwilio وكلُّ خلفيّةٍ تنفّذُ الأخَ بعدٍّ تحتَ `_unresolved` فلا يُرسَلُ شيءٌ بلا عدٍّ إن نوديَ يومًا)؛ أمّا `IEmailOtpChannel` و`INafathChannel` و`IFileStorage` وعمليّاتُ ميسّر وPayPal وPaddle وOTO فتواقيعُها تحملُه ولا أخَ بدونِه.
+
+**مقاعدُ الاختبارِ دَينٌ معلَن — G6c (`MeterTestSeamTests`) عندَ `cc79500`: «تَجميعات 58 · مَقاعِد 17 · مَأذون 6 · مُنادونَ في libs/apps 0»** (التصميم §16 الخطر ٩: «ثلاثُ نسخٍ وتحويلٌ واحد» صارت سبعةَ عشر):
+
+| المقعد | لماذا بقي | المنادي المأذون |
+|---|---|---|
+| `IOtpChannel.SendOtpAsync(string, string, ct)` و`SendNoticeAsync(string, string, ct)` (2) وتنفيذاهما في `TwilioSmsChannel` (2) و`MockSmsChannel` (2) | `LiveMeterJourneyFootprintCharacterizationProofTests.cs:89`/`:95` (توصيفُ هذه الموجة) ينفّذُهما — لا يُمَسّ | جسما الأخوين ذوَي `ProviderCall` الافتراضيّان (2) |
+| `IAgentBackend.CallAsync(AgentRequest, ct)` (1) وتنفيذُه في الخلفيّاتِ الثلاث (3) | `SessionCircuitTests.cs:95` (`ProbeAgentBackends`) ينفّذُه | جسمُ الأخِ ذي `ProviderCall` الافتراضيّ (1) |
+| `ProviderCalls.Unrecorded` (1) | يبني به اختبارٌ عُدّةً بلا مضيف | جسمُ التحويل، وجسما البانيَين القديمَين (3) |
+| التحويلُ الضمنيُّ `HttpClient → ProviderHttp<TKit>` (1) | بناءُ العُددِ في اختباراتِها بعميلٍ خامّ (`new MoyasarClient(new HttpClient(handler), …)` وأخواتُها) بلا مسّ | — |
+| بانيا `S3FileStorage(IOptions, ILogger)` و`WebPushService(IConfiguration, ILogger)` القديمان (2) | بناؤهما في الاختباراتِ وسكربتاتِ المشغّلِ كما كان | — |
+| `PayPalPaymentProvider.CancelSubscriptionAsync`/`GetInvoiceAsync` (2) و`OtoClient.CheckOtoDeliveryFeeAsync` (1) | أعضاءٌ بلا منادٍ في وقتِ التشغيل (دَينُ القاعدة ١): مساعدٌ بسببِ `uncalled_member`، وأوّلُ منادٍ يحمِّرُ G6c فيولدُ معه صفُّ وحدة | — |
+
+والمقعدُ يُنقَضُ بسطرٍ في الواجهةِ وصفٍّ في G6c — وما ينفّذُه ملفُّ توصيفٍ لا يُنقَضُ إلّا بقرارِ المالكِ في ذلك الملفّ («ب» W13-6·١١ و«ب» W13-6·١٥). وG6d (`MeterCompositionTests`) يركّبُ المضيفَ كما يركّبُه `Program.cs`: «عُمَلاءُ صادِرونَ 8 · عُدَد 11» كلُّها تسجّل، وبلا القالبِ كلُّها لا تسجّل.
+
+**المقيسُ عندَ `cc79500`** (رسائلُ كوميتاتِ البنودِ الأربعةِ تحملُه مفصَّلًا): 8-ج «مِلَفّاتٌ مَفحوصَة 350 · تُسَمّي عَميلاً خامّاً 5 · رُموز 10 · وُصولُ SDK مَفحوص 9 · في القائِمَة 5 · خُروق 0» — القائمةُ 12 ← 11 ← 10 ← 7 ← 5: `ProviderHttp.cs` و`S3FileStorage.cs` و`SmtpEmailChannel.cs` و`WebPushService.cs` و`RealtimeClient.cs`؛ وتوصيفاتُ الطلبِ الأربعةُ ببصماتِها قبلُ وبعد (`EmailRequestShapeCharacterizationTests` و`NafathS3PushRequestShapeCharacterizationTests` و`PaymentsRequestShapeCharacterizationTests` و`OtoModelRequestShapeCharacterizationTests`)؛ والحيّةُ «نَجَحَ 440 · بَلَغَ القاعِدَة 438 (الأَرضِيَّة 378)»؛ والوحدات 9364.

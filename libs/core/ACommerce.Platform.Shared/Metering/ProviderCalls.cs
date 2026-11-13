@@ -34,7 +34,7 @@ public sealed class ProviderCalls(OutboundRecorder? recorder)
     public bool IsRecording => recorder is not null;
 
     /// <summary>
-    /// <para>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨؛ التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: مُستَدعٍ لا يُسَجِّل — يَبني بِه اختِبارٌ عُدَّةً بِلا مُضيف (التَحويلُ
+    /// <para>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩؛ التَصميم §6.3) <b>مَقعَدُ اختِبار</b>: مُستَدعٍ لا يُسَجِّل — يَبني بِه اختِبارٌ عُدَّةً بِلا مُضيف (التَحويلُ
     /// <c>HttpClient → ProviderHttp</c>، وقَناةُ SMTP في اختِباراتِ المُهلَة). <b>لا يُناديه كودُ الإنتاج</b>: <c>MeterTestSeamTests</c> (G6c) يَقرَأُ الـIL المَبنِيَّ
     /// ويَحمَرُّ عَلى مُنادٍ في <c>libs/</c> أَو <c>apps/</c>، والمُضيفُ المُرَكَّبُ يَبني مُستَدعيَه بِكاتِبِه (<see cref="ProviderCallsExtensions.AddProviderCalls"/>).</para>
     /// </summary>

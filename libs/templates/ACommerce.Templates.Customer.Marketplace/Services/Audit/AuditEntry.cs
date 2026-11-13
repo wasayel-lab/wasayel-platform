@@ -38,7 +38,7 @@ public sealed class AuditWriter
 
     public const string PlatformScope = "_platform";
 
-    /// <summary>يَكتُبُ السَطرَ ويُعيدُ مُعَرِّفَه (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): أَوَّلُ مُستَهلِكٍ لَه <c>VendorShippingService.RegisterAsync</c> — مُعَرِّفُ
+    /// <summary>يَكتُبُ السَطرَ ويُعيدُ مُعَرِّفَه (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): أَوَّلُ مُستَهلِكٍ لَه <c>VendorShippingService.RegisterAsync</c> — مُعَرِّفُ
     /// نِداءِ تَسجيلِ البائِعِ المَعدودِ سَطرُ الأَثَرِ الَّذي يَسبِقُه.</summary>
     public async Task<Guid> WriteAsync(
         string scope, Guid? actorId, string actorName,

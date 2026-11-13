@@ -7,7 +7,7 @@
        سَبَبِه (‏ADR-001 أ): مَشروعٌ وَرَقيٌّ لا يَقلِب سَهمَ الاعتِماد. -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
-    <!-- ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) مُستَدعيها المَعدود: `ProviderHttp<BrevoEmailChannel>` مالِكُ عَميلِها و`AddProviderHttp` تَسجيلُه. -->
+    <!-- ‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) مُستَدعيها المَعدود: `ProviderHttp<BrevoEmailChannel>` مالِكُ عَميلِها و`AddProviderHttp` تَسجيلُه. -->
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
   </ItemGroup>
 </Project>

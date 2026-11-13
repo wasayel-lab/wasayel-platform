@@ -69,7 +69,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// والمُختَبِر.</summary>
     public const string RequestIdHeader = "PayPal-Request-Id";
 
-    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٨؛ التَصميم §3.4 و§6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٩؛ التَصميم §3.4 و§6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
     // `ProviderHttp<PayPalPaymentProvider>` مالِكُه. والعَمَلِيّاتُ المَعدودَةُ الخَمسُ (الخُطَّة، الرابِط، الطَلَب، الالتِقاط، التَحَقُّقُ مِن التَوقيع) تَأخُذُ
     // `ProviderCall` أَوَّلَ وُسَطائِها والعُدَّةُ تَسِمُه بِاسمِها، ومُعَرِّفُ الطَلَبِ مِفتاحُ PayPal نَفسُه (`PayPal-Request-Id`) — حَتّى الخُطَّة الَّتي لا يُعرَفُ مِفتاحُها
     // إلّا بَعدَ المُنتَج (`ProviderCall.Keyed`). والرَمزُ ومُنتَجُ الكاتالوجِ نِداءانِ مُساعِدانِ لا يُعَدّان (`oauth_token`، `catalog_product`)، وعُضوا الواجِهَةِ بِلا

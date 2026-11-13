@@ -49,7 +49,7 @@ public sealed class SmtpEmailOptions
 /// قَناة OTP بَريديَّة فِعليَّة عَبر MailKit. تُرسِل رِسالَة نَصّ + HTML
 /// بِسيطَة تَحمِل الرَمز، ولا تَعرِف شَيئاً عَن تَوليده أَو تَخزينه —
 /// ذلِك كُلُّه في <c>AuthHandlers</c> المُشتَرَك مَع قَناة الهاتِف.
-/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) <b>أَفعالُ MailKit داخِلَ المُستَدعي المَعدود</b>: الاتِّصالُ والاعتِمادُ والإرسالُ والانصِرافُ وُسَطاءُ
+/// <para>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٩) <b>أَفعالُ MailKit داخِلَ المُستَدعي المَعدود</b>: الاتِّصالُ والاعتِمادُ والإرسالُ والانصِرافُ وُسَطاءُ
 /// <see cref="ProviderCalls.InvokeAsync{T}"/> — نِيَّةٌ قَبلَها، والنِداءُ <b>مَقبولٌ حينَ يَعودُ <c>SendAsync</c></b> (التَصميم §6.2؛ والانصِرافُ بَعدَه لا يَرمي:
 /// وَثيقَةُ MailKit لا تُعلِنُ لِـ<c>DisconnectAsync</c> إلّا <c>ObjectDisposedException</c>)، وما يُرمى مَجهولٌ ويُعادُ رَميُه كَما هُوَ فَتُحَوِّلُه القَناةُ كَما كانَت.
 /// والطَبَقَةُ ٨-ج تُحَمِّرُ وُصولاً إلى <c>client</c> خارِجَ وُسَطائِه. والحِوارُ والرِسالَةُ هُما هُما (<c>EmailRequestShapeCharacterizationTests</c>، أُودِعَ قَبلَ
@@ -182,7 +182,7 @@ public static class SmtpEmailExtensions
     /// <summary>يُسَجِّل قَناة SMTP كَتَنفيذ لِـ <see cref="IEmailOtpChannel"/>.
     /// الإعدادات تُمَرَّر مِن التَهيئَة في التَّطبيق المُضيف — نَفس نَمَط
     /// <c>AddUnifonicSmsChannel</c>.</summary>
-    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٨) ومَعَها مُستَدعيها المَعدود (<see cref="ProviderCallsExtensions.AddProviderCalls"/>): مُفرَدٌ بِكاتِبِ المُضيفِ
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) ومَعَها مُستَدعيها المَعدود (<see cref="ProviderCallsExtensions.AddProviderCalls"/>): مُفرَدٌ بِكاتِبِ المُضيفِ
     /// إن سُجِّل — والقَناةُ مُفرَدٌ كَما كانَت.</remarks>
     public static IServiceCollection AddSmtpEmailChannel(
         this IServiceCollection services, Action<SmtpEmailOptions> configure)

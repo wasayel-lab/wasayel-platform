@@ -55,7 +55,7 @@ public sealed class PayPalGateway
     /// <summary>تَحَقُّقٌ مِن التَوقيع — و<c>false</c> حينَ لا مُزَوِّدَ
     /// أَصلاً. <b>لا استِثناءَ ولا «مَرَّت لِأَنَّها غَيرُ
     /// مُهَيَّأَة»</b>.</summary>
-    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) <b>و<see cref="ProviderCall"/> أَوَّلُ وُسَطاءِ كُلِّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّة</b> هُنا وفي جاراتِها
+    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) <b>و<see cref="ProviderCall"/> أَوَّلُ وُسَطاءِ كُلِّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّة</b> هُنا وفي جاراتِها
     /// (القاعِدَة ٦): المُنادي يَعرِفُ المَتجَرَ وسَبَبَ النِداء، والمُزَوِّدُ يَسِمُه ويَضَعُ مِفتاحَ مَرَّة-واحِدَةٍ مُعَرِّفاً. وحينَ لا مُزَوِّدَ فَلا نِداءَ ولا نِيَّة.</remarks>
     public Task<bool> VerifyWebhookSignatureAsync(
         ProviderCall call, PayPalWebhookHeaders headers, string rawBody, CancellationToken ct = default)
@@ -162,7 +162,7 @@ public static class PayPalExtensions
 
         if (PayPalEnvironment.IsConfigured(options))
         {
-            // ‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) بِالمُستَدعي المَعدود: العَميلُ المُسَمّى بِاسمِ الصِنفِ بِالسَقفِ نَفسِه، والمُزَوِّدُ عابِرٌ كَما كانَ مُطَبَّعاً.
+            // ‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) بِالمُستَدعي المَعدود: العَميلُ المُسَمّى بِاسمِ الصِنفِ بِالسَقفِ نَفسِه، والمُزَوِّدُ عابِرٌ كَما كانَ مُطَبَّعاً.
             services.AddProviderHttp<PayPalPaymentProvider>((_, client) =>
             {
                 // سَقفٌ احتِياطيٌّ لَو سَقَطَ الرَمزُ الداخِليّ —

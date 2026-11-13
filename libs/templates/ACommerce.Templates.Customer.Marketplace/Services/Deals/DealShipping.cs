@@ -758,7 +758,7 @@ public sealed class DealShipping
         // نَجاحُ «Create Order» طَلَبٌ لا شُحنَة: تُسأَلُ OTO قَبلَ أَن تَتَحَرَّكَ الصَفقَة — ولا «شَحنَ» بِلا شُحنَةٍ وبوليصَة.
         // (‏2026-10-29، د13: والمُعَرِّفُ مِن مَرجِعِ الصَفقَةِ المَكتوب — `current` لا `deal`: صَفقَةٌ في طَلَبِ أُختِها مُعَرِّفُ طَلَبِها غَيرُ مُعَرِّفِها.)
         var orderId = OrderIdOf(current);
-        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): سُؤالُ الحالِ قَبلَ الانتِقالِ عَمَلِيَّةٌ مَعدودَةٌ بِغَرَضِها `check` وزِنادٍ جَديد — كُلُّ نَقرَةٍ سُؤالٌ مِن OTO.
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): سُؤالُ الحالِ قَبلَ الانتِقالِ عَمَلِيَّةٌ مَعدودَةٌ بِغَرَضِها `check` وزِنادٍ جَديد — كُلُّ نَقرَةٍ سُؤالٌ مِن OTO.
         var state = (await _oto.GetOrderStatusAsync(ShippingCalls.Status(tenantSlug, orderId, ShippingCalls.Check, ProviderCall.FreshRequestId()),
             token, orderId, CancellationToken.None)).Value;
         var siblings = await OrderSiblingsAsync(tenantSlug, current, orderId, CancellationToken.None);
@@ -886,7 +886,7 @@ public sealed class DealShipping
     /// بِالعُطلِ نَفسِه قَبلَ أَن يَبلُغَ نُقطَةَ الحال، ويَعودُ الفَشَلُ الأَصلِيُّ بِرَمزِه. كُلفَتُه نِداءُ رَمزٍ ثانٍ لا طَلَبٌ ولا سُؤال —
     /// مَقيسٌ في <c>DealShipTests</c>.)</para>
     /// </summary>
-    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والنِداءانِ مَعدودان</b>: الإنشاءُ بِمُعَرِّفِ طَلَبِنا نَفسِه
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والنِداءانِ مَعدودان</b>: الإنشاءُ بِمُعَرِّفِ طَلَبِنا نَفسِه
     /// (فَإعادَةُ الإنشاءِ لِلطَلَبِ نَفسِه عَمَلِيَّةٌ واحِدَة، وOTO تَرُدُّ الثانِيَ «OTO1063»)، والاستِردادُ سُؤالُ حالٍ بِغَرَضِه <c>recover</c> وزِنادٍ جَديد —
     /// و<paramref name="tenantSlug"/> مَتجَرُهُما.</remarks>
     private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string tenantSlug, string token, IReadOnlyList<Deal> members, string city, CancellationToken ct)
@@ -955,7 +955,7 @@ public sealed class DealShipping
         // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة — بِرَمزٍ يُفَكُّ الآنَ لا قَبلَ التَوقيع (G5 (viii)).
         if (!TryOpenToken(tenantSlug, carrier, out var token))
             return new(OtoOrderStatusGate.CarrierUnavailable, deal);
-        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): والسُؤالُ بَعدَ الإشعارِ مَعدودٌ بِغَرَضِه `notice` وزِنادُه حَدَثُ الحالِ نَفسُه (الحالُ وخَتمُه كَما وَقَّعَتهُما OTO) —
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): والسُؤالُ بَعدَ الإشعارِ مَعدودٌ بِغَرَضِه `notice` وزِنادُه حَدَثُ الحالِ نَفسُه (الحالُ وخَتمُه كَما وَقَّعَتهُما OTO) —
         // فَإعادَةُ OTO لِلإشعارِ نَفسِه سُؤالٌ واحِدٌ في الدَفتَر، وإشعارٌ بِحالٍ أُخرى سُؤالٌ آخَر.
         var fetched = await _oto.GetOrderStatusAsync(ShippingCalls.Status(tenantSlug, notice.OrderId, ShippingCalls.Notice, ShippingCalls.EventOf(notice)),
             token, notice.OrderId, ct);
@@ -1146,7 +1146,7 @@ public sealed record VendorCarrier(string RefreshToken, string? WebhookSecret)
 public enum StoreCarrier { None, Ready, Unreadable }
 
 /// <summary>
-/// <para><b>نِداءاتُ الشَحنِ المَعدودَة</b> (‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.2) — يَبنيها مَن يَعرِفُ المَتجَر (<see cref="DealShipping"/>،
+/// <para><b>نِداءاتُ الشَحنِ المَعدودَة</b> (‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٩؛ التَصميم §6.2) — يَبنيها مَن يَعرِفُ المَتجَر (<see cref="DealShipping"/>،
 /// <see cref="VendorShippingService"/>)، والعُدَّةُ تَسِمُها بِاسمِ المُزَوِّد. <b>الإنشاءُ بِمُعَرِّفِ طَلَبِنا</b>؛ و<b>سُؤالُ الحالِ</b> <c>{orderId}:{غَرَض}:{زِناد}</c> —
 /// <c>check</c> عِندَ الشَحن و<c>recover</c> بَعدَ إنشاءٍ ضاعَ رَدُّه، وزِنادُهُما جَديدٌ لِكُلِّ نَقرَة، و<c>notice</c> بَعدَ الإشعارِ وزِنادُه حَدَثُ الحال؛ ومَصدَرُهُما
 /// الطَلَبُ نَفسُه. و<b>تَسجيلُ الوارِد</b> بِمُعَرِّفٍ جَديد، و<b>تَسجيلُ البائِع</b> بِمُعَرِّفِ سَطرِ الأَثَرِ المَكتوبِ قَبلَه.</para>

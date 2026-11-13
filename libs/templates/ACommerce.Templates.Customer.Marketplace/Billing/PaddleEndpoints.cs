@@ -74,7 +74,7 @@ public static class PaddleEndpoints
             HttpContext http, IDocumentSession session, PaddleGateway paddle,
             Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
-            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٨) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار).
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار).
             MeterScope.Current?.FillPlatformRole(MeterSentinels.Provider);
             var raw = await new StreamReader(http.Request.Body).ReadToEndAsync(http.RequestAborted);
 

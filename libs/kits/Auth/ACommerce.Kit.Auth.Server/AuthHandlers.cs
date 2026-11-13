@@ -439,7 +439,7 @@ public static class AuthHandlers
 
         var code = NewCode(channel.DevHintCode);
         var attemptId = IssueAttempt(tenantCtx.Slug, email, code, AuthKind.EmailOtp);
-        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٨) النِداءُ مَعدودٌ في تَوقيعِه كَأَخيهِ في الجَوّال: المَتجَرُ ومُعَرِّفُ المُحاوَلَة.
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٢ — ADR-051 §١٩) النِداءُ مَعدودٌ في تَوقيعِه كَأَخيهِ في الجَوّال: المَتجَرُ ومُعَرِّفُ المُحاوَلَة.
         var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
             ACommerce.Platform.Shared.Metering.OutboundUnits.OtpEmailSend, tenantCtx.Slug, attemptId);
         // نَفسُ الحارِس — والعِلَّةُ المَقيسَةُ كانَت هُنا بِالضَبط:
@@ -523,7 +523,7 @@ public static class AuthHandlers
         if (!TryConsumeSendQuota($"{tenantCtx.Slug}|nafath:{cmd.NationalId?.Trim()}")
             || !TryConsumeGlobalSendQuota(GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited: try again in an hour");
-        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٨) البَدءُ نِداءٌ مَعدود: المَتجَرُ، ومُعَرِّفُ نِداءٍ جَديد — مُعَرِّفُ المُحاوَلَةِ جَوابُ نَفاذٍ لا يُعرَفُ قَبلَه
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) البَدءُ نِداءٌ مَعدود: المَتجَرُ، ومُعَرِّفُ نِداءٍ جَديد — مُعَرِّفُ المُحاوَلَةِ جَوابُ نَفاذٍ لا يُعرَفُ قَبلَه
         // (التَصميم §6.2). والاستِطلاعُ في بابِ التَأكيدِ مُساعِدٌ لا يُعَدّ.
         var call = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
             ACommerce.Platform.Shared.Metering.OutboundUnits.IdentityNafathStart, tenantCtx.Slug, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId());

@@ -321,7 +321,7 @@ public sealed class FeasibilityAnalysisService
         };
         var req = new AgentRequest(systemPrompt, messages,
             Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000, Wait: AgentCallWait.Background);
-        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): نِداءٌ مَعدودٌ عَلى المَنَصَّة — الحاضِنَةُ لِمُشرِفِ المَنَصَّة.
+        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): نِداءٌ مَعدودٌ عَلى المَنَصَّة — الحاضِنَةُ لِمُشرِفِ المَنَصَّة.
         var resp = await _backend.CallAsync(ModelCalls.Platform(), req, ct);
 
         // القياسُ **قَبلَ** فَرعِ الخَطَأ: تَحسينٌ فَشِلَ أَنفَقَ
@@ -428,7 +428,7 @@ public sealed class FeasibilityAnalysisService
             };
             var req = new AgentRequest(systemPrompt, messages,
                 Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000, Wait: AgentCallWait.Background);
-            // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): كُلُّ مُحاوَلَةٍ نِداءٌ مَعدودٌ بِمُعَرِّفِه — المُحاوَلَتانِ تَوكِناتانِ أُنفِقَتا.
+            // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): كُلُّ مُحاوَلَةٍ نِداءٌ مَعدودٌ بِمُعَرِّفِه — المُحاوَلَتانِ تَوكِناتانِ أُنفِقَتا.
             var resp = await _backend.CallAsync(ModelCalls.Platform(), req, ct);
 
             // ─── سَطرُ قياسٍ **لِكُلِّ مُحاوَلَة**، الفاشِلَةِ قَبلَ
