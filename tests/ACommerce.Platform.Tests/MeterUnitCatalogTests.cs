@@ -288,4 +288,60 @@ public class MeterUnitCatalogTests(ITestOutputHelper output)
         Assert.True(resolved.Count > 0, "أَداةٌ عَمياء: صِفرُ مِيزَةٍ ثابِتَة.");
         Assert.All(resolved, r => Assert.True(r.Anchor is not null, $"مِيزَةُ «{r.Code}» = «{r.Feature}» لَيسَت اسماً في أَيِّ مُعجَمٍ قائِم."));
     }
+
+    // ─── (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-2) مَوضِعُ العَدِّ في المُعجَمِ يُسَمّي بانِيَ النِداءِ الَّذي يَستَعمِلُه مَوضِعُه ────────────────
+
+    /// <summary>
+    /// <para>‏(M6C-RULES-R3-2 — ADR-051 §١٩) <b>الوَحَداتُ الصادِرَةُ الَّتي صَحَّحَت المُراجَعاتُ عَدَّها، وبانِي كُلٍّ ومَوضِعُ استِعمالِه</b>: <c>source</c> هُوَ
+    /// «مَوضِعُ العَدّ» (التَصميم §3.1)، ومَن يُطابِقُ أَو يُراجِعُ الخُصوصِيَّةَ مِن المُعجَمِ يَقرَأُ ما فيه. وكانَت خَمسٌ مِنها تَصِفُ عَدّاً غَيَّرَته الإصلاحات
+    /// (<c>ce71c1f</c> و<c>7495de4</c> و<c>af3e566</c>) والمِلَفُّ لَم يُمَسّ — والمَعدودُ يُعادُ تَسمِيَتُه بِالمُتَرجِمِ هُنا (<c>nameof</c>) أَو بِالانعِكاسِ لِلخاصّ.</para>
+    /// </summary>
+    internal static readonly (string Unit, Type Builder, string Member, string CallSite, string CallText)[] CorrectedOutboundSources =
+    [
+        (OutboundUnits.BillingPayPalWebhookVerify, typeof(ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface),
+            nameof(ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.VerifyCall),
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PayPalEndpoints.cs", "PayPalSurface.VerifyCall(headers)"),
+        (OutboundUnits.PaymentGatewayInvoiceFetch, typeof(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls),
+            nameof(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.ExpiryRun),
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/Deals/GatewayPayments.cs", "GatewayCalls.ExpiryRun(deal)"),
+        (OutboundUnits.DeliveryOrderCreate, typeof(ACommerce.Kit.Delivery.OtoClient), "Acceptance",
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs", "a => Acceptance(a.Response.StatusCode, a.Root)"),
+        (OutboundUnits.DeliveryOrderStatus, typeof(ACommerce.Kit.Delivery.OtoClient), "Acceptance",
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs", "a => Acceptance(a.Response.StatusCode, a.Root)"),
+        (OutboundUnits.DeliveryWebhookRegister, typeof(ACommerce.Kit.Delivery.OtoClient), "Acceptance",
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs", "a => Acceptance(a.Response.StatusCode, a.Root)"),
+        (OutboundUnits.DeliveryVendorRegister, typeof(ACommerce.Kit.Delivery.OtoClient), "Acceptance",
+            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs", "a => Acceptance(a.Response.StatusCode, a.Root)"),
+        (OutboundUnits.BillingPaddleTransactionCreate, typeof(ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface),
+            nameof(ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.CreateCall),
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/Billing/PaddleEndpoints.cs", "PaddleSurface.CreateCall(slug, reference)"),
+    ];
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-2 — ADR-051 §١٩) <b>كُلُّ وَحدَةٍ صادِرَةٍ صُحِّحَ عَدُّها يُسَمّي <c>source</c>ها بانِيَ نِدائِها</b>
+    /// (<c>{نَوع}.{عُضو}</c>)، والعُضوُ قائِمٌ في الكود، ومَوضِعُ النِداءِ يَستَعمِلُه بِحَرفِه. فَإصلاحٌ يُغَيِّرُ البانِيَ أَو يَنقُلُ المَوضِعُ عَنه يُحَمِّرُ الصَفَّ حَتّى يُكتَبَ
+    /// المُعجَمُ مَعَه؛ وحَقنُ النُصوصِ القَديمَةِ (المُعَرِّفُ «the transmission id PayPal sent»، و«{invoiceId}:expiry» وَحدَها، و«answers 2xx» لِـOTO) يُحَمِّرُه.</para>
+    /// </summary>
+    [Fact]
+    public void Each_corrected_outbound_unit_source_names_the_builder_its_call_site_uses()
+    {
+        var catalog = MeterUnitCatalog.Default;
+        const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+        var matched = 0;
+        foreach (var (unit, builder, member, callSite, callText) in CorrectedOutboundSources)
+        {
+            var row = catalog.Find(unit);
+            Assert.NotNull(row);
+            Assert.Equal(MeterBoundaries.Outbound, row.Boundary);
+            Assert.NotEmpty(builder.GetMember(member, all));
+            var named = $"{builder.Name}.{member}";
+            var site = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, callSite));
+            var ok = row.Source.Contains(named, StringComparison.Ordinal) && site.Contains(callText, StringComparison.Ordinal);
+            output.WriteLine($"[G2·source] {unit} ⇐ {named} · في المُعجَم {row.Source.Contains(named, StringComparison.Ordinal)} · في {Path.GetFileName(callSite)} {site.Contains(callText, StringComparison.Ordinal)}");
+            if (ok) matched++;
+        }
+        output.WriteLine($"[G2·source] وَحَداتٌ مَفحوصَة {CorrectedOutboundSources.Length} · تُسَمّي بانِيَها {matched}");
+        Assert.True(CorrectedOutboundSources.Length >= 7, $"أَداةٌ عَمياء: {CorrectedOutboundSources.Length} وَحدَة.");
+        Assert.Equal(CorrectedOutboundSources.Length, matched);
+    }
 }

@@ -169,7 +169,7 @@
       "measure": "count",
       "feature": "payments",
       "reconcile": "intents",
-      "source": "the store gateway client's FetchInvoiceAsync through ProviderHttp — one entry per accepted GET; request id = {invoiceId}:verify:{fresh call id} (GatewayPayments.VerifyAsync), {invoiceId}:notice:{payment id} (ConfirmNoticeAsync), {invoiceId}:expiry (ExpireAsync — dedupes the scheduled retries) or {invoiceId}:close:{cancelled deal id} (GatewayInvoiceCloser, on every cancel of a deal with an invoice); source = the invoice id; app = the store slug"
+      "source": "the store gateway client's FetchInvoiceAsync through ProviderHttp — one entry per accepted GET; request id = {invoiceId}:verify:{fresh call id} (GatewayPayments.VerifyAsync), {invoiceId}:notice:{payment id} (ConfirmNoticeAsync), {invoiceId}:expiry (ExpireAsync on a deal never resumed — dedupes the scheduled retries), {invoiceId}:expiry:resume:{dealId:N}:{n} (ExpireAsync after the deal's n-th resume past the window — GatewayCalls.ExpiryRun: a new run, whose own retries share its trigger) or {invoiceId}:close:{cancelled deal id} (GatewayInvoiceCloser, on every cancel of a deal with an invoice); source = the invoice id; app = the store slug"
     },
     {
       "code": "payment.gateway.invoice.cancel",
@@ -232,7 +232,7 @@
       "measure": "count",
       "feature": "subscriptions",
       "reconcile": "intents",
-      "source": "PayPalPaymentProvider.VerifyWebhookSignatureAsync through ProviderHttp — one entry when verify-webhook-signature answers 2xx, before the event is read; request id = the transmission id PayPal sent; app = _platform (POST /api/billing/paypal)"
+      "source": "PayPalPaymentProvider.VerifyWebhookSignatureAsync through ProviderHttp — one entry when verify-webhook-signature answers 2xx, before the event is read; request id = UsageEntryId.Pseudonym(billing.paypal.webhook.verify, _platform, paypal-transmission-id) (PayPalSurface.VerifyCall — the raw header, which anyone writes before verification, never enters the ledger; PayPal's redelivery of one transmission is one entry); app = _platform (POST /api/billing/paypal)"
     },
     {
       "code": "billing.paddle.transaction.create",
@@ -250,7 +250,7 @@
       "measure": "count",
       "feature": "delivery",
       "reconcile": "intents",
-      "source": "DealShipping.ShipAsync through PlaceAsync — the OTO client's CreateOrderAsync through ProviderHttp; one entry when POST /rest/v2/createOrder answers 2xx; request id = our order id (DealShipping.OrderIdOf, the first deal of the vendor's cart), so a repeated create of the same order is one operation; source = the order id; app = the store slug; the access-token exchange before it is a helper, not counted"
+      "source": "DealShipping.ShipAsync through PlaceAsync — the OTO client's CreateOrderAsync through ProviderHttp; one entry when OTO accepts — POST /rest/v2/createOrder answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = our order id (DealShipping.OrderIdOf, the first deal of the vendor's cart), so a repeated create of the same order is one operation; source = the order id; app = the store slug; the access-token exchange before it is a helper, not counted"
     },
     {
       "code": "delivery.order.status",
@@ -259,7 +259,7 @@
       "measure": "count",
       "feature": "delivery",
       "reconcile": "intents",
-      "source": "the OTO client's GetOrderStatusAsync through ProviderHttp — one entry per accepted POST /rest/v2/orderStatus; request id = {orderId}:check:{fresh call id} (DealShipping.ShipAsync, before the deal moves), {orderId}:recover:{fresh call id} (PlaceAsync, after a create whose answer was lost) or {orderId}:notice:{status}:{timestamp} (ReceiveAsync, the signed status event, so OTO's redelivery of one event is one entry); source = the order id; app = the store slug"
+      "source": "the OTO client's GetOrderStatusAsync through ProviderHttp — one entry per POST /rest/v2/orderStatus OTO accepts — one that answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = {orderId}:check:{fresh call id} (DealShipping.ShipAsync, before the deal moves), {orderId}:recover:{fresh call id} (PlaceAsync, after a create whose answer was lost) or {orderId}:notice:{status}:{timestamp} (ReceiveAsync, the signed status event, so OTO's redelivery of one event is one entry); source = the order id; app = the store slug"
     },
     {
       "code": "delivery.webhook.register",
@@ -268,7 +268,7 @@
       "measure": "count",
       "feature": "delivery",
       "reconcile": "intents",
-      "source": "VendorShippingService (paste and register) — the OTO client's RegisterWebhookAsync through ProviderHttp; one entry when POST or PUT /rest/v2/webhook answers 2xx; request id = a fresh call id (an update refused by another account and then created again is two operations); app = the store slug"
+      "source": "VendorShippingService (paste and register) — the OTO client's RegisterWebhookAsync through ProviderHttp; one entry when OTO accepts — POST or PUT /rest/v2/webhook answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = a fresh call id (an update refused by another account and then created again is two operations); app = the store slug"
     },
     {
       "code": "delivery.vendor.register",
@@ -277,7 +277,7 @@
       "measure": "count",
       "feature": "delivery",
       "reconcile": "intents",
-      "source": "VendorShippingService.RegisterAsync — the OTO client's RegisterVendorAsync through ProviderHttp on the marketplace credential; one entry when POST /rest/v2/register answers 2xx; request id = the audit row written before the call (AuditWriter.WriteAsync returns it); app = the store slug"
+      "source": "VendorShippingService.RegisterAsync — the OTO client's RegisterVendorAsync through ProviderHttp on the marketplace credential; one entry when OTO accepts — POST /rest/v2/register answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = the audit row written before the call (AuditWriter.WriteAsync returns it); app = the store slug"
     },
     {
       "code": "model.call",
