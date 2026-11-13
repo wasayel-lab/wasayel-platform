@@ -358,7 +358,7 @@
       "measure": "count",
       "feature": "api.call",
       "reconcile": "presence_claims",
-      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with active ApiKeyDocument keys; quantity = their count"
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with active ApiKeyDocument keys; quantity = their count — active = usable at the read instant (ApiKeyDocument.IsUsableAt, counted by PresenceReader.ApiKeysOf: status active and not expired, the same predicate ApiKeyService.AuthenticateAsync refuses by)"
     },
     {
       "code": "presence.auth_channel",

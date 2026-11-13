@@ -799,4 +799,67 @@ public class LivePresenceSnapshotProofTests(ITestOutputHelper output)
             Assert.Equal(1L, await CarriersAsync(cs, today.AddDays(1)));
         }, logs);
     }
+
+    // ─── ٩. المِفتاحُ المُنتَهي لا يُعَدّ (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثانِيَة · W13-6·D-R2·١ — M6D-CNT-R2-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ) ─────────────
+    // ‏مِفتاحٌ يَصدُرُ بِمَسارِ الاستوديو الحَقيقيّ (`IssueAsync` بِمُهلَةِ يَوم) ثُمَّ يُؤَخَّرُ انتِهاؤُه ساعَة: الاعتِمادُ يَرُدُّه `Expired` وحالُه ما زالَت `active` —
+    // ولا شَيءَ يُبطِلُه عِندَ انتِهائِه. فَكَمِّيَّةُ `presence.api_key` لِلمَتجَرِ لا تَتَغَيَّرُ بِه؛ ومِفتاحٌ يَنتَهي بَعدَ ثَلاثينَ يَوماً يُقبَلُ ويُعَدّ (الضابِطُ المُوجِب).
+    // ‏والسُؤالُ القَديمُ (الحالُ وَحدَها) يُطبَعُ بِجانِبِها: كانَ يَعُدُّ المُنتَهي.
+
+    [Fact]
+    public async Task An_expired_key_the_authenticator_refuses_is_not_counted_and_one_that_expires_later_is()
+    {
+        if (!Enabled) return;
+        await WithHostAsync("ps", async (app, store, cs) =>
+        {
+            var log = app.Services.GetRequiredService<ILogger<PresenceSnapshot>>();
+            var actor = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = StoreA, FullName = "فاعِلُ المِفتاح", Phone = "0500000002" };
+            await using (var u = store.LightweightSession(StoreA))
+            {
+                u.Store(actor);
+                await u.SaveChangesAsync();
+            }
+            var keys = new ApiKeyService(store);
+            async Task<ApiKeyIssued> IssueAsync(string name, int days)
+                => await keys.IssueAsync(StoreA, new ApiKeyValidator.IssueRequest(name, actor.Id, "", new[] { ApiScopeCatalog.DealsRead }, days), Guid.NewGuid());
+            async Task<long> ApiKeysAsync(DateOnly d)
+                => (await DayRowsAsync(cs, d)).Where(r => r.StartsWith($"{StoreA} {PresenceUnits.ApiKey} ", StringComparison.Ordinal))
+                                              .Select(r => long.Parse(r.Split(' ')[^1], System.Globalization.CultureInfo.InvariantCulture)).SingleOrDefault();
+            Task<long> StatusOnlyAsync()
+                => ScalarAsync<long>(cs, "select count(*) from platform.mt_doc_apikeydocument where data->>'TenantSlug' = @t and data->>'Status' = @s",
+                                     ("t", StoreA), ("s", ApiKeyDocument.StatusActive));
+
+            var (before, withExpired, withLater) = (new DateOnly(2030, 5, 1), new DateOnly(2030, 5, 2), new DateOnly(2030, 5, 3));
+            await new PresenceSnapshot(store, log).TakeAsync(before, PresenceDefinitions.Platform);
+
+            var expired = await IssueAsync("مِفتاحٌ انتَهى", 1);
+            await using (var s = store.LightweightSession())
+            {
+                var doc = await s.LoadAsync<ApiKeyDocument>(expired.Key.Id);
+                doc!.ExpiresAt = DateTime.UtcNow.AddHours(-1);
+                s.Store(doc);
+                await s.SaveChangesAsync();
+            }
+            var expiredAuth = (await keys.AuthenticateAsync(expired.Presented)).Rejection;
+            string expiredStatus;
+            await using (var q = store.QuerySession())
+                expiredStatus = (await q.LoadAsync<ApiKeyDocument>(expired.Key.Id))!.Status;
+            await new PresenceSnapshot(store, log).TakeAsync(withExpired, PresenceDefinitions.Platform);
+            var statusOnlyThen = await StatusOnlyAsync();
+
+            var later = await IssueAsync("مِفتاحٌ يَنتَهي بَعدَ شَهر", 30);
+            var laterAuth = (await keys.AuthenticateAsync(later.Presented)).Rejection;
+            await new PresenceSnapshot(store, log).TakeAsync(withLater, PresenceDefinitions.Platform);
+
+            output.WriteLine($"[G12] المُنتَهي: AuthenticateAsync → {expiredAuth} · حالُه {expiredStatus} — presence.api_key لِـ{StoreA}: قَبلَه {await ApiKeysAsync(before)} · "
+                             + $"مَعَه {await ApiKeysAsync(withExpired)} (بِالحالِ وَحدَها {statusOnlyThen}) · ومَعَ مِفتاحٍ يَنتَهي بَعدَ شَهر ({laterAuth}) {await ApiKeysAsync(withLater)}");
+            Assert.Equal(ApiKeyRejection.Expired, expiredAuth);
+            Assert.Equal(ApiKeyDocument.StatusActive, expiredStatus);
+            Assert.Equal(ApiKeyRejection.None, laterAuth);
+            Assert.Equal(2, await ApiKeysAsync(before));
+            Assert.Equal(await ApiKeysAsync(before), await ApiKeysAsync(withExpired));
+            Assert.Equal(3, statusOnlyThen);
+            Assert.Equal(3, await ApiKeysAsync(withLater));
+            Assert.Equal((await DayRowsAsync(cs, before)).Count, (await DayRowsAsync(cs, withExpired)).Count);
+        });
+    }
 }

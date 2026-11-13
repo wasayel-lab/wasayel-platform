@@ -33,6 +33,7 @@ public static class PresenceUnits
     /// <summary>مَداخِلُ البائِعينَ النَشِطَةُ عِندَ مُزَوِّدٍ مِترُه <see cref="ProviderMeterPresences.VendorBinding"/> — سَطرٌ لِكُلِّ مُزَوِّدٍ كَمِّيَّتُه عَدَدُها.</summary>
     public const string VendorBinding = "presence.vendor_binding";
     /// <summary>مَفاتيحُ API النَشِطَةُ لِلمَتجَر — كَمِّيَّتُها عَدَدُها.</summary>
+    /// <remarks>(‏2026-11-13، W13-6·D-R2·١ — يُلحَقُ): و«النَشِطُ» ما يَقبَلُه الاعتِمادُ عِندَ لَحظَةِ القِراءَة (<see cref="ApiKeyDocument.IsUsableAt"/>: نَشِطٌ ولَم يَنتَهِ) — <see cref="PresenceReader.ApiKeysOf"/>.</remarks>
     public const string ApiKey = "presence.api_key";
     /// <summary>قَناةُ دُخولِ المَتجَر (<c>Tenant.AuthChannel</c>) — كَمِّيَّتُها 1 ومَصدَرُها القَناة.</summary>
     public const string AuthChannel = "presence.auth_channel";
@@ -111,6 +112,7 @@ public static class PresenceReader
         if (!stored.Contains(typeof(Tenant))) return [];
         IReadOnlyList<Tenant> tenants;
         IReadOnlyList<ApiKeyDocument> keys = [];
+        var at = DateTime.UtcNow;
         await using (var q = store.QuerySession())
         {
             tenants = await q.Query<Tenant>().ToListAsync(ct);
@@ -140,10 +142,19 @@ public static class PresenceReader
             var roles = set.Materialize(t.Roles).Select(r => new PresenceRoleFact(r.Slug, r.CatalogSlug)).ToList();
             facts.Add(new(t.Id, t.OwnerUserId, false, t.AuthChannel, set, roles, set.TenantAuthored.Count, themes, plans,
                 [.. bindings.OrderBy(b => b.Id, StringComparer.Ordinal).Select(b => new PresenceBindingFact(b.Id, b.ProviderSlug))],
-                keys.Count(k => string.Equals(k.TenantSlug, t.Id, StringComparison.Ordinal))));
+                ApiKeysOf(keys, t.Id, at)));
         }
         return facts;
     }
+
+    /// <summary>
+    /// <para><b>مَفاتيحُ المَتجَرِ الَّتي يَقبَلُها الاعتِمادُ عِندَ لَحظَةِ القِراءَة</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثانِيَة · W13-6·D-R2·١ — M6D-CNT-R2-1) — دالَّةٌ
+    /// نَقِيَّة: مِفتاحٌ لِهذا المَتجَرِ و<see cref="ApiKeyDocument.IsUsableAt"/> عِندَ <paramref name="at"/>، المَحمولُ نَفسُه الَّذي يَرُدُّ بِه <c>ApiKeyService.AuthenticateAsync</c>.
+    /// كانَ <see cref="ReadAsync"/> يَعُدُّ بِالحالِ وَحدَها، فَيَدخُلُ المُنتَهي — وتَصدُرُ المَفاتيحُ بِمُهلَةٍ مِن الاستوديو (<c>expires_in_days</c>) ولا شَيءَ يُبطِلُها
+    /// عِندَ انتِهائِها — <c>presence.api_key</c> كُلَّ يَومٍ بَعدَ أَن صارَ لا يَفتَحُ باباً. وتَرشيحُ الحالِ في الاستِعلامِ باقٍ تَقليلاً لِما يُقرَأ، والحُكمُ هُنا.</para>
+    /// </summary>
+    public static int ApiKeysOf(IEnumerable<ApiKeyDocument> keys, string slug, DateTime at)
+        => keys.Count(k => string.Equals(k.TenantSlug, slug, StringComparison.Ordinal) && k.IsUsableAt(at));
 
     /// <summary>
     /// <para><b>أَيُّ هذه الأَنواعِ لَه جَدوَل؟</b> (‏2026-11-13، W13-6·D-R1·٣) — اسمُ جَدوَلِ كُلِّ نَوعٍ مِن تَعيينِ Marten نَفسِه (<c>FindOrResolveDocumentType</c>، لا نُسخَةٌ

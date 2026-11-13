@@ -131,6 +131,17 @@ public sealed class ApiKeyDocument
     public Guid IssuedByStudioUserId { get; set; }
 
     public bool HasScope(string scope) => Scopes.Contains(scope, StringComparer.Ordinal);
+
+    /// <summary>
+    /// <para><b>أَصالِحٌ هذا المِفتاحُ عِندَ هذه اللَحظَة؟</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثانِيَة · W13-6·D-R2·١ — M6D-CNT-R2-1؛ ADR-051 §٢٣): نَشِطٌ
+    /// (<see cref="Status"/> = <see cref="StatusActive"/>) ولَم يَنتَهِ (<see cref="ExpiresAt"/> غائِبٌ أَو بَعدَ <paramref name="at"/>) — دالَّةٌ نَقِيَّةٌ واحِدَةٌ يَرُدُّ بِها
+    /// الاعتِمادُ (<c>ApiKeyService.AuthenticateAsync</c>) ويَعُدُّ بِها قارِئُ الحُضورِ (<c>PresenceReader.ApiKeysOf</c>، وَحدَةُ <c>presence.api_key</c>).</para>
+    /// <para><b>لِماذا دالَّةٌ عَلى الوَثيقَة</b>: لا شَيءَ يَنقُلُ المِفتاحَ المُنتَهِيَ عَن <c>active</c> (كاتِبُ <see cref="StatusRevoked"/> الوَحيدُ الإبطال)، فَكانَ القارِئُ
+    /// يَسأَلُ الحالَ وَحدَها ويَعُدُّ المُنتَهِيَ حاضِراً كُلَّ يَومٍ والمَنَصَّةُ تَرُدُّه. سُؤالانِ في مَوضِعَينِ يَنجَرِفان؛ وسُؤالٌ واحِدٌ يُجيبُ الاثنَين.
+    /// والحَدُّ حَدُّ الاعتِمادِ بِحَرفِه: انتِهاءٌ يُساوي اللَحظَةَ مُنتَهٍ.</para>
+    /// </summary>
+    public bool IsUsableAt(DateTime at)
+        => string.Equals(Status, StatusActive, StringComparison.Ordinal) && (ExpiresAt is not { } expires || expires > at);
 }
 
 /// <summary>

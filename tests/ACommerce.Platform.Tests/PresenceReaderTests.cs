@@ -1,6 +1,7 @@
 using ACommerce.Kit.Roles;
 using ACommerce.Platform.Providers;
 using ACommerce.Platform.Shared.Metering;
+using ACommerce.Templates.Customer.Marketplace.Services.Api;
 using ACommerce.Templates.Customer.Marketplace.Services.Metering;
 using Xunit;
 using Xunit.Abstractions;
@@ -159,5 +160,50 @@ public class PresenceReaderTests(ITestOutputHelper output)
         Assert.StartsWith("[meter] presence day=2026-11-13 claimed=true stores=3 suspended=1 entries=14 (presence.api_key 1 · presence.auth_channel 2 · ", won, StringComparison.Ordinal);
         Assert.EndsWith(" unresolved=store-a:cache:ghost_cache", won, StringComparison.Ordinal);
         Assert.Equal("[meter] presence day=2026-11-13 claimed=false stores=3 suspended=1 entries=0", lost);
+    }
+
+    // ─── مَفاتيحُ API: يُعَدُّ ما يَقبَلُه الاعتِمادُ لا ما حالُه «active» (‏2026-11-13، W13-6·D-R2·١ — M6D-CNT-R2-1) ───────────────────────
+
+    private static readonly DateTime At = new(2026, 11, 13, 9, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>مَفاتيحُ مَتجَرٍ بِكُلِّ حالٍ وانتِهاء، ومِفتاحٌ نَشِطٌ لِمَتجَرٍ آخَر.</summary>
+    private static readonly (string Name, ApiKeyDocument Key, bool Usable)[] Keys =
+    [
+        ("نَشِطٌ بِلا انتِهاء", new() { Id = "k1", TenantSlug = "store-a", Status = ApiKeyDocument.StatusActive }, true),
+        ("نَشِطٌ يَنتَهي بَعدَ اللَحظَةِ بِنَبضَة", new() { Id = "k2", TenantSlug = "store-a", Status = ApiKeyDocument.StatusActive, ExpiresAt = At.AddTicks(1) }, true),
+        ("نَشِطٌ يَنتَهي عِندَ اللَحظَة", new() { Id = "k3", TenantSlug = "store-a", Status = ApiKeyDocument.StatusActive, ExpiresAt = At }, false),
+        ("نَشِطٌ انتَهى قَبلَ يَوم", new() { Id = "k4", TenantSlug = "store-a", Status = ApiKeyDocument.StatusActive, ExpiresAt = At.AddDays(-1) }, false),
+        ("مُبطَلٌ بِلا انتِهاء", new() { Id = "k5", TenantSlug = "store-a", Status = ApiKeyDocument.StatusRevoked }, false),
+        ("مُبطَلٌ يَنتَهي غَداً", new() { Id = "k6", TenantSlug = "store-a", Status = ApiKeyDocument.StatusRevoked, ExpiresAt = At.AddDays(1) }, false),
+        ("نَشِطٌ لِمَتجَرٍ آخَر", new() { Id = "k7", TenantSlug = "store-b", Status = ApiKeyDocument.StatusActive }, true),
+    ];
+
+    /// <summary><c>IsUsableAt</c> بِحَدِّ الاعتِمادِ بِحَرفِه (<c>ExpiresAt &lt;= now</c> ⇐ مُنتَهٍ): المُساوي لِلَّحظَةِ مُنتَهٍ، وما بَعدَها بِنَبضَةٍ صالِح، والمُبطَلُ لا يُنقِذُه انتِهاءٌ بَعيد.</summary>
+    [Fact]
+    public void A_key_is_usable_when_active_and_not_expired_at_the_instant_and_the_boundary_is_the_authenticators()
+    {
+        foreach (var (name, key, usable) in Keys)
+        {
+            output.WriteLine($"[G12·keys] {name}: IsUsableAt={key.IsUsableAt(At)} (المُثَبَّت {usable})");
+            Assert.Equal(usable, key.IsUsableAt(At));
+        }
+        Assert.True(Keys.Length >= 7, $"أَداةٌ عَمياء: {Keys.Length} مِفتاحاً.");
+    }
+
+    /// <summary>مِفتاحا «أ» الصالِحانِ وَحدَهُما يُعَدّان — والسُؤالُ القَديمُ (الحالُ وَحدَها) كانَ يَعُدُّ أَربَعَة، فَالفَرقُ المُنتَهِيانِ النَشِطان.</summary>
+    [Fact]
+    public void Only_the_keys_the_authenticator_accepts_at_the_read_instant_are_counted_for_their_store()
+    {
+        var keys = Keys.Select(k => k.Key).ToList();
+        var counted = PresenceReader.ApiKeysOf(keys, "store-a", At);
+        var other = PresenceReader.ApiKeysOf(keys, "store-b", At);
+        var statusOnly = keys.Count(k => k.TenantSlug == "store-a" && k.Status == ApiKeyDocument.StatusActive);
+        var later = PresenceReader.ApiKeysOf(keys, "store-a", At.AddTicks(1));
+        output.WriteLine($"[G12·keys] store-a: يُعَدّ {counted} · بِالحالِ وَحدَها {statusOnly} · بَعدَ اللَحظَةِ بِنَبضَة {later} · store-b {other}");
+        Assert.Equal(2, counted);
+        Assert.Equal(4, statusOnly);
+        Assert.Equal(1, later);
+        Assert.Equal(1, other);
+        Assert.Equal(0, PresenceReader.ApiKeysOf(keys, "store-z", At));
     }
 }

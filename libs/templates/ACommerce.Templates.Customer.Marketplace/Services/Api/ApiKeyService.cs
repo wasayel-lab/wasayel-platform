@@ -160,11 +160,11 @@ public class ApiKeyService
                 Encoding.UTF8.GetBytes(Sha256Hex(secret))))
             return new(null, ApiKeyRejection.SecretMismatch);
 
-        if (!string.Equals(doc.Status, ApiKeyDocument.StatusActive, StringComparison.Ordinal))
-            return new(null, ApiKeyRejection.Revoked);
-
-        if (doc.ExpiresAt is { } exp && exp <= DateTime.UtcNow)
-            return new(null, ApiKeyRejection.Expired);
+        // ‏(‏2026-11-13، W13-6·D-R2·١ — M6D-CNT-R2-1) «صالِحٌ الآن» سُؤالٌ واحِدٌ عَلى الوَثيقَة يَسأَلُه قارِئُ الحُضورِ نَفسُه؛ وسَبَبُ الرَفضِ كَما كان:
+        // غَيرُ النَشِطِ مُبطَلٌ ولَو انتَهى، والنَشِطُ المُنتَهي مُنتَهٍ (تَوصيفُه ApiKeyAuthenticateRefusalCharacterizationTests).
+        if (!doc.IsUsableAt(DateTime.UtcNow))
+            return new(null, string.Equals(doc.Status, ApiKeyDocument.StatusActive, StringComparison.Ordinal)
+                ? ApiKeyRejection.Expired : ApiKeyRejection.Revoked);
 
         if (string.IsNullOrWhiteSpace(doc.TenantSlug))
             return new(null, ApiKeyRejection.TenantGone);
