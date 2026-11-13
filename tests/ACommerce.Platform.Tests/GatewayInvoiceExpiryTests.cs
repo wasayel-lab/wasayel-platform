@@ -228,6 +228,34 @@ public class GatewayInvoiceExpiryTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// <para><b>صُندوقٌ صادِرٌ مُعامَلاتِيٌّ واحِدٌ في المُستَودَع، ويَحمِلُ غَدَ لَقطَةِ الحُضور</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثانِيَة · W13-6·D-R2·٢ — M6D-RULES-R2-1؛
+    /// ADR-046 وسَطرُه المُؤَرَّخ): عَدُّ <c>ScheduleAsync(</c> أَعلاه أَعمى عَن الصُندوق — <c>PresenceSnapshot.CarryAsync</c> يَبلُغُه عَبرَ <c>ScheduleDayAsync</c> نَفسِها، فَمَوضِعُ
+    /// <c>new MartenOutbox(</c> ثانٍ في أَيِّ مِلَفٍّ كانَ يَبقى أَخضَر. فَهُنا يُعَدُّ <c>MartenOutbox</c> في كودِ <c>libs</c> و<c>apps</c> بِلا تَعليق — والاسمُ يَشمَلُ
+    /// <c>IMartenOutbox</c> مَحقوناً، والبِناءُ <c>MartenOutbox(</c> — مَوضِعٌ واحِدٌ في <c>PresenceSnapshot.cs</c>. ومَوضِعٌ ثانٍ (صُندوقٌ لِرِسالَةٍ أُخرى، أَو تَفعيلٌ لِعَقدِ
+    /// التَراسُلِ القَديمِ الَّذي تُسَجِّلُه القاعِدَةُ ١) قَرارٌ يُكتَبُ في ADR-046 قَبلَ أَن يُعَدَّل هذا الصَفّ.</para>
+    /// </summary>
+    [Fact]
+    public void The_one_transactional_outbox_site_in_the_repo_carries_tomorrows_presence_snapshot()
+    {
+        var root = RepoRoot();
+        var sep = Path.DirectorySeparatorChar;
+        var files = new[] { "libs", "apps" }.SelectMany(d => Directory.EnumerateFiles(Path.Combine(root, d), "*.cs", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{sep}bin{sep}") && !f.Contains($"{sep}obj{sep}"))
+            .ToArray();
+        var code = files.Select(f => (Name: Path.GetRelativePath(root, f), Code: WriteEndpointGuardTests.StripComments(File.ReadAllText(f)))).ToArray();
+        var sites = code.Select(f => (f.Name, Built: f.Code.Split("MartenOutbox(").Length - 1, Named: f.Code.Split("MartenOutbox").Length - 1))
+            .Where(f => f.Named > 0)
+            .ToArray();
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files.Length} (libs + apps) · مَواضِعُ MartenOutbox: {sites.Sum(s => s.Named)} (بِناء {sites.Sum(s => s.Built)}) · في: "
+                         + string.Join(", ", sites.Select(s => $"{s.Name} ×{s.Named}")));
+        Assert.True(files.Length >= 200, $"أَداةٌ عَمياء: {files.Length} مِلَفّاً.");
+        var site = Assert.Single(sites);
+        Assert.Equal("PresenceSnapshot.cs", Path.GetFileName(site.Name));
+        Assert.Equal((1, 1), (site.Built, site.Named));
+        Assert.Contains("new MartenOutbox(runtime, session)", code.Single(f => f.Name == site.Name).Code, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <para><b>ساعَةُ المُهلَةِ مِن إنشاءِ الفاتورَةِ عِندَ إتمامِ الشِراء، والقَبولُ لا يُحَرِّكُها</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO1 — المُرَحَّلُ [S3·٢]؛ <b>بِلا تَغييرِ
     /// سُلوك</b>): صَفُّ ساعَةٍ في CI يَجمَعُ ما كانَ مُفَرَّقاً بَينَ صَفَّين — <c>GatewayPaymentConfirmTests</c> يُثَبِّتُ ‏24 ساعَةً والتاريخَ المَكتوبَ بِلا حافِلَة، وصَفُّ الجَدوَلَةِ أَعلاه
     /// يُثَبِّتُ وَقتَ الرِسالَةِ = <c>Opened + InvoiceLifetime</c> بِالثابِتِ نَفسِه (فَيَمُرُّ لَو صارَ ‏48). هُنا بِحَرفِها: الفَتحُ ‏2026-10-29 ‏08:00Z ⇒ <c>expired_at</c> إلى ميسر
