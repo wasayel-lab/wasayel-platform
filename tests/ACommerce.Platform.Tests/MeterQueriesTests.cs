@@ -132,6 +132,50 @@ public class MeterQueriesTests(ITestOutputHelper output)
         Assert.Equal(0L, MeterReading.Failed(MeterReadState.Error).Entries());
     }
 
+    /// <summary>
+    /// <para><b>سُطورُ جانِبِ التِقنِيَةِ لا تَدخُلُ أَرقامَ التَشغيل</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·١ — M6D-SEC-R1-1 وM6D-CNT-2 وM6D-RULES-R1-1؛
+    /// ADR-051 §٢ و§٢٣): لَقطَةُ الحُضورِ تَكتُبُ في الجَدوَلِ نَفسِه سُطوراً دَورُها <c>_system</c> (أَو الدَورُ المَعدودُ لِسَطرِ الدَور) — فَالمَجموعُ والذَيلُ والأَيّامُ
+    /// والمَتاجِرُ والبُعدانِ و<c>_unresolved</c> و<c>_seed</c> هِيَ هِيَ بِها وبِدونِها، ومَتجَرٌ لا سَطرَ لَه إلّا الحُضورُ لا يُدرَجُ تَحتَ العَمَلِيّات.</para>
+    /// </summary>
+    [Fact]
+    public void Technology_rows_never_enter_the_operations_totals_dimensions_days_or_store_list()
+    {
+        var plain = Sample();
+        var mixed = plain with
+        {
+            Rows =
+            [
+                .. plain.Rows,
+                new("2026-11-12", "a", "e1", MeterSentinels.SystemJob, "tenants", "_none", "presence.store", 1, 1, 1),
+                new("2026-11-12", "a", "e1", "vendor", "roles", "_none", "presence.role", 1, 1, 1),
+                new("2026-11-10", "a", MeterSentinels.Unresolved, MeterSentinels.Seed, "auth", "_none", "presence.auth_channel", 1, 1, 0),
+                new("2026-11-12", "idle", MeterSentinels.Unowned, MeterSentinels.SystemJob, "tenants", "_none", "presence.store", 1, 1, 1),
+            ],
+        };
+        output.WriteLine($"[queries] بِلا حُضور: a {plain.Entries("a")} (ذَيل {plain.TailEntries("a")}) · المَتاجِر [{string.Join(", ", plain.Apps())}] · أَيّامُ a [{string.Join(", ", plain.Days("a"))}] — "
+                         + $"بِالحُضور: a {mixed.Entries("a")} (ذَيل {mixed.TailEntries("a")}) · المَتاجِر [{string.Join(", ", mixed.Apps())}] · أَيّامُ a [{string.Join(", ", mixed.Days("a"))}] · "
+                         + $"الدَور «{string.Join(" · ", mixed.By(x => x.Role, "a").Select(v => $"{v.Value} {v.Entries}"))}» · idle {mixed.Entries("idle")}");
+        Assert.Equal(plain.Entries("a"), mixed.Entries("a"));
+        Assert.Equal(plain.Entries(), mixed.Entries());
+        Assert.Equal(plain.Entries("a", day: "2026-11-12"), mixed.Entries("a", day: "2026-11-12"));
+        Assert.Equal(0L, mixed.Entries("a", "presence.store"));
+        Assert.Equal(plain.TailEntries("a"), mixed.TailEntries("a"));
+        Assert.Equal(plain.TailEntries(), mixed.TailEntries());
+        Assert.Equal(plain.Apps(), mixed.Apps());
+        Assert.DoesNotContain("idle", mixed.Apps());
+        Assert.Equal(0L, mixed.Entries("idle"));
+        Assert.Empty(mixed.Days("idle"));
+        Assert.Equal(plain.Days("a"), mixed.Days("a"));
+        Assert.Equal(plain.Days(), mixed.Days());
+        Assert.Equal(plain.By(x => x.Role, "a"), mixed.By(x => x.Role, "a"));
+        Assert.Equal(plain.By(x => x.Entrepreneur, "a"), mixed.By(x => x.Entrepreneur, "a"));
+        Assert.DoesNotContain(mixed.By(x => x.Role), v => v.Value == MeterSentinels.SystemJob);
+        Assert.Equal(plain.Unresolved("a"), mixed.Unresolved("a"));
+        Assert.Equal(plain.Seed("a"), mixed.Seed("a"));
+        Assert.Equal(mixed.Entries("a"), mixed.Operations("a").Sum(o => o.Entries));
+        Assert.True(MeterReading.IsOperation("deal.create") && MeterReading.IsOperation("zz.unknown") && !MeterReading.IsOperation("presence.store"));
+    }
+
     /// <summary><b>ولا عُضوَ في قارِئِ العَدِّ يُسَمّي سِعراً</b> (القاعِدَة ١٦ — هذه المَوجَةُ عَدٌّ وَحدَه؛ الحارِسُ G2 نَفسُه بِمُعجَمِه عَلى أَنواعِ القارِئ).</summary>
     [Fact]
     public void No_member_of_the_meter_reader_names_a_price()

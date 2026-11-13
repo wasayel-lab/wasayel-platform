@@ -25,43 +25,54 @@ public sealed record MeterReading(
 {
     public static MeterReading Failed(MeterReadState state) => new(state, "", "", false, null, []);
 
-    /// <summary>عَدَدُ السُطورِ (العَمَلِيّات) بِشَرطٍ اختِيارِيٍّ عَلى المَتجَرِ والوَحدَةِ واليَوم.</summary>
+    /// <summary>
+    /// <para><b>أَسَطرُ جانِبِ التَشغيلِ هذا؟</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·١ — M6D-SEC-R1-1 وM6D-CNT-2 وM6D-RULES-R1-1؛ ADR-051 §٢ و§٢٣):
+    /// كُلُّ وَحدَةٍ لا يُعلِنُ المُعجَمُ أَنّها حُضورٌ (<see cref="MeterSides.Technology"/>) — ووَحدَةٌ لا يَعرِفُها المُعجَمُ تُعَدُّ مِنه وتُعرَضُ بِرَمزِها ولا تُبتَلَع.</para>
+    /// <para><b>ولِماذا هُنا لا في الجُملَة</b>: الجانِبانِ في جَدوَلٍ واحِدٍ (التَصميم §1)، وصَفحَةُ المَتجَرِ سَتَعرِضُ الحُضورَ في قِسمِه مِن القِراءَةِ نَفسِها (البَند ٢٠) — فَالسُطورُ
+    /// (<see cref="Rows"/>) تَحمِلُ الجانِبَين، وكُلُّ دالَّةٍ هُنا تَقرَأُ جانِبَ التَشغيلِ وَحدَه بِهذا المِرشَحِ الواحِد. كانَت سَبعٌ مِنها عَمياءَ عَن الجانِب، فَلَمّا كَتَبَت
+    /// لَقطَةُ الحُضورِ (<c>6c7cae5</c>) دَخَلَت سُطورُها مَجموعَ التَشغيلِ ولَوحَتَي الدَورِ ورائِدِ الأَعمالِ وقائِمَةَ الفِهرِس.</para>
+    /// </summary>
+    public static bool IsOperation(string unit) => MeterUnitCatalog.Default.Find(unit)?.Side != MeterSides.Technology;
+
+    /// <summary>سُطورُ جانِبِ التَشغيلِ (<see cref="IsOperation"/>) — ما تَقرَؤُه كُلُّ دالَّةٍ أَدناه.</summary>
+    private IEnumerable<MeterCountRow> OperationRows => Rows.Where(r => IsOperation(r.Unit));
+
+    /// <summary>عَدَدُ السُطورِ (العَمَلِيّات — جانِبُ التَشغيلِ وَحدَه) بِشَرطٍ اختِيارِيٍّ عَلى المَتجَرِ والوَحدَةِ واليَوم.</summary>
     public long Entries(string? app = null, string? unit = null, string? day = null)
-        => Rows.Where(r => (app is null || r.App == app) && (unit is null || r.Unit == unit) && (day is null || r.Day == day)).Sum(r => r.Entries);
+        => OperationRows.Where(r => (app is null || r.App == app) && (unit is null || r.Unit == unit) && (day is null || r.Day == day)).Sum(r => r.Entries);
 
-    /// <summary>ما جاءَ مِن الذَيلِ الخامّ (فَوقَ المُؤَشِّر) — كُلُّه حينَ لَم يَعمَلِ المُجَمِّع.</summary>
-    public long TailEntries(string? app = null) => Rows.Where(r => app is null || r.App == app).Sum(r => r.Tail);
+    /// <summary>ما جاءَ مِن الذَيلِ الخامّ (فَوقَ المُؤَشِّر) مِن جانِبِ التَشغيل — كُلُّه حينَ لَم يَعمَلِ المُجَمِّع.</summary>
+    public long TailEntries(string? app = null) => OperationRows.Where(r => app is null || r.App == app).Sum(r => r.Tail);
 
-    /// <summary>المَتاجِرُ في النافِذَة، مُرَتَّبَة.</summary>
-    public IReadOnlyList<string> Apps() => Rows.Select(r => r.App).Distinct().Order(StringComparer.Ordinal).ToList();
+    /// <summary>المَتاجِرُ في النافِذَةِ الَّتي لَها سَطرُ تَشغيل، مُرَتَّبَة — فَمَتجَرٌ لا سَطرَ لَه إلّا الحُضورُ لا يُدرَجُ تَحتَ عُنوانِ العَمَلِيّات.</summary>
+    public IReadOnlyList<string> Apps() => OperationRows.Select(r => r.App).Distinct().Order(StringComparer.Ordinal).ToList();
 
-    /// <summary>الأَيّامُ في النافِذَة، الأَحدَثُ أَوَّلاً (<c>YYYY-MM-DD</c> يُرَتَّبُ حَرفِيّاً كَما يُرَتَّبُ زَمَنِيّاً).</summary>
+    /// <summary>أَيّامُ التَشغيلِ في النافِذَة، الأَحدَثُ أَوَّلاً (<c>YYYY-MM-DD</c> يُرَتَّبُ حَرفِيّاً كَما يُرَتَّبُ زَمَنِيّاً).</summary>
     public IReadOnlyList<string> Days(string? app = null)
-        => Rows.Where(r => app is null || r.App == app).Select(r => r.Day).Distinct().OrderDescending(StringComparer.Ordinal).ToList();
+        => OperationRows.Where(r => app is null || r.App == app).Select(r => r.Day).Distinct().OrderDescending(StringComparer.Ordinal).ToList();
 
     /// <summary>
     /// <b>وَحَداتُ جانِبِ التَشغيلِ</b> (العَمَلِيّات) بِعَدَدِها — والجانِبانِ لا يَختَلِطان (ADR-051 §٢): وَحدَةٌ يُعلِنُ المُعجَمُ أَنّها حُضورٌ
     /// (<see cref="MeterSides.Technology"/>) لا تُعَدُّ هُنا أَبَداً. ووَحدَةٌ لا يَعرِفُها المُعجَمُ تُعرَضُ بِرَمزِها ولا تُبتَلَع.
     /// </summary>
     public IReadOnlyList<(string Unit, long Entries)> Operations(string? app = null, string? day = null)
-        => Rows.Where(r => (app is null || r.App == app) && (day is null || r.Day == day)
-                           && MeterUnitCatalog.Default.Find(r.Unit)?.Side != MeterSides.Technology)
+        => OperationRows.Where(r => (app is null || r.App == app) && (day is null || r.Day == day))
                .GroupBy(r => r.Unit, StringComparer.Ordinal)
                .Select(g => (g.Key, g.Sum(r => r.Entries)))
                .OrderBy(u => u.Key, StringComparer.Ordinal).ToList();
 
-    /// <summary>سُطورٌ لَم يُعرَف أَحَدُ بُعدَيها (الدَور أَو رائِدُ الأَعمال) — <see cref="MeterSentinels.Unresolved"/>: تُعَدُّ وتُعرَضُ ولا تُخفى.</summary>
+    /// <summary>سُطورُ تَشغيلٍ لَم يُعرَف أَحَدُ بُعدَيها (الدَور أَو رائِدُ الأَعمال) — <see cref="MeterSentinels.Unresolved"/>: تُعَدُّ وتُعرَضُ ولا تُخفى.</summary>
     public long Unresolved(string? app = null)
-        => Rows.Where(r => (app is null || r.App == app)
-                           && (r.Role == MeterSentinels.Unresolved || r.Entrepreneur == MeterSentinels.Unresolved)).Sum(r => r.Entries);
+        => OperationRows.Where(r => (app is null || r.App == app)
+                                    && (r.Role == MeterSentinels.Unresolved || r.Entrepreneur == MeterSentinels.Unresolved)).Sum(r => r.Entries);
 
-    /// <summary>سُطورُ البَذر (<see cref="MeterSentinels.Seed"/>) — تُطبَعُ بَعيداً عَن غَيرِها.</summary>
+    /// <summary>سُطورُ البَذرِ مِن جانِبِ التَشغيل (<see cref="MeterSentinels.Seed"/>) — تُطبَعُ بَعيداً عَن غَيرِها.</summary>
     public long Seed(string? app = null)
-        => Rows.Where(r => (app is null || r.App == app) && r.Role == MeterSentinels.Seed).Sum(r => r.Entries);
+        => OperationRows.Where(r => (app is null || r.App == app) && r.Role == MeterSentinels.Seed).Sum(r => r.Entries);
 
-    /// <summary>بُعدٌ واحِدٌ بِعَدَدِه (رائِدُ الأَعمال، أَو الدَور …) — لِمَتجَرٍ في نافِذَتِه.</summary>
+    /// <summary>بُعدٌ واحِدٌ بِعَدَدِ عَمَلِيّاتِه (رائِدُ الأَعمال، أَو الدَور …) — لِمَتجَرٍ في نافِذَتِه؛ فَدَورُ سَطرِ الحُضورِ (<c>_system</c> أَو الدَورُ المَعدود) لا يَدخُلُه.</summary>
     public IReadOnlyList<(string Value, long Entries)> By(Func<MeterCountRow, string> dimension, string? app = null)
-        => Rows.Where(r => app is null || r.App == app)
+        => OperationRows.Where(r => app is null || r.App == app)
                .GroupBy(dimension, StringComparer.Ordinal)
                .Select(g => (g.Key, g.Sum(r => r.Entries)))
                .OrderByDescending(v => v.Item2).ThenBy(v => v.Key, StringComparer.Ordinal).ToList();

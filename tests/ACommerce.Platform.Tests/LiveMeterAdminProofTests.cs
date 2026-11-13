@@ -427,4 +427,85 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
         Assert.Equal(3, lines.All.Length);                                  // ‏سَطرٌ لِكُلِّ قِراءَة: المُباشِرَةُ والصَفحَتان
         Assert.All(lines.All, x => Assert.Contains(MeterQueries.LogTag, x, StringComparison.Ordinal));
     }
+
+    // ─── (٦) جانِبُ التِقنِيَةِ في الجَدوَلِ نَفسِه: لا يَدخُلُ مَجموعَ التَشغيلِ ولا بُعدَيه ولا قائِمَةَ الفِهرِس ─────────────────────────
+    // (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·١ — M6D-SEC-R1-1 وM6D-CNT-2 وM6D-RULES-R1-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ). لَقطَةُ الحُضورِ تَكتُبُ
+    // سُطورَ `presence.*` بِدَورِ `_system` (أَو الدَورِ المَعدودِ لِسَطرِ الدَور) عِندَ بِدايَةِ اليَوم؛ والصُفوفُ أَعلاه بِلا سَطرِ حُضور، فَكانَت عَمياءَ عَن الخَلط.
+
+    private const string Idle = "mq-idle";
+
+    /// <summary>سَطرُ حُضورٍ بِشَكلِ سَطرِ اللَقطَة (<c>MeterSql.PresenceInsert</c>): عِندَ بِدايَةِ يَومِ الرِياض، والمَصدَرُ المَتجَر.</summary>
+    private static Task PresenceAsync(Ledger l, string app, string unit, string role, string entrepreneur)
+        => ExecAsync(l.Cs,
+            "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, generation, occurred_at) "
+            + $"values ('{unit}:{app}:' || gen_random_uuid(), '{unit}', 1, '{app}', '{entrepreneur}', '{role}', 'tenants', '_none', 'tenant', '{app}', "
+            + $"(select max(generation) from meter.generation), {DayStart(0)})");
+
+    /// <summary>مَجموعُ <c>data-entries</c> لِبَلاطاتِ الوَحَداتِ تَحتَ <c>data-meter-total</c> — مِنها حَتّى بَلاطَةِ <c>_unresolved</c>/<c>_seed</c>.</summary>
+    private static long TileSum(string html)
+    {
+        var from = html.IndexOf("data-meter-total=", StringComparison.Ordinal);
+        var to = from < 0 ? -1 : html.IndexOf("data-meter-unresolved=", from, StringComparison.Ordinal);
+        if (to < 0) return -1;
+        return Regex.Matches(html[from..to], @"data-meter-unit=""[^""]+"" data-entries=""(?<n>\d+)""").Sum(m => long.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task Presence_rows_never_enter_the_operations_total_its_dimensions_or_the_store_list()
+    {
+        if (!Enabled) return;
+        await using var l = await Ledger.CreateAsync(output, boot: true);
+        await EntriesAsync(l, App, 2, "transaction_timestamp()");
+        await PresenceAsync(l, App, "presence.store", MeterSentinels.SystemJob, $"owner-{App}");
+        await PresenceAsync(l, App, "presence.role", "vendor", $"owner-{App}");
+        await PresenceAsync(l, App, "presence.auth_channel", MeterSentinels.SystemJob, $"owner-{App}");
+        await PresenceAsync(l, Idle, "presence.store", MeterSentinels.SystemJob, MeterSentinels.Unowned);
+        var sides = await TextAsync(l.Cs, "select string_agg(app || ' ' || unit || ' ' || n, ' · ' order by app, unit) from (select app, unit, count(*) n from meter.usage_entry group by app, unit) t");
+        var lines = new Lines();
+        var q = new MeterQueries(l.Store, lines);
+        var store = await q.StoreAsync(App);
+        var idle = await q.StoreAsync(Idle);
+        var today = await q.TodayAsync();
+        string Dim(MeterReading r, Func<MeterCountRow, string> d, string app) => string.Join(",", r.By(d, app).Select(v => $"{v.Value}={v.Entries}"));
+        output.WriteLine($"[G11·F] الدَفتَر «{sides}» · السُطورُ المَقروءَةُ لِـ{App} {store.Rows.Count(r => r.App == App)} (حُضور {store.Rows.Count(r => r.App == App && !MeterReading.IsOperation(r.Unit))}) — "
+                         + $"المَجموع {store.Entries(App)} · الذَيل {store.TailEntries(App)} · الدَور «{Dim(store, r => r.Role, App)}» · رائِدُ الأَعمال «{Dim(store, r => r.Entrepreneur, App)}» · "
+                         + $"الأَيّام [{string.Join(", ", store.Days(App))}] · {Idle} {idle.Entries(Idle)} · مَتاجِرُ الفِهرِس [{string.Join(", ", today.Apps())}]");
+        // ‏القِراءَةُ تَحمِلُ الجانِبَين (قِسمُ الحُضورِ يَقرَؤُها في البَند ٢٠)، والدَوالُّ تَعُدُّ التَشغيلَ وَحدَه.
+        Assert.Equal(3, store.Rows.Count(r => r.App == App && !MeterReading.IsOperation(r.Unit)));
+        Assert.Equal(2L, store.Entries(App));
+        Assert.Equal(2L, store.TailEntries(App));
+        Assert.Equal(new[] { ("_none", 2L) }, store.By(r => r.Role, App));
+        Assert.Equal(new[] { ($"owner-{App}", 2L) }, store.By(r => r.Entrepreneur, App));
+        Assert.Single(store.Days(App));
+        Assert.Equal(0L, idle.Entries(Idle));
+        Assert.Equal(new[] { App }, today.Apps());
+        Assert.Empty(lines.All);
+
+        var admin = default(Probe);
+        await using var host = HostReading(l.Store, lines);
+        try
+        {
+            admin = await UserAsync(host, consented: false, platformAdmin: true);
+            var page = await StorePageAsync(host, admin.Token, App);
+            var idlePage = await StorePageAsync(host, admin.Token, Idle);
+            var index = await IndexPageAsync(host, admin.Token);
+            output.WriteLine($"[G11·F] صَفحَةُ {App}: المَجموع «{Attr(page, "data-meter-total")}» · مَجموعُ البَلاطات {TileSum(page)} · الوَحَدات «{Attr(page, "data-meter-unit")}» · "
+                             + $"الأَدوار «{Attr(page, "data-meter-role")}» · رُوّادُ الأَعمال «{Attr(page, "data-meter-entrepreneur")}» · الأَيّام «{Attr(page, "data-meter-day")}» — "
+                             + $"صَفحَةُ {Idle}: المَجموع «{Attr(idlePage, "data-meter-total")}» · «لا عَمَلِيّات» {idlePage.Contains(Text("admin.meter.store_empty"), StringComparison.Ordinal)} — "
+                             + $"الفِهرِس: المَتاجِر «{Attr(index, "data-meter-app")}»");
+            Assert.Equal("2", Attr(page, "data-meter-total"));
+            Assert.Equal(2L, TileSum(page));
+            Assert.Equal("deal.create,deal.create", Attr(page, "data-meter-unit"));   // ‏بَلاطَةُ المَجموعِ وشارَةُ يَومِه — لا وَحدَةَ حُضور
+            Assert.Equal("_none", Attr(page, "data-meter-role"));
+            Assert.Equal($"owner-{App}", Attr(page, "data-meter-entrepreneur"));
+            Assert.DoesNotContain($"data-meter-role=\"{MeterSentinels.SystemJob}\"", page, StringComparison.Ordinal);
+            Assert.DoesNotContain("presence.", page, StringComparison.Ordinal);
+            Assert.Equal("0", Attr(idlePage, "data-meter-total"));
+            Assert.Contains(Text("admin.meter.store_empty"), idlePage, StringComparison.Ordinal);
+            Assert.Equal(App, Attr(index, "data-meter-app"));
+            Assert.Equal("1", Attr(index, "data-meter-apps"));
+        }
+        finally { await CleanAsync(host, admin is null ? [] : [admin]); }
+        Assert.Empty(lines.All);
+    }
 }

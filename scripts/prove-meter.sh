@@ -30,6 +30,9 @@
 #  أَرقامَ صَفحَتِه — ويَطبَعُ سُطورَها لِكُلِّ وَحدَةٍ وصُفوفَ الصُندوق؛ و«الدَفتَرُ قَبلَ أَوَّلِ طَلَب» وسَطرُ السَحبِ يُعَدّانِ لِوَحَداتِ جانِبِ التَشغيلِ مِن المُعجَم
 #  (`side`)، والحُضورُ يَطبَعُه المُجَمِّعُ بَعيداً («presence N»).
 #
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصَفٌّ لا يَلتَفُّ عَلى الخَلط**: انتِظارُ P12 يَجعَلُ مَتجَرَ البُرهانِ
+#  بِلا سَطرِ حُضورٍ فَلا يَرى خَلطَ الجانِبَين؛ فَـP12·ب يَقرَأُ صَفحَةَ مَتجَرٍ مَبذورٍ (`ashare`، أَو أَوَّلِ مَتجَرٍ لَه سُطورُ حُضور) **بَعدَ** لَقطَةِ الإقلاع: «المَجموعُ» = سُطورُ
+#  جانِبِ التَشغيلِ في دَفتَرِه = مَجموعُ بَلاطاتِ وَحَداتِه، ولا دَورَ `_system` ولا وَحدَةَ `presence.*` في الصَفحَة — وسُطورُ حُضورِه أَكثَرُ مِن صِفرٍ وإلّا فَالصَفُّ أَعمى.#
 #  **ولا يُشَغَّلُ عَلى الإنتاج**: يُنشِئُ قاعِدَةً ويَحذِفُها عَلى خادِمِ Postgres مَحَلِّيٍّ وَحدَه (المُضيفُ localhost أَو 127.0.0.1 أَو ::1، والاسمُ `wasayel_…`)،
 #  والدُخولُ بِرَمزِ المُحاكي (Development وَحدَه). ولا يُطبَعُ مِن الاتِّصالِ إلّا المُضيفُ واسمُ القاعِدَة.
 #  **والعَدُّ وَحدَه**: لا سِعرَ في هذا المِلَفّ ولا في ما يَقرَؤُه (القاعِدَة ١٦)؛ وقيمَةُ حَقلِ `price` في استِمارَةِ الإعلانِ بَيانُ المَتجَرِ المَطلوب لا رَقَمُ عَدّ.
@@ -358,6 +361,20 @@ P4="$(store_page "$J_ADM")"
 check "$([ "$P4" = "data · absent ·  · 5 · 1" ] && has "$F" "$(ar admin.meter.agg_absent)" && grep -q "data-meter-entrepreneur=\"$OWNER\"" "$F" && echo 1 || echo 0)" \
     "P4 · /admin/meter/stores/$SLUG → «$P4» · «$(ar admin.meter.agg_absent)» · رائِدُ الأَعمالِ $OWNER"
 anonymous P4
+
+# ‏(W13-6·D-R1·١) P12·ب · مَتجَرٌ مَبذورٌ تُقرَأُ صَفحَتُه بَعدَ لَقطَةِ الحُضور: جانِبُ التِقنِيَةِ لا يَدخُلُ «المَجموعَ» ولا لَوحَةَ الدَورِ ولا رائِدَ الأَعمال.
+say "P12·ب · صَفحَةُ مَتجَرٍ مَبذورٍ بَعدَ لَقطَةِ الحُضور"
+tiles() { perl -0777 -ne 'if (/data-meter-total="\d+"(.*?)data-meter-unresolved=/s) { my ($b, $s) = ($1, 0); $s += $1 while $b =~ /data-meter-unit="[^"]+" data-entries="(\d+)"/g; print $s } else { print -1 }' "$F"; }
+SEEDED=ashare
+[ "$(q "select count(*) from meter.usage_entry where app = '$SEEDED' and unit in ($TECH)")" -gt 0 ] \
+    || SEEDED="$(q "select app from meter.usage_entry where unit in ($TECH) group by app order by app limit 1")"
+SP_T="$(q "select count(*) from meter.usage_entry where app = '$SEEDED' and unit in ($TECH)")"
+SP_O="$(q "select count(*) from meter.usage_entry where app = '$SEEDED' and unit in ($OPS)")"
+req "$J_ADM" GET "/admin/meter/stores/$SEEDED"
+SP_TOTAL="$(attr data-meter-total)"; SP_TILES="$(tiles)"; SP_ROLES="$(attr data-meter-role)"
+check "$([ "$CODE" = 200 ] && [ -n "$SEEDED" ] && [ "$SP_T" -gt 0 ] && [ "$SP_TOTAL" = "$SP_O" ] && [ "$SP_TILES" = "$SP_TOTAL" ] \
+         && [[ ",$SP_ROLES," != *",_system,"* ]] && ! grep -q 'data-meter-unit="presence\.' "$F" && echo 1 || echo 0)" \
+    "P12·ب · /admin/meter/stores/$SEEDED → $CODE · المَجموع $SP_TOTAL = سُطورُ التَشغيلِ في دَفتَرِه $SP_O = مَجموعُ البَلاطات $SP_TILES · سُطورُ حُضورِه $SP_T خارِجَه · الأَدوار «$SP_ROLES»"
 
 say "P5 · V1.Meter --once"
 agg_once() { ConnectionStrings__Postgres="$CS" timeout 300 dotnet "$METER_DLL" --once > "$WORK/agg.txt" 2>&1; AGG_EXIT=$?; AGG="$(grep -o '\[meter-agg\] gen .*' "$WORK/agg.txt" | head -1)"; }
