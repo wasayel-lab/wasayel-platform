@@ -62,6 +62,9 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
     private static readonly Regex TypeBefore = new(@"[\w>\]?]\s+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex KeywordBefore = new(@"\b(?:return|await|throw|yield|in|out|ref|is|as|case|when|else|and|or|not|new|nameof)\s+$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-1 — ADR-051 §١٩) **وما يَلي `=>` أَو `??` لَيسَ إعلاناً**: `TypeBefore` يَقرَأُ `>` في `=>`
+    // (و`?` في `??`) حَرفَ نَوع، فَكانَ `private IAmazonS3 Raw => _client;` إعلاناً لا يُعَدّ ويَمُرُّ الاسمُ المُستَعارُ خارِجَ المُستَدعي (مَقيسٌ عِندَ المُراجِع: «Passed 21/21»).
+    private static readonly Regex OperatorBefore = new(@"(?:=>|\?\?)\s*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     internal static Scan Classify(string file, string code, string? field)
     {
@@ -82,7 +85,7 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
                 }
                 if (AssignAfter.Match(s, end).Success) continue;
                 var before = s[Math.Max(0, m.Index - 160)..m.Index];
-                if (DeclarationEndAfter.Match(s, end).Success && TypeBefore.IsMatch(before) && !KeywordBefore.IsMatch(before)) continue;
+                if (DeclarationEndAfter.Match(s, end).Success && TypeBefore.IsMatch(before) && !KeywordBefore.IsMatch(before) && !OperatorBefore.IsMatch(before)) continue;
                 accesses++;
                 escapes++;
                 if (!InsideInvoker(s, m.Index)) outside++;
@@ -248,6 +251,8 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
                      ("!.", "await _client!.ListBucketsAsync(ct);"),
                      ("alias", "var alias = _client; await alias.ListBucketsAsync(ct);"),
                      ("argument", "await Probe(_client, ct);"),
+                     // ‏(‏2026-11-13، M6C-RULES-R2-1) الاسمُ المُستَعارُ بِجِسمِ تَعبير — دالَّةٌ مَحَلِّيَّةٌ في الجِسمِ نَفسِه، كَخاصِّيَّةِ المُراجِعِ `Raw => _client`.
+                     ("=>", "IAmazonS3 Raw() => _client; await Raw().DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), ct);"),
                  })
         {
             var injected = sources.Select(x => x == s3 ? (x.File, x.Code.Replace(delete, inject + "\n        " + delete, StringComparison.Ordinal)) : x).ToList();
@@ -274,6 +279,12 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
     [InlineData("await _calls.HelperAsync(h, t => _c!.GetObjectAsync(k, t), ct);", 1, 0, 0)]
     [InlineData("private readonly IAmazonS3 _c; public A(IAmazonS3 c) { _c = c; } public void Dispose() => _c?.Dispose();", 0, 0, 0)]
     [InlineData("private readonly WebPushClient _c = new(); X() { _c ??= Make(); }", 0, 0, 0)]
+    // ‏(‏2026-11-13، M6C-RULES-R2-1) ما يَلي `=>` أَو `??` اسمٌ مُستَعارٌ لا إعلان؛ والنَوعُ القابِلُ لِلفَراغِ يَبقى إعلاناً.
+    [InlineData("private IAmazonS3 Raw => _c; await Raw.ListBucketsAsync(ct);", 1, 1, 1)]
+    [InlineData("IAmazonS3 Raw() => _c; await Raw().ListBucketsAsync(ct);", 1, 1, 1)]
+    [InlineData("var c = other ?? _c; await c.ListBucketsAsync(ct);", 1, 1, 1)]
+    [InlineData("var c = kind switch { 1 => _c, _ => other };", 1, 1, 1)]
+    [InlineData("private readonly IAmazonS3? _c; public A(IAmazonS3? c) { _c = c; }", 0, 0, 0)]
     public void Every_shape_of_the_field_is_seen(string code, int accesses, int outside, int escapes)
     {
         var scan = Classify("A.cs", code, "_c");
