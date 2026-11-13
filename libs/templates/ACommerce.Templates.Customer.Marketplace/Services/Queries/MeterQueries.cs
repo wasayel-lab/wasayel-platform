@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.Extensions.Logging;
@@ -79,6 +80,37 @@ public sealed record MeterReading(
 }
 
 /// <summary>
+/// <para><b>مَتجَرٌ في صَفحَةِ رائِدِ الأَعمال</b> (‏2026-11-13، الموجَة ١٣ W13-6·٢١ — التَصميم §11، COR-11): سلاجُه (أَو رَمزُ تَطبيقٍ حارِسٌ كَـ<c>_platform</c>)،
+/// واسمُه إن كانَ يَملِكُه الآن، و<see cref="OwnedNow"/>: أَيَملِكُه الآن (مِن <c>Tenant.OwnerUserId</c>)، و<see cref="Entries"/>: عَمَلِيّاتُه فيه المَنسوبَةُ إلَيه
+/// <b>لَحظَةَ الكِتابَة</b> في النافِذَة — فَمَتجَرٌ تَبَنّاه أَو نُقِلَ إلَيه لا تَدخُلُ عَدَّه سُطورُ ما قَبلَ ذلك.</para>
+/// </summary>
+public sealed record MeterOwnerStore(string App, string Name, bool OwnedNow, long Entries);
+
+/// <summary>
+/// <para><b>قِراءَةُ صَفحَةِ رائِدِ الأَعمال</b> (‏2026-11-13، الموجَة ١٣ W13-6·٢١ — التَصميم §11، COR-11؛ ADR-051 القَرارُ ٣): سُؤالانِ مُختَلِفانِ لا يُخلَطان —
+/// <see cref="Reading"/> عَمَلِيّاتٌ <b>نُسِبَت إلَيه لَحظَةَ كِتابَتِها</b> (عَمودُ <c>entrepreneur</c> في الفَرعَين)، و<see cref="OwnedNow"/> المَتاجِرُ الَّتي
+/// <b>يَملِكُها الآن</b> (<c>Tenant</c> بِـ<c>OwnerUserId</c>، بِتَرتيبِ الإنشاء). فَالتَبَنّي (<c>StudioOwnershipSeeder.cs:47-58</c>) والنَقلُ يُغَيِّرانِ الثانِيَ
+/// ولا يُعيدانِ نِسبَةَ الأَوَّل: سُطورُ ما قَبلَهُما تَبقى لِمَن كُتِبَت لَه (<c>_unowned</c> لِيَتيم).</para>
+/// </summary>
+public sealed record MeterOwnerReading(MeterReading Reading, IReadOnlyList<Tenant> OwnedNow)
+{
+    /// <summary>
+    /// <para>مَتاجِرُه الآنَ أَوَّلاً (بِتَرتيبِ الإنشاء)، كُلٌّ بِعَمَلِيّاتِه المَنسوبَةِ إلَيه فيه — وصِفرٌ لِمَتجَرٍ يَملِكُه ولا سَطرَ لَه فيه؛ ثُمَّ ما نُسِبَ إلَيه
+    /// في غَيرِها (مَتجَرٌ نُقِلَ عَنه، أَو <c>_platform</c> لِحِسابِه في الاستوديو) بِتَرتيبِ الرَمز. فَمَجموعُ <see cref="MeterOwnerStore.Entries"/> = عَمَلِيّاتُ
+    /// القِراءَةِ كُلُّها (<see cref="MeterReading.Entries"/>) — جانِبُ التَشغيلِ وَحدَه.</para>
+    /// </summary>
+    public IReadOnlyList<MeterOwnerStore> Stores()
+    {
+        var owned = OwnedNow.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
+        return
+        [
+            .. OwnedNow.Select(t => new MeterOwnerStore(t.Id, t.Name, true, Reading.Entries(t.Id))),
+            .. Reading.Apps().Where(a => !owned.Contains(a)).Select(a => new MeterOwnerStore(a, "", false, Reading.Entries(a))),
+        ];
+    }
+}
+
+/// <summary>
 /// <para><b>قارِئُ صَفحَتَي العَدّ</b> (‏2026-11-12، الموجَة ١٣ W13-6·٥ — ADR-051 §١٣؛ التَصميم §11، RULES-12 وCOR-13): <c>/admin/meter</c> و
 /// <c>/admin/meter/stores/{slug}</c> خَلفَ <c>RequirePlatformAdmin</c>.</para>
 /// <para><b>المَجموعُ حَتّى المُؤَشِّرِ والذَيلُ الخامُّ بَعدَه، داخِلَ نافِذَةِ الصَفحَة</b>: <c>meter.agg_daily</c> لِما جَمَعَه المُجَمِّعُ
@@ -94,6 +126,10 @@ public sealed record MeterReading(
 /// سَطراً واحِداً <c>[meter-page]</c> ويُرسَمُ بِطاقَةَ خَطَأ — لا ‏500 أَبَداً (نَمَطُ <see cref="PlatformBillingQueries"/>، ولا يَبتَلِعُ بِلا أَثَر).</para>
 /// <para><b>قِراءَةٌ لا كِتابَة</b>: لا جُملَةَ هُنا تَكتُبُ جَدوَلاً (G10، <c>MeterIndependenceTests</c>)، ولا جَلسَةَ Marten — اتِّصالٌ خامٌّ مِن مَخزَنِه
 /// كَما في <c>MeterBoot</c>.</para>
+/// <para><b>وصَفحَةُ رائِدِ الأَعمال</b> (‏2026-11-13، W13-6·٢١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <c>/admin/meter/owners/{id}</c> بِالقِراءَةِ نَفسِها، شَرطُها
+/// عَلى الفَرعَينِ عَمودُ رائِدِ الأَعمالِ لا المَتجَر (<see cref="AggOwnerFilter"/>/<see cref="TailOwnerFilter"/>) وبِنافِذَةِ صَفحَةِ المَتجَر — ثُمَّ، بَعدَ إيداعِ
+/// اللَقطَةِ وفي المِصيَدَتَينِ نَفسَيهِما، مَتاجِرُه الآنَ مِن سِجِلِّ المُستَأجِرين <see cref="TenantDirectory.ListOwnedByAsync"/> (القاعِدَة ٨ — القارِئُ القائِم؛
+/// وجَلسَتُه هُناكَ لا هُنا). قِراءَتانِ لِسُؤالَين: «لِمَن نُسِبَ» تُجيبُه لَقطَةُ الدَفتَر، و«مَن يَملِكُ الآن» يُجيبُه السِجِلّ.</para>
 /// </summary>
 public sealed class MeterQueries
 {
@@ -134,13 +170,21 @@ public sealed class MeterQueries
         + "and (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i)"
         + ") r group by day, app, entrepreneur, role, feature, provider, unit order by day desc, app, unit, entrepreneur, role, feature, provider";
 
+    /// <summary>‏(W13-6·٢١) شَرطُ صَفحَةِ رائِدِ الأَعمالِ عَلى فَرعِ المَجموع (<c>{0}</c>): مَن نُسِبَت إلَيه العَمَلِيَّةُ لَحظَةَ كِتابَتِها — لا مَتاجِرُه الآن.</summary>
+    public const string AggOwnerFilter = "and a.entrepreneur = @owner";
+
+    /// <summary>‏(W13-6·٢١) والشَرطُ نَفسُه عَلى فَرعِ الذَيل (<c>{1}</c>).</summary>
+    public const string TailOwnerFilter = "and e.entrepreneur = @owner";
+
     private readonly IDocumentStore _store;
     private readonly ILogger<MeterQueries> _log;
+    private readonly TenantDirectory _tenants;
 
     public MeterQueries(IDocumentStore store, ILogger<MeterQueries> log)
     {
         _store = store;
         _log = log;
+        _tenants = new TenantDirectory(store);
     }
 
     /// <summary>الفِهرِس: كُلُّ المَتاجِرِ اليَوم.</summary>
@@ -149,8 +193,20 @@ public sealed class MeterQueries
     /// <summary>صَفحَةُ مَتجَر: ثَلاثونَ يَوماً بِاليَوم.</summary>
     public Task<MeterReading> StoreAsync(string app, CancellationToken ct = default) => ReadAsync(app, StoreWindowDays, "store", ct);
 
-    private async Task<MeterReading> ReadAsync(string? app, int days, string page, CancellationToken ct)
+    /// <summary>
+    /// <para>‏(W13-6·٢١) <b>صَفحَةُ رائِدِ الأَعمال</b>: ما نُسِبَ إلَيه لَحظَةَ الكِتابَةِ في نافِذَةِ صَفحَةِ المَتجَر — ومِفتاحُه في الدَفتَرِ كَما يَكتُبُه الوَسيط
+    /// (<see cref="MeterScope.OwnerOf"/>) — ومَتاجِرُه الآن. والمَتاجِرُ لا تُقرَأُ إلّا بَعدَ قِراءَةِ الدَفتَرِ ناجِحَة: بِلا دَفتَرٍ أَو عِندَ العُطلِ لا قائِمَة.</para>
+    /// </summary>
+    public async Task<MeterOwnerReading> OwnerAsync(Guid owner, CancellationToken ct = default)
     {
+        var owned = new List<Tenant>();
+        var reading = await ReadAsync(null, StoreWindowDays, "owner", ct, owner, owned);
+        return new MeterOwnerReading(reading, reading.State == MeterReadState.Data ? owned : []);
+    }
+
+    private async Task<MeterReading> ReadAsync(string? app, int days, string page, CancellationToken ct, Guid? owner = null, List<Tenant>? owned = null)
+    {
+        var entrepreneur = owner is { } o ? MeterScope.OwnerOf(o) : null;
         try
         {
             await using var conn = _store.Storage.Database.CreateConnection();
@@ -176,8 +232,8 @@ public sealed class MeterQueries
                 if (ran) cursor = (r.GetInt32(3), r.GetString(4), r.GetString(5));
             }
 
-            var filter = app is null ? "" : "and a.app = @app";
-            var tailFilter = app is null ? "" : "and e.app = @app";
+            var filter = app is not null ? "and a.app = @app" : entrepreneur is not null ? AggOwnerFilter : "";
+            var tailFilter = app is not null ? "and e.app = @app" : entrepreneur is not null ? TailOwnerFilter : "";
             var rows = new List<MeterCountRow>();
             await using (var cmd = new NpgsqlCommand(string.Format(CultureInfo.InvariantCulture, RowsSql, filter, tailFilter), conn, tx))
             {
@@ -186,6 +242,7 @@ public sealed class MeterQueries
                 cmd.Parameters.AddWithValue("x", cursor.X);
                 cmd.Parameters.AddWithValue("i", cursor.I);
                 if (app is not null) cmd.Parameters.AddWithValue("app", app);
+                if (entrepreneur is not null) cmd.Parameters.AddWithValue("owner", entrepreneur);
                 await using var r = await cmd.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
                     rows.Add(new MeterCountRow(
@@ -193,6 +250,8 @@ public sealed class MeterQueries
                         r.GetString(5), r.GetString(6), r.GetInt64(7), r.GetInt64(8), r.GetInt64(9)));
             }
             await tx.CommitAsync(ct);
+            // ‏(W13-6·٢١) «مَن يَملِكُ الآن» بَعدَ لَقطَةِ «لِمَن نُسِبَ» — مِن السِجِلِّ القائِم، وعُطلُه في المِصيَدَتَينِ أَدناه كَعُطلِ الدَفتَر.
+            if (owner is { } id && owned is not null) owned.AddRange(await _tenants.ListOwnedByAsync(id, ct));
             return new MeterReading(MeterReadState.Data, fromLabel, toLabel, ran, pulledAt, rows);
         }
         catch (PostgresException e) when (e.SqlState == UndefinedTable)
@@ -201,7 +260,7 @@ public sealed class MeterQueries
         }
         catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            _log.LogError("{Tag} {Page} {App}: {Type} {SqlState} {Message}", LogTag, page, app ?? "*", e.GetType().Name,
+            _log.LogError("{Tag} {Page} {App}: {Type} {SqlState} {Message}", LogTag, page, app ?? entrepreneur ?? "*", e.GetType().Name,
                 (e as PostgresException)?.SqlState ?? "-", e.Message);
             return MeterReading.Failed(MeterReadState.Error);
         }

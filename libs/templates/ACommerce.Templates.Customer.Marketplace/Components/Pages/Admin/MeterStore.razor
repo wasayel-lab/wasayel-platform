@@ -17,6 +17,8 @@
     ‏(‏2026-11-13، W13-6·٢٠ — ADR-051 §٢٤؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَ لِلمُطابَقَةِ قِسمُها: لِكُلِّ وَحدَةِ حِفظٍ ما قورِنَ وما نَقَصَ وما يَتُم، والنِيّاتُ الصادِرَةُ
     («غَيرُ مُسَجَّلَة» و«مَجهولَة» و«مَرفوضَة»)، والمَجاميعُ مُقابِلَ الدَفتَرِ حَتّى المُؤَشِّر، والحُضورُ لِكُلِّ يَومٍ أَو «لَقطَةٌ غائِبَة» — مِن `MeterReconciliation` الَّذي
     يُناديه `scripts/meter-reconcile.cs` نَفسُه.
+    ‏(‏2026-11-13، W13-6·٢١ — التَصميم §11؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وخانَةُ رائِدِ الأَعمالِ صارَت مَدخَلَ `/admin/meter/owners/{id}` لِمُعَرِّفِ الحِسابِ وَحدَه:
+    مَتاجِرُه الآنَ بِجِوارِ ما نُسِبَ إلَيه لَحظَةَ الكِتابَة. والسِماتُ `data-meter-entrepreneur` و`data-entries` كَما كانَت (يَقرَؤُها `prove-meter.sh` وG11).
 *@
 
 <RequirePlatformAdmin>
@@ -124,10 +126,21 @@
                             <div class="studio-list">
                                 @foreach (var (value, entries) in reading.By(r => r.Entrepreneur, Slug))
                                 {
-                                    <div class="studio-list-row" style="cursor:default;" data-meter-entrepreneur="@value" data-entries="@Num(entries)">
-                                        <div class="studio-list-body"><code>@value</code></div>
-                                        <span class="st-chip">@Num(entries)</span>
-                                    </div>
+                                    @* ‏(‏2026-11-13، W13-6·٢١) مُعَرِّفُ حِسابٍ ← صَفحَتُه؛ والحارِسُ (`_unowned` و`_seed` …) نَصٌّ لا رابِط — لا صَفحَةَ لَه. *@
+                                    if (Guid.TryParse(value, out _))
+                                    {
+                                        <a class="studio-list-row" href="/admin/meter/owners/@value" data-meter-entrepreneur="@value" data-entries="@Num(entries)">
+                                            <div class="studio-list-body"><code>@value</code></div>
+                                            <span class="st-chip">@Num(entries)</span>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <div class="studio-list-row" style="cursor:default;" data-meter-entrepreneur="@value" data-entries="@Num(entries)">
+                                            <div class="studio-list-body"><code>@value</code></div>
+                                            <span class="st-chip">@Num(entries)</span>
+                                        </div>
+                                    }
                                 }
                             </div>
 

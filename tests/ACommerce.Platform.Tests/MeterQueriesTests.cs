@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Queries;
 using Xunit;
@@ -12,6 +13,9 @@ namespace ACommerce.Platform.Tests;
 // يَسحَبُ بِها (`MeterSql.PageKeys`) — فَلا سَطرَ يُعَدُّ مَرَّتَينِ ولا يَسقُطُ بَينَهُما؛ والذَيلُ مَحدودٌ بِنافِذَةِ الصَفحَةِ فَلا تَقرَأُ الصَفحَةُ الدَفتَرَ كُلَّه؛
 // واليَومُ يَومُ المُجَمِّعِ (`MeterSql.DayZone`) في الفَرعَين. وهُنا شَكلُ الجُمَلِ وما يُشتَقُّ مِن القِراءَة؛ والتَطابُقُ عَلى الدَفتَرِ الحَقيقِيِّ (المَجموعُ + الذَيلُ
 // = عَدُّ السُطورِ في النافِذَة، والنافِذَةُ بِحافَّتَيها) في `LiveMeterAdminProofTests`.
+// ‏(‏2026-11-13، W13-6·٢١ — التَصميم §11 وCOR-11؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وقِراءَةُ رائِدِ الأَعمال**: الشَرطُ عَلى الفَرعَينِ عَمودُ `entrepreneur` (مَن نُسِبَت
+// إلَيه العَمَلِيَّةُ لَحظَةَ كِتابَتِها)، ومَتاجِرُه الآنَ مِن سِجِلِّ المُستَأجِرين بَعدَ اللَقطَة — والمَتجَرُ المُتَبَنّى تَحتَ مالِكِه الآنَ بِما كُتِبَ لَه وَحدَه، وما قَبلَ
+// التَبَنّي `_unowned`. وحَيّاً بِالمُستَمِعِ والمُتَبَنّي الحَقيقِيَّين في `LiveMeterOwnerProofTests`.
 public class MeterQueriesTests(ITestOutputHelper output)
 {
     /// <summary>فَرعُ الذَيلِ مِن جُملَةِ السُطور — ما بَعدَ <c>union all</c>.</summary>
@@ -174,6 +178,100 @@ public class MeterQueriesTests(ITestOutputHelper output)
         Assert.Equal(plain.Seed("a"), mixed.Seed("a"));
         Assert.Equal(mixed.Entries("a"), mixed.Operations("a").Sum(o => o.Entries));
         Assert.True(MeterReading.IsOperation("deal.create") && MeterReading.IsOperation("zz.unknown") && !MeterReading.IsOperation("presence.store"));
+    }
+
+    private static string Source() => File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+        "Services", "Queries", "MeterQueries.cs"));
+
+    /// <summary>
+    /// <para>‏(W13-6·٢١) <b>رائِدُ الأَعمالِ عَلى الفَرعَينِ بِعَمودِه لا بِمَتاجِرِه</b>: جُملَةُ السُطورِ نَفسُها، وشَرطُها <c>a.entrepreneur = @owner</c> عَلى المَجموعِ
+    /// و<c>e.entrepreneur = @owner</c> عَلى الذَيل — والمُؤَشِّرُ والنافِذَةُ كَما هُما؛ ولا شَرطَ مَتجَرٍ فيهِما (فَمَتجَرٌ نُقِلَ عَنه يَبقى ما كُتِبَ لَه فيه).
+    /// ومِفتاحُه كَما يَكتُبُه الوَسيط (<c>MeterScope.OwnerOf</c>)، و«مَن يَملِكُ الآن» سِجِلُّ المُستَأجِرينَ القائِم (<c>TenantDirectory.ListOwnedByAsync</c>،
+    /// القاعِدَة ٨) بَعدَ إيداعِ اللَقطَة وقَبلَ رَدِّ القِراءَة — فَعُطلُه في المِصيَدَتَينِ نَفسَيهِما.</para>
+    /// </summary>
+    [Fact]
+    public void The_owner_reading_filters_both_branches_by_the_write_time_entrepreneur_and_reads_who_owns_now_from_the_registry()
+    {
+        var sql = string.Format(System.Globalization.CultureInfo.InvariantCulture, MeterQueries.RowsSql, MeterQueries.AggOwnerFilter, MeterQueries.TailOwnerFilter);
+        var at = sql.IndexOf("union all", StringComparison.Ordinal);
+        var (agg, tail) = (sql[..at], sql[at..]);
+        var source = Source();
+        var commit = source.IndexOf("await tx.CommitAsync(ct);", StringComparison.Ordinal);
+        var owned = source.IndexOf("owned.AddRange(await _tenants.ListOwnedByAsync(id, ct));", StringComparison.Ordinal);
+        var data = source.IndexOf("return new MeterReading(MeterReadState.Data,", StringComparison.Ordinal);
+        output.WriteLine($"[queries·owner] المَجموع: «{MeterQueries.AggOwnerFilter}» {agg.Contains(MeterQueries.AggOwnerFilter, StringComparison.Ordinal)} · الذَيل: «{MeterQueries.TailOwnerFilter}» "
+                         + $"{tail.Contains(MeterQueries.TailOwnerFilter, StringComparison.Ordinal)} · شَرطُ مَتجَر {sql.Contains(".app = @app", StringComparison.Ordinal)} · "
+                         + $"الإيداع {commit} < مَتاجِرُه الآن {owned} < الرَدّ {data} · المِفتاح OwnerOf {source.Contains("MeterScope.OwnerOf(o)", StringComparison.Ordinal)}");
+        Assert.Contains("a.entrepreneur = @owner", agg, StringComparison.Ordinal);
+        Assert.Contains("e.entrepreneur = @owner", tail, StringComparison.Ordinal);
+        Assert.DoesNotContain(".app = @app", sql, StringComparison.Ordinal);
+        Assert.Contains("(e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i)", tail, StringComparison.Ordinal);
+        Assert.Contains($"e.occurred_at >= (@from::timestamp at time zone '{MeterSql.DayZone}')", tail, StringComparison.Ordinal);
+        Assert.Empty(Regex.Matches((MeterQueries.AggOwnerFilter + " " + MeterQueries.TailOwnerFilter).ToLowerInvariant(), @"\b(insert|update|delete|truncate|alter|drop|create)\b"));
+        Assert.Contains("MeterScope.OwnerOf(o)", source, StringComparison.Ordinal);
+        Assert.Contains("new TenantDirectory(store)", source, StringComparison.Ordinal);
+        Assert.True(commit > 0 && owned > commit && data > owned, $"مَتاجِرُه الآنَ لا تُقرَأُ بَعدَ اللَقطَةِ وقَبلَ الرَدّ: {commit} · {owned} · {data}");
+        Assert.Equal(MeterSentinels.Unowned, MeterScope.OwnerOf(Guid.Empty));
+    }
+
+    /// <summary>
+    /// <para>‏(W13-6·٢١) <b>المَتجَرُ المُتَبَنّى تَحتَ مالِكِه الآن، وسُطورُ ما قَبلَ التَبَنّي تَبقى <c>_unowned</c></b> (التَصميم §11، COR-11): المُتَبَنّي
+    /// (<c>StudioOwnershipSeeder.cs:47-58</c>) يَكتُبُ <c>OwnerUserId</c> ويَحفَظُ بِـ<c>Store</c> — تَحديثٌ لا يُعَدّ (G3) ولا يَمَسُّ سَطراً؛ فَالدَفتَرُ نَفسُه يُقرَأُ
+    /// بِشَرطَيه: صَفحَةُ المَتجَرِ تَرى رائِدَي أَعمالِه، وصَفحَةُ رائِدِ الأَعمالِ تَرى المَتجَرَ في «مَتاجِرِه الآن» بِما كُتِبَ لَه بَعدَ التَبَنّي وَحدَه. والضابِطُ
+    /// السالِب: مَن يَنسِبُ بِالمِلكِيَّةِ الآنَ (مَجموعُ صَفحَةِ المَتجَرِ لِمَتاجِرِه) يَعُدُّ لَه ما قَبلَ التَبَنّي.</para>
+    /// </summary>
+    [Fact]
+    public void An_adopted_store_shows_under_its_current_owner_while_its_earlier_entries_stay_unowned()
+    {
+        var seeder = File.ReadAllLines(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Services", "Incubator", "StudioOwnershipSeeder.cs"));
+        var adoption = string.Join("\n", seeder.Skip(46).Take(12));
+        Assert.Contains("t.OwnerUserId == Guid.Empty", adoption, StringComparison.Ordinal);
+        Assert.Contains("t.OwnerUserId = firstUser.Id;", adoption, StringComparison.Ordinal);
+        Assert.Contains("ws.Store(t);", adoption, StringComparison.Ordinal);
+
+        var owner = Guid.NewGuid();
+        var key = MeterScope.OwnerOf(owner);
+        var other = MeterScope.OwnerOf(Guid.NewGuid());
+        MeterCountRow Row(string day, string app, string who, string unit, long n) => new(day, app, who, "_none", "f", "_none", unit, n, n, 0);
+        // ‏الدَفتَر: «adopted» وُلِدَ يَتيماً (وِلادَتُه وصَفقَتاه `_unowned`) ثُمَّ تَبَنّاه — فَثَلاثُ صَفَقاتٍ بَعدَها لَه؛ و«own» وُلِدَ لَه؛ و«sold» وُلِدَ لَه ثُمَّ نُقِلَ
+        // فَصَفقَتُه بَعدَ النَقلِ لِلآخَر؛ وحِسابُه في الاستوديو `_platform`؛ و«fresh» يَملِكُه ولا سَطرَ لَه.
+        MeterCountRow[] ledger =
+        [
+            Row("2026-11-10", "adopted", MeterSentinels.Unowned, "store.create", 1),
+            Row("2026-11-10", "adopted", MeterSentinels.Unowned, "deal.create", 2),
+            Row("2026-11-12", "adopted", key, "deal.create", 3),
+            Row("2026-11-11", "own", key, "store.create", 1),
+            Row("2026-11-11", "sold", key, "store.create", 1),
+            Row("2026-11-12", "sold", other, "deal.create", 2),
+            Row("2026-11-09", MeterSentinels.Platform, key, "studio.account.create", 1),
+            Row("2026-11-12", "elsewhere", other, "deal.create", 4),
+        ];
+        // ‏ما يُعيدُه الشَرطانِ عَلى هذا الدَفتَر: المَتجَرُ بِعَمودِ app، ورائِدُ الأَعمالِ بِعَمودِ entrepreneur.
+        MeterReading Read(Func<MeterCountRow, bool> where) => new(MeterReadState.Data, "2026-10-14", "2026-11-12", false, null, [.. ledger.Where(where)]);
+        var storePage = Read(r => r.App == "adopted");
+        var ownerPage = new MeterOwnerReading(Read(r => r.Entrepreneur == key),
+        [
+            new Tenant { Id = "adopted", Name = "مُتَبَنّى", OwnerUserId = owner },
+            new Tenant { Id = "own", Name = "لَه", OwnerUserId = owner },
+            new Tenant { Id = "fresh", Name = "جَديد", OwnerUserId = owner },
+        ]);
+        var stores = ownerPage.Stores();
+        var reattributed = ownerPage.OwnedNow.Sum(t => Read(r => r.App == t.Id).Entries(t.Id));
+        output.WriteLine($"[queries·owner] صَفحَةُ المَتجَرِ adopted: «{string.Join(" · ", storePage.By(r => r.Entrepreneur, "adopted").Select(v => $"{(v.Value == key ? "المالِكُ الآن" : v.Value)} {v.Entries}"))}» — "
+                         + $"صَفحَةُ رائِدِ الأَعمال: «{string.Join(" · ", stores.Select(x => $"{x.App}{(x.OwnedNow ? "*" : "")} {x.Entries}"))}» = {ownerPage.Reading.Entries()} · "
+                         + $"والنِسبَةُ بِالمِلكِيَّةِ الآنَ (الضابِطُ السالِب) {reattributed}");
+        Assert.Equal(3L, storePage.By(r => r.Entrepreneur, "adopted").Single(v => v.Value == MeterSentinels.Unowned).Entries);
+        Assert.Equal(3L, storePage.By(r => r.Entrepreneur, "adopted").Single(v => v.Value == key).Entries);
+        Assert.Equal(
+            new[] { new MeterOwnerStore("adopted", "مُتَبَنّى", true, 3), new MeterOwnerStore("own", "لَه", true, 1), new MeterOwnerStore("fresh", "جَديد", true, 0),
+                    new MeterOwnerStore(MeterSentinels.Platform, "", false, 1), new MeterOwnerStore("sold", "", false, 1) },
+            stores);
+        Assert.Equal(ownerPage.Reading.Entries(), stores.Sum(x => x.Entries));
+        Assert.Equal(6L, ownerPage.Reading.Entries());
+        Assert.Equal(7L, reattributed);   // ‏adopted 6 (ثَلاثَةٌ مِنها قَبلَ التَبَنّي) + own 1 + fresh 0 — ما لا تَفعَلُه الصَفحَة
+        Assert.DoesNotContain(stores, x => x.App == "elsewhere");
+        Assert.Empty(new MeterOwnerReading(MeterReading.Failed(MeterReadState.Error), []).Stores());
     }
 
     /// <summary><b>ولا عُضوَ في قارِئِ العَدِّ يُسَمّي سِعراً</b> (القاعِدَة ١٦ — هذه المَوجَةُ عَدٌّ وَحدَه؛ الحارِسُ G2 نَفسُه بِمُعجَمِه عَلى أَنواعِ القارِئ).</summary>

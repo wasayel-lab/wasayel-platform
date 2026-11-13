@@ -1,0 +1,188 @@
+@page "/admin/meter/owners/{Id:guid}"
+@using System.Globalization
+@using ACommerce.Platform.Shared.Metering
+@using ACommerce.Templates.Customer.Marketplace.Services.Queries
+@inject ACommerce.Templates.Customer.Marketplace.Services.PlatformAdminGuard PlatformGuard
+@inject MeterQueries Meter
+@inject L L
+
+@*
+    العَدُّ الداخِلِيّ — رائِدُ أَعمالٍ واحِد (‏2026-11-13، الموجَة ١٣ W13-6·٢١ — التَصميم §11 وCOR-11؛ ADR-051 القَرارُ ٣).
+    سُؤالانِ لا يُخلَطان: **مَتاجِرُه الآن** (`Tenant` بِـ`OwnerUserId` — مِن سِجِلِّ المُستَأجِرين `TenantDirectory.ListOwnedByAsync`)، و**عَمَلِيّاتٌ نُسِبَت إلَيه لَحظَةَ
+    كِتابَتِها** في نافِذَةِ صَفحَةِ المَتجَر (عَمودُ `entrepreneur` في الدَفتَر، مِفتاحُه `MeterScope.OwnerOf` كَما يَكتُبُه الوَسيط — في حُدودِ ذاكِرَتِه ذاتِ
+    الدَقائِقِ الخَمس، `TenantResolverMiddleware.cs:590-592`). فَالتَبَنّي (`StudioOwnershipSeeder.cs:47-58`) والنَقلُ يُغَيِّرانِ الأَوَّلَ ولا يُعيدانِ نِسبَةَ الثاني:
+    مَتجَرٌ تَبَنّاه يَظهَرُ في مَتاجِرِه بِما كُتِبَ لَه بَعدَ التَبَنّي وَحدَه، وسُطورُ ما قَبلَه تَبقى `_unowned` في صَفحَةِ المَتجَر.
+    ومَدخَلُها خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَر (القاعِدَة ١٢) — رابِطٌ لِمُعَرِّفِ حِسابٍ وَحدَه، والحارِسُ (`_unowned` و`_seed` …) نَصٌّ لا رابِط.
+    والبابُ `RequirePlatformAdmin`، **والبَوّابَةُ قَبلَ الاستِعلام** كَالصَفحَتَين. ولا وَقتَ يُرسَمُ هُنا (لا `Culture.FormatTime`): آخِرُ سَحبٍ لِلمُجَمِّعِ
+    في الفِهرِسِ وصَفحَةِ المَتجَر، وهُنا ما بَعدَ مُؤَشِّرِه بِعَدَدِه. والجانِبُ جانِبُ التَشغيلِ وَحدَه (`MeterReading`)؛ والحُضورُ لِلمَتجَرِ لا لِرائِدِ الأَعمال.
+*@
+
+<RequirePlatformAdmin>
+<div class="studio-root">
+    <div class="studio-shell">
+        <aside class="studio-sidebar">
+            <div class="studio-sidebar-brand">
+                <img src="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-lockup-white.svg"
+                     alt="@L["shell.seo.site_name"]" height="30" />
+            </div>
+            <nav class="studio-nav">
+                <a class="studio-nav-item" href="/admin">
+                    <AcIcon Name="building" Size="18" /> @L.Markup("admin.nav.tenants")
+                </a>
+                <a class="studio-nav-item" href="/admin/monitor">
+                    <AcIcon Name="grid" Size="18" /> @L.Markup("admin.nav.monitor")
+                </a>
+                <a class="studio-nav-item active" href="/admin/meter">
+                    <AcIcon Name="bar-chart" Size="18" /> @L.Markup("admin.nav.meter")
+                </a>
+            </nav>
+            <div class="studio-sidebar-footer">
+                <a href="/studio" class="studio-nav-item">← @L.Markup("admin.nav.my_board")</a>
+            </div>
+        </aside>
+
+        <div class="studio-main">
+            <header class="studio-topbar">
+                <h2 class="studio-topbar-title">@L.Markup("admin.meter.topbar")</h2>
+            </header>
+            <div class="studio-content">
+                <div class="studio-page-head">
+                    <a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/meter"><AcIcon Name="arrow-right" Size="16" /> @L.Markup("admin.meter.back")</a>
+                    <h1 data-meter-owner="@Key">@L.Markup("admin.meter.owner_title", Key)</h1>
+                    @if (owner is { Reading.State: MeterReadState.Data })
+                    {
+                        <p>@L.Markup("admin.meter.owner_subtitle", Num(MeterQueries.StoreWindowDays), owner.Reading.From, owner.Reading.To)</p>
+                    }
+                </div>
+
+                @if (owner is null || owner.Reading.State == MeterReadState.Error)
+                {
+                    <div data-meter-state="error">
+                        <AcAlert Variant="danger" Title="@L["admin.meter.error_title"]" Message="@L["admin.meter.error_body"]" />
+                    </div>
+                }
+                else if (owner.Reading.State == MeterReadState.NoLedger)
+                {
+                    <div data-meter-state="no-ledger">
+                        <AcEmptyState IconName="inbox" Title="@L["admin.meter.no_ledger_title"]" Message="@L["admin.meter.no_ledger_body"]" />
+                    </div>
+                }
+                else
+                {
+                    var reading = owner.Reading;
+                    var stores = owner.Stores();
+                    <div data-meter-state="data">
+                        @if (!reading.AggregatorRan)
+                        {
+                            <div data-meter-agg="absent">
+                                <AcAlert Variant="warning" Message="@L["admin.meter.agg_absent"]" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div data-meter-agg="ran" data-meter-tail="@Num(reading.TailEntries())">
+                                <AcAlert Variant="info" Message="@L.Format("admin.meter.owner_agg_ran", Num(reading.TailEntries()))" />
+                            </div>
+                        }
+
+                        <div class="st-section-title">@L.Markup("admin.meter.owner_stores")</div>
+                        @if (owner.OwnedNow.Count == 0)
+                        {
+                            <div class="st-card" data-meter-owned="0">@L.Markup("admin.meter.owner_no_stores")</div>
+                        }
+                        else
+                        {
+                            <div class="studio-list" data-meter-owned="@Num(owner.OwnedNow.Count)">
+                                @foreach (var s in stores.Where(s => s.OwnedNow))
+                                {
+                                    <a class="studio-list-row" href="/admin/meter/stores/@s.App" data-meter-owned-store="@s.App" data-entries="@Num(s.Entries)">
+                                        <span class="studio-list-icon"><AcIcon Name="store" Size="18" /></span>
+                                        <div class="studio-list-body">
+                                            <strong>@s.Name</strong>
+                                            <code>@s.App</code>
+                                        </div>
+                                        <span class="st-chip">@L.Markup("admin.meter.owner_store_entries", Num(s.Entries))</span>
+                                    </a>
+                                }
+                            </div>
+                        }
+
+                        <div class="st-section-title">@L.Markup("admin.meter.owner_attributed")</div>
+                        @if (reading.Entries() == 0)
+                        {
+                            <div class="st-card" data-meter-total="0">@L.Markup("admin.meter.owner_empty")</div>
+                        }
+                        else
+                        {
+                            <div class="studio-stats" data-meter-total="@Num(reading.Entries())">
+                                @foreach (var (unit, entries) in reading.Operations())
+                                {
+                                    <div class="studio-stat" data-meter-unit="@unit" data-entries="@Num(entries)">
+                                        <div class="studio-stat-label">@UnitLabel(unit)</div>
+                                        <div class="studio-stat-value">@Num(entries)</div>
+                                        <div class="studio-stat-sub">@unit</div>
+                                    </div>
+                                }
+                                <div class="studio-stat" data-meter-unresolved="@Num(reading.Unresolved())" data-meter-seed="@Num(reading.Seed())">
+                                    <div class="studio-stat-label">@L.Markup("admin.meter.unresolved_seed", Num(reading.Unresolved()), Num(reading.Seed()))</div>
+                                </div>
+                            </div>
+
+                            @if (stores.Any(s => !s.OwnedNow))
+                            {
+                                <div class="st-section-title">@L.Markup("admin.meter.owner_elsewhere")</div>
+                                <div class="studio-list">
+                                    @foreach (var s in stores.Where(s => !s.OwnedNow))
+                                    {
+                                        <div class="studio-list-row" style="cursor:default;" data-meter-elsewhere="@s.App" data-entries="@Num(s.Entries)">
+                                            <div class="studio-list-body"><code>@s.App</code></div>
+                                            @if (!MeterSentinels.IsSentinel(s.App))
+                                            {
+                                                <span class="st-chip" data-meter-not-owned="@s.App">@L.Markup("admin.meter.owner_not_owned")</span>
+                                            }
+                                            <span class="st-chip">@Num(s.Entries)</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            <div class="st-section-title">@L.Markup("admin.meter.by_role")</div>
+                            <div class="studio-list">
+                                @foreach (var (value, entries) in reading.By(r => r.Role))
+                                {
+                                    <div class="studio-list-row" style="cursor:default;" data-meter-role="@value" data-entries="@Num(entries)">
+                                        <div class="studio-list-body"><code>@value</code></div>
+                                        <span class="st-chip">@Num(entries)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+</RequirePlatformAdmin>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    MeterOwnerReading? owner;
+
+    /// <summary>مِفتاحُه في الدَفتَرِ كَما يَكتُبُه الوَسيط — المُعَرِّفُ بِصيغَةِ <c>D</c>.</summary>
+    string Key => MeterScope.OwnerOf(Id);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // البَوّابَةُ قَبلَ أَيِّ استِعلام — كالفِهرِسِ وصَفحَةِ المَتجَر.
+        if (!(await PlatformGuard.EvaluateAsync()).Allowed) return;
+        owner = await Meter.OwnerAsync(Id);
+    }
+
+    /// <summary>اسمُ الوَحدَةِ مِن القامُوس، ورَمزُها حينَ لا يَعرِفُها المُعجَم.</summary>
+    string UnitLabel(string unit)
+        => MeterUnitCatalog.Default.Find(unit) is null ? unit : L[MeterUnitCatalog.LabelKey(unit)];
+
+    static string Num(long n) => n.ToString(CultureInfo.InvariantCulture);
+}

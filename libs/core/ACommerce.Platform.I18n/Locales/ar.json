@@ -2702,5 +2702,15 @@
   "admin.meter.recon_agg_clean": "تُطابِقُ الدَفتَرَ في {0} صَفّاً.",
   "admin.meter.recon_agg_mismatch": "لا تُطابِقُ الدَفتَرَ في {0} صَفّاً.",
   "admin.meter.recon_presence": "الحُضور — لَقطَةُ كُلِّ يَوم",
-  "admin.meter.recon_absent_day": "لَقطَةٌ غائِبَة"
+  "admin.meter.recon_absent_day": "لَقطَةٌ غائِبَة",
+  "admin.meter.owner_title": "رائِدُ الأَعمال {0}",
+  "admin.meter.owner_subtitle": "آخِرُ {0} يَوماً ({1} – {2}) بِيَومِ الرِياض — العَمَلِيَّةُ تُنسَبُ إلَيه لَحظَةَ كِتابَتِها، فَتَبَنّي مَتجَرٍ أَو نَقلُه لا يُعيدُ نِسبَةَ ما سَبَق.",
+  "admin.meter.owner_agg_ran": "عَمِلَ المُجَمِّع — ومِن الدَفتَرِ مُباشَرَةً ما بَعدَ مُؤَشِّرِه: {0}",
+  "admin.meter.owner_stores": "مَتاجِرُه الآن",
+  "admin.meter.owner_no_stores": "لا يَملِكُ مَتجَراً الآن.",
+  "admin.meter.owner_store_entries": "عَمَلِيّاتُه فيه: {0}",
+  "admin.meter.owner_attributed": "عَمَلِيّاتٌ نُسِبَت إلَيه لَحظَةَ الكِتابَة",
+  "admin.meter.owner_empty": "لا عَمَلِيّاتٍ مَنسوبَةٌ إلَيه في النافِذَة.",
+  "admin.meter.owner_elsewhere": "نُسِبَت إلَيه خارِجَ مَتاجِرِه الآن",
+  "admin.meter.owner_not_owned": "لا يَملِكُه الآن"
 }

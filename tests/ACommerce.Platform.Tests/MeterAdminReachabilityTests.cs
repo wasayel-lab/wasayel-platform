@@ -12,11 +12,18 @@ namespace ACommerce.Platform.Tests;
 // لَه الدَفتَرُ أَصلاً (نَمَطُ `TenantEdit.razor`)، لا يُقرَأُ ثُمَّ يُحجَب. ولا جَلسَةَ Marten في الصَفحَة (الطَبَقَة ٨).
 // والفاحِصُ دالَّةٌ نَقِيَّةٌ عَلى النُصوص (`Breaches`) فَيُقاسُ هُوَ نَفسُه بِنُسَخٍ مَحقونَة: كُلُّ عَيبٍ يُسَمّى بِرَمزِه (القاعِدَة ١٠).
 // والحالاتُ الحَيَّةُ (الدَفتَرُ بِلا مُجَمِّع، والمَجموعُ مَعَ الذَيل، والمَجهولُ لا يُرسَم، و42P01، والعُطلُ الآخَرُ بِطاقَةٌ لا ‏500) في `LiveMeterAdminProofTests`.
+// ‏(‏2026-11-13، W13-6·٢١ — التَصميم §11؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصَفحَةٌ ثالِثَة**: `/admin/meter/owners/{id}` بِالشُروطِ نَفسِها (مَسار، وحارِس، والبَوّابَةُ
+// قَبلَ القِراءَة، ولا جَلسَة)، ومَدخَلُها خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَر — رَمزُ خَرقٍ سابِعٌ `owner_unlinked` بِحَقنِه. وحالاتُها الحَيَّةُ (مَتجَرٌ مُتَبَنّى
+// تَحتَ مالِكِه الآن وسُطورُ ما قَبلَ التَبَنّي `_unowned`، والمَجهولُ لا يُرسَمُ ولا يُقرَأُ لَه) في `LiveMeterOwnerProofTests`.
 public class MeterAdminReachabilityTests(ITestOutputHelper output)
 {
     private const string TemplateRoot = "libs/templates/ACommerce.Templates.Customer.Marketplace";
     internal const string IndexRoute = "/admin/meter";
     internal const string StoreRoute = "/admin/meter/stores/{Slug}";
+    internal const string OwnerRoute = "/admin/meter/owners/{Id:guid}";
+
+    /// <summary>‏(W13-6·٢١) رابِطُ خانَةِ رائِدِ الأَعمالِ في صَفحَةِ المَتجَر إلى صَفحَتِه.</summary>
+    internal const string OwnerLink = "href=\"/admin/meter/owners/@value\"";
 
     private static string Read(string relative)
     {
@@ -30,12 +37,14 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     internal static string AdminHome() => Read($"{TemplateRoot}/Components/Pages/Admin/AdminHome.razor");
     internal static string IndexPage() => Read($"{TemplateRoot}/Components/Pages/Admin/MeterIndex.razor");
     internal static string StorePage() => Read($"{TemplateRoot}/Components/Pages/Admin/MeterStore.razor");
+    internal static string OwnerPage() => Read($"{TemplateRoot}/Components/Pages/Admin/MeterOwner.razor");
 
     /// <summary>رُموزُ الخَرقِ — مُعجَمٌ مُغلَق: <c>link_missing</c> (لا رابِطَ إلى الفِهرِسِ داخِلَ قِسمِ المُشرِفِ في <c>AdminHome</c> بَعدَ رابِطِ المُراقَبَة) ·
     /// <c>store_unlinked</c> (الفِهرِسُ لا يَربِطُ صَفحَةَ المَتجَر) · <c>route_missing</c> (لا <c>@page</c> بِالمَسارِ) · <c>page_unguarded</c> (المُحتَوى خارِجَ
-    /// <c>&lt;RequirePlatformAdmin&gt;</c>) · <c>read_before_guard</c> (القِراءَةُ لا تَسبِقُها البَوّابَة) · <c>session_in_page</c> (جَلسَةُ Marten أَو مَخزَنُه في الصَفحَة).</summary>
+    /// <c>&lt;RequirePlatformAdmin&gt;</c>) · <c>read_before_guard</c> (القِراءَةُ لا تَسبِقُها البَوّابَة) · <c>session_in_page</c> (جَلسَةُ Marten أَو مَخزَنُه في الصَفحَة) ·
+    /// ‏(W13-6·٢١) <c>owner_unlinked</c> (خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَرِ لا تَربِطُ صَفحَتَه).</summary>
     internal static readonly IReadOnlyList<string> Codes =
-        ["link_missing", "store_unlinked", "route_missing", "page_unguarded", "read_before_guard", "session_in_page"];
+        ["link_missing", "store_unlinked", "route_missing", "page_unguarded", "read_before_guard", "session_in_page", "owner_unlinked"];
 
     private static readonly string[] SessionTokens =
         ["IDocumentSession", "IQuerySession", "IDocumentStore", "LightweightSession", "QuerySession(", "SaveChangesAsync"];
@@ -77,10 +86,27 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         return found;
     }
 
-    internal static IReadOnlyList<string> Breaches(string adminHome, string index, string store) =>
+    /// <summary>
+    /// <para>‏(W13-6·٢١) <b>مَدخَلُ صَفحَةِ رائِدِ الأَعمال</b>: في صَفحَةِ المَتجَرِ، بَينَ حَلقَةِ رائِدِ الأَعمالِ (<c>reading.By(r =&gt; r.Entrepreneur, Slug)</c>) وعُنوانِ
+    /// الدَور، رابِطٌ إلى <see cref="OwnerLink"/> — خَلفَ <c>Guid.TryParse</c> فَالحارِسُ لا يُربَط. وغِيابُ أَيٍّ مِنها <c>owner_unlinked</c>.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> OwnerLinkBreaches(string store)
+    {
+        var code = WriteEndpointGuardTests.StripMarkupComments(store);
+        var loop = code.IndexOf("reading.By(r => r.Entrepreneur, Slug)", StringComparison.Ordinal);
+        var end = loop < 0 ? -1 : code.IndexOf("admin.meter.by_role", loop, StringComparison.Ordinal);
+        var cell = loop >= 0 && end > loop ? code[loop..end] : "";
+        var guard = cell.IndexOf("Guid.TryParse(value", StringComparison.Ordinal);
+        var link = cell.IndexOf(OwnerLink, StringComparison.Ordinal);
+        return guard >= 0 && link > guard ? [] : ["owner_unlinked"];
+    }
+
+    internal static IReadOnlyList<string> Breaches(string adminHome, string index, string store, string owner) =>
         HomeBreaches(adminHome)
             .Concat(PageBreaches(index, IndexRoute, "Meter.TodayAsync", "href=\"/admin/meter/stores/@app\""))
             .Concat(PageBreaches(store, StoreRoute, "Meter.StoreAsync"))
+            .Concat(PageBreaches(owner, OwnerRoute, "Meter.OwnerAsync"))
+            .Concat(OwnerLinkBreaches(store))
             .Distinct().ToList();
 
     [Fact]
@@ -89,11 +115,14 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var home = AdminHome();
         var index = IndexPage();
         var store = StorePage();
+        var owner = OwnerPage();
         var links = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(home), Regex.Escape($"href=\"{IndexRoute}\"")).Count;
-        var found = Breaches(home, index, store);
-        output.WriteLine($"[G11] صَفَحاتٌ مَفحوصَة 2 · رَوابِطُ AdminHome إلى {IndexRoute}: {links} · خُروق {found.Count}"
+        var ownerLinks = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(store), Regex.Escape(OwnerLink)).Count;
+        var found = Breaches(home, index, store, owner);
+        output.WriteLine($"[G11] صَفَحاتٌ مَفحوصَة 3 · رَوابِطُ AdminHome إلى {IndexRoute}: {links} · رَوابِطُ صَفحَةِ المَتجَرِ إلى صَفحَةِ رائِدِ الأَعمال: {ownerLinks} · خُروق {found.Count}"
                          + (found.Count == 0 ? "" : ": " + string.Join(", ", found)));
         Assert.Equal(1, links);
+        Assert.Equal(1, ownerLinks);
         Assert.Empty(found);
     }
 
@@ -104,21 +133,31 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var home = AdminHome();
         var index = IndexPage();
         var store = StorePage();
-        var injections = new (string Code, string Home, string Index, string Store)[]
+        var owner = OwnerPage();
+        var guardLine = @"if\s*\(!\(await PlatformGuard\.EvaluateAsync\(\)\)\.Allowed\)\s*return;";
+        var injections = new (string Code, string Home, string Index, string Store, string Owner)[]
         {
-            ("link_missing", home.Replace($"href=\"{IndexRoute}\"", "href=\"/admin/elsewhere\"", StringComparison.Ordinal), index, store),
-            ("store_unlinked", home, index.Replace("href=\"/admin/meter/stores/@app\"", "href=\"#\"", StringComparison.Ordinal), store),
-            ("route_missing", home, index, store.Replace($"@page \"{StoreRoute}\"", "@page \"/admin/meter/store/{Slug}\"", StringComparison.Ordinal)),
+            ("link_missing", home.Replace($"href=\"{IndexRoute}\"", "href=\"/admin/elsewhere\"", StringComparison.Ordinal), index, store, owner),
+            ("store_unlinked", home, index.Replace("href=\"/admin/meter/stores/@app\"", "href=\"#\"", StringComparison.Ordinal), store, owner),
+            ("route_missing", home, index, store.Replace($"@page \"{StoreRoute}\"", "@page \"/admin/meter/store/{Slug}\"", StringComparison.Ordinal), owner),
             ("page_unguarded", home, index.Replace("<RequirePlatformAdmin>", "<div>", StringComparison.Ordinal)
-                                          .Replace("</RequirePlatformAdmin>", "</div>", StringComparison.Ordinal), store),
-            ("read_before_guard", home, index, Regex.Replace(store, @"if\s*\(!\(await PlatformGuard\.EvaluateAsync\(\)\)\.Allowed\)\s*return;", "")),
-            ("session_in_page", home, index.Replace("@inject MeterQueries Meter", "@inject MeterQueries Meter\n@inject Marten.IDocumentStore Store", StringComparison.Ordinal), store),
+                                          .Replace("</RequirePlatformAdmin>", "</div>", StringComparison.Ordinal), store, owner),
+            ("read_before_guard", home, index, Regex.Replace(store, guardLine, ""), owner),
+            ("session_in_page", home, index.Replace("@inject MeterQueries Meter", "@inject MeterQueries Meter\n@inject Marten.IDocumentStore Store", StringComparison.Ordinal), store, owner),
+            // ‏(W13-6·٢١) صَفحَةُ رائِدِ الأَعمالِ بِحُقونِها، ومَدخَلُها مِن صَفحَةِ المَتجَر.
+            ("owner_unlinked", home, index, store.Replace(OwnerLink, "href=\"#\"", StringComparison.Ordinal), owner),
+            ("owner_unlinked", home, index, store.Replace("Guid.TryParse(value, out _)", "true", StringComparison.Ordinal), owner),
+            ("route_missing", home, index, store, owner.Replace($"@page \"{OwnerRoute}\"", "@page \"/admin/meter/owner/{Id}\"", StringComparison.Ordinal)),
+            ("page_unguarded", home, index, store, owner.Replace("<RequirePlatformAdmin>", "<div>", StringComparison.Ordinal)
+                                                        .Replace("</RequirePlatformAdmin>", "</div>", StringComparison.Ordinal)),
+            ("read_before_guard", home, index, store, Regex.Replace(owner, guardLine, "")),
+            ("session_in_page", home, index, store, owner.Replace("@inject MeterQueries Meter", "@inject MeterQueries Meter\n@inject Marten.IQuerySession Session", StringComparison.Ordinal)),
         };
         var produced = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var (codeName, h, i, s) in injections)
+        foreach (var (codeName, h, i, s, o) in injections)
         {
-            Assert.NotEqual(h + i + s, home + index + store);   // ‏الحَقنُ وَقَعَ فِعلاً — نَصٌّ لَم يَتَغَيَّر حَقنٌ أَعمى
-            var got = Breaches(h, i, s);
+            Assert.NotEqual(h + i + s + o, home + index + store + owner);   // ‏الحَقنُ وَقَعَ فِعلاً — نَصٌّ لَم يَتَغَيَّر حَقنٌ أَعمى
+            var got = Breaches(h, i, s, o);
             output.WriteLine($"[G11] حَقنُ {codeName} ⇐ {string.Join(", ", got)}");
             Assert.Contains(codeName, got);
             produced.Add(codeName);
@@ -135,7 +174,7 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     {
         var keyRx = new Regex(@"\bL(?:\.Markup|\.Format)?(?:\(|\[)""(?<k>[a-z0-9_]+\.[a-z0-9_]+\.[a-z0-9_]+)""");
         var keys = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var page in new[] { IndexPage(), StorePage() })
+        foreach (var page in new[] { IndexPage(), StorePage(), OwnerPage() })
             foreach (Match m in keyRx.Matches(WriteEndpointGuardTests.StripMarkupComments(page))) keys.Add(m.Groups["k"].Value);
         keys.Add("admin.home.meter_cta");
         Assert.Contains("admin.home.meter_cta", WriteEndpointGuardTests.StripMarkupComments(AdminHome()), StringComparison.Ordinal);
