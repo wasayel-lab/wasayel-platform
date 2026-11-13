@@ -616,7 +616,7 @@ public class ProviderCallsTests(ITestOutputHelper output)
         Assert.Equal(4, ids.Distinct().Count());
     }
 
-    /// <summary><b>Paddle</b>: المُعامَلَةُ تُعَدُّ بِمَرجِعِنا — ‏201 مَقبولَة و‏400 مَرفوضَة والجَوابُ يَعودُ كَما كان (رِسالَةُ Paddle في النَتيجَة).</summary>
+    /// <summary><b>Paddle</b>: المُعامَلَةُ تُعَدُّ بِمَرجِعِنا مَصدَراً ونِداءِ البابِ مُعَرِّفاً (<c>PaddleSurface.CreateCall</c> — M6C-CNT-R3-1) — ‏201 مَقبولَة و‏400 مَرفوضَة والجَوابُ يَعودُ كَما كان (رِسالَةُ Paddle في النَتيجَة).</summary>
     [Theory]
     [InlineData(201, "Accepted")]
     [InlineData(400, "Refused")]
@@ -633,12 +633,47 @@ public class ProviderCallsTests(ITestOutputHelper output)
         var draft = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.ReadDraft(Store, "manual", "49", "USD", "30", "شَهر", "");
         var reference = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.Reference(draft);
 
-        var result = await provider.CreateTransactionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPaddleTransactionCreate, Store, reference), draft, reference);
+        var call = ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.CreateCall(Store, reference);
+        var result = await provider.CreateTransactionAsync(call, draft, reference);
 
-        var id = $"{OutboundUnits.BillingPaddleTransactionCreate}:{ProviderNames.Paddle}:{reference}";
+        var id = $"{OutboundUnits.BillingPaddleTransactionCreate}:{ProviderNames.Paddle}:{call.RequestId}";
         output.WriteLine($"[G6] Paddle {status} ⇒ {result.FailureReason ?? result.TransactionId} · {string.Join(" → ", recorder.Log)}");
         Assert.Equal(new[] { $"open {id}", $"decide {id} {outcome} 1" }, recorder.Log);
         Assert.Equal(status == 201, result.FailureReason is null);
+        Assert.Equal((ProviderCall.PaddleReferenceSource, reference), (call.SourceType, call.SourceId));
+    }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-CNT-R3-1 — ADR-051 §١٩) <b>نَقرَتانِ بِالمُسَوَّدَةِ نَفسِها مُعامَلَتانِ عِندَ Paddle ⇐ مُعَرِّفانِ
+    /// مَقبولانِ بِمَرجِعٍ واحِد</b>: مَرجِعُنا يَمنَعُ وَثيقَتَينِ عِندَنا لا مُعامَلَتَينِ عِندَه (<c>docs/DEPLOY.md</c> §٥-أ)، والبابُ يُمَرِّرُ الثانِيَةَ ما دامَت الوَثيقَةُ
+    /// تَنتَظِرُ الدَفع. كانَ المُعَرِّفُ المَرجِعَ فَتَطوي <c>ON CONFLICT (id) DO NOTHING</c> المُعامَلَةَ الثانِيَة (مَقيسٌ عِندَ المُراجِع: «paddle POST sent 2 ·
+    /// provider txns txn_01,txn_02 · ledger entries 1»). والنِداءانِ يُبنَيانِ كَما يَبنيهِما البابُ (<c>PaddleSurface.CreateCall</c>).</para>
+    /// </summary>
+    [Fact]
+    public async Task Two_paddle_creates_of_the_same_draft_are_two_accepted_ids_under_one_reference()
+    {
+        static string Transaction(string id) => "{\"data\":{\"id\":\"" + id + "\",\"status\":\"ready\",\"checkout\":{\"url\":\"https://pay.example/c?_ptxn=" + id + "\"}}}";
+        var recorder = new CallRecorder();
+        var script = new Script((HttpStatusCode.Created, Transaction("txn_01")), (HttpStatusCode.Created, Transaction("txn_02")));
+        var provider = new ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider(
+            Options.Create(new ACommerce.Kit.Payments.Providers.Paddle.PaddleOptions { ApiKey = "k", Environment = "live" }),
+            new ProviderHttp<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>(new HttpClient(script), new ProviderCalls(recorder)),
+            NullLogger<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>.Instance);
+        var draft = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.ReadDraft(Store, "manual", "49", "USD", "30", "شَهر", "");
+        var reference = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.Reference(draft);
+
+        var first = await provider.CreateTransactionAsync(ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.CreateCall(Store, reference), draft, reference);
+        var second = await provider.CreateTransactionAsync(ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.CreateCall(Store, reference), draft, reference);
+
+        var accepted = recorder.Calls.Where(c => c.Acceptance is { Outcome: ProviderOutcome.Accepted }).Select(c => c.Call).ToList();
+        output.WriteLine($"[G6·Paddle] طَلَباتُ POST {script.Seen.Count} · مُعامَلاتُ Paddle {first.TransactionId},{second.TransactionId} · مُعَرِّفاتٌ مَقبولَة {accepted.Select(c => c.Id).Distinct().Count()} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(new[] { "txn_01", "txn_02" }, new[] { first.TransactionId, second.TransactionId });
+        Assert.Equal(2, script.Seen.Count);
+        Assert.Equal(2, accepted.Count);
+        Assert.Equal(2, accepted.Select(c => c.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(accepted, c => Assert.Equal((OutboundUnits.BillingPaddleTransactionCreate, ProviderNames.Paddle, Store, ProviderCall.PaddleReferenceSource, reference),
+                                               (c.Unit, c.Provider, c.App, c.SourceType, c.SourceId)));
+        Assert.All(accepted, c => Assert.DoesNotContain(reference, c.Id, StringComparison.Ordinal));
     }
 
     // ═══ (‏2026-11-12، W13-6·١٥ — التَصميم §6.2) OTO ونِداءُ النَموذَج ═══════════════════════════════════════════════════════════════════

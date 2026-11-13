@@ -241,7 +241,7 @@
       "measure": "count",
       "feature": "subscriptions",
       "reconcile": "intents",
-      "source": "PaddlePaymentProvider.CreateTransactionAsync through ProviderHttp — one entry when POST /transactions answers 2xx; request id = our reference (PaddleTransactionPolicy.Reference); app = the store slug (POST /admin/tenants/{slug}/plan/paddle-link)"
+      "source": "PaddlePaymentProvider.CreateTransactionAsync through ProviderHttp — one entry when POST /transactions answers 2xx; request id = a fresh call id (PaddleSurface.CreateCall — our reference keys our document, not a Paddle deduplication: two clicks with the same draft are two Paddle transactions, so each accepted create is its own operation); source = paddle_reference:{our reference} (PaddleTransactionPolicy.Reference); app = the store slug (POST /admin/tenants/{slug}/plan/paddle-link)"
     },
     {
       "code": "delivery.order.create",

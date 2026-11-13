@@ -1,5 +1,6 @@
 using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -176,6 +177,18 @@ public static class PaddleSurface
             CreatedAt     = at,
             At            = at,
         };
+
+    /// <summary>
+    /// <para><b>نِداءُ إنشاءِ المُعامَلَةِ المَعدود — مُعَرِّفُه نِداءٌ جَديدٌ ومَصدَرُه مَرجِعُنا</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-CNT-R3-1 —
+    /// ADR-051 §١٩). كانَ المُعَرِّفُ المَرجِعَ نَفسَه، والمَرجِعُ يَمنَعُ وَثيقَتَينِ عِندَنا لا مُعامَلَتَينِ عِندَ Paddle (<c>docs/DEPLOY.md</c> §٥-أ):
+    /// فَالنَقرَةُ الثانِيَةُ بِالمُسَوَّدَةِ نَفسِها — والبابُ يُمَرِّرُها ما دامَت الوَثيقَةُ تَنتَظِرُ الدَفع (<c>IsOverwritable</c>) — مُعامَلَةٌ ثانِيَةٌ قَبِلَها Paddle
+    /// يَبتَلِعُها <c>ON CONFLICT (id) DO NOTHING</c>. وكَذا إعادَةُ المُشرِفِ بَعدَ فَشَلٍ يَلي النِداء، وبَعدَ مَجهولٍ أَنشَأَ عِندَه.</para>
+    /// <para>فَكُلُّ إنشاءٍ مَقبولٍ سَطرٌ (كَإنشاءِ فاتورَةِ البَوّابَة، التَصميم §6.2؛ و§17 س٦: «التَكرارُ التَفاعُلِيُّ يُعَدُّ مُنفَصِلاً»)، والمَرجِعُ يَبقى
+    /// في السَطرِ مَصدَراً (<see cref="ProviderCall.PaddleReferenceSource"/>) فَتُجمَعُ مُعامَلاتُ الوَثيقَةِ الواحِدَةِ بِه.</para>
+    /// </summary>
+    public static ProviderCall CreateCall(string slug, string reference)
+        => ProviderCall.ForChannel(OutboundUnits.BillingPaddleTransactionCreate, slug, ProviderCall.FreshRequestId())
+                       .About(ProviderCall.PaddleReferenceSource, reference);
 
     /// <summary>فَشَلُ نُقطَةِ نَموذَجٍ في <c>/admin</c> — <b>تَحويلٌ
     /// لا JSON</b>، ونَفسُ صيغَةِ

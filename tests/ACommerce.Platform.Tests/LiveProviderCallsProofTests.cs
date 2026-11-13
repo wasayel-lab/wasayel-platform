@@ -856,4 +856,54 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
         Assert.All(afterRetry, f => Assert.Equal((slug, owner.ToString("D"), MeterSentinels.SystemJob, ProviderCall.InvoiceSource, invoice, true),
                                                  (f.Row.App, f.Row.Entrepreneur, f.Row.Role, f.Row.SourceType, f.Row.SourceId, f.Row.SameTransactionAsIntent)));
     }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-CNT-R3-1 — ADR-051 §١٩) <b>نَقرَتانِ عَلى «أَنشِئ الرابِط» بِالمُسَوَّدَةِ نَفسِها عَلى كاتِبِ المُضيفِ
+    /// المُرَكَّب</b>: Paddle يُجيبُ ‏201 بِـ<c>txn_01</c> ثُمَّ <c>txn_02</c> (مُعامَلَتانِ عِندَه — <c>docs/DEPLOY.md</c> §٥-أ) ⇐ سَطرانِ ونِيَّتانِ مَقبولَتان، كُلُّ سَطرٍ
+    /// في مُعامَلَةِ قَبولِ نِيَّتِه (<c>writer_xid</c> = <c>xmin</c> النِيَّة)، ومَصدَرُهُما مَرجِعُنا الواحِد. والنِداءانِ كَما يَبنيهِما البابُ (<c>PaddleSurface.CreateCall</c>).</para>
+    /// </summary>
+    [Fact]
+    public async Task Two_paddle_creates_of_the_same_draft_are_two_entries_each_written_with_its_intent()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ Paddle", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var log = new CapturedLog();
+        var calls = new ProviderCalls(new UsageLedgerWriter(host.Store, host.Services.GetRequiredService<IMemoryCache>(), log));
+        var transactions = new Queue<string>(new[] { "txn_01", "txn_02" });
+        var paddle = new Answer((_, _) =>
+        {
+            var id = transactions.Dequeue();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("{\"data\":{\"id\":\"" + id + "\",\"status\":\"ready\",\"checkout\":{\"url\":\"https://pay.example/c?_ptxn=" + id + "\"}}}"),
+            });
+        });
+        var provider = new ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider(
+            Microsoft.Extensions.Options.Options.Create(new ACommerce.Kit.Payments.Providers.Paddle.PaddleOptions { ApiKey = "k", Environment = "live" }),
+            new ProviderHttp<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>(new HttpClient(paddle), calls),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider>.Instance);
+        var draft = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.ReadDraft(slug, "manual", "49", "USD", "30", "شَهر", "");
+        var reference = ACommerce.Kit.Payments.Providers.Paddle.PaddleTransactionPolicy.Reference(draft);
+
+        var created = new List<string>();
+        for (var click = 0; click < 2; click++)
+            created.Add((await provider.CreateTransactionAsync(ACommerce.Templates.Customer.Marketplace.Billing.PaddleSurface.CreateCall(slug, reference), draft, reference)).TransactionId);
+
+        var entries = await EntriesOfAppAsync(slug, OutboundUnits.BillingPaddleTransactionCreate);
+        var intents = await IntentsOfAppAsync(slug);
+        var failed = log.Lines.Count(l => l.StartsWith("[meter] outbound-intent-failed", StringComparison.Ordinal) || l.StartsWith("[meter] outbound-unrecorded", StringComparison.Ordinal));
+        output.WriteLine($"[G6·Paddle] طَلَباتُ POST {paddle.Sent} · مُعامَلاتُ Paddle {string.Join(",", created)} · سُطورُ الدَفتَر {entries.Count} · نِيّاتٌ {string.Join(", ", intents.Select(i => i.Outcome))} · سُطورُ عُطلِ الكاتِب {failed}");
+        foreach (var (id, row) in entries) output.WriteLine($"[G6·Paddle] {id} · {row}");
+        Assert.Equal(new[] { "txn_01", "txn_02" }, created);
+        Assert.Equal(2, paddle.Sent);
+        Assert.Equal(2, entries.Count);
+        Assert.All(entries, e => Assert.Equal((slug, owner.ToString("D"), MeterSentinels.Unresolved, "subscriptions", ProviderNames.Paddle, ProviderCall.PaddleReferenceSource, reference, 1L, true),
+                                              (e.Row.App, e.Row.Entrepreneur, e.Row.Role, e.Row.Feature, e.Row.Provider, e.Row.SourceType, e.Row.SourceId, e.Row.Quantity, e.Row.SameTransactionAsIntent)));
+        Assert.Equal(entries.Select(e => e.Id).Order(StringComparer.Ordinal), intents.Select(i => i.Id).Order(StringComparer.Ordinal));
+        Assert.All(intents, i => Assert.Equal("accepted", i.Outcome));
+        Assert.Equal(0, failed);
+    }
 }

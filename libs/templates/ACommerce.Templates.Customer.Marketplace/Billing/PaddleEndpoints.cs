@@ -130,7 +130,7 @@ public static class PaddleEndpoints
                     await session.LoadAsync<PaddleTransactionRecord>(reference, ct)))
                 return PaddleSurface.Failed(slug, PaddleSurface.AlreadySettled);
 
-            var result = await paddle.CreateTransactionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPaddleTransactionCreate, slug, reference), draft, reference, ct);
+            var result = await paddle.CreateTransactionAsync(PaddleSurface.CreateCall(slug, reference), draft, reference, ct);
 
             // ورِسالَةُ Paddle تُعرَض كَما هي — رَمزُها ونَصُّها.
             // و«فَشِلَ الإنشاء» وَحدَها تُرسِل المُشرِفَ يُخَمِّن.

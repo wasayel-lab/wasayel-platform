@@ -68,6 +68,13 @@ public sealed record ProviderCall(string Unit, string Provider, string App, stri
     // `ShippingCalls` (القالِب).
     /// <summary>‏(W13-6·١٥) نَوعُ مَصدَرِ إنشاءِ طَلَبِ الشَحنِ وسُؤالِ حالِه: مُعَرِّفُ طَلَبِنا عِندَ الناقِل.</summary>
     public const string DeliveryOrderSource = "delivery_order";
+
+    // ─── (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-CNT-R3-1 — ADR-051 §١٩) مَرجِعُ Paddle مَصدَراً لا مُعَرِّفاً ──────────────────────────
+    // **مَرجِعُنا مِفتاحُ وَثيقَتِنا لا مِفتاحُ مَنعِ تَكرارٍ عِندَ Paddle** (`PaddlePaymentProvider.CreateTransactionAsync`: «يَمنَعُ وَثيقَتَين لا مُعامَلَتَين»؛
+    // `docs/DEPLOY.md` §٥-أ): نَقرَتانِ بِالمُسَوَّدَةِ نَفسِها مُعامَلَتانِ عِندَ Paddle، فَكُلُّ إنشاءٍ مَقبولٍ عَمَلِيَّتُه (مُعَرِّفُ نِداءٍ جَديد) والمَرجِعُ ما عُدّ.
+    // مُستَهلِكُه الأَوَّلُ في وَقتِ التَشغيل `PaddleSurface.CreateCall` (بابُ رابِطِ Paddle).
+    /// <summary>‏(M6C-CNT-R3-1) نَوعُ مَصدَرِ إنشاءِ مُعامَلَةِ Paddle: مَرجِعُنا (<c>PaddleTransactionPolicy.Reference</c>) — والمُعَرِّفُ نِداءٌ جَديد.</summary>
+    public const string PaddleReferenceSource = "paddle_reference";
 }
 
 /// <summary>
