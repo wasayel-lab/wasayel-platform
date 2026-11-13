@@ -104,6 +104,19 @@ public static class MeterSql
     public const string PresenceClaimCompleted = "select exists(select 1 from meter.presence_claim where day = @day and completed_at is not null)";
 
     /// <summary>
+    /// <para><b>حامِلُ اليَومِ في الطابور — صَفٌّ واحِدٌ لِكُلِّ يَوم</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٢ — M6D-CNT-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ):
+    /// <c>day</c> مِفتاحُه و<c>scheduled_at</c>. يُكتَبُ مَعَ رِسالَةِ ذلكَ اليَومِ المُجَدوَلَةِ في <b>مُعامَلَةٍ واحِدَة</b> (صُندوقُ Marten الصادِر)، فَوُجودُه ⇔ لِليَومِ حامِلٌ
+    /// في الطابور؛ ومُعالِجٌ ثانٍ يَقِفُ عَلى المِفتاحِ الفَريدِ فَيَتَراجَعُ ومَعَه رِسالَتُه — فَلا يَتَضاعَفُ الحامِل. كاتِبُه الوَحيدُ <c>PresenceSnapshot.CarryAsync</c>.</para>
+    /// </summary>
+    public const string PresenceSchedule = "presence_schedule";
+
+    /// <summary>صَفُّ الحامِلِ بِعَلامَةِ <c>?</c> الَّتي يَقرَؤُها <c>QueueSqlCommand</c> — <b>بِلا <c>ON CONFLICT</c> عَمداً</b>: التَكرارُ (‏23505) يَرُدُّ المُعامَلَةَ كُلَّها ومَعَها الرِسالَة.</summary>
+    public const string PresenceScheduleInsert = "insert into meter.presence_schedule (day) values (?)";
+
+    /// <summary>أَلِهذا اليَومِ حامِل؟ — يُسأَلُ قَبلَ المُعامَلَةِ فَلا يُرمى التَكرارُ في المَسارِ المُعتاد؛ والمِفتاحُ الفَريدُ هُوَ الحَكَمُ في السِباق.</summary>
+    public const string PresenceScheduleCarried = "select exists(select 1 from meter.presence_schedule where day = @day)";
+
+    /// <summary>
     /// <para><b>سَطرُ الحُضور</b> — أَعمِدَةُ <see cref="Insert"/> بِأَسمائِها، و<c>occurred_at</c> بِدايَةُ اليَومِ بِـ<see cref="DayZone"/> (فَيَقَعُ في دَلوِ يَومِه عِندَ المُجَمِّعِ
     /// والصَفحَة)، والجيلُ بِتَعبيرِ <see cref="Insert"/> نَفسِه. و<c>ON CONFLICT (id) DO NOTHING</c>: المُعَرِّفُ يَحمِلُ اليَوم، فَإعادَتُه لا تُضاعِف.</para>
     /// </summary>

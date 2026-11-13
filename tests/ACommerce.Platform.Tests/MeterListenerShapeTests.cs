@@ -97,7 +97,8 @@ public class MeterListenerShapeTests(ITestOutputHelper output)
         Assert.Equal(new[] { nameof(UsageListener) }, listeners);
         // ‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) ونِيَّاتُ الصادِرِ جَدوَلٌ سادِسٌ في الميزَةِ نَفسِها (لا كائِنَ جَديدٌ خارِجَ `meter`).
         // ‏(‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣) ومُطالَبَةُ لَقطَةِ الحُضورِ جَدوَلٌ سابِعٌ في الميزَةِ نَفسِها (لا كائِنَ جَديدٌ خارِجَ `meter`).
-        Assert.Equal(new[] { "meter.agg_cursor", "meter.agg_daily", "meter.generation", "meter.outbound_intent", "meter.presence_claim", "meter.unit_epoch", "meter.usage_entry" },
+        // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٢ — ADR-051 §٢٣) وحامِلُ كُلِّ يَومٍ في الطابورِ جَدوَلٌ ثامِنٌ في الميزَةِ نَفسِها (لا كائِنَ جَديدٌ خارِجَ `meter`).
+        Assert.Equal(new[] { "meter.agg_cursor", "meter.agg_daily", "meter.generation", "meter.outbound_intent", "meter.presence_claim", "meter.presence_schedule", "meter.unit_epoch", "meter.usage_entry" },
                      objects.Order(StringComparer.Ordinal));
     }
 }

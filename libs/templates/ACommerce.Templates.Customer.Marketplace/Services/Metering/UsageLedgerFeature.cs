@@ -89,5 +89,12 @@ public sealed class UsageLedgerFeature : FeatureSchemaBase
         claim.AddColumn("claimed_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
         claim.AddColumn("completed_at", "timestamp with time zone");
         yield return claim;
+
+        // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٢ — M6D-CNT-1؛ ADR-051 §٢٣) حامِلُ كُلِّ يَومٍ في الطابور: صَفٌّ يُكتَبُ مَعَ رِسالَتِه المُجَدوَلَةِ في
+        // مُعامَلَةٍ واحِدَة، فَلِكُلِّ يَومٍ حامِلٌ واحِدٌ مَهما فَشِلَت لَقطَةُ اليَومِ الَّذي قَبلَه. يَكتُبُه `PresenceSnapshot.CarryAsync` وَحدَه.
+        var schedule = new Table(Name(MeterSql.PresenceSchedule));
+        schedule.AddColumn("day", "date").AsPrimaryKey();
+        schedule.AddColumn("scheduled_at", "timestamp with time zone").NotNull().DefaultValueByExpression("transaction_timestamp()");
+        yield return schedule;
     }
 }

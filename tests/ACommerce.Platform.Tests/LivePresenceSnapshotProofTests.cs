@@ -669,4 +669,134 @@ public class LivePresenceSnapshotProofTests(ITestOutputHelper output)
             output.WriteLine($"[G12·٧] حُذِفَت {database}");
         }
     }
+
+    // ─── ٨. حامِلُ الغَدِ مُستَقِلٌّ عَن نَتيجَةِ اليَوم (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٢ — M6D-CNT-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ) ─────────────
+    // كانَ الرابِحُ وَحدَه يُجَدوِلُ غَدَه بَعدَ إيداعِه، والرِسالَةُ بِلا سِياسَةِ فَشَل: زِنادٌ يَرمي عَلى المُطالَبَةِ ⇐ رِسالَةٌ ميتَةٌ خِلالَ ثانِيَة، ولا حامِلَ لِلغَدِ حَتّى الإقلاعِ التالي.
+    // وكانَ الإقلاعُ يَسأَلُ عَن اكتِمالِ اليَومِ قَبلَ الغَدِ في مُحاوَلَةٍ واحِدَة. الصُفوفُ الثَلاثَةُ تَقيسُ ما صار: حامِلٌ واحِدٌ لِكُلِّ يَومٍ قَبلَ اللَقطَة، وإعادَةٌ بِمُهلَةٍ لا رِسالَةٌ ميتَة،
+    // ومِفتاحُ الحامِلِ يَرُدُّ الرِسالَةَ مَعَ صَفِّه، والإقلاعُ يَحمِلُ الغَدَ ويُرسِلُ اليَومَ وإن تَعَذَّرَت قِراءَتُه.
+
+    private static async Task<bool> UntilAsync(Func<Task<bool>> done, TimeSpan limit)
+    {
+        var clock = Stopwatch.StartNew();
+        while (clock.Elapsed < limit)
+        {
+            if (await done()) return true;
+            await Task.Delay(250);
+        }
+        return await done();
+    }
+
+    private static Task<long> CarriersAsync(string cs, DateOnly day)
+        => ScalarAsync<long>(cs, "select count(*) from meter.presence_schedule where day = @d", ("d", day));
+
+    private static Task<long> DeadAsync(string cs)
+        => ScalarAsync<long>(cs, "select count(*) from platform.wolverine_dead_letters where message_type like @t", ("t", "%" + nameof(TakePresenceSnapshot) + "%"));
+
+    [Fact]
+    public async Task A_failing_snapshot_keeps_one_carrier_for_tomorrow_and_its_cooldown_retry_takes_the_day()
+    {
+        if (!Enabled) return;
+        var logs = new Captured();
+        await WithHostAsync("ps", async (app, store, cs) =>
+        {
+            var today = PresenceSnapshot.Today();
+            var (todayKey, tomorrowKey) = (PresenceReader.DayKey(today), PresenceReader.DayKey(today.AddDays(1)));
+            // ‏العُطلُ مَحقونٌ في القاعِدَةِ عَلى مُطالَبَةِ يَومِ الحامِل — شَكلُ قِياسِ المُراجِع.
+            await ExecAsync(cs, "create function meter.g12_claim() returns trigger language plpgsql as $$ begin raise exception 'g12 injected claim failure'; end $$; "
+                                + "create trigger g12_claim before insert on meter.presence_claim for each row execute function meter.g12_claim()");
+            using (var scope = app.Services.CreateScope())
+                await scope.ServiceProvider.GetRequiredService<IMessageBus>().SendAsync(new TakePresenceSnapshot(today));
+            var failed = await UntilAsync(async () => (await EnvelopesAsync(cs)).Any(e => e.Status == "Scheduled" && e.Body == todayKey), TimeSpan.FromSeconds(30));
+            var afterFailure = await EnvelopesAsync(cs);
+            var (claims0, rows0, dead0, carriers0) = (await ClaimsAsync(cs, today), (await DayRowsAsync(cs, today)).Count, await DeadAsync(cs), await CarriersAsync(cs, today.AddDays(1)));
+            await ExecAsync(cs, "drop trigger g12_claim on meter.presence_claim; drop function meter.g12_claim()");
+            var taken = await UntilAsync(async () => await ScalarAsync<long>(cs, "select count(*) from meter.presence_claim where day = @d and completed_at is not null", ("d", today)) == 1,
+                                         TimeSpan.FromSeconds(90));
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var afterRetry = await EnvelopesAsync(cs);
+            var (rows1, dead1, carriers1) = ((await DayRowsAsync(cs, today)).Count, await DeadAsync(cs), await CarriersAsync(cs, today.AddDays(1)));
+            var carry = logs.Lines.Where(l => l.StartsWith("[meter] presence-carry", StringComparison.Ordinal)).ToList();
+            output.WriteLine($"[G12·٨] بَعدَ العُطل: إعادَةٌ مُجَدوَلَة {failed} · مُطالَبات {claims0} · سُطور {rows0} · رَسائِلُ ميتَة {dead0} · صَفُّ حامِلِ الغَد {carriers0} · الصُندوق {Show(afterFailure)}");
+            output.WriteLine($"[G12·٨] بَعدَ رَفعِ العُطل: أُخِذَ اليَوم {taken} · سُطور {rows1} · رَسائِلُ ميتَة {dead1} · صَفُّ حامِلِ الغَد {carriers1} · الصُندوق {Show(afterRetry)} · «{string.Join(" | ", carry)}»");
+
+            Assert.True(failed, "لا إعادَةَ مُجَدوَلَةً لِرِسالَةِ اليَومِ بَعدَ العُطل.");
+            Assert.Equal((0L, 0, 0L, 1L), (claims0, rows0, dead0, carriers0));
+            var carried = Assert.Single(afterFailure, e => e.Status == "Scheduled" && e.Body == tomorrowKey);
+            Assert.Equal(PresenceSnapshot.StartOf(today.AddDays(1)), carried.At);
+            Assert.True(taken, "الإعادَةُ لَم تَأخُذ اليَومَ بَعدَ رَفعِ العُطل.");
+            Assert.True(rows1 >= 12, $"أَداةٌ عَمياء: {rows1} سَطراً لِليَوم.");
+            Assert.Equal((0L, 1L), (dead1, carriers1));
+            Assert.Single(afterRetry, e => e.Status == "Scheduled" && e.Body == tomorrowKey);
+            Assert.DoesNotContain(afterRetry, e => e.Status == "Scheduled" && e.Body == todayKey);
+            Assert.Equal(new[] { $"[meter] presence-carry day={tomorrowKey} carrier=scheduled", $"[meter] presence-carry day={tomorrowKey} carrier=already" }, carry);
+        }, logs);
+    }
+
+    [Fact]
+    public async Task A_carrier_that_loses_the_day_key_rolls_back_its_message_with_its_row()
+    {
+        if (!Enabled) return;
+        await WithHostAsync("ps", async (app, store, cs) =>
+        {
+            var runtime = app.Services.GetRequiredService<Wolverine.Runtime.IWolverineRuntime>();
+            var log = app.Services.GetRequiredService<ILogger<PresenceSnapshot>>();
+            // ‏مُعامَلَةٌ أُخرى تُمسِكُ صَفَّ الحامِلِ ولَم تُودِع — السُؤالُ لا يَراه، فَيَقِفُ الحامِلُ عَلى المِفتاح: تُودِعُ ⇐ يَتَراجَعُ ومَعَه رِسالَتُه؛ تَتَراجَعُ ⇐ يَحمِلُ اليَوم.
+            foreach (var (day, commit) in new[] { (new DateOnly(2030, 6, 1), true), (new DateOnly(2030, 6, 2), false) })
+            {
+                await using var holder = new NpgsqlConnection(cs);
+                await holder.OpenAsync();
+                await using var tx = await holder.BeginTransactionAsync();
+                await using (var row = new NpgsqlCommand("insert into meter.presence_schedule (day) values (@d)", holder, tx))
+                {
+                    row.Parameters.AddWithValue("d", day);
+                    await row.ExecuteNonQueryAsync();
+                }
+                var carrying = new PresenceSnapshot(store, log).CarryAsync(day, runtime);
+                var blocked = await Task.WhenAny(carrying, Task.Delay(TimeSpan.FromSeconds(2))) != carrying;
+                if (commit) await tx.CommitAsync(); else await tx.RollbackAsync();
+                var carried = await carrying.WaitAsync(TimeSpan.FromSeconds(60));
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                var key = PresenceReader.DayKey(day);
+                var envelopes = (await EnvelopesAsync(cs)).Where(e => e.Body == key).ToList();
+                output.WriteLine($"[G12·٨] صَفُّ حامِلٍ مُمسَك ({(commit ? "يُودَع" : "يَتَراجَع")}) لِيَوم {key}: وَقَفَ الحامِل {blocked} · حَمَلَ {carried} · صُفوفُ الحامِل {await CarriersAsync(cs, day)} · الصُندوق {Show(envelopes)}");
+                Assert.True(blocked, "الحامِلُ لَم يَقِف عَلى الصَفِّ المُمسَك — المِفتاحُ الفَريدُ لا يَحرُسُ اليَوم.");
+                Assert.Equal(!commit, carried);
+                Assert.Equal(1L, await CarriersAsync(cs, day));
+                Assert.Equal(commit ? 0 : 1, envelopes.Count);
+                Assert.All(envelopes, e => Assert.Equal(("Scheduled", (DateTimeOffset?)PresenceSnapshot.StartOf(day)), (e.Status, e.At)));
+            }
+        });
+    }
+
+    [Fact]
+    public async Task A_boot_that_cannot_read_the_day_still_carries_tomorrow_and_sends_today()
+    {
+        if (!Enabled) return;
+        var logs = new Captured();
+        await WithHostAsync("ps", async (app, store, cs) =>
+        {
+            var today = PresenceSnapshot.Today();
+            var (todayKey, tomorrowKey) = (PresenceReader.DayKey(today), PresenceReader.DayKey(today.AddDays(1)));
+            // ‏سُؤالُ الإقلاعِ عَن اكتِمالِ اليَومِ يَفشَلُ (جَدوَلُ المُطالَبَةِ غائِبٌ تَحتَ اسمِه): كانَ يُسقِطُ الغَدَ واليَومَ مَعاً.
+            await ExecAsync(cs, "alter table meter.presence_claim rename to presence_claim_g12");
+            await PresenceSnapshot.ScheduleAtBootAsync(app.Services);
+            var boot = logs.Lines.Where(l => l.StartsWith("[meter] presence-boot", StringComparison.Ordinal)).ToList();
+            var bootTomorrow = (await EnvelopesAsync(cs)).Count(e => e.Status == "Scheduled" && e.Body == tomorrowKey);
+            var failed = await UntilAsync(async () => (await EnvelopesAsync(cs)).Any(e => e.Status == "Scheduled" && e.Body == todayKey), TimeSpan.FromSeconds(30));
+            await ExecAsync(cs, "alter table meter.presence_claim_g12 rename to presence_claim");
+            var taken = await UntilAsync(async () => await ScalarAsync<long>(cs, "select count(*) from meter.presence_claim where day = @d and completed_at is not null", ("d", today)) == 1,
+                                         TimeSpan.FromSeconds(90));
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            var after = await EnvelopesAsync(cs);
+            output.WriteLine($"[G12·٨] الإقلاع: «{string.Join(" | ", boot)}» · حامِلُ الغَدِ بَعدَه {bootTomorrow} · إعادَةُ اليَومِ مُجَدوَلَة {failed} · أُخِذَ اليَوم {taken} · "
+                             + $"صَفُّ حامِلِ الغَد {await CarriersAsync(cs, today.AddDays(1))} · الصُندوق {Show(after)}");
+            Assert.Contains(boot, l => l.StartsWith("[meter] presence-boot-failed step=read:", StringComparison.Ordinal));
+            Assert.Contains(boot, l => l.StartsWith($"[meter] presence-boot today={todayKey} sent=yes (unread) tomorrow={tomorrowKey}", StringComparison.Ordinal) && !l.EndsWith("(failed)", StringComparison.Ordinal));
+            Assert.Equal(1, bootTomorrow);
+            Assert.True(failed && taken, $"اليَومُ لَم يُؤخَذ: إعادَة {failed} · أُخِذ {taken}");
+            // ‏حامِلا الغَد: الإقلاعُ (بِلا صَفّ — إصلاحُ السِلسِلَة) ورِسالَةُ اليَومِ (بِصَفِّه)، كَما يَعُدُّهُما P12؛ وإعادَتُها لا تُضيفُ ثالِثاً.
+            Assert.Equal(2, after.Count(e => e.Status == "Scheduled" && e.Body == tomorrowKey));
+            Assert.Equal(1L, await CarriersAsync(cs, today.AddDays(1)));
+        }, logs);
+    }
 }
