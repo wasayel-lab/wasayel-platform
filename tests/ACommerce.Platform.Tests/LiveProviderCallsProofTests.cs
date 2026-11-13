@@ -709,4 +709,68 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
         Assert.Equal((MeterSentinels.Platform, MeterSentinels.Platform, "studio.build", ProviderNames.Anthropic, 1L, true),
                      (Assert.Single(model).App, model[0].Entrepreneur, model[0].Feature, model[0].Provider, model[0].Quantity, model[0].SameTransactionAsIntent));
     }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-SEC-R2-1 — ADR-051 §١٩) <b>رِسالَةُ PayPal المُزَوَّرَةُ عَلى كاتِبِ المُضيفِ المُرَكَّب</b>: الرُؤوسُ
+    /// كَما يَبنيها البابُ (<c>PayPalSurface.HeadersFrom</c> ثُمَّ <c>VerifyCall</c>)، والعُدَّةُ الحَقيقِيَّةُ عَلى PayPal يُجيبُ «FAILURE» بِـ‏200. مُعَرِّفُ مُستَخدِمٍ
+    /// في رَأسِ الإرسال ⇐ سَطرٌ مَقبولٌ ونِيَّةٌ مَقبولَة، وحُكمُ G17 عَلى الجَدوَلَينِ صِفر؛ ورَأسٌ طَولُه ‏8192 (فَوقَ حَدِّ فِهرِسِ btree لَو كُتِبَ كَما هُوَ) ⇐ سَطرٌ
+    /// مَقبولٌ كَذلِك بِلا سَطرِ <c>outbound-intent-failed</c> ولا <c>outbound-unrecorded</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_forged_paypal_webhook_counts_its_verify_call_without_planting_the_header_and_whatever_its_length()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        var user = Guid.NewGuid();   // مُعَرِّفُ مُستَخدِمٍ كَما يَظهَرُ في عُنوانِ صورَتِه العامّ (`tenants/{slug}/avatars/{userId}.{ext}`)
+        var log = new CapturedLog();
+        var calls = new ProviderCalls(new UsageLedgerWriter(host.Store, host.Services.GetRequiredService<IMemoryCache>(), log));
+        var opts = new ACommerce.Kit.Payments.Providers.PayPal.PayPalOptions { ClientId = "c", ClientSecret = "s", Environment = "live", WebhookId = "WH-1" };
+        var huge = string.Concat(Enumerable.Range(0, 256).Select(_ => Guid.NewGuid().ToString("N")));
+        var rows = new List<LedgerPersonScan.Row>();
+        foreach (var header in new[] { user.ToString("D"), huge })
+        {
+            var paypal = new Answer((req, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(req.RequestUri!.AbsolutePath.EndsWith("/token", StringComparison.Ordinal)
+                    ? "{\"access_token\":\"A21AA\",\"expires_in\":32400}" : "{\"verification_status\":\"FAILURE\"}"),
+            }));
+            var provider = new ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider(Microsoft.Extensions.Options.Options.Create(opts),
+                new ProviderHttp<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>(new HttpClient(paypal), calls),
+                new ACommerce.Kit.Payments.Providers.PayPal.PayPalTokenCache(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>.Instance);
+            var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionIdHeader] = header;
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionTimeHeader] = "2026-11-13T00:00:00Z";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.CertUrlHeader] = "https://api.paypal.com/cert.pem";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.AuthAlgoHeader] = "SHA256withRSA";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionSigHeader] = "forged==";
+            var headers = ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.HeadersFrom(http.Request);
+            var call = ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.VerifyCall(headers);
+
+            var verified = await new ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway(opts, provider).VerifyWebhookSignatureAsync(call, headers, "{\"id\":\"WH-1\"}");
+            var id = call.By(ProviderNames.PayPal).Id;
+            var entry = await EntriesAsync(id);
+            output.WriteLine($"[G17·PayPal] رَأسٌ بِطولِ {header.Length} ⇒ مُتَحَقَّق {verified} · طَلَباتُ PayPal {paypal.Sent} · النِيَّة {await OutcomeAsync(id)} · سُطور {entry.Count} · {id}");
+            Assert.False(verified);
+            Assert.Equal(("accepted", 1), (await OutcomeAsync(id), entry.Count));
+            Assert.Equal((MeterSentinels.Platform, ProviderNames.PayPal, UsageLedgerWriter.RequestSource, true),
+                         (entry[0].App, entry[0].Provider, entry[0].SourceType, entry[0].SameTransactionAsIntent));
+            await using var conn = new NpgsqlConnection(Cs);
+            await conn.OpenAsync();
+            await using (var cmd = new NpgsqlCommand("select 'usage_entry', id, 'source_id', source_id from meter.usage_entry where id = @id "
+                                                     + "union all select 'outbound_intent', id, 'request_id', request_id from meter.outbound_intent where id = @id", conn))
+            {
+                cmd.Parameters.AddWithValue("id", id);
+                await using var r = await cmd.ExecuteReaderAsync();
+                while (await r.ReadAsync()) rows.Add(new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3)));
+            }
+        }
+
+        var leaks = LedgerPersonScan.Leaks(new[] { user.ToString("D") }, rows);
+        var failed = log.Lines.Count(l => l.StartsWith("[meter] outbound-intent-failed", StringComparison.Ordinal) || l.StartsWith("[meter] outbound-unrecorded", StringComparison.Ordinal));
+        output.WriteLine($"[G17·PayPal] صُفوفٌ مَفحوصَة {rows.Count} · تَسَرُّب {leaks.Count} ({string.Join(", ", leaks)}) · سُطورُ عُطلِ الكاتِب {failed}");
+        Assert.Equal(4, rows.Count);
+        Assert.Empty(leaks);
+        Assert.Equal(0, failed);
+    }
 }

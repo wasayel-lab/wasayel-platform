@@ -528,6 +528,60 @@ public class ProviderCallsTests(ITestOutputHelper output)
         }, recorder.Log);
     }
 
+    /// <summary>
+    /// <para><b>رِسالَةُ PayPal المُزَوَّرَةُ لا تَزرَعُ رَأسَها في الدَفتَر</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-SEC-R2-1 — ADR-051 §١٩): البابُ مُعفًى
+    /// مِن بَوّابَةِ المَصدَر، والرَأسُ <c>paypal-transmission-id</c> يَكتُبُه مَجهول، وPayPal يُجيبُ التَوقيعَ الفاسِدَ بِـ‏200 و«FAILURE» فَيُقبَلُ النِداءُ ويُعَدّ.
+    /// الرُؤوسُ تُبنى كَما يَبنيها البابُ (<c>PayPalSurface.HeadersFrom</c> ثُمَّ <c>PayPalSurface.VerifyCall</c>) والعُدَّةُ الحَقيقِيَّة: مُعَرِّفُ مُستَخدِمٍ في الرَأسِ
+    /// ⇐ سَطرٌ مَقبولٌ وحُكمُ G17 (<c>LedgerPersonScan.Leaks</c>) عَلى مُعَرِّفِ السَطرِ ومَصدَرِه ومُعَرِّفِ النِيَّةِ وطَلَبِها صِفر؛ والهاتِفُ نَصّاً كَذلِك؛ ورَأسٌ
+    /// طَولُه ‏4096 ⇐ مُعَرِّفٌ بِطولِ اسمٍ مُستَعار؛ والإرسالُ نَفسُه مُعاداً ⇐ المُعَرِّفُ نَفسُه (سَطرٌ واحِد).</para>
+    /// </summary>
+    [Fact]
+    public async Task A_forged_paypal_webhook_never_plants_its_transmission_header_in_the_ledger()
+    {
+        var user = Guid.NewGuid();
+        var phone = "+966551234567";
+        var huge = string.Concat(Enumerable.Range(0, 128).Select(_ => Guid.NewGuid().ToString("N")));
+        var opts = new ACommerce.Kit.Payments.Providers.PayPal.PayPalOptions { ClientId = "c", ClientSecret = "s", Environment = "live", WebhookId = "WH-1" };
+        var rows = new List<LedgerPersonScan.Row>();
+        var ids = new List<string>();
+        foreach (var header in new[] { user.ToString("D"), user.ToString("N"), phone, huge, user.ToString("D") })
+        {
+            var recorder = new MemoryRecorder();
+            var script = new Script((HttpStatusCode.OK, "{\"access_token\":\"A21AA\",\"expires_in\":32400}"), (HttpStatusCode.OK, "{\"verification_status\":\"FAILURE\"}"));
+            var provider = new ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider(Options.Create(opts),
+                new ProviderHttp<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>(new HttpClient(script), new ProviderCalls(recorder)),
+                new ACommerce.Kit.Payments.Providers.PayPal.PayPalTokenCache(), NullLogger<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>.Instance);
+            var gateway = new ACommerce.Kit.Payments.Providers.PayPal.PayPalGateway(opts, provider);
+            var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionIdHeader] = header;
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionTimeHeader] = "2026-11-13T00:00:00Z";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.CertUrlHeader] = "https://api.paypal.com/cert.pem";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.AuthAlgoHeader] = "SHA256withRSA";
+            http.Request.Headers[ACommerce.Kit.Payments.Providers.PayPal.PayPalWebhookHeaders.TransmissionSigHeader] = "forged==";
+            var headers = ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.HeadersFrom(http.Request);
+            var call = ACommerce.Templates.Customer.Marketplace.Billing.PayPalSurface.VerifyCall(headers);
+
+            Assert.False(await gateway.VerifyWebhookSignatureAsync(call, headers, "{\"id\":\"WH-1\"}"));
+            var id = $"{OutboundUnits.BillingPayPalWebhookVerify}:{ProviderNames.PayPal}:{call.RequestId}";
+            Assert.Equal(new[] { $"open {id}", $"decide {id} Accepted 1" }, recorder.Log);
+            output.WriteLine($"[G17] رَأسٌ بِطولِ {header.Length} ⇒ {id} ({id.Length})");
+            Assert.DoesNotContain(header, id, StringComparison.OrdinalIgnoreCase);
+            Assert.Matches("^[0-9a-f]{32}$", call.RequestId);
+            ids.Add(id);
+            // الصُفوفُ كَما يَكتُبُها الكاتِب: السَطرُ بِمَصدَرِه (الطَلَبُ حينَ لا `About`) والنِيَّةُ بِطَلَبِها.
+            rows.Add(new("usage_entry", id, "source_id", call.SourceId ?? call.RequestId));
+            rows.Add(new("outbound_intent", id, "request_id", call.RequestId));
+        }
+
+        var leaks = LedgerPersonScan.Leaks(new[] { user.ToString("D") }, rows);
+        output.WriteLine($"[G17] صُفوفٌ مَفحوصَة {rows.Count} · تَسَرُّب {leaks.Count}");
+        Assert.Equal(10, rows.Count);
+        Assert.Empty(leaks);
+        Assert.DoesNotContain(rows, r => r.Value.Contains(phone, StringComparison.Ordinal) || r.Id.Contains(phone, StringComparison.Ordinal));
+        Assert.Equal(ids[0], ids[4]);
+        Assert.Equal(4, ids.Distinct().Count());
+    }
+
     /// <summary><b>Paddle</b>: المُعامَلَةُ تُعَدُّ بِمَرجِعِنا — ‏201 مَقبولَة و‏400 مَرفوضَة والجَوابُ يَعودُ كَما كان (رِسالَةُ Paddle في النَتيجَة).</summary>
     [Theory]
     [InlineData(201, "Accepted")]

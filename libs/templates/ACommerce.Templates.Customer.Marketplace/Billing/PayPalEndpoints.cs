@@ -79,7 +79,7 @@ public static class PayPalEndpoints
             var headers = PayPalSurface.HeadersFrom(http.Request);
 
             var verified = paypal.CanVerifyWebhooks
-                && await paypal.VerifyWebhookSignatureAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform, headers.TransmissionId), headers, raw, http.RequestAborted);
+                && await paypal.VerifyWebhookSignatureAsync(PayPalSurface.VerifyCall(headers), headers, raw, http.RequestAborted);
             var gate = PayPalBillingPolicy.Gate(paypal.Options, headers, verified);
             if (gate != PayPalWebhookGate.Accepted)
                 return PayPalSurface.Rejected(log, gate);

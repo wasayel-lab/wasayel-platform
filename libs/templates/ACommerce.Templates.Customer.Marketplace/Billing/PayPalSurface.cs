@@ -1,5 +1,6 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -61,6 +62,17 @@ public static class PayPalSurface
         req.Headers[PayPalWebhookHeaders.CertUrlHeader].ToString(),
         req.Headers[PayPalWebhookHeaders.AuthAlgoHeader].ToString(),
         req.Headers[PayPalWebhookHeaders.TransmissionSigHeader].ToString());
+
+    /// <summary>
+    /// <para><b>نِداءُ التَحَقُّقِ مِن التَوقيعِ المَعدود — مِفتاحُه اسمٌ مُستَعارٌ لِرَأسِ الإرسالِ لا الرَأسُ نَفسُه</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج
+    /// الثانِيَة · M6C-SEC-R2-1 — ADR-051 §١٩). البابُ مُعفًى مِن بَوّابَةِ المَصدَر، والرَأسُ <c>paypal-transmission-id</c> نَصٌّ يَكتُبُه أَيُّ مَجهولٍ
+    /// <b>قَبلَ</b> أَن يُتَحَقَّقَ مِن شَيء، ونِداءُ التَحَقُّقِ يُقبَلُ ولو أَجابَ PayPal بِـ‏200 و«FAILURE». فَكانَ الرَأسُ كَما هُوَ مُعَرِّفَ سَطرٍ ونِيَّةٍ
+    /// لا يُمحَيان: مُعَرِّفُ مُستَخدِمٍ مَخزونٍ أَو هاتِفٌ يَزرَعُه طَلَبٌ مَجهول، ورَأسٌ طَويلٌ يُسقِطُ الكِتابَتَينِ بِحَدِّ فِهرِسِ btree فَيَمُرُّ النِداءُ بِلا عَدّ.</para>
+    /// <para>والاسمُ المُستَعار (<see cref="UsageEntryId.Pseudonym"/>) ‏32 مِحرَفاً لا يُعكَس، وإعادَةُ PayPal لِلإرسالِ نَفسِه سَطرٌ واحِدٌ كَما كانَت.</para>
+    /// </summary>
+    public static ProviderCall VerifyCall(PayPalWebhookHeaders headers)
+        => ProviderCall.ForChannel(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform,
+            UsageEntryId.Pseudonym(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform, headers.TransmissionId));
 
     /// <summary>
     /// <para>رَفضُ البَوّابَة — <b>‏400 لا ‏500، وبِلا تَحويلٍ ولا
