@@ -10,6 +10,33 @@ namespace ACommerce.Platform.Tests;
 // (‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١؛ التَصميم §2 «Privacy (corrected)»). الاسمُ المُستَعارُ أَحادِيُّ الاتِّجاه وحَتمِيّ (مَنعُ
 // التَكرارِ والمُطابَقَةُ يُعيدانِ حِسابَه)، ولا مِفتاحَ فيه عَن قَصد. والفَحصُ الحَيُّ عَلى قاعِدَةٍ حَقيقِيَّة في LiveMeterPersistenceProofTests.
 
+/// <summary>
+/// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-SEC-1 — ADR-051 §١٩) <b>حُكمُ التَسَرُّبِ الواحِدُ لِلدَفتَرِ بِجَدوَلَيه</b>: سُطورُه
+/// (<c>meter.usage_entry</c>: المُعَرِّفُ والمَصدَر) ونِيّاتُه (<c>meter.outbound_intent</c>: المُعَرِّفُ والطَلَب) — حَقلٌ يَحمِلُ مُعَرِّفَ مُستَخدِمٍ مَخزونٍ بِصيغَةِ
+/// <c>D</c> أَو <c>N</c> (أَيّاً كانَت حالَةُ الحُروف)، أَو مِفتاحَ صورَةٍ شَخصِيَّة (<c>/avatars/</c>)، تَسَرُّب. كانَ الفَحصُ الحَيُّ يَقرَأُ السُطورَ وَحدَها والمَصدَرَ
+/// بِصيغَةِ <c>D</c> وَحدَها — والصادِرُ يَبني مُعَرِّفاتِه بِصيغَةِ <c>N</c>، والمَرفوضُ والمَجهولُ لا يَبلُغانِ إلّا النِيّات (مَقيسٌ عِندَ المُراجِعِ «تَسَرُّب 0» عَلى نِيَّةٍ
+/// وسَطرٍ مَحقونَين). مُستَهلِكاه: <c>LiveMeterPersistenceProofTests</c> (G17 حَيّاً وعَيبُه المَحقون) وصُفوفُ الحُكمِ أَدناه.</para>
+/// </summary>
+internal static class LedgerPersonScan
+{
+    /// <summary>صَفُّ الدَفتَر: جَدوَلُه ومُعَرِّفُه وحَقلُه الثاني باسمِه وقيمَتِه.</summary>
+    internal sealed record Row(string Table, string Id, string Field, string Value);
+
+    internal static IReadOnlyList<string> Leaks(IEnumerable<string> userIds, IEnumerable<Row> rows)
+    {
+        var forms = userIds.Where(u => Guid.TryParse(u, out _)).SelectMany(u => new[] { Guid.Parse(u).ToString("D"), Guid.Parse(u).ToString("N") })
+                           .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        bool Carries(string v) => v.Contains("/avatars/", StringComparison.Ordinal) || forms.Any(f => v.Contains(f, StringComparison.OrdinalIgnoreCase));
+        var leaks = new List<string>();
+        foreach (var r in rows)
+        {
+            if (Carries(r.Id)) leaks.Add($"{r.Table}:{r.Id}·id");
+            if (Carries(r.Value)) leaks.Add($"{r.Table}:{r.Id}·{r.Field}");
+        }
+        return leaks;
+    }
+}
+
 public class MeterPrivacyTests(ITestOutputHelper output)
 {
     [Fact]
@@ -108,5 +135,37 @@ public class MeterPrivacyTests(ITestOutputHelper output)
             Assert.DoesNotContain(user.ToString("N"), field, StringComparison.OrdinalIgnoreCase);
         }
         Assert.Equal($"{notice:N}:{UsageEntryId.Pseudonym(OutboundUnits.PushSend, "store-a", subscriber.Endpoint)}", call.RequestId);
+    }
+
+    // ─── ‏(‏2026-11-13، M6C-SEC-1) حُكمُ التَسَرُّبِ نَفسُه يُقاسُ قَبلَ أَن يُوثَقَ بِه (القاعِدَة ١٠) — كُلُّ صيغَةٍ وكُلُّ حَقلٍ وكُلُّ جَدوَل ───────────────
+
+    private static readonly string Person = "5ee030c5-200e-4ca0-8ec0-c25056e7287a";
+
+    [Theory]
+    [InlineData("usage_entry", "deal.create:store-a:5ee030c5-200e-4ca0-8ec0-c25056e7287a", "source_id", "x", "usage_entry:deal.create:store-a:5ee030c5-200e-4ca0-8ec0-c25056e7287a·id")]
+    [InlineData("usage_entry", "member.join:store-a:x", "source_id", "5ee030c5200e4ca08ec0c25056e7287a", "usage_entry:member.join:store-a:x·source_id")]
+    [InlineData("usage_entry", "member.join:store-a:x", "source_id", "5EE030C5-200E-4CA0-8EC0-C25056E7287A", "usage_entry:member.join:store-a:x·source_id")]
+    [InlineData("outbound_intent", "otp.sms.send:twilio:5ee030c5200e4ca08ec0c25056e7287a", "request_id", "x", "outbound_intent:otp.sms.send:twilio:5ee030c5200e4ca08ec0c25056e7287a·id")]
+    [InlineData("outbound_intent", "otp.sms.send:twilio:x", "request_id", "5ee030c5200e4ca08ec0c25056e7287a", "outbound_intent:otp.sms.send:twilio:x·request_id")]
+    [InlineData("outbound_intent", "file.upload:s3:x", "request_id", "tenants/store-a/avatars/x.png", "outbound_intent:file.upload:s3:x·request_id")]
+    public void The_leak_verdict_sees_each_form_in_each_field_of_each_table(string table, string id, string field, string value, string expected)
+    {
+        var leaks = LedgerPersonScan.Leaks([Person, Guid.NewGuid().ToString("D")], [new(table, id, field, value)]);
+        output.WriteLine($"[G17] {table} {id} · {field}={value} ⇒ {string.Join(" | ", leaks)}");
+        Assert.Equal(expected, Assert.Single(leaks));
+    }
+
+    [Fact]
+    public void A_pseudonym_or_another_id_is_not_a_leak()
+    {
+        var rows = new LedgerPersonScan.Row[]
+        {
+            new("usage_entry", $"member.join:store-a:{UsageEntryId.Pseudonym("member.join", "store-a", Person)}", "source_id", UsageEntryId.Pseudonym("member.join", "store-a", Person)),
+            new("outbound_intent", $"otp.sms.send:twilio:{Guid.NewGuid():N}", "request_id", Guid.NewGuid().ToString("N")),
+            new("usage_entry", $"deal.create:store-a:{Guid.NewGuid()}", "source_id", Guid.NewGuid().ToString("D")),
+        };
+        var leaks = LedgerPersonScan.Leaks([Person], rows);
+        output.WriteLine($"[G17] صُفوفٌ نَظيفَة {rows.Length} ⇒ تَسَرُّب {leaks.Count}");
+        Assert.Empty(leaks);
     }
 }

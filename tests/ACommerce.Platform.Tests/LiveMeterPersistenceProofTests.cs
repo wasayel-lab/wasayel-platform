@@ -619,6 +619,11 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
     }
 
     /// <summary><b>G17 حَيّاً</b>: لا مُعَرِّفَ سَطرٍ ولا مَصدَرَ يَحمِلُ مُعَرِّفَ مُستَخدِمٍ مَخزون — عَلى الدَفتَرِ كُلِّه، بَعدَ صَفقَةٍ مُبادِرُها مُستَخدِمٌ حَقيقِيّ.</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ C الجَولَةُ الأولى · M6C-SEC-1 — ADR-051 §١٩) <b>والنِيّاتُ مَعَ السُطور، والصيغَتانِ مَعاً</b>: كانَ الفَحصُ يَقرَأُ
+    /// <c>meter.usage_entry</c> وَحدَه، والمَصدَرَ بِصيغَةِ <c>D</c> وَحدَها — والصادِرُ يَبني مُعَرِّفاتِه بِصيغَةِ <c>N</c> (<c>FreshRequestId</c>، <c>{notificationId:N}</c>)،
+    /// والمَرفوضُ والمَجهولُ لا يَبلُغانِ إلّا <c>meter.outbound_intent</c>. مَقيسٌ عِندَ المُراجِع: نِيَّةٌ طَلَبُها مُعَرِّفُ مُستَخدِمٍ وسَطرٌ مَصدَرُه بِصيغَةِ <c>N</c> ⇐ «تَسَرُّب 0».
+    /// الآنَ <see cref="LedgerPersonScan"/> عَلى الجَدوَلَين: مُعَرِّفُ السَطرِ ومَصدَرُه ومُعَرِّفُ النِيَّةِ وطَلَبُها، بِصيغَتَيِ <c>D</c> و<c>N</c>؛ ونِداءٌ مَعدودٌ يَكتُبُ
+    /// نِيَّةً هُنا فَلا يَكونُ صِفرُ النِيّاتِ عَمىً — والصِفرُ يُحمِّرُ الصَفّ.</remarks>
     [Fact]
     public async Task No_entry_id_or_source_carries_a_stored_user_id()
     {
@@ -634,9 +639,56 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
             await s.SaveChangesAsync();
         }
         await StartAsync(deals, slug, member.Id);
+        // نِداءٌ صادِرٌ مَعدودٌ بِكاتِبِ المُضيفِ المُرَكَّب: نِيَّةٌ وسَطرٌ بِمُعَرِّفِ طَلَبٍ جَديد — فَالنِيّاتُ لا تُفحَصُ صِفراً.
+        var calls = new ProviderCalls(host.Services.GetRequiredService<OutboundRecorder>());
+        var sent = ProviderCall.ForChannel(OutboundUnits.OtpSmsSend, slug, ProviderCall.FreshRequestId()).By(ProviderNames.Twilio);
+        await calls.InvokeAsync(sent, _ => Task.FromResult(true), _ => new ProviderAcceptance(ProviderOutcome.Accepted), CancellationToken.None);
 
+        var (users, entries, intents, leaks) = await ScanLedgerAsync();
+        output.WriteLine($"[G17] سُطورٌ مَفحوصَة {entries} · نِيّاتٌ مَفحوصَة {intents} · مُعَرِّفاتُ مُستَخدِمين {users.Count} · تَسَرُّب {leaks.Count}");
+        Assert.True(entries > 0 && intents > 0 && users.Count > 0, $"أَداةٌ عَمياء: {entries} سَطراً و{intents} نِيَّةً و{users.Count} مُستَخدِماً.");
+        Assert.Contains(member.Id.ToString("D"), users);
+        Assert.Empty(leaks);
+    }
+
+    /// <summary>‏(‏2026-11-13، M6C-SEC-1) <b>الفاحِصُ يُقاسُ بِعَيبٍ مَحقون</b> (القاعِدَة ١٠): مُعَرِّفُ مُستَخدِمٍ مَخزونٍ بِصيغَةِ <c>N</c> طَلَباً لِنِداءٍ <b>مَرفوض</b> عَبرَ الكاتِبِ
+    /// الحَقيقِيّ — نِيَّةٌ مَرفوضَةٌ ولا سَطر، فَلا يَراه إلّا مَن يَقرَأُ النِيّات — ⇐ <see cref="ScanLedgerAsync"/> يَراه تَسَرُّباً. والنِيَّةُ المَحقونَةُ تُمحى بَعدَ القِياس
+    /// فَلا يَرِثُها صَفُّ الدَفتَرِ كُلِّه (المَجموعَةُ الحَيَّةُ تَسَلسُلِيَّة).</summary>
+    [Fact]
+    public async Task A_raw_user_id_as_a_refused_intent_request_turns_the_ledger_scan_red()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        var slug = NewSlug();
+        var member = new User { Id = Guid.NewGuid(), TenantSlug = slug, Phone = "+9665" + Random.Shared.Next(10_000_000, 99_999_999) };
+        await using (var s = host.Store.LightweightSession(slug))
+        {
+            s.Insert(member);
+            await s.SaveChangesAsync();
+        }
+        var calls = new ProviderCalls(host.Services.GetRequiredService<OutboundRecorder>());
+        var injected = ProviderCall.ForChannel(OutboundUnits.OtpSmsSend, slug, member.Id.ToString("N")).By(ProviderNames.Twilio);
+        try
+        {
+            await calls.InvokeAsync(injected, _ => Task.FromResult(false), _ => new ProviderAcceptance(ProviderOutcome.Refused), CancellationToken.None);
+            Assert.Equal("refused", await ScalarAsync("select outcome from meter.outbound_intent where id = @id", ("id", injected.Id)));
+            Assert.Equal(0L, Convert.ToInt64(await ScalarAsync("select count(*) from meter.usage_entry where id = @id", ("id", injected.Id))));
+            var (_, entries, intents, leaks) = await ScanLedgerAsync();
+            output.WriteLine($"[G17] المَحقون: نِيَّةٌ مَرفوضَةٌ طَلَبُها مُعَرِّفُ مُستَخدِمٍ بِصيغَةِ N ⇐ سُطورٌ {entries} · نِيّاتٌ {intents} · تَسَرُّب {leaks.Count} ({string.Join(" | ", leaks)})");
+            Assert.Contains(leaks, l => l.StartsWith($"outbound_intent:{injected.Id}", StringComparison.Ordinal));
+        }
+        finally
+        {
+            await ScalarAsync("delete from meter.outbound_intent where id = @id", ("id", injected.Id));
+        }
+    }
+
+    /// <summary>الدَفتَرُ كُلُّه بِجَدوَلَيه: مُعَرِّفاتُ المُستَخدِمينَ المَخزونَة، وكُلُّ سَطرٍ (مُعَرِّفُه ومَصدَرُه) وكُلُّ نِيَّةٍ (مُعَرِّفُها وطَلَبُها) — والتَسَرُّبُ بِحُكمِ <see cref="LedgerPersonScan"/>.</summary>
+    private static async Task<(List<string> Users, int Entries, int Intents, IReadOnlyList<string> Leaks)> ScanLedgerAsync()
+    {
         var users = new List<string>();
-        var entries = new List<(string Id, string Source)>();
+        var rows = new List<LedgerPersonScan.Row>();
+        int entries = 0, intents = 0;
         await using (var conn = new NpgsqlConnection(Cs))
         {
             await conn.OpenAsync();
@@ -645,15 +697,12 @@ public class LiveMeterPersistenceProofTests(ITestOutputHelper output)
                 while (await r.ReadAsync()) users.Add(r.GetString(0));
             await using (var cmd = new NpgsqlCommand("select id, source_id from meter.usage_entry", conn))
             await using (var r = await cmd.ExecuteReaderAsync())
-                while (await r.ReadAsync()) entries.Add((r.GetString(0), r.GetString(1)));
+                while (await r.ReadAsync()) { entries++; rows.Add(new("usage_entry", r.GetString(0), "source_id", r.GetString(1))); }
+            await using (var cmd = new NpgsqlCommand("select id, request_id from meter.outbound_intent", conn))
+            await using (var r = await cmd.ExecuteReaderAsync())
+                while (await r.ReadAsync()) { intents++; rows.Add(new("outbound_intent", r.GetString(0), "request_id", r.GetString(1))); }
         }
-        var leaks = entries.Where(e => users.Any(u => e.Id.Contains(u, StringComparison.OrdinalIgnoreCase)
-                                                    || e.Source.Contains(u, StringComparison.OrdinalIgnoreCase)
-                                                    || e.Id.Contains(u.Replace("-", ""), StringComparison.OrdinalIgnoreCase))).ToList();
-        output.WriteLine($"[G17] سُطورٌ مَفحوصَة {entries.Count} · مُعَرِّفاتُ مُستَخدِمين {users.Count} · تَسَرُّب {leaks.Count}");
-        Assert.True(entries.Count > 0 && users.Count > 0, $"أَداةٌ عَمياء: {entries.Count} سَطراً و{users.Count} مُستَخدِماً.");
-        Assert.Contains(member.Id.ToString("D"), users);
-        Assert.Empty(leaks);
+        return (users, entries, intents, LedgerPersonScan.Leaks(users, rows));
     }
 
     // ═══ ‏(‏2026-11-12، W13-6·٨) وَحَداتُ الوَثائِقِ الأَربَعُ بِأَبوابِها الحَقيقِيَّة، وحُرّاسُ الاستوديو والإدارَةِ يَملَؤونَ الحامِلَ بَعدَ `await` قِراءَتِهِم ═══
