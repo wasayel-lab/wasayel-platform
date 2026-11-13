@@ -16,42 +16,48 @@
       "to": "Discovery",
       "actor": "initiator",
       "label": { "ar": "اِبدَأ جَلسَة", "en": "Start session" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Discovery",
       "to": "PatternSuggested",
       "actor": "system",
       "label": { "ar": "اكتِمال الأَسئِلَة يَقتَرِح نَمَطاً", "en": "Suggest pattern" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "PatternSuggested",
       "to": "Analyzing",
       "actor": "initiator",
       "label": { "ar": "حَلِّل الآن", "en": "Analyze" },
-      "effects": ["run_analysis"]
+      "effects": ["run_analysis"],
+      "meter": "none"
     },
     {
       "from": "Analyzing",
       "to": "Completed",
       "actor": "system",
       "label": { "ar": "عادَ التَحليل بِنَتيجَة", "en": "Analysis returned" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Analyzing",
       "to": "Failed",
       "actor": "system",
       "label": { "ar": "تَعَذَّرَ التَحليل", "en": "Analysis failed" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Failed",
       "to": "Analyzing",
       "actor": "initiator",
       "label": { "ar": "إعادَة التَحليل", "en": "Retry analysis" },
-      "effects": ["run_analysis"]
+      "effects": ["run_analysis"],
+      "meter": "none"
     }
   ]
 }

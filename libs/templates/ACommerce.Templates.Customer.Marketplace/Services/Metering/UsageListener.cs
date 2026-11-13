@@ -29,10 +29,21 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Metering;
 /// تُمَيِّزُ الوِلادَة. ولِذلكَ قُلِبَت وِلاداتُ <c>Tenant</c> الثَلاثُ في البَذرِ <c>Insert</c>. ويَخرُجُ مُبَكِّراً حينَ لا وِلادَةَ ولا مَجرىً يَبدَأ.</para>
 /// <para>‏(‏2026-11-12، W13-6·٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و<c>Message</c> مِن <c>Inserts</c> وَحدَها</b> كَـ<c>Tenant</c> و<c>Review</c>: لا تَزامُنَ تَفاؤُلِيّاً
 /// لَها، فَقُلِبَ <c>Store</c>ها <c>Insert</c> في بابِ الإرسالِ وفي البَذرَين (خَلفَ تَوصيفِ البابِ <c>LiveChatMessageSendCharacterizationProofTests</c>).</para>
+/// <para>‏(‏2026-11-13، W13-6·١٨ — ‏ADR-051 §٢٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ويَقرَأُ مِتراتِ الوِلادَةِ الأَربَعَ عِندَ تَركيبِه</b> (التَصميم §7): البانِي
+/// بِلا وَسيطٍ — وهُوَ ما يُناديه <c>ConfigureMarten</c> — يَأخُذُ <see cref="MeterGenesis.Default"/>، فَتُقرَأُ مِلَفّاتُ التَدَفُّقِ وتُصادَقُ مِتراتُها حينَ
+/// يُرَكَّبُ المَخزَنُ لا عِندَ أَوَّلِ حِفظ، ومِترٌ خارِقٌ يُفشِلُ الإقلاع. ويُمَرِّرُها إلى المُصَنِّفِ مَعَ كُلِّ حِفظ: قِيَمٌ في الذاكِرَة، لا قِراءَةَ جَلسَة.</para>
 /// </summary>
 public sealed class UsageListener : DocumentSessionListenerBase
 {
     private int _generation;
+
+    private readonly MeterGenesis _genesis;
+
+    /// <summary>البانِي الَّذي يُركِّبُه المَخزَن — مِتراتُ الوِلادَةِ مِن مِلَفّاتِ المَكتَبَة، تُقرَأُ الآن.</summary>
+    public UsageListener() : this(MeterGenesis.Default) { }
+
+    /// <summary>بِمِتراتِ وِلادَةٍ مُعطاة — ما يُصَنِّفُ بِه كُلَّ حِفظ.</summary>
+    public UsageListener(MeterGenesis genesis) => _genesis = genesis;
 
     /// <summary>الجيلُ الَّذي خَبَّأَه الإقلاعُ لِهذا المَخزَن (<c>MeterBoot</c>)؛ و<c>0</c> قَبلَه — فَيَأخُذُ الإدخالُ آخِرَ جيلٍ مَفتوح (<see cref="MeterSql.Insert"/>).</summary>
     public int Generation => Volatile.Read(ref _generation);
@@ -53,7 +64,7 @@ public sealed class UsageListener : DocumentSessionListenerBase
         if (!documents.Any(d => d.Created) && !streams.Any(s => s.Started)) return;
 
         var pending = new PendingSnapshot(session.TenantId, documents, streams);
-        var entries = MeterRules.Classify(pending, MeterScope.View(), MeterUnitCatalog.Default);
+        var entries = MeterRules.Classify(pending, MeterScope.View(), MeterUnitCatalog.Default, _genesis);
         if (entries.Count == 0) return;
 
         await session.Database.EnsureStorageExistsAsync(typeof(UsageLedgerFeature), token);

@@ -90,14 +90,17 @@ public static class ApprovalFlow
             new FlowState(Approved, new FlowLabel("مُعتَمَد", "Approved"), IsTerminal: true),
             new FlowState(Rejected, new FlowLabel("مَرفوض", "Rejected"), IsTerminal: true),
         },
+        // ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٨ — ‏ADR-051 §٢٢) والانتِقالاتُ الثَلاثَةُ لا تَعُدُّ شَيئاً (`FlowMeter.None`): التَعريفُ المُؤَلَّفُ
+        // يُعَدُّ حُضوراً لِكُلِّ مَتجَرٍ في اليَوم (البَند ١٩) لا عَمَلِيَّةً عِندَ اقتِراحِه أَو قَرارِه — ومِلَفّا tenant_role وtenant_theme يَحمِلانِ القيمَةَ نَفسَها،
+        // والمُساواةُ صارَت تَراها (`FlowTransition.Equals`).
         Transitions: new[]
         {
             new FlowTransition(FlowVocabulary.Genesis, Pending, "system",
-                new FlowLabel("اقتِراح تَعريف", "Propose"), new[] { "invalidate_tenant_cache" }),
+                new FlowLabel("اقتِراح تَعريف", "Propose"), new[] { "invalidate_tenant_cache" }, FlowMeter.None),
             new FlowTransition(Pending, Approved, "moderator",
-                new FlowLabel("اِعتَمِد", "Approve"), new[] { "revalidate_definition" }),
+                new FlowLabel("اِعتَمِد", "Approve"), new[] { "revalidate_definition" }, FlowMeter.None),
             new FlowTransition(Pending, Rejected, "moderator",
-                new FlowLabel("اِرفُض", "Reject"), new[] { "invalidate_tenant_cache" }),
+                new FlowLabel("اِرفُض", "Reject"), new[] { "invalidate_tenant_cache" }, FlowMeter.None),
         },
         Initial: Pending);
 }

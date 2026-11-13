@@ -14,28 +14,32 @@
       "to": "Active",
       "actor": "initiator",
       "label": { "ar": "اِبدَأ صَفقَة", "en": "Start deal" },
-      "effects": ["append_timeline"]
+      "effects": ["append_timeline"],
+      "meter": "deal.create"
     },
     {
       "from": "Active",
       "to": "Completed",
       "actor": "system",
       "label": { "ar": "اكتِمال بِبُلوغ آخِر مَرحَلَة", "en": "Complete on last stage" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Active",
       "to": "Cancelled",
       "actor": "either",
       "label": { "ar": "أَلغِ الصَفقَة", "en": "Cancel" },
-      "effects": ["refund_payment", "append_timeline"]
+      "effects": ["refund_payment", "append_timeline"],
+      "meter": "none"
     },
     {
       "from": "Active",
       "to": "Disputed",
       "actor": "either",
       "label": { "ar": "اِفتَح نِزاعاً", "en": "Dispute" },
-      "effects": ["append_timeline"]
+      "effects": ["append_timeline"],
+      "meter": "none"
     }
   ]
 }

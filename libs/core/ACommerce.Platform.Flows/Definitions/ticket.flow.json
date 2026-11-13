@@ -13,35 +13,40 @@
       "to": "open",
       "actor": "initiator",
       "label": { "ar": "اِفتَح تَذكِرَة", "en": "Open ticket" },
-      "effects": []
+      "effects": [],
+      "meter": "ticket.open"
     },
     {
       "from": "open",
       "to": "answered",
       "actor": "moderator",
       "label": { "ar": "رُدّ مِن الطاقِم", "en": "Staff reply" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "answered",
       "to": "answered",
       "actor": "moderator",
       "label": { "ar": "رُدّ آخَر مِن الطاقِم", "en": "Further staff reply" },
-      "effects": ["write_audit"]
+      "effects": ["write_audit"],
+      "meter": "none"
     },
     {
       "from": "open",
       "to": "closed",
       "actor": "moderator",
       "label": { "ar": "أَغلِق", "en": "Close" },
-      "effects": ["write_audit"]
+      "effects": ["write_audit"],
+      "meter": "none"
     },
     {
       "from": "answered",
       "to": "closed",
       "actor": "moderator",
       "label": { "ar": "أَغلِق", "en": "Close" },
-      "effects": ["write_audit"]
+      "effects": ["write_audit"],
+      "meter": "none"
     }
   ]
 }

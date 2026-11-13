@@ -13,21 +13,24 @@
       "to": "Active",
       "actor": "system",
       "label": { "ar": "بَدء بِقَبول العَرض", "en": "Start on acceptance" },
-      "effects": ["open_coordination_chat"]
+      "effects": ["open_coordination_chat"],
+      "meter": "none"
     },
     {
       "from": "Active",
       "to": "Completed",
       "actor": "either",
       "label": { "ar": "أَنهِ الرِحلَة", "en": "Complete" },
-      "effects": ["expire_coordination_chat"]
+      "effects": ["expire_coordination_chat"],
+      "meter": "none"
     },
     {
       "from": "Active",
       "to": "Aborted",
       "actor": "either",
       "label": { "ar": "اقطَع الرِحلَة", "en": "Abort" },
-      "effects": ["expire_coordination_chat"]
+      "effects": ["expire_coordination_chat"],
+      "meter": "none"
     }
   ]
 }

@@ -59,12 +59,18 @@ public sealed record FlowState(
 /// تَسمِيَة الحالَة.</param>
 /// <param name="Effects">مَفاتيح الآثار <b>بِتَرتيب وُقوعِها</b>،
 /// أَو فارِغَة لِانتِقال يُغَيِّر الحالَة ولا يَفعَل شَيئاً آخَر.</param>
+/// <param name="Meter">‏(‏2026-11-13، الموجَة ١٣ W13-6·١٨ — ‏ADR-051 §٢٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ما يَعُدُّه هذا الانتِقال</b>: رَمزُ وَحدَةٍ
+/// مِن مُعجَمِ الوَحَداتِ حَدُّها الحِفظ، أَو <see cref="FlowMeter.None"/> — قيمَةٌ تُكتَبُ لا غِياب، و<c>null</c> خَرقُ <c>meter_missing</c>
+/// (<see cref="FlowMeter"/>). <b>وصفٌ لا أَثَر</b> (القاعِدَة ٥): المِلَفُّ يَقولُ «وِلادَةُ هذا التَدَفُّقِ تُعَدُّ بِهذه الوَحدَة»، والكودُ يَكتُبُ السَطر.
+/// وقارِئُه في وَقتِ التَشغيلِ مُستَمِعُ العَدِّ عِندَ التَركيب: مِترُ الانتِقالِ المُنشِئِ (<see cref="FlowVocabulary.Genesis"/>) لِكُلِّ تَدَفُّقٍ وَحدَه —
+/// والانتِقالاتُ الأُخرى <see cref="FlowMeter.None"/> كُلُّها، فَعَدُّها وَحدَةٌ لاحِقَة (التَصميم §5.6).</param>
 public sealed record FlowTransition(
     string From,
     string To,
     string Actor,
     FlowLabel Label,
-    IReadOnlyList<string>? Effects = null)
+    IReadOnlyList<string>? Effects = null,
+    string? Meter = null)
 {
     /// <summary>
     /// <para>الآثار مُطَبَّعَة — فارِغَة لا <c>null</c>.</para>
@@ -83,14 +89,18 @@ public sealed record FlowTransition(
     /// <see cref="Effects"/> بِالمَرجِع (قائِمَة)، فَتَعريفانِ
     /// مُتَطابِقان مَبنيّانِ مُنفَصِلَين كانا سَيَختَلِفان. والمُقارَنَة
     /// هي بِالضَبط ما يُبَرهِن أَنّ الأَدوار والمَظهَر تَعريف
-    /// واحِد.</summary>
+    /// واحِد.
+    /// ‏(‏2026-11-13، W13-6·١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمِترُ عُضوٌ فيها</b> (<see cref="Meter"/>، حَسّاساً لِلحالَة) في الكوميتِ الَّذي
+    /// وَلَدَه: مُساواةٌ مَكتوبَةٌ بِاليَدِ عَمياءُ عَن كُلِّ عُضوٍ جَديد (مَقيس: انتِقالانِ يَختَلِفانِ في المِترِ وَحدَه كانا «مُتَساوِيَين»)، فَكانَ بُرهانُ
+    /// «المِلَفُّ يُطابِقُ <c>ApprovalFlow</c>» سَيَخضَرُّ ومِترُ المِلَفِّ غَيرُ مِترِ الكود.</summary>
     public bool Equals(FlowTransition? other)
         => other is not null
         && string.Equals(From,  other.From,  StringComparison.Ordinal)
         && string.Equals(To,    other.To,    StringComparison.Ordinal)
         && string.Equals(Actor, other.Actor, StringComparison.Ordinal)
         && Label == other.Label
-        && EffectKeys.SequenceEqual(other.EffectKeys, StringComparer.Ordinal);
+        && EffectKeys.SequenceEqual(other.EffectKeys, StringComparer.Ordinal)
+        && string.Equals(Meter, other.Meter, StringComparison.Ordinal);
 
     public override int GetHashCode()
     {
@@ -100,6 +110,7 @@ public sealed record FlowTransition(
         h.Add(Actor, StringComparer.Ordinal);
         h.Add(Label);
         foreach (var e in EffectKeys) h.Add(e, StringComparer.Ordinal);
+        h.Add(Meter, StringComparer.Ordinal);
         return h.ToHashCode();
     }
 }
@@ -181,6 +192,11 @@ public static class FlowVocabulary
 /// المُوَحَّدَين في البَند ٤. قيمَتُها اليَوم: تَوثيق مَقيس، ومُصادَقَة
 /// تَكشِف الحالات المَيِّتَة، وجاهِزيَّة شَكل. الاعتِماد يَأتي
 /// تَدَفُّقاً تَدَفُّقاً بِتَوصيف يَخضَرّ أَوَّلاً — لا دُفعَةً واحِدَة.</para>
+///
+/// <para>‏(‏2026-11-13، الموجَة ١٣ W13-6·١٨ — ‏ADR-051 §٢٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وصارَ لِلمِلَفّاتِ قارِئٌ في وَقتِ التَشغيل</b>:
+/// مُستَمِعُ العَدِّ يَقرَأُ عِندَ تَركيبِه مِترَ الانتِقالِ المُنشِئِ لِكُلِّ تَدَفُّق (<see cref="FlowTransition.Meter"/>، <see cref="FlowMeter.GenesisMeters"/>)،
+/// فَوِلادَةُ <c>deal_status</c> و<c>offer</c> و<c>ticket</c> و<c>subscription</c> تُعَدُّ بِالوَحدَةِ الَّتي يُسَمّيها مِلَفُّها. وهُوَ <b>أَوَّلُ قارِئٍ لِلمِلَفّاتِ نَفسِها</b>
+/// خارِجَ الاختِبارات (<c>ApprovalFlow</c> مَبنِيٌّ في الكودِ لا مِن مِلَفِّه)، ولا يُقَرِّرُ شَيئاً مِن الحالاتِ أَو الفاعِلين: يَقرَأُ ما يُعَدُّ وَحدَه.</para>
 ///
 /// <para>الصِحَّة البُنيَوِيَّة والخَصائِص المُبرهَنَة في
 /// <see cref="FlowDefinitionValidator"/> — بِنَفس قالِب

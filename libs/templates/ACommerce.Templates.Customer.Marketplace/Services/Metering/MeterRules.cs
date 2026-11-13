@@ -6,6 +6,7 @@ using ACommerce.Kit.Reviews;
 using ACommerce.Kit.Subscriptions;
 using ACommerce.Kit.Support;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Flows;
 using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
@@ -58,6 +59,11 @@ public sealed record PendingSnapshot(string SessionTenant, IReadOnlyList<Pending
 /// سَطرٌ واحِد، مَتجَرُه مُستَأجِرُ الجَلسَةِ (الوَثيقَةُ مُقتَرِنَة) ومَصدَرُه <b>مُعَرِّفُ الرِسالَة</b> — لا المُرسِلُ ولا المُحادَثَة، فَالنَقرَتانِ رِسالَتانِ وسَطران.
 /// وقُلِبَ <c>Store</c> الرِسالَةِ <c>Insert</c> في بابِ الإرسالِ وفي البَذرَينِ خَلفَ تَوصيفِ البابِ (<c>LiveChatMessageSendCharacterizationProofTests</c>)،
 /// فَـ<c>Store</c> رِسالَةٍ قائِمَةٍ لا يَبلُغُ المُصَنِّفَ أَصلاً.</para>
+/// <para>‏(‏2026-11-13، W13-6·١٨ — ‏ADR-051 §٢٢؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ووَحدَةُ الوِلادَةِ الَّتي يَصِفُها تَدَفُّقٌ يَقولُها مِلَفُّه</b> (التَصميم §7):
+/// الصَفقَةُ تولَدُ في <c>deal_status</c> والعَرضُ في <c>offer</c> والتَذكِرَةُ في <c>ticket</c> واشتِراكُ العُضوِ في <c>subscription</c>، ووَحدَةُ كُلٍّ مِترُ الانتِقالِ
+/// المُنشِئِ في مِلَفِّه (<see cref="MeterGenesis"/>، يَقرَؤُه المُستَمِعُ عِندَ تَركيبِه) — فَمِترٌ «none» هُناكَ يُسكِتُ العَدَّ هُنا، والكودُ يَعرِفُ أَينَ يولَدُ
+/// النَوعُ لا بِماذا يُعَدّ (<see cref="DocumentRules"/> و<see cref="StreamRules"/>). والسِتُّ الباقِيَةُ لا تَدَفُّقَ يَصِفُها (عَشَرَةُ مِلَفّات، مَقيس)، فَوَحدَتُها
+/// ثابِتَةٌ في الكود ومُثَبَّتَةٌ بِاسمِها وسَبَبِها في <c>MeterEmitterTests</c> (G15) — قائِمَةٌ تَنكَمِشُ ولا تَنمو.</para>
 /// </summary>
 public static class MeterRules
 {
@@ -98,15 +104,46 @@ public static class MeterRules
     /// <summary>مَصدَرُ <c>chat.message</c> — ومُعَرِّفُه مُعَرِّفُ الرِسالَة (لا المُرسِلُ ولا المُحادَثَة).</summary>
     public const string MessageSource = "message";
 
-    /// <summary><b>الحَدَثُ الَّذي يولَدُ بِه مَجراه وَحدَةً</b> — بِالنَوعِ لا بِاسمِه (إعادَةُ تَسمِيَةٍ تَكسِرُ البِناء). وقارِئُ مُطابَقَةِ كُلِّ وَحدَةٍ في المُعجَمِ
-    /// <c>event_ids:{النَوع}</c> بِهذا النَوعِ نَفسِه (<c>MeterRulesTests</c>).</summary>
-    public static IReadOnlyDictionary<Type, string> StreamBirths { get; } = new Dictionary<Type, string>
+    // ‏(‏2026-11-13، W13-6·١٨) التَدَفُّقاتُ الأَربَعَةُ الَّتي تولَدُ فيها وَحدَة — أَسماءُ مِلَفّاتِها. ووَحدَةُ كُلٍّ مِترُ انتِقالِها المُنشِئِ لا ثابِتٌ هُنا:
+    // ‏DealCreate وOfferSubmit وTicketOpen وMemberPlanSubscribe أَعلاه أَسماءٌ لِما يُسَمّيه المِلَف، يَقرَؤُها مَن يَقرَأُ الدَفتَرَ ويُثَبِّتُها G15 عَلى المِلَفّ.
+    public const string DealFlow = "deal_status";
+    public const string OfferFlow = "offer";
+    public const string TicketFlow = "ticket";
+    public const string SubscriptionFlow = "subscription";
+
+    /// <summary>‏(‏2026-11-13، W13-6·١٨) <b>الوَثيقَةُ الَّتي تولَدُ وَحدَةً، وأَينَ تُسَمّى وَحدَتُها</b> — بِالنَوعِ لا بِاسمِه: الصَفقَةُ في تَدَفُّقِها،
+    /// والخَمسُ الباقِيَةُ ثابِتَةٌ لا تَدَفُّقَ لَها.</summary>
+    public static IReadOnlyDictionary<Type, MeterBirth> DocumentRules { get; } = new Dictionary<Type, MeterBirth>
     {
-        [typeof(ListingCreated)] = ListingCreate,
-        [typeof(OfferSubmitted)] = OfferSubmit,
-        [typeof(TicketCreated)] = TicketOpen,
-        [typeof(SubscriptionCreated)] = MemberPlanSubscribe,
+        [typeof(Deal)] = MeterBirth.InFlow(DealFlow),
+        [typeof(Tenant)] = MeterBirth.Fixed(StoreCreate),
+        [typeof(StudioUser)] = MeterBirth.Fixed(StudioAccountCreate),
+        [typeof(User)] = MeterBirth.Fixed(MemberJoin),
+        [typeof(Review)] = MeterBirth.Fixed(ReviewCreate),
+        [typeof(Message)] = MeterBirth.Fixed(ChatMessage),
     };
+
+    /// <summary>‏(‏2026-11-13، W13-6·١٨) <b>الحَدَثُ الَّذي يولَدُ بِه مَجراه وَحدَةً، وأَينَ تُسَمّى وَحدَتُه</b> — بِالنَوع: العَرضُ والتَذكِرَةُ واشتِراكُ العُضوِ
+    /// في تَدَفُّقاتِها، والإعلانُ ثابِتٌ لا تَدَفُّقَ لَه.</summary>
+    public static IReadOnlyDictionary<Type, MeterBirth> StreamRules { get; } = new Dictionary<Type, MeterBirth>
+    {
+        [typeof(ListingCreated)] = MeterBirth.Fixed(ListingCreate),
+        [typeof(OfferSubmitted)] = MeterBirth.InFlow(OfferFlow),
+        [typeof(TicketCreated)] = MeterBirth.InFlow(TicketFlow),
+        [typeof(SubscriptionCreated)] = MeterBirth.InFlow(SubscriptionFlow),
+    };
+
+    /// <summary><b>الحَدَثُ الَّذي يولَدُ بِه مَجراه وَحدَةً</b> — بِالنَوعِ لا بِاسمِه (إعادَةُ تَسمِيَةٍ تَكسِرُ البِناء). وقارِئُ مُطابَقَةِ كُلِّ وَحدَةٍ في المُعجَمِ
+    /// <c>event_ids:{النَوع}</c> بِهذا النَوعِ نَفسِه (<c>MeterRulesTests</c>).
+    /// ‏(‏2026-11-13، W13-6·١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَ <see cref="StreamRules"/> مَحلولاً بِمِتراتِ الوِلادَةِ في المِلَفّات (<see cref="MeterGenesis.Default"/>):
+    /// الشَكلُ نَفسُه (النَوعُ ← رَمزُ الوَحدَة) والقِيَمُ نَفسُها ما دامَت المِلَفّاتُ تُسَمّيها.</summary>
+    public static IReadOnlyDictionary<Type, string> StreamBirths => StreamBirthsOf(MeterGenesis.Default);
+
+    /// <summary>‏(‏2026-11-13، W13-6·١٨) <see cref="StreamRules"/> مَحلولاً بِمِتراتِ وِلادَةٍ مُعطاة — وما مِترُ تَدَفُّقِه «none» لا يَدخُلُه.</summary>
+    public static IReadOnlyDictionary<Type, string> StreamBirthsOf(MeterGenesis genesis)
+        => StreamRules.Select(r => (r.Key, Code: r.Value.UnitWith(genesis)))
+            .Where(r => r.Code is not null)
+            .ToDictionary(r => r.Key, r => r.Code!);
 
     /// <summary><b>المَجاري المُعَلَّقَةُ قِيَماً</b> — ما يُمَرِّرُه المُستَمِعُ مِن <c>PendingChanges.Streams()</c> بِلا قِراءَة: المُستَأجِرُ وبِدءُ المَجرى ومُعَرِّفُ
     /// كُلِّ حَدَثٍ وحِملُه. ويَبني بِه حارِسُ التَصنيفِ (G3) مُدخَلَه نَفسَه، فَما يُقاسُ هُوَ ما يَراه المُستَمِع.</summary>
@@ -114,8 +151,11 @@ public static class MeterRules
         => [.. actions.Select(a => new PendingStream(a.TenantId, a.ActionType == StreamActionType.Start,
                                                      [.. a.Events.Select(e => new PendingEvent(e.Id, e.Data))]))];
 
-    public static IReadOnlyList<UsageEntry> Classify(PendingSnapshot pending, MeterScopeView? scope, MeterUnitCatalog catalog)
+    /// <param name="genesis">‏(‏2026-11-13، W13-6·١٨) مِتراتُ الوِلادَةِ الَّتي يَعُدُّ بِها التَدَفُّق — ما قَرَأَه المُستَمِعُ عِندَ تَركيبِه، و<c>null</c>: مِلَفّاتُ
+    /// المَكتَبَةِ نَفسُها (<see cref="MeterGenesis.Default"/>).</param>
+    public static IReadOnlyList<UsageEntry> Classify(PendingSnapshot pending, MeterScopeView? scope, MeterUnitCatalog catalog, MeterGenesis? genesis = null)
     {
+        var births = genesis ?? MeterGenesis.Default;
         var entries = new List<UsageEntry>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var p in pending.Documents)
@@ -123,18 +163,18 @@ public static class MeterRules
             if (!p.Created) continue;
             var entry = p.Document switch
             {
-                Deal deal when catalog.Find(DealCreate) is { } unit
+                Deal deal when Born<Deal>() is { } unit
                     => Entry(unit, string.IsNullOrWhiteSpace(deal.TenantSlug) ? MeterSentinels.Unresolved : deal.TenantSlug,
                              DealSource, deal.Id.ToString("D"), scope),
-                Tenant tenant when catalog.Find(StoreCreate) is { } unit
+                Tenant tenant when Born<Tenant>() is { } unit
                     => StoreEntry(unit, tenant, scope),
-                StudioUser account when catalog.Find(StudioAccountCreate) is { } unit
+                StudioUser account when Born<StudioUser>() is { } unit
                     => Entry(unit, MeterSentinels.Platform, StudioUserSource, account.Id.ToString("D"), scope, entrepreneur: account.Id.ToString("D")),
-                User member when catalog.Find(MemberJoin) is { } unit
+                User member when Born<User>() is { } unit
                     => MemberEntry(unit, SessionApp(pending.SessionTenant), member, scope),
-                Review review when catalog.Find(ReviewCreate) is { } unit
+                Review review when Born<Review>() is { } unit
                     => Entry(unit, SessionApp(pending.SessionTenant), ReviewSource, review.Id.ToString("D"), scope),
-                Message message when catalog.Find(ChatMessage) is { } unit
+                Message message when Born<Message>() is { } unit
                     => Entry(unit, SessionApp(pending.SessionTenant), MessageSource, message.Id.ToString("D"), scope),
                 _ => null,
             };
@@ -146,12 +186,17 @@ public static class MeterRules
             var app = StreamApp(stream.Tenant, pending.SessionTenant);
             foreach (var ev in stream.Events)
             {
-                if (ev.Data is null || !StreamBirths.TryGetValue(ev.Data.GetType(), out var code) || catalog.Find(code) is not { } unit) continue;
+                if (ev.Data is null || !StreamRules.TryGetValue(ev.Data.GetType(), out var birth)
+                    || birth.UnitWith(births) is not { } code || catalog.Find(code) is not { } unit) continue;
                 var entry = Entry(unit, app, EventSource, ev.Id.ToString("D"), scope);
                 if (seen.Add(entry.Id)) entries.Add(entry);
             }
         }
         return entries;
+
+        // وَحدَةُ وِلادَةِ الوَثيقَة: مِن قاعِدَةِ نَوعِها — مِترُ تَدَفُّقِها أَو ثابِتُها — ثُمَّ مِن المُعجَم؛ و«none» أَو الغائِبُ: لا سَطر.
+        MeterUnit? Born<T>()
+            => DocumentRules.TryGetValue(typeof(T), out var birth) && birth.UnitWith(births) is { } code ? catalog.Find(code) : null;
     }
 
     /// <summary>مَتجَرُ سَطرِ الحَدَث: مُستَأجِرُ المَجرى، وإن غابَ فَمُستَأجِرُ الجَلسَة (الإيداعُ المُقتَرِنُ يَكتُبُ الحَدَثَ بِه)؛ والمُستَأجِرُ الافتِراضِيُّ
@@ -201,5 +246,78 @@ public static class MeterRules
         var platformActor = scope is { IsSeed: false, App: null } && !string.IsNullOrEmpty(scope.Role);
         return (applies && !string.IsNullOrEmpty(scope!.Entrepreneur) ? scope.Entrepreneur : MeterSentinels.Unresolved,
                 (applies || platformActor) && !string.IsNullOrEmpty(scope!.Role) ? scope.Role : MeterSentinels.Unresolved);
+    }
+}
+
+/// <summary>
+/// <para>‏(‏2026-11-13، W13-6·١٨ — ‏ADR-051 §٢٢) <b>أَينَ تُسَمّى وَحدَةُ وِلادَةِ نَوعٍ مَعدود</b>: في مِلَفِّ تَدَفُّقِه (<see cref="Flow"/> — مِترُ انتِقالِه المُنشِئ)
+/// أَو ثابِتَةً في الكودِ لِنَوعٍ لا تَدَفُّقَ يَصِفُه (<see cref="Unit"/>). واحِدٌ مِنهُما لا الاثنان.</para>
+/// </summary>
+public sealed record MeterBirth
+{
+    /// <summary>اسمُ مِلَفِّ التَدَفُّقِ الَّذي تُسَمّى فيه الوَحدَة — أَو <c>null</c>.</summary>
+    public string? Flow { get; private init; }
+
+    /// <summary>الوَحدَةُ الثابِتَة — أَو <c>null</c>.</summary>
+    public string? Unit { get; private init; }
+
+    public static MeterBirth InFlow(string flow) => new() { Flow = flow };
+
+    public static MeterBirth Fixed(string unit) => new() { Unit = unit };
+
+    /// <summary>رَمزُ الوَحدَةِ بِمِتراتِ وِلادَةٍ مُعطاة — و<c>null</c> حينَ يَقولُ مِلَفُّ التَدَفُّقِ «none».</summary>
+    public string? UnitWith(MeterGenesis genesis) => Flow is null ? Unit : genesis.UnitOf(Flow);
+}
+
+/// <summary>
+/// <para>‏(‏2026-11-13، الموجَة ١٣ W13-6·١٨ — ‏ADR-051 §٢٢؛ التَصميم §7) <b>مِتراتُ الوِلادَةِ في مِلَفّاتِ التَدَفُّق — يَقرَؤُها مُستَمِعُ العَدِّ عِندَ تَركيبِه</b>:
+/// لِكُلِّ تَدَفُّقٍ مِترُ انتِقالِه المُنشِئ (<see cref="FlowMeter.GenesisMeters"/>)، وأَربَعٌ مِنها تُسَمّي وَحدَة (<c>deal_status</c> ← <c>deal.create</c>،
+/// <c>offer</c> ← <c>offer.submit</c>، <c>ticket</c> ← <c>ticket.open</c>، <c>subscription</c> ← <c>member_plan.subscribe</c>) والسِتُّ الباقِيَةُ «none».
+/// فَهذا <b>أَوَّلُ قارِئٍ لِمِلَفّاتِ التَدَفُّقِ في وَقتِ التَشغيل</b> (كانَت مَواضِعُ قارِئِها كُلُّها في الاختِبارات).</para>
+/// <para><b>يُصادِقُ ويَرمي بِكُلِّ الخُروق</b> (<see cref="FlowMeter.Validate"/>، ADR-038) قَبلَ أَن يُقرَأَ مِتر — فَمِترٌ لَيسَ وَحدَةً أَو وَحدَةٌ لا تُعَدُّ عِندَ الحِفظِ
+/// يُفشِلُ تَركيبَ المَخزَنِ عِندَ الإقلاع، كَما يُفشِلُه مِلَفُّ دَورٍ أَو مُزَوِّدٍ خارِق؛ <b>وتَدَفُّقٌ يُعلِنُ لِوِلادَتِه وَحدَتَينِ مُختَلِفَتَين</b> يُفشِلُه أَيضاً: لا يُختارُ
+/// أَحَدُهُما صامِتاً. ولا يَقرَأُ حالَةً مَخزونَة: مَورِدٌ مَضمونٌ في مَكتَبَةِ التَدَفُّقاتِ ومُعجَمُ الوَحَدات، قِيَمٌ لا جَلسَة (القاعِدَة ٧).</para>
+/// </summary>
+public sealed class MeterGenesis
+{
+    private static readonly Lazy<MeterGenesis> Files = new(
+        () => From(FlowDefinitionLoader.LoadAll(), MeterUnitCatalog.Default), LazyThreadSafetyMode.ExecutionAndPublication);
+
+    private readonly IReadOnlyDictionary<string, string> _meters;
+
+    private MeterGenesis(IReadOnlyDictionary<string, string> meters) => _meters = meters;
+
+    /// <summary>مِلَفّاتُ المَكتَبَةِ المَضمونَة، تُقرَأُ وتُصادَقُ مَرَّةً في العَمَلِيَّة — وتَرمي (وتَبقى تَرمي) إن خَرَقَت.</summary>
+    public static MeterGenesis Default => Files.Value;
+
+    /// <summary>مِترُ وِلادَةِ كُلِّ تَدَفُّقٍ كَما كُتِب (رَمزُ وَحدَةٍ أَو «none») — بِاسمِ التَدَفُّق.</summary>
+    public IReadOnlyDictionary<string, string> Meters => _meters;
+
+    /// <summary>الوَحدَةُ الَّتي تُعَدُّ بِها وِلادَةُ هذا التَدَفُّق — و<c>null</c> لِتَدَفُّقٍ مِترُ وِلادَتِه «none» أَو لا يوجَد.</summary>
+    public string? UnitOf(string flow)
+        => _meters.TryGetValue(flow, out var m) && !string.Equals(m, FlowMeter.None, StringComparison.Ordinal) ? m : null;
+
+    /// <summary>ما يَحتاجُه مُصادِقُ المِترِ مِن المُعجَم (<see cref="FlowMeterUnits"/>): حَدُّ كُلِّ وَحدَةٍ واسمُ حَدِّ الحِفظ.</summary>
+    public static FlowMeterUnits UnitsOf(MeterUnitCatalog catalog)
+        => new(catalog.Units.ToDictionary(u => u.Code, u => u.Boundary, StringComparer.Ordinal), MeterBoundaries.Persistence);
+
+    /// <summary>يُصادِقُ مِتراتِ كُلِّ التَدَفُّقاتِ ويَقرَأُ مِترَ وِلادَةِ كُلٍّ — ويَرمي بِرُموزِ كُلِّ خَرقٍ وبِكُلِّ وِلادَةٍ مُلتَبِسَة.</summary>
+    public static MeterGenesis From(IEnumerable<FlowDefinition> flows, MeterUnitCatalog catalog)
+    {
+        var units = UnitsOf(catalog);
+        var list = flows.ToList();
+        var violations = list.SelectMany(f => FlowMeter.Validate(f, units).Select(v => $"{f.Flow}: {v.Code}: {v.MessageAr}")).ToList();
+        var meters = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var f in list)
+        {
+            var genesis = FlowMeter.GenesisMeters(f).Distinct(StringComparer.Ordinal).ToList();
+            if (genesis.Count > 1)
+                violations.Add($"{f.Flow}: وِلادَةٌ مُلتَبِسَة: انتِقالاتُه المُنشِئَةُ تُعلِنُ {genesis.Count} مِترات ({string.Join("، ", genesis)}) — وِلادَةُ التَدَفُّقِ تُعَدُّ بِوَحدَةٍ واحِدَة.");
+            else if (genesis.Count == 1)
+                meters[f.Flow] = genesis[0];
+        }
+        if (violations.Count > 0)
+            throw new InvalidOperationException("مِتراتُ التَدَفُّقاتِ لا تَجتازُ المُصادَقَة: " + string.Join(" | ", violations));
+        return new MeterGenesis(meters);
     }
 }
