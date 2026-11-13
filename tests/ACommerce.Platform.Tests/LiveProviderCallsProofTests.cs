@@ -773,4 +773,87 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
         Assert.Empty(leaks);
         Assert.Equal(0, failed);
     }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-CNT-R2-1 — ADR-051 §١٩) <b>تَشغيلُ المُهلَةِ بَعدَ الاستِئنافِ يُعَدُّ جَلبُه</b>: نِزاعٌ ثُمَّ رِسالَةُ المُهلَةِ
+    /// المُجَدوَلَة (جَلبٌ، ولا إلغاء) ثُمَّ استِئنافٌ بَعدَ النافِذَة ثُمَّ رِسالَتُه (جَلبٌ ثانٍ فَإلغاء) ⇐ سَطرا جَلبٍ لِغَرَضِ المُهلَة: <c>{invoice}:expiry</c>
+    /// و<c>{invoice}:expiry:resume:{deal:N}:1</c>، كِلاهُما لِلمَتجَرِ ومالِكِه بِدَورِ <c>_system</c>؛ وإعادَةُ الرِسالَةِ نَفسِها ⇐ جَلبَةٌ أُخرى ولا سَطرَ ثالِث.
+    /// كانَ الثاني يَحمِلُ مُعَرِّفَ الأَوَّلِ فَيَبتَلِعُه <c>ON CONFLICT (id) DO NOTHING</c> (مَقيسٌ عِندَ المُراجِع: «GET sent 3 · fetch entries 2 · expiry-purpose entries 1»).
+    /// وما يَبلُغُ البَوّابَةَ ويَصيرُ إلَيه الطَلَبُ يُثَبِّتُه <c>LiveExpiryResumeRunCharacterizationProofTests</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task A_resume_after_the_window_counts_its_expiry_fetch_as_a_second_run_and_a_retry_of_it_as_none()
+    {
+        if (!Enabled) return;
+        var moyasar = new MoyasarScriptedHandler();
+        var vault = TenantGatewayEndpointsTests.NewVault();
+        var bus = new RecordingMessageBus();
+        await using var host = LiveTemplateDoorHost.Build(services: s =>
+        {
+            s.AddSingleton(vault);
+            s.AddSingleton<Wolverine.IMessageBus>(bus);
+            s.ConfigureHttpClientDefaults(b => b.ConfigurePrimaryHttpMessageHandler(() => moyasar));
+        });
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        var invoice = Guid.NewGuid().ToString("D");
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ الاستِئناف", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var binding = TenantGatewayEndpointsTests.PaymentsBinding(vault, sealedFor: slug);
+        binding.TenantSlug = slug;
+        await using (var s = host.Store.LightweightSession(slug)) { s.Store(binding); await s.SaveChangesAsync(); }
+        Guid deal;
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            var deals = scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealsService>();
+            deal = (await deals.StartAsync(slug, "marketplace", Guid.NewGuid(), "مُشتَرٍ", null, "سِلعَة", 100m,
+                ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments.MarkedAtBirth(new()
+                {
+                    [ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutPayMethods.AttributeKey] =
+                        ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutPayMethods.Card,
+                }, viaGateway: true))).Id;
+            await deals.AttachRefAsync(slug, deal, ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPaymentProof.InvoiceRef, invoice);
+            await deals.AttachRefAsync(slug, deal, ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments.InvoiceExpiresAtRef,
+                ACommerce.Kit.Payments.MoyasarClient.ExpiryText(DateTimeOffset.UtcNow.AddMinutes(-5)));
+            Assert.True((await deals.DisputeAsync(slug, deal, owner, "صاحِبُ المَتجَر", "نِزاع")).Ok);
+        }
+        var listed = ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPaymentProof.MetadataFor(new[] { deal });
+        var l = new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor());
+        async Task HandleAsync(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayInvoiceExpiryDue due)
+        {
+            await using var scope = host.Services.CreateAsyncScope();
+            await ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayInvoiceExpiryHandler.Handle(due,
+                scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments>(),
+                scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealNotices>(), l, CancellationToken.None);
+        }
+        string Fetch(string tail) => $"{OutboundUnits.PaymentGatewayInvoiceFetch}:{ProviderNames.StoreGateway}:{invoice}:{tail}";
+        async Task<List<(string Id, EntryRow Row)>> ExpiryFetchesAsync()
+            => (await EntriesOfAppAsync(slug, OutboundUnits.PaymentGatewayInvoiceFetch)).Where(f => f.Id.StartsWith(Fetch("expiry"), StringComparison.Ordinal)).ToList();
+
+        moyasar.Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 10000, metadata: listed, id: invoice));
+        await HandleAsync(new(slug, deal));
+        var afterFirst = await ExpiryFetchesAsync();
+        await using (var scope = host.Services.CreateAsyncScope())
+            Assert.True((await scope.ServiceProvider.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Deals.DealsService>()
+                .ResolveDisputeAsync(slug, deal, new ACommerce.Templates.Customer.Marketplace.Services.Deals.DealCanceller(owner, "صاحِبُ المَتجَر", true),
+                    ACommerce.Templates.Customer.Marketplace.Services.Deals.DealDisputeResolution.Resume, "استِئناف")).Ok);
+        var due = (ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayInvoiceExpiryDue)Assert.Single(bus.Sent).Message;
+        moyasar.Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 10000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("initiated", 10000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("canceled", 10000, metadata: listed, id: invoice))
+               .Then(HttpStatusCode.OK, MoyasarClientTests.InvoiceJson("canceled", 10000, metadata: listed, id: invoice));
+        await HandleAsync(due);
+        var afterResume = await ExpiryFetchesAsync();
+        await HandleAsync(due);
+        var afterRetry = await ExpiryFetchesAsync();
+        var gets = moyasar.Requests.Count(r => r.Method == HttpMethod.Get);
+        output.WriteLine($"[G6·المُهلَة بَعدَ الاستِئناف] GET {gets} · سُطورُ غَرَضِ المُهلَة: بَعدَ الأَوَّل {afterFirst.Count} · بَعدَ تَشغيلِ الاستِئناف {afterResume.Count} · بَعدَ إعادَتِه {afterRetry.Count}");
+        foreach (var (id, row) in afterRetry) output.WriteLine($"[G6·المُهلَة بَعدَ الاستِئناف] {id} · {row}");
+
+        Assert.Equal(4, gets);
+        Assert.Equal(new[] { Fetch("expiry") }, afterFirst.Select(f => f.Id));
+        Assert.Equal(new[] { Fetch("expiry"), Fetch($"expiry:resume:{deal:N}:1") }.Order(StringComparer.Ordinal), afterResume.Select(f => f.Id).Order(StringComparer.Ordinal));
+        Assert.Equal(afterResume.Select(f => f.Id).Order(StringComparer.Ordinal), afterRetry.Select(f => f.Id).Order(StringComparer.Ordinal));
+        Assert.All(afterRetry, f => Assert.Equal((slug, owner.ToString("D"), MeterSentinels.SystemJob, ProviderCall.InvoiceSource, invoice, true),
+                                                 (f.Row.App, f.Row.Entrepreneur, f.Row.Role, f.Row.SourceType, f.Row.SourceId, f.Row.SameTransactionAsIntent)));
+    }
 }

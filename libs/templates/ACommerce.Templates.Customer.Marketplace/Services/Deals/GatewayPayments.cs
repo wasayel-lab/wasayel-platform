@@ -515,7 +515,9 @@ public sealed class GatewayPayments
         if (_client is null || await SecretKeyAsync(_providers, _vault, _log, tenantSlug, ct) is not { } key)
             return With(Logged(tenantSlug, new(deal.Id, null, MoyasarFailures.NotConfigured)));
 
-        var fetched = await _client.FetchInvoiceAsync(GatewayCalls.Fetch(tenantSlug, deal.Refs[GatewayPaymentProof.InvoiceRef], GatewayCalls.Expiry, trigger: null),
+        // (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-CNT-R2-1 — ADR-051 §١٩): زِنادُ التَشغيلِ مِن صَفقَةِ الرِسالَةِ لا `null` دائِماً — رِسالَةُ استِئنافٍ
+        // بَعدَ النافِذَةِ (`DealsService.ExpireAfterResumeAsync`) تَشغيلٌ جَديدٌ يَجلِبُ ثانِيَةً، وكانَ مُعَرِّفُه مُعَرِّفَ التَشغيلِ الأَوَّلِ فَيَبتَلِعُه `ON CONFLICT`.
+        var fetched = await _client.FetchInvoiceAsync(GatewayCalls.Fetch(tenantSlug, deal.Refs[GatewayPaymentProof.InvoiceRef], GatewayCalls.Expiry, GatewayCalls.ExpiryRun(deal)),
             key, deal.Refs[GatewayPaymentProof.InvoiceRef], ct);
         if (!fetched.Ok)
             return With(Logged(tenantSlug, new(deal.Id, null, fetched.Failure!.Code)));
@@ -1307,7 +1309,8 @@ public sealed class GatewayInvoiceCloser
 /// <list type="bullet">
 ///   <item><b>الإنشاء</b>: مُعَرِّفُ نِداءٍ جَديد — البَوّابَةُ لا تَأخُذُ مِفتاحَ مَرَّة-واحِدَة، فَالإنشاءُ المُعادُ فاتورَةٌ ثانِيَة؛ ومَصدَرُه أُولى صَفَقاتِ الفاتورَة.</item>
 ///   <item><b>الجَلب</b>: <c>{invoiceId}:{purpose}[:{trigger}]</c> — التَحَقُّقُ بِمُعَرِّفِ نِداءٍ جَديد (كُلُّ نَقرَةٍ جَلب)، والإشعارُ بِمُعَرِّفِ دَفعِه (إعادَةُ البَوّابَةِ
-///   لِلإشعارِ نَفسِه لا تُضاعِف)، والمُهلَةُ بِلا زِناد (إعاداتُ الرِسالَةِ ‏1/5/15 ث جَلبٌ واحِد)، والإغلاقُ بِالصَفقَةِ المُلغاة (كُلُّ إلغاءٍ جَلبُه).</item>
+///   لِلإشعارِ نَفسِه لا تُضاعِف)، والمُهلَةُ بِلا زِناد (إعاداتُ الرِسالَةِ ‏1/5/15 ث جَلبٌ واحِد)، والإغلاقُ بِالصَفقَةِ المُلغاة (كُلُّ إلغاءٍ جَلبُه).
+///   ‏(‏2026-11-13، M6C-CNT-R2-1) والمُهلَةُ بَعدَ استِئنافٍ بِزِنادِه (<see cref="ExpiryRun"/>): تَشغيلٌ جَديدٌ لا إعادَة.</item>
 ///   <item><b>الإلغاءُ عِندَ البَوّابَة</b>: <c>{invoiceId}:close</c> — الفاتورَةُ تُلغى مَرَّةً، بَعدَ إلغاءِ آخِرِ صَفقَةٍ قائِمَةٍ فيها.</item>
 ///   <item><b>تَسجيلُ الإشعار</b>: مُعَرِّفُ نِداءٍ جَديد — كُلُّ رَبطٍ تَسجيل.</item>
 /// </list>
@@ -1332,6 +1335,20 @@ public static class GatewayCalls
         => ProviderCall.ForChannel(OutboundUnits.PaymentGatewayInvoiceFetch, tenantSlug,
                                    trigger is null ? $"{invoiceId}:{purpose}" : $"{invoiceId}:{purpose}:{trigger}")
                        .About(ProviderCall.InvoiceSource, invoiceId);
+
+    /// <summary>
+    /// <para><b>زِنادُ تَشغيلِ المُهلَة</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-CNT-R2-1 — ADR-051 §١٩): <c>null</c> لِصَفقَةٍ لَم تُستَأنَف — الرِسالَةُ المُجَدوَلَةُ
+    /// (واحِدَةٌ لِكُلِّ فاتورَة) وإعاداتُها ‏1/5/15 ث جَلبٌ واحِدٌ <c>{invoiceId}:expiry</c> كَما كانَ؛ و<c>resume:{dealId:N}:{n}</c> بَعدَ الاستِئنافِ رَقمِ <c>n</c> — فَرِسالَةُ
+    /// الاستِئنافِ بَعدَ النافِذَةِ (<c>DealsService.ExpireAfterResumeAsync</c>) تَشغيلٌ جَديدٌ بِجَلبٍ يُعَدّ، وإعاداتُها بِزِنادِها نَفسِه، واستِئنافا صَفقَتَينِ عَلى فاتورَةٍ واحِدَةٍ زِنادان.</para>
+    /// <para><b>ومِن الصَفقَةِ لا مِن الرِسالَة</b>: الرِسالَةُ عَقدٌ مُخَزَّنٌ (‏ADR-046 §٤) يُقارَنُ بِحَرفِه (<c>DealDisputedSiblingOrderSwitchTests</c>)، والصَفقَةُ يَقرَؤُها المُعالِجُ أَصلاً
+    /// (<see cref="GatewayPayments.ExpireAsync"/>) — فَلا حَقلَ جَديدَ في رِسالَةٍ ولا قِراءَةَ زائِدَة. ويُقالُ ما يَبقى: إعادَةُ رِسالَةٍ مُجَدوَلَةٍ تَقَعُ بَعدَ استِئنافِ
+    /// صَفقَتِها المَرجِعِ نَفسِها يَصيرُ زِنادُها زِنادَ رِسالَةِ ذلكَ الاستِئناف (نافِذَةُ الإعاداتِ ‏21 ث).</para>
+    /// </summary>
+    public static string? ExpiryRun(Deal deal)
+    {
+        var resumes = deal.Timeline.Count(e => e.Action == DealEvent.DisputeResumed);
+        return resumes == 0 ? null : $"resume:{deal.Id:N}:{resumes}";
+    }
 
     /// <summary>إلغاءُ الفاتورَةِ عِندَ البَوّابَة.</summary>
     public static ProviderCall Cancel(string tenantSlug, string invoiceId)

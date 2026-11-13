@@ -462,6 +462,40 @@ public class ProviderCallsTests(ITestOutputHelper output)
         Assert.Equal((ProviderCall.InvoiceSource, invoice, ProviderCall.InvoiceSource, invoice), (verify.SourceType, verify.SourceId, close.SourceType, close.SourceId));
     }
 
+    /// <summary>
+    /// <para><b>زِنادُ تَشغيلِ المُهلَة</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-CNT-R2-1 — ADR-051 §١٩): صَفقَةٌ لَم تُستَأنَف ⇐ <c>null</c> فَالجَلبُ
+    /// <c>{invoice}:expiry</c> كَما كان (والإعاداتُ الثَلاثُ أَعلاه سَطرٌ واحِد)؛ واستِئنافٌ ⇐ <c>resume:{deal:N}:1</c>، وثانٍ ⇐ <c>:2</c>؛ وصَفقَتانِ مُستَأنَفَتانِ عَلى فاتورَةٍ
+    /// واحِدَةٍ ⇐ زِنادان — وسَطرُ «نِزاع» وَحدَه لا يُغَيِّرُه.</para>
+    /// </summary>
+    [Fact]
+    public void Each_expiry_run_after_a_resume_has_its_own_trigger_and_a_run_without_one_keeps_the_old_id()
+    {
+        static ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal Deal(params string[] actions)
+        {
+            var d = new ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal { Id = Guid.NewGuid() };
+            foreach (var a in actions)
+                d.Timeline.Add(new(default, default, a, null, null, null, DateTime.UtcNow));
+            return d;
+        }
+        const string disputed = "disputed";
+        var resumed = ACommerce.Templates.Customer.Marketplace.Services.Deals.DealEvent.DisputeResumed;
+        var never = Deal("created", disputed);
+        var once = Deal("created", disputed, resumed);
+        var twice = Deal("created", disputed, resumed, disputed, resumed);
+        var sibling = Deal("created", disputed, resumed);
+        string? Run(ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal d)
+            => ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.ExpiryRun(d);
+        string Id(ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal d)
+            => ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayCalls.Fetch(Store, "inv-1", "expiry", Run(d)).By(ProviderNames.StoreGateway).Id;
+        output.WriteLine($"[G6·المُهلَة] بِلا استِئناف ⇒ {Id(never)} · مَرَّة ⇒ {Id(once)} · مَرَّتان ⇒ {Id(twice)} · أُختٌ ⇒ {Id(sibling)}");
+        Assert.Null(Run(never));
+        Assert.Equal($"{OutboundUnits.PaymentGatewayInvoiceFetch}:{ProviderNames.StoreGateway}:inv-1:expiry", Id(never));
+        Assert.Equal($"resume:{once.Id:N}:1", Run(once));
+        Assert.Equal($"resume:{twice.Id:N}:2", Run(twice));
+        Assert.Equal(4, new[] { Id(never), Id(once), Id(twice), Id(sibling) }.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(Id(once), Id(once));
+    }
+
     /// <summary><b>الإنشاءُ يُعَدُّ عِندَ ‏2xx الـ<c>POST</c> ووَسمُه مُساعِد</b>: ‏<c>POST</c> ‏201 ثُمَّ <c>PUT</c> ‏503 ⇐ نِيَّةٌ واحِدَةٌ وسَطرُ إنشاءٍ واحِد، ولا نِيَّةَ لِلوَسم، والرَمزُ
     /// رَمزُ الوَسمِ كَما كان (<c>gateway_unreachable</c>)؛ ومَصدَرُه أُولى صَفَقاتِ الفاتورَة.</summary>
     [Fact]
