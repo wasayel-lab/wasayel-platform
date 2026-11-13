@@ -15,6 +15,12 @@ namespace ACommerce.Platform.Tests;
 // ‏(‏2026-11-13، W13-6·٢١ — التَصميم §11؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصَفحَةٌ ثالِثَة**: `/admin/meter/owners/{id}` بِالشُروطِ نَفسِها (مَسار، وحارِس، والبَوّابَةُ
 // قَبلَ القِراءَة، ولا جَلسَة)، ومَدخَلُها خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَر — رَمزُ خَرقٍ سابِعٌ `owner_unlinked` بِحَقنِه. وحالاتُها الحَيَّةُ (مَتجَرٌ مُتَبَنّى
 // تَحتَ مالِكِه الآن وسُطورُ ما قَبلَ التَبَنّي `_unowned`، والمَجهولُ لا يُرسَمُ ولا يُقرَأُ لَه) في `LiveMeterOwnerProofTests`.
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ هـ الأولى · W13-6·E-R1·١ — SEC-E-R1-1 وM6E-RULES-R1-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وكُلُّ قِراءَةٍ في الصَفحَةِ بَعدَ البَوّابَة،
+// لا قِراءَتُها المُسَمّاةُ وَحدَها**: البَندُ ٢٠ أَضافَ إلى صَفحَةِ المَتجَرِ قِراءَةً ثانِيَة (`Reconcile.StoreAsync` — المُطابَقَةُ العابِرَةُ لِلمَتاجِرِ بِلَقطَةِ REPEATABLE READ)
+// والفاحِصُ يَسأَلُ عَن `Meter.StoreAsync` وَحدَه: مَقيسٌ عِندَ 41f2087 — نَقلُ سَطرِ المُطابَقَةِ فَوقَ البَوّابَةِ يُبقي الصُفوفَ الأَربَعَةَ خَضراءَ و«خُروق 0». فَصارَ
+// `read_before_guard` يَعُدُّ القُرّاءَ مِن `@inject` نَفسِها (كُلُّ اسمٍ مَحقونٍ إلّا ما لا يَقرَأُ حالَةً مَخزونَة: البَوّابَةُ والقامُوسُ والثَقافَة) ويُلزِمُ كُلَّ ذِكرٍ لَها
+// في `@code` أَن يَقَعَ بَعدَ سَطرِ البَوّابَةِ **وفي دالَّتِها** — ودالَّةُ دَورَةِ حَياةٍ أُخرى تَقرَأُ بِلا بَوّابَة. و`page_unguarded` يُلزِمُ سِماتِ `data-recon-` بِالحارِسِ
+// كَـ`data-meter-state`. والحالَةُ الحَيَّةُ (المَجهولُ وغَيرُ المُشرِفِ لا تُقرَأُ لَهُما المُطابَقَة، والمُشرِفُ عَلى المُضيفِ نَفسِه تُقرَأُ لَه مَرَّة) في `LiveMeterAdminProofTests` (٣).
 public class MeterAdminReachabilityTests(ITestOutputHelper output)
 {
     private const string TemplateRoot = "libs/templates/ACommerce.Templates.Customer.Marketplace";
@@ -49,6 +55,56 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     private static readonly string[] SessionTokens =
         ["IDocumentSession", "IQuerySession", "IDocumentStore", "LightweightSession", "QuerySession(", "SaveChangesAsync"];
 
+    /// <summary>سَطرُ البَوّابَةِ في <c>@code</c> — نَمَطُ <c>TenantEdit.razor</c>.</summary>
+    internal const string GateLine = @"if\s*\(!\(await PlatformGuard\.EvaluateAsync\(\)\)\.Allowed\)\s*return;";
+
+    /// <summary>‏(W13-6·E-R1·١) <b>حُقَنُ الصَفحَةِ الَّتي لا تَقرَأُ حالَةً مَخزونَة</b> — مُعجَمٌ مُغلَق: البَوّابَةُ نَفسُها، والقامُوس، وثَقافَةُ الطَلَب.
+    /// وكُلُّ اسمٍ تُعلِنُه <c>@inject</c> سِواها قارِئٌ (القاعِدَة ٧: المِحوَرُ «أَيَقرَأُ حالَةً مَخزونَة؟»).</summary>
+    internal static readonly IReadOnlyList<string> NonReading = ["PlatformGuard", "L", "Culture"];
+
+    /// <summary>‏(W13-6·E-R1·١) القُرّاءُ المَحقونونَ في الصَفحَة: أَسماءُ <c>@inject</c> ناقِصَ <see cref="NonReading"/>.</summary>
+    internal static IReadOnlyList<string> Readers(string page) =>
+        [.. Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(page), @"^@inject[ \t]+\S+[ \t]+(?<n>[A-Za-z_]\w*)[ \t]*\r?$", RegexOptions.Multiline)
+            .Select(m => m.Groups["n"].Value).Where(n => !NonReading.Contains(n)).Distinct()];
+
+    /// <summary>‏(W13-6·E-R1·١) قِسمُ <c>@code</c> بِلا تَعليقات — بِمَواضِعِه (المُزيلُ يُبَيِّضُ ولا يَحذِف).</summary>
+    private static string CodeSection(string page)
+    {
+        var code = WriteEndpointGuardTests.StripMarkupComments(page);
+        var body = code.IndexOf("@code", StringComparison.Ordinal);
+        return body >= 0 ? WriteEndpointGuardTests.StripComments(code[body..]) : "";
+    }
+
+    /// <summary>‏(W13-6·E-R1·١) <b>كُلُّ ذِكرٍ لِقارِئٍ مَحقونٍ في <c>@code</c></b> بِمَوضِعِه — نِداءً (<c>Reconcile.StoreAsync</c>) أَو اسماً مُجَرَّداً (تَمريرُه أَو
+    /// تَسمِيَتُه بِغَيرِ اسمِه قِراءَةٌ مُؤَجَّلَة).</summary>
+    internal static IReadOnlyList<(string Call, int At)> Reads(string page)
+    {
+        var readers = Readers(page);
+        if (readers.Count == 0) return [];
+        return [.. Regex.Matches(CodeSection(page), $@"\b(?<n>{string.Join("|", readers.Select(Regex.Escape))})\b(?:\s*\.\s*(?<m>[A-Za-z_]\w*))?")
+            .Select(m => (m.Groups["m"].Success ? $"{m.Groups["n"].Value}.{m.Groups["m"].Value}" : m.Groups["n"].Value, m.Index))];
+    }
+
+    /// <summary>‏(W13-6·E-R1·١) حُدودُ الدالَّةِ الَّتي فيها سَطرُ البَوّابَة: ما بَعدَ السَطرِ حَتّى قَوسِ إغلاقِ دالَّتِه — أَو <c>null</c> إن غابَ السَطر.</summary>
+    private static (int From, int To)? Gated(string section)
+    {
+        var gate = Regex.Match(section, GateLine);
+        if (!gate.Success) return null;
+        int open = -1, depth = 0;
+        for (var i = gate.Index - 1; i >= 0 && open < 0; i--)
+            if (section[i] == '}') depth++;
+            else if (section[i] == '{') { if (depth == 0) open = i; else depth--; }
+        if (open < 0) return null;
+        depth = 0;
+        for (var i = open + 1; i < section.Length; i++)
+            if (section[i] == '{') depth++;
+            else if (section[i] == '}') { if (depth == 0) return (gate.Index + gate.Length, i); depth--; }
+        return null;
+    }
+
+    /// <summary>‏(W13-6·E-R1·١) سِماتُ الصَفحَةِ الَّتي لا تُرسَمُ إلّا خَلفَ الحارِس: الحالَةُ (لازِمَة) وقِسمُ المُطابَقَة (حَيثُ وُجِد).</summary>
+    internal static readonly IReadOnlyList<string> GuardedMarkers = ["data-meter-state", "data-recon-"];
+
     /// <summary>خُروقُ <c>AdminHome</c>: الرابِطُ داخِلَ <c>&lt;RequirePlatformAdmin&gt;</c> وبَعدَ رابِطِ <c>/admin/monitor</c> (بِجِوارِه — التَصميم §11).</summary>
     internal static IReadOnlyList<string> HomeBreaches(string adminHome)
     {
@@ -62,9 +118,12 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
 
     /// <summary>
     /// <para>خُروقُ صَفحَة: <c>@page</c> بِمَسارِها، والمُحتَوى كُلُّه بَعدَ <c>&lt;RequirePlatformAdmin&gt;</c> وقَبلَ إغلاقِه، وفي <c>@code</c> سُؤالُ
-    /// <c>PlatformGuard.EvaluateAsync()</c> قَبلَ أَوَّلِ <paramref name="read"/>، ولا رَمزَ جَلسَة. و<paramref name="storeLink"/> لِلفِهرِسِ وَحدَه.</para>
+    /// <c>PlatformGuard.EvaluateAsync()</c> قَبلَ أَوَّلِ <paramref name="reads"/>، ولا رَمزَ جَلسَة. و<paramref name="storeLink"/> لِلفِهرِسِ وَحدَه.</para>
+    /// <para>‏(‏2026-11-13، W13-6·E-R1·١) <b>وكُلُّ قِراءَة، لا المُسَمّاةُ وَحدَها</b>: <paramref name="reads"/> ما يَجِبُ أَن يوجَدَ (فَالفاحِصُ لا يَعمى إن ضاعَت
+    /// القِراءَة)، و<see cref="Reads"/> كُلُّ ذِكرٍ لِقارِئٍ مَحقونٍ — وكُلُّها بَعدَ سَطرِ البَوّابَةِ في دالَّتِه (<see cref="Gated"/>). و<see cref="GuardedMarkers"/>
+    /// كُلُّها بَينَ طَرَفَيِ الحارِس.</para>
     /// </summary>
-    internal static IReadOnlyList<string> PageBreaches(string page, string route, string read, string? storeLink = null)
+    internal static IReadOnlyList<string> PageBreaches(string page, string route, IReadOnlyList<string> reads, string? storeLink = null)
     {
         var found = new List<string>();
         var code = WriteEndpointGuardTests.StripMarkupComments(page);
@@ -75,11 +134,13 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var firstMarkup = code.IndexOf("data-meter-state", StringComparison.Ordinal);
         var lastMarkup = code.LastIndexOf("data-meter-state", StringComparison.Ordinal);
         if (open < 0 || close < open || firstMarkup < open || lastMarkup > close || (body >= 0 && body < close)) found.Add("page_unguarded");
-        var section = body >= 0 ? WriteEndpointGuardTests.StripComments(code[body..]) : "";
-        var guard = section.IndexOf("PlatformGuard.EvaluateAsync()", StringComparison.Ordinal);
-        var reading = section.IndexOf(read, StringComparison.Ordinal);
-        if (guard < 0 || reading < 0 || reading < guard
-            || !Regex.IsMatch(section[..Math.Max(reading, 0)], @"if\s*\(!\(await PlatformGuard\.EvaluateAsync\(\)\)\.Allowed\)\s*return;"))
+        else if (GuardedMarkers.Any(m => code.IndexOf(m, StringComparison.Ordinal) is var first and >= 0
+                                         && (first < open || code.LastIndexOf(m, StringComparison.Ordinal) > close)))
+            found.Add("page_unguarded");
+        var calls = Reads(page);
+        var gated = Gated(CodeSection(page));
+        if (gated is not { } g || reads.Count == 0 || reads.Any(r => !calls.Any(c => c.Call == r))
+            || calls.Any(c => c.At < g.From || c.At > g.To))
             found.Add("read_before_guard");
         if (SessionTokens.Any(t => code.Contains(t, StringComparison.Ordinal))) found.Add("session_in_page");
         if (storeLink is not null && !code.Contains(storeLink, StringComparison.Ordinal)) found.Add("store_unlinked");
@@ -101,11 +162,16 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         return guard >= 0 && link > guard ? [] : ["owner_unlinked"];
     }
 
+    /// <summary>‏(W13-6·E-R1·١) قِراءاتُ كُلِّ صَفحَةٍ بِأَسمائِها — وصَفحَةُ المَتجَرِ اثنَتان مُنذُ البَند ٢٠: العَدُّ والمُطابَقَة.</summary>
+    internal static readonly IReadOnlyList<string> IndexReads = ["Meter.TodayAsync"];
+    internal static readonly IReadOnlyList<string> StoreReads = ["Meter.StoreAsync", "Reconcile.StoreAsync"];
+    internal static readonly IReadOnlyList<string> OwnerReads = ["Meter.OwnerAsync"];
+
     internal static IReadOnlyList<string> Breaches(string adminHome, string index, string store, string owner) =>
         HomeBreaches(adminHome)
-            .Concat(PageBreaches(index, IndexRoute, "Meter.TodayAsync", "href=\"/admin/meter/stores/@app\""))
-            .Concat(PageBreaches(store, StoreRoute, "Meter.StoreAsync"))
-            .Concat(PageBreaches(owner, OwnerRoute, "Meter.OwnerAsync"))
+            .Concat(PageBreaches(index, IndexRoute, IndexReads, "href=\"/admin/meter/stores/@app\""))
+            .Concat(PageBreaches(store, StoreRoute, StoreReads))
+            .Concat(PageBreaches(owner, OwnerRoute, OwnerReads))
             .Concat(OwnerLinkBreaches(store))
             .Distinct().ToList();
 
@@ -121,9 +187,16 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var found = Breaches(home, index, store, owner);
         output.WriteLine($"[G11] صَفَحاتٌ مَفحوصَة 3 · رَوابِطُ AdminHome إلى {IndexRoute}: {links} · رَوابِطُ صَفحَةِ المَتجَرِ إلى صَفحَةِ رائِدِ الأَعمال: {ownerLinks} · خُروق {found.Count}"
                          + (found.Count == 0 ? "" : ": " + string.Join(", ", found)));
+        // ‏(W13-6·E-R1·١) ما قَرَأَه الفاحِصُ لِكُلِّ صَفحَة: القُرّاءُ المَحقونونَ ونِداءاتُهم — وكُلُّها بَعدَ البَوّابَة؛ وسِماتُ المُطابَقَةِ داخِلَ الحارِس.
+        var pages = new (string Name, string Page, IReadOnlyList<string> Named)[] { ("index", index, IndexReads), ("store", store, StoreReads), ("owner", owner, OwnerReads) };
+        foreach (var (name, page, named) in pages)
+            output.WriteLine($"[G11] {name}: قُرّاءٌ مَحقونون [{string.Join(", ", Readers(page))}] · قِراءاتٌ مَفحوصَة {Reads(page).Count} [{string.Join(", ", Reads(page).Select(r => r.Call))}] · "
+                             + $"سِماتُ data-recon- {Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(page), "data-recon-").Count}");
         Assert.Equal(1, links);
         Assert.Equal(1, ownerLinks);
         Assert.Empty(found);
+        Assert.All(pages, p => Assert.Equal(p.Named.Order(StringComparer.Ordinal), Reads(p.Page).Select(r => r.Call).Distinct().Order(StringComparer.Ordinal)));
+        Assert.True(Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(store), "data-recon-").Count > 0, "أَداةٌ عَمياء: صَفحَةُ المَتجَرِ بِلا قِسمِ مُطابَقَة.");
     }
 
     /// <summary><b>والفاحِصُ نَفسُه يَرى ما يَعُدُّ</b>: كُلُّ رَمزٍ يُنتِجُه عَيبٌ مَحقونٌ في نُسخَةٍ مِن المِلَفِّ الحَقيقِيّ — ورَمزٌ مُعلَنٌ بِلا حَقنٍ يُنتِجُه حارِسٌ أَعمى.</summary>
@@ -135,6 +208,32 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var store = StorePage();
         var owner = OwnerPage();
         var guardLine = @"if\s*\(!\(await PlatformGuard\.EvaluateAsync\(\)\)\.Allowed\)\s*return;";
+
+        // ‏(‏2026-11-13، W13-6·E-R1·١ — SEC-E-R1-1 وM6E-RULES-R1-1) حُقونُ القِراءَةِ الثانِيَةِ في صَفحَةِ المَتجَرِ وسِماتِ قِسمِها: كُلُّ حَقنٍ يَجِدُ نَصَّه
+        // مَرَّةً واحِدَةً أَو يَحمَرّ (حَقنٌ لا يَقَعُ يُنتِجُ «أَخضَرَ» أَعمى).
+        string Cut(string page, string pattern, out string line)
+        {
+            var hits = Regex.Matches(page, pattern);
+            Assert.True(hits.Count == 1, $"حَقنٌ أَعمى: «{pattern}» ×{hits.Count}");
+            line = hits[0].Value;
+            return page.Remove(hits[0].Index, hits[0].Length);
+        }
+        string AboveGate(string page, string line)
+        {
+            var gate = Regex.Matches(page, @"[ \t]*" + GateLine);
+            Assert.True(gate.Count == 1, $"حَقنٌ أَعمى: سَطرُ البَوّابَةِ ×{gate.Count}");
+            return page.Insert(gate[0].Index, line);
+        }
+        var withoutRecon = Cut(store, @"[ \t]*recon = await Reconcile\.StoreAsync\(Slug\);\r?\n", out var reconLine);
+        var reconAboveGate = AboveGate(withoutRecon, reconLine);                                     // ‏ما قاسَه المُراجِع: السَطرُ نَفسُه فَوقَ البَوّابَة
+        var reconOutsideGated = withoutRecon.Insert(withoutRecon.LastIndexOf('}'),                    // ‏بَعدَ البَوّابَةِ نَصّاً وفي دالَّةِ دَورَةِ حَياةٍ بِلا بَوّابَة
+            "\n    protected override async Task OnInitializedAsync()\n    {\n" + reconLine + "    }\n");
+        Assert.Single(Regex.Matches(store, @"@inject MeterQueries Meter\r?\n"));
+        var unnamedReader = AboveGate(Regex.Replace(store, @"(@inject MeterQueries Meter\r?\n)",                 // ‏قارِئٌ ثالِثٌ لا تُسَمّيه القائِمَة
+                                          "$1@inject ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterReconciliation Audit\n"),
+                                      "        _ = await Audit.StoreAsync(Slug);\n");
+        var reconMarkerOutside = store.Replace("<RequirePlatformAdmin>", "<div data-recon-state=\"error\"></div>\n<RequirePlatformAdmin>", StringComparison.Ordinal);
+
         var injections = new (string Code, string Home, string Index, string Store, string Owner)[]
         {
             ("link_missing", home.Replace($"href=\"{IndexRoute}\"", "href=\"/admin/elsewhere\"", StringComparison.Ordinal), index, store, owner),
@@ -152,6 +251,11 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
                                                         .Replace("</RequirePlatformAdmin>", "</div>", StringComparison.Ordinal)),
             ("read_before_guard", home, index, store, Regex.Replace(owner, guardLine, "")),
             ("session_in_page", home, index, store, owner.Replace("@inject MeterQueries Meter", "@inject MeterQueries Meter\n@inject Marten.IQuerySession Session", StringComparison.Ordinal)),
+            // ‏(W13-6·E-R1·١) كُلُّ قِراءَةٍ بَعدَ البَوّابَةِ وفي دالَّتِها — لا المُسَمّاةُ وَحدَها؛ وقِسمُ المُطابَقَةِ داخِلَ الحارِس.
+            ("read_before_guard", home, index, reconAboveGate, owner),
+            ("read_before_guard", home, index, reconOutsideGated, owner),
+            ("read_before_guard", home, index, unnamedReader, owner),
+            ("page_unguarded", home, index, reconMarkerOutside, owner),
         };
         var produced = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var (codeName, h, i, s, o) in injections)

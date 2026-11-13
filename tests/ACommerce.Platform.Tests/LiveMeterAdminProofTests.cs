@@ -31,6 +31,9 @@ namespace ACommerce.Platform.Tests;
 // (٢) بَعدَ `--once` وسُطورٍ بَعدَه: المَجموعُ + الذَيلُ = عَدُّ الدَفتَرِ في النافِذَةِ لِكُلِّ يَوم؛ (٣) المَجهولُ وغَيرُ المُشرِفِ لا يُرسَمُ لَهُما رَقَمٌ **ولا يُقرَأُ
 // لَهُما الدَفتَر** (قارِئٌ عَلى قاعِدَةٍ غائِبَةٍ لا يَكتُبُ سَطراً)؛ (٤) قاعِدَةٌ بِلا دَفتَر (‏42P01) ← «لا بَيانات» بِلا سَطرِ عُطل؛ (٥) أَيُّ عُطلٍ آخَر ← سَطرٌ واحِدٌ
 // `[meter-page]` وبِطاقَةُ خَطَأ — والتَصييرُ لا يَرمي (أَي لا ‏500).
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ هـ الأولى · W13-6·E-R1·١ — SEC-E-R1-1 وM6E-RULES-R1-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمُطابَقَةُ قِراءَةٌ ثانِيَةٌ في صَفحَةِ
+// المَتجَر** (البَند ٢٠): في (٣) تُبنى عَلى القاعِدَةِ الغائِبَةِ بِسِجِلٍّ يُعَدُّ — صِفرُ سَطرٍ [meter-reconcile] لِلمَجهولِ وغَيرِ المُشرِف، ولا `data-recon-` يُرسَم،
+// وضابِطُها مُشرِفٌ عَلى المُضيفِ نَفسِه يُقرَأُ لَه سَطرٌ واحِدٌ مِن كُلِّ قارِئ؛ وفي (١) تُبنى عَلى دَفتَرِ الصَفِّ فَيُرسَمُ قِسمُها لِلمُشرِف «data».
 
 [Collection(LiveProofCollection.Name)]
 public class LiveMeterAdminProofTests(ITestOutputHelper output)
@@ -78,7 +81,7 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
     }
 
     /// <summary>سِجِلٌّ يَلتَقِطُ ما يَكتُبُه القارِئ — لِيُعَدَّ سَطرُ <c>[meter-page]</c> لا لِيُفتَرَض.</summary>
-    private sealed class Lines : ILogger<MeterQueries>
+    private sealed class Lines : ILogger<MeterQueries>, ILogger<MeterReconciliation>
     {
         private readonly List<string> _all = [];
         public string[] All { get { lock (_all) return _all.ToArray(); } }
@@ -145,6 +148,14 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
 
     private static LiveTemplateDoorHost HostReading(DocumentStore ledger, Lines lines)
         => LiveTemplateDoorHost.Build(services: s => s.AddScoped(_ => new MeterQueries(ledger, lines)));
+
+    /// <summary>‏(W13-6·E-R1·١) والمُطابَقَةُ عَلى قاعِدَةِ الصَفِّ نَفسِها بِسِجِلٍّ يُعَدّ — لا عَلى القاعِدَةِ المُشتَرَكَة.</summary>
+    private static LiveTemplateDoorHost HostReading(DocumentStore ledger, Lines lines, Lines reconciler)
+        => LiveTemplateDoorHost.Build(services: s =>
+        {
+            s.AddScoped(_ => new MeterQueries(ledger, lines));
+            s.AddScoped(_ => new MeterReconciliation(ledger, reconciler));
+        });
 
     /// <summary>الصَفحَةُ مُصَيَّرَةً بِكوكيِّ الاستوديو (أَو بِلا كوكي) — النَصُّ مَفكوكُ الكِيانات. والتَصييرُ الَّذي يَرمي هُوَ ‏500 الخادِم.</summary>
     private static async Task<string> RenderAsync<TPage>(LiveTemplateDoorHost host, string? token, string path, Dictionary<string, object?> parameters)
@@ -213,12 +224,18 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
         Assert.Empty(lines.All);
 
         var admin = default(Probe);
-        await using var host = HostReading(l.Store, lines);
+        var reconciler = new Lines();
+        await using var host = HostReading(l.Store, lines, reconciler);
         try
         {
             admin = await UserAsync(host, consented: false, platformAdmin: true);
             var page = await StorePageAsync(host, admin.Token, App);
             var index = await IndexPageAsync(host, admin.Token);
+            // ‏(‏2026-11-13، W13-6·E-R1·١ — SEC-E-R1-1) قِسمُ المُطابَقَةِ لِلمُشرِفِ عَلى دَفتَرٍ حَقيقِيّ: يُقرَأُ ويُرسَم (والصَفُّ (٣) يَقيسُ أَنّه لا يُقرَأُ لِغَيرِه).
+            output.WriteLine($"[G11·A] قِسمُ المُطابَقَة: الحالَة «{Attr(page, "data-recon-state")}» · قورِن «{Attr(page, "data-recon-compared")}» · عُيوب «{Attr(page, "data-recon-defects")}» · "
+                             + $"سُطورُ سِجِلِّ المُطابَقَة {reconciler.All.Length}");
+            Assert.Equal("data", Attr(page, "data-recon-state"));
+            Assert.Empty(reconciler.All);
             output.WriteLine($"[G11·A] صَفحَةُ المَتجَر: الحالَة «{Attr(page, "data-meter-state")}» · المُجَمِّع «{Attr(page, "data-meter-agg")}» · المَجموع «{Attr(page, "data-meter-total")}» · "
                              + $"deal.create «{UnitEntries(page, "data-meter-total", "deal.create")}» · الأَيّام «{Attr(page, "data-meter-day")}» — "
                              + $"الفِهرِس: المَتاجِر «{Attr(index, "data-meter-app")}» · {App} «{UnitEntries(index, $"data-meter-app=\"{App}\"", "deal.create")}» · "
@@ -335,10 +352,27 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
         output.WriteLine($"[G11·C] الضابِطُ: قِراءَةٌ عَلى {b.Database} ⇒ {control.State} · سُطور {lines.All.Length}: {string.Join(" | ", lines.All)}");
         Assert.Equal(MeterReadState.Error, control.State);
         Assert.Single(lines.All);
+        // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ هـ الأولى · W13-6·E-R1·١ — SEC-E-R1-1 وM6E-RULES-R1-1) **والمُطابَقَةُ كَذلِك**: البَندُ ٢٠ أَضافَ إلى صَفحَةِ المَتجَرِ
+        // قِراءَةً ثانِيَةً (`Reconcile.StoreAsync` — عابِرَةٌ لِلمَتاجِرِ بِلَقطَةِ REPEATABLE READ) والصَفُّ يُبَدِّلُ `MeterQueries` وَحدَه، فَلَو قُرِئَت لِلمَجهولِ
+        // لَقَرَأَتِ القاعِدَةَ المُشتَرَكَةَ ولا تُعَدّ: مَقيسٌ عِندَ المُراجِعِ عَلى 41f2087 — سَطرُها فَوقَ البَوّابَةِ والصَفُّ أَخضَرُ «قِراءاتٌ لِلدَفتَر 0». فَهِيَ هُنا عَلى
+        // القاعِدَةِ الغائِبَةِ بِسِجِلٍّ يُعَدّ، وضابِطُها: سَطرٌ واحِدٌ [meter-reconcile] لِقِراءَةٍ واحِدَة.
+        var reconControl = new Lines();
+        var reconRead = await new MeterReconciliation(nowhere, reconControl).StoreAsync(App);
+        output.WriteLine($"[G11·C] ضابِطُ المُطابَقَة: قِراءَةٌ عَلى {b.Database} ⇒ {reconRead.State} · سُطور {reconControl.All.Length}: {string.Join(" | ", reconControl.All)}");
+        Assert.Equal(MeterReconcileState.Error, reconRead.State);
+        Assert.StartsWith($"Error {MeterReconciliation.LogTag} store {App}: PostgresException 3D000 ", Assert.Single(reconControl.All), StringComparison.Ordinal);
 
         var reader = new Lines();
+        var reconciler = new Lines();
         var member = default(Probe);
-        await using var host = LiveTemplateDoorHost.Build(services: s => s.AddScoped(_ => new MeterQueries(nowhere, reader)));
+        var admin = default(Probe);
+        await using var host = LiveTemplateDoorHost.Build(services: s =>
+        {
+            s.AddScoped(_ => new MeterQueries(nowhere, reader));
+            s.AddScoped(_ => new MeterReconciliation(nowhere, reconciler));
+        });
+        int ledgerReads, reconReads;
+        string adminPage;
         try
         {
             member = await UserAsync(host, consented: true, platformAdmin: false);
@@ -351,14 +385,28 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
             };
             foreach (var (who, page, html) in rendered)
                 output.WriteLine($"[G11·C] {who} · {page}: data-meter «{Attr(html, "data-meter-state")}{Attr(html, "data-meter-agg")}{Attr(html, "data-meter-total")}» · "
+                                 + $"data-recon «{Attr(html, "data-recon-state")}» · "
                                  + $"دُخول {html.Contains("href=\"/studio/auth\"", StringComparison.Ordinal)} · مَنع {html.Contains(Text("admin.guard.forbidden_title"), StringComparison.Ordinal)}");
             Assert.All(rendered, r => Assert.DoesNotContain("data-meter-", r.Html, StringComparison.Ordinal));
+            Assert.All(rendered, r => Assert.DoesNotContain("data-recon-", r.Html, StringComparison.Ordinal));
             Assert.All(rendered.Take(2), r => Assert.Contains(Text("admin.guard.need_auth_title"), r.Html, StringComparison.Ordinal));
             Assert.All(rendered.Skip(2), r => Assert.Contains(Text("admin.guard.forbidden_title"), r.Html, StringComparison.Ordinal));
+            (ledgerReads, reconReads) = (reader.All.Length, reconciler.All.Length);
+
+            // ‏(W13-6·E-R1·١) **والعَدّادانِ يَبلُغانِ الصَفحَةَ فِعلاً** — صِفرٌ مِن سِجِلٍّ لا تَبلُغُه الصَفحَةُ لا يُمَيَّزُ مِن أَداةٍ عَمياء (القاعِدَة ١٠): مُشرِفٌ عَلى المُضيفِ
+            // نَفسِه تُقرَأُ لَه القِراءَتانِ مَرَّةً، كُلٌّ بِسَطرِها، وتُرسَمُ بِطاقَةُ الخَطَأ (وقِسمُ المُطابَقَةِ داخِلَ حالَةِ البَيانات، فَلا يُرسَمُ هُنا وقَد قُرِئ).
+            admin = await UserAsync(host, consented: false, platformAdmin: true);
+            adminPage = await StorePageAsync(host, admin.Token, App);
         }
-        finally { await CleanAsync(host, member is null ? [] : [member]); }
-        output.WriteLine($"[G11·C] صَفَحاتٌ مُصَيَّرَة 4 · قِراءاتٌ لِلدَفتَر {reader.All.Length}");
-        Assert.Empty(reader.All);
+        finally { await CleanAsync(host, new[] { member, admin }.OfType<Probe>()); }
+        output.WriteLine($"[G11·C] صَفَحاتٌ مُصَيَّرَة 4 · قِراءاتٌ لِلدَفتَر {ledgerReads} · قِراءاتٌ لِلمُطابَقَة {reconReads} — "
+                         + $"ضابِطُ الصَفحَة (مُشرِف): data-meter «{Attr(adminPage, "data-meter-state")}» · data-recon «{Attr(adminPage, "data-recon-state")}» · "
+                         + $"قِراءاتٌ لِلدَفتَر {reader.All.Length - ledgerReads} · لِلمُطابَقَة {reconciler.All.Length - reconReads}: {string.Join(" | ", reconciler.All)}");
+        Assert.Equal(0, ledgerReads);
+        Assert.Equal(0, reconReads);
+        Assert.Equal("error", Attr(adminPage, "data-meter-state"));
+        Assert.StartsWith($"Error {MeterQueries.LogTag} store {App}: ", Assert.Single(reader.All), StringComparison.Ordinal);
+        Assert.StartsWith($"Error {MeterReconciliation.LogTag} store {App}: PostgresException 3D000 ", Assert.Single(reconciler.All), StringComparison.Ordinal);
     }
 
     // ─── (٤) قاعِدَةٌ بِلا دَفتَر: «لا بَيانات» (‏42P01) بِلا سَطرِ عُطل ───────────────────────────────────────────────
