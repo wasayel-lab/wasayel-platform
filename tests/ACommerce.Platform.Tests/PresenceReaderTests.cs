@@ -109,8 +109,11 @@ public class PresenceReaderTests(ITestOutputHelper output)
         Assert.Empty(RoleMeterValidator.Validate(vendor));
 
         var providers = new PresenceDefinitions([.. ProviderCatalog.Definitions.Select(d => d.Slug == quiet.Slug ? quiet : d.Slug == otoNone.Slug ? otoNone : d)],
-            PresenceDefinitions.Platform.RoleMeter);
-        var roles = new PresenceDefinitions(ProviderCatalog.Definitions, (set, slug) => slug == vendor.Slug ? vendor.Meter! : set.MeterOf(slug));
+            PresenceDefinitions.Platform.Roles);
+        // ‏(W13-6·D-R3·١) نُسخَةُ الكاتالوجِ تُعطى قائِمَةً يَقرَؤُها `MeterOf` نَفسُه — لا دالَّةً يَكتُبُها الاختِبار: لَو كَفَّ `MeterOf` عَن قِراءَةِ مِترِ المِلَفِّ لاحمَرَّ الصَفّ.
+        var roles = new PresenceDefinitions(ProviderCatalog.Definitions, [.. RoleCatalog.Definitions.Select(d => d.Slug == vendor.Slug ? vendor : d)]);
+        Assert.Equal((RoleMeterUnits.PresenceRole, RoleMeterUnits.None),
+            (TenantRoleSet.Platform.MeterOf(vendor.Slug, PresenceDefinitions.Platform.Roles), TenantRoleSet.Platform.MeterOf(vendor.Slug, roles.Roles)));
         int Count(IReadOnlyList<UsageEntry> es, string unit, string? role = null) => es.Count(e => e.Unit == unit && (role is null || e.Role == role));
 
         var asIs = Plan();

@@ -394,11 +394,12 @@ public class LivePresenceSnapshotProofTests(ITestOutputHelper output)
             var moyasar = ProviderCatalog.Find("moyasar_api")!;
             var quiet = moyasar with { Meter = new ProviderMeterDefinition { Presence = ProviderMeterPresences.None } };
             Assert.Empty(ProviderMeterValidator.Validate(quiet));
-            var providers = new PresenceDefinitions([.. ProviderCatalog.Definitions.Select(d => d.Slug == moyasar.Slug ? quiet : d)], PresenceDefinitions.Platform.RoleMeter);
+            var providers = new PresenceDefinitions([.. ProviderCatalog.Definitions.Select(d => d.Slug == moyasar.Slug ? quiet : d)], PresenceDefinitions.Platform.Roles);
             // ‏ونُسخَةُ دَورِ البائِعِ بِمِترٍ «none» — والمُصادِقُ يَقبَلُها.
             var vendor = RoleCatalog.FindDefinition("vendor")! with { Meter = RoleMeterUnits.None };
             Assert.Empty(RoleMeterValidator.Validate(vendor));
-            var roles = new PresenceDefinitions(ProviderCatalog.Definitions, (set, slug) => slug == vendor.Slug ? vendor.Meter! : set.MeterOf(slug));
+            // ‏(W13-6·D-R3·١) والنُسخَةُ في قائِمَةِ تَعريفاتِ الأَدوارِ يَقرَؤُها `TenantRoleSet.MeterOf` نَفسُه — كانَت دالَّةً يَكتُبُها الصَفُّ فَلا يُسأَلُ `MeterOf` عَنها.
+            var roles = new PresenceDefinitions(ProviderCatalog.Definitions, [.. RoleCatalog.Definitions.Select(d => d.Slug == vendor.Slug ? vendor : d)]);
 
             var (asIs, noBinding, noVendorRole) = (new DateOnly(2030, 4, 1), new DateOnly(2030, 4, 2), new DateOnly(2030, 4, 3));
             await new PresenceSnapshot(store, log).TakeAsync(asIs, PresenceDefinitions.Platform);

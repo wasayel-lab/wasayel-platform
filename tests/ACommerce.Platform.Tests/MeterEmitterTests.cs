@@ -26,6 +26,8 @@ namespace ACommerce.Platform.Tests;
 //   مُخَطِّطُ اللَقطَةِ (`PresenceReader.Entries`) عَلى مَتاجِرَ مَقروءَةٍ تَحمِلُ كُلَّ ما يُعَدّ (`PresenceReaderTests.Fixture`)، وما يُنتِجُه هُوَ المُصدَر؛ وقارِئا مِترَي
 //   المُزَوِّدِ والدَورِ في وَقتِ التَشغيلِ صارا اللَقطَةَ نَفسَها (دَينُ §٢٠–§٢١ سُدِّد): `PresenceReader.Entries` يَقرَأُ `ProviderDefinition.Meter`، و`PresenceDefinitions`
 //   يُنادي `TenantRoleSet.MeterOf`.
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثالِثَة · W13-6·D-R3·١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وصارَ المُنادي `PresenceReader.Entries` بِقائِمَةِ أَدوارِ مُعطاه**،
+//   و«`RoleDefinition.Meter` ← `TenantRoleSet.MeterOf`» صَفٌّ يُسأَلُ بِاسمِه: قارِئٌ ما لِلحَقلِ (بَوّابَةُ الإقلاعِ وَحدَها تَكفيه) لا يَعني أَنّ `MeterOf` يَقرَؤُه.
 
 public class MeterEmitterTests(ITestOutputHelper output)
 {
@@ -294,7 +296,10 @@ public class MeterEmitterTests(ITestOutputHelper output)
             .Select(r => Owner(r.Caller).Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
         output.WriteLine($"[G15] قُرّاءُ الحُضور: ProviderDefinition.Meter ← {string.Join(", ", readers["ProviderDefinition.Meter"])} · TenantRoleSet.MeterOf ← {string.Join(", ", meterOfCallers)}");
         Assert.Contains($"{nameof(PresenceReader)}.{nameof(PresenceReader.Entries)}", readers["ProviderDefinition.Meter"]);
-        Assert.Contains(nameof(PresenceDefinitions), meterOfCallers);
+        // ‏(‏2026-11-13، W13-6·D-R3·١ — M6D-RULES-R3-1) و`MeterOf` نَفسُه يَقرَأُ مِترَ الدَور: كانَ الصَفُّ يَسأَلُ «مَن يُنادي MeterOf» وحدَه، فَـ`MeterOf` يُجيبُ
+        // `Derived` دائِماً وهذا أَخضَر (قارِئُ الحَقلِ بَوّابَةُ الإقلاعِ تَكفيه). والمُنادي اللَقطُ نَفسُه مُمَرِّراً قائِمَةَ أَدوارِ مُعطاه — لا دالَّةٌ في `PresenceDefinitions`.
+        Assert.Contains($"{nameof(ACommerce.Kit.Roles.TenantRoleSet)}.{nameof(ACommerce.Kit.Roles.TenantRoleSet.MeterOf)}", readers["RoleDefinition.Meter"]);
+        Assert.Contains(nameof(PresenceReader), meterOfCallers);
 
         // سِلسِلَةُ «المُستَمِعُ يَقرَأُ مِتراتِ الوِلادَةِ عِندَ تَركيبِه» حَلقَةً حَلقَة: البانِي بِلا وَسيطٍ ← المِلَفّات ← القِراءَة ← مِترُ الانتِقال.
         bool Calls(MethodBase from, MethodBase to) => references.Any(r => Same(r.Callee, to)

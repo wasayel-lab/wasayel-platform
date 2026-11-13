@@ -183,9 +183,15 @@ public sealed class TenantRoleSet
     /// </list>
     /// <para><b>فَالجَوابُ لا يَتَغَيَّرُ بِما أَلَّفَه المَتجَر</b> — وتِلكَ هِيَ الضَمانَة لا عَرَضٌ لَها. ومَوضِعُها هذه اللَقطَةُ لِأَنّ لَقطَ الحُضورِ (البَند ١٩)
     /// يَقرَأُ الأَدوارَ مِنها. <b>قارِئُها في وَقتِ التَشغيلِ ذلك اللَقطُ وَحدَه، ولَم يُبنَ بَعد</b> — دَينٌ مُعلَنٌ في §٢١ (القاعِدَة ١).</para>
+    /// <para>(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثالِثَة · W13-6·D-R3·١ — M6D-RULES-R3-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والكاتالوجُ مُعطًى يُقرَأُ مِنه
+    /// المِتر</b>: <paramref name="catalogue"/> قائِمَةُ تَعريفاتِ أَدوارِ المَنَصَّةِ الَّتي تُحَلُّ بِها الحالَةُ الأولى — <c>null</c> = <see cref="RoleCatalog.Definitions"/>،
+    /// ولَقطُ الحُضورِ يُمَرِّرُ ما يَحمِلُه مُعطاه (<c>PresenceDefinitions.Roles</c>، مِرآةُ مُزَوِّدِيه). كانَ المُعطى دالَّةً، فَصَفُّ «نُسخَةُ دَورٍ بِمِترٍ none ⇐
+    /// صِفرُ سَطرِ دَور» يَقرَأُ النُسخَةَ بِدالَّتِه هُوَ لا بِهذه، وحَقنُ «الجَوابُ <see cref="RoleMeterUnits.Derived"/> دائِماً» أَخضَر — والمِلَفّاتُ العَشَرَةُ كُلُّها
+    /// <c>presence.role</c> = <see cref="RoleMeterUnits.Derived"/>. فَالآنَ نُسخَةٌ تُعطى تُقرَأُ هُنا، والحالَتانِ الأُخرَيانِ كَما هُما: لا مِترَ مِن وَثيقَةِ المُستَأجِر.</para>
     /// </summary>
-    public string MeterOf(string? catalogSlug) =>
-        !string.IsNullOrEmpty(catalogSlug) && RoleCatalog.FindDefinition(catalogSlug) is { } platform
+    public string MeterOf(string? catalogSlug, IReadOnlyList<RoleDefinition>? catalogue = null) =>
+        !string.IsNullOrEmpty(catalogSlug)
+        && (catalogue ?? RoleCatalog.Definitions).FirstOrDefault(d => string.Equals(d.Slug, catalogSlug, StringComparison.Ordinal)) is { } platform
             // المُحَمِّلُ يَرمي عِندَ الإقلاعِ عَلى مِلَفٍّ بِلا مِتر (meter_missing) — فَما وَصَلَ الكاتالوجَ يَحمِلُه.
             ? platform.Meter!
             : RoleMeterUnits.Derived;

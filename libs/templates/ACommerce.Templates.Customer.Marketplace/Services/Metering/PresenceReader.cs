@@ -67,11 +67,14 @@ public sealed record PresenceStoreFacts(
 /// <para><b>التَعريفاتُ الَّتي تَختارُ وَحدَةَ كُلِّ سَطر</b> (التَصميم §7 و§3.4، RULES-10): مِترُ حُضورِ المُزَوِّدِ مِن تَعريفِه
 /// (<see cref="ProviderDefinition.Meter"/>) ومِترُ الدَورِ المُشتَقُّ (<see cref="TenantRoleSet.MeterOf"/>). <see cref="Platform"/> ما يُقلِعُ بِه التَطبيق — كاتالوجُ
 /// المُزَوِّدينَ المَضمونُ ومِترُ الكاتالوج؛ ونُسخَةٌ مِنهُما تُقاسُ بِها «مِترٌ تَغَيَّرَ في التَعريفِ فَتَغَيَّرَ ما يُعَدّ» (G12/G15).</para>
+/// <para>(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثالِثَة · W13-6·D-R3·١ — M6D-RULES-R3-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والأَدوارُ قائِمَةُ تَعريفاتٍ لا دالَّة</b>:
+/// <see cref="Roles"/> مِرآةُ <see cref="Providers"/>، يَقرَأُ مِنها <see cref="TenantRoleSet.MeterOf"/> نَفسُه مِترَ دَورِ الكاتالوج. كانَ هُنا
+/// <c>Func&lt;TenantRoleSet, string, string&gt; RoleMeter</c>، فَمَرَّرَ صَفُّ G12 دالَّتَه الَّتي تَقرَأُ النُسخَةَ ولا تَسأَلُ <c>MeterOf</c> — فَما كانَ شَيءٌ
+/// يَحمَرُّ لَو كَفَّ <c>MeterOf</c> عَن قِراءَةِ المِلَفّ.</para>
 /// </summary>
-public sealed record PresenceDefinitions(IReadOnlyList<ProviderDefinition> Providers, Func<TenantRoleSet, string, string> RoleMeter)
+public sealed record PresenceDefinitions(IReadOnlyList<ProviderDefinition> Providers, IReadOnlyList<RoleDefinition> Roles)
 {
-    public static readonly PresenceDefinitions Platform =
-        new(ProviderCatalog.Definitions, static (set, catalogSlug) => set.MeterOf(catalogSlug));
+    public static readonly PresenceDefinitions Platform = new(ProviderCatalog.Definitions, RoleCatalog.Definitions);
 }
 
 /// <summary>
@@ -204,7 +207,7 @@ public static class PresenceReader
 
             foreach (var role in s.Roles)
             {
-                var meter = definitions.RoleMeter(s.RoleSet, role.CatalogSlug);
+                var meter = s.RoleSet.MeterOf(role.CatalogSlug, definitions.Roles);
                 if (!string.Equals(meter, RoleMeterUnits.None, StringComparison.Ordinal))
                     Add(meter, 1, role.Slug, null, MeterSentinels.None, RoleSource, role.Slug);
             }

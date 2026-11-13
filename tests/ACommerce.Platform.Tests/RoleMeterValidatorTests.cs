@@ -284,6 +284,44 @@ public class RoleMeterValidatorTests(ITestOutputHelper output)
         Assert.True(rows > 0, "أَداةٌ عَمياء: صِفرُ دَور.");
     }
 
+    /// <summary>
+    /// <para><b>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثالِثَة · W13-6·D-R3·١ — M6D-RULES-R3-1) <see cref="TenantRoleSet.MeterOf"/> يَقرَأُ مِترَ الكاتالوجِ
+    /// الَّذي يُعطاه</b>: المِلَفّاتُ العَشَرَةُ كُلُّها <c>presence.role</c> = <see cref="RoleMeterUnits.Derived"/>، فَصَفُّ «مِترُ كُلِّ مِلَفٍّ = جَوابُه» أَعلاه
+    /// أَخضَرُ و<c>MeterOf</c> يُسنِدُ دائِماً (مَقيس). فَهُنا لِكُلِّ دَورٍ نُسخَةٌ مِن الكاتالوجِ مِترُه فيها <c>none</c>: جَوابُه <c>none</c> عَلى لَقطَتَين، وجَوابُ
+    /// الباقينَ مِتراتُ مِلَفّاتِهِم، والكاتالوجُ الضِمنِيُّ لا تَتَسَرَّبُ إلَيه النُسخَة، والمُؤَلَّفُ يُسنَدُ؛ وسلاجٌ غائِبٌ عَن القائِمَةِ المُعطاةِ يُسنَدُ ولَو كانَ في
+    /// الكاتالوج — القائِمَةُ هِيَ الكاتالوجُ لا مُضافَةٌ إلَيه.</para>
+    /// </summary>
+    [Fact]
+    public void MeterOf_reads_the_meter_of_the_catalogue_it_is_given()
+    {
+        var authored = TenantRoleSet.FromDocuments("meter-of", [new TenantRoleDefinition
+        {
+            Id = "khayyat", Slug = "khayyat", DefinitionJson = TenantRoleDefinitionToolTests.KhayyatJson,
+            Status = TenantRoleStatuses.Approved, CreatedAt = new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc),
+        }]);
+
+        var rows = 0;
+        foreach (var target in RoleCatalog.Definitions)
+        {
+            IReadOnlyList<RoleDefinition> copy = [.. RoleCatalog.Definitions.Select(d => d.Slug == target.Slug ? d with { Meter = RoleMeterUnits.None } : d)];
+            Assert.Empty(RoleMeterValidator.Validate(copy.Single(d => d.Slug == target.Slug)));
+            foreach (var set in new[] { TenantRoleSet.Platform, authored })
+            {
+                Assert.Equal(RoleMeterUnits.None, set.MeterOf(target.Slug, copy));
+                Assert.All(RoleCatalog.Definitions.Where(d => d.Slug != target.Slug), d => Assert.Equal(d.Meter, set.MeterOf(d.Slug, copy)));
+                Assert.Equal(target.Meter, set.MeterOf(target.Slug));
+            }
+            Assert.Equal(RoleMeterUnits.Derived, authored.MeterOf("khayyat", copy));
+            rows++;
+        }
+        IReadOnlyList<RoleDefinition> withoutVendor = [.. RoleCatalog.Definitions.Where(d => d.Slug != "vendor").Select(d => d with { Meter = RoleMeterUnits.None })];
+        Assert.Equal(RoleMeterUnits.Derived, TenantRoleSet.Platform.MeterOf("vendor", withoutVendor));
+        Assert.Equal(RoleMeterUnits.None, TenantRoleSet.Platform.MeterOf("customer", withoutVendor));
+        output.WriteLine($"[G7] MeterOf بِكاتالوجٍ مُعطًى: نُسَخ {rows} × لَقَطات 2 — الدَورُ المَنسوخُ none ⇐ none، والباقي مِتراتُ مِلَفّاتِهِم، والضِمنِيُّ كَما هُوَ · "
+                         + $"vendor غائِباً عَن القائِمَة ⇐ {TenantRoleSet.Platform.MeterOf("vendor", withoutVendor)}");
+        Assert.True(rows >= 10, $"أَداةٌ عَمياء: {rows} نُسخَة.");
+    }
+
     // ─── بابا الكِتابَة — وَحدَهُما ─────────────────────────────────────────
 
     /// <summary>
