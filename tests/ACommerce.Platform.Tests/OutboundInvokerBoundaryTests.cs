@@ -93,12 +93,17 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         return new Scan(file, tokens, accesses, outside, escapes);
     }
 
-    internal sealed record Allowed(string File, string Field, string Reason);
+    /// <summary>سَطرُ القائِمَة. ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-2 — ADR-051 §١٩) و<paramref name="Tokens"/> عَدَدُ رُموزِ النَوعِ الخامِّ
+    /// المُثَبَّتُ لِلمِلَفّ (العَمودُ الثالِث، و<c>-1</c> لِسَطرٍ بِلا عَدَد): قاعِدَةُ النَوعِ تُعفي المِلَفَّ كُلَّه وقاعِدَةُ الفِعلِ لا تَرى إلّا الحَقلَ المُسَمّى، فَنُسخَةُ SDK
+    /// ثانِيَةٌ فيه (<c>new AmazonS3Client(…)</c> مَحَلِّيّاً، <c>new SmtpClient()</c> ثانٍ) كانَت تُرسِلُ خارِجَ المُستَدعي والتَوأَمُ أَخضَر («Passed 21/21» عِندَ المُراجِع).</summary>
+    internal sealed record Allowed(string File, string Field, int Tokens, string Reason);
 
     internal static IReadOnlyList<Allowed> AllowList(IEnumerable<string>? lines = null)
         => (lines ?? File.ReadAllLines(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "scripts", "verify-outbound-allowlist.txt")))
             .Where(l => !string.IsNullOrWhiteSpace(l) && !l.TrimStart().StartsWith('#'))
-            .Select(l => l.Split('|')).Select(p => new Allowed(p[0], p.Length > 1 ? p[1] : "-", p.Length > 2 ? p[2] : "")).ToList();
+            .Select(l => l.Split('|')).Select(p => new Allowed(p[0], p.Length > 1 ? p[1] : "-",
+                p.Length > 2 && int.TryParse(p[2], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : -1,
+                p.Length > 3 ? p[3] : "")).ToList();
 
     internal static IReadOnlyList<(string File, string Code)> LibsSources()
     {
@@ -121,6 +126,10 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         // ‏(‏2026-11-13، M6C-RULES-R1-2) وسَطرٌ يُسَمّي حَقلاً لا وُصولَ إلَيه: قاعِدَةُ الفِعلِ عَمياءُ عَن مِلَفِّه.
         var byFile = scans.ToDictionary(s => s.File, StringComparer.Ordinal);
         v.AddRange(allowed.Where(a => a.Field != "-" && byFile.TryGetValue(a.File, out var s) && s.Accesses == 0).Select(a => $"dead_field:{a.File}"));
+        // ‏(‏2026-11-13، M6C-RULES-R2-2) وعَدَدُ رُموزِ المِلَفِّ المُدرَجِ كَما ثُبِّت: سَطرٌ بِلا عَدَدٍ أَحمَر، وفَرقٌ أَحمَر.
+        v.AddRange(allowed.Where(a => a.Tokens < 0).Select(a => $"unpinned:{a.File}"));
+        v.AddRange(allowed.Where(a => a.Tokens >= 0 && byFile.TryGetValue(a.File, out var s) && s.Tokens > 0 && s.Tokens != a.Tokens)
+                          .Select(a => $"token_drift:{a.File} {a.Tokens}→{byFile[a.File].Tokens}"));
         return v;
     }
 
@@ -140,7 +149,10 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var violations = Violations(scans, allowed);
         output.WriteLine($"[8-ج] مِلَفّاتٌ مَفحوصَة {scans.Count} · تُسَمّي عَميلاً خامّاً {naming.Count} · رُموز {scans.Sum(s => s.Tokens)} · "
                          + $"وُصولُ SDK مَفحوص {scans.Sum(s => s.Accesses)} · في القائِمَة {allowed.Count} (السَقف {AllowListCeiling}) · خُروق {violations.Count}");
-        foreach (var s in naming) output.WriteLine($"  {s.File} · {s.Tokens}");
+        foreach (var s in naming) output.WriteLine($"  {s.File} · {s.Tokens} (المُثَبَّت {allowed.SingleOrDefault(a => a.File == s.File)?.Tokens})");
+        // ‏(‏2026-11-13، M6C-RULES-R2-2) كُلُّ سَطرٍ بِعَدَدِه، ومَجموعُ المُثَبَّتِ مَجموعُ المَقيس.
+        Assert.All(allowed, a => Assert.True(a.Tokens > 0, $"سَطرٌ بِلا عَدَدِ رُموز: {a.File}"));
+        Assert.Equal(naming.Sum(s => s.Tokens), allowed.Sum(a => a.Tokens));
         Assert.True(scans.Count >= 300 && scans.Sum(s => s.Tokens) > 0, $"أَداةٌ عَمياء: {scans.Count} مِلَفّاً و{scans.Sum(s => s.Tokens)} رَمزاً.");
         Assert.True(allowed.Count <= AllowListCeiling, $"القائِمَةُ نَمَت: {allowed.Count} فَوقَ السَقف {AllowListCeiling} — تَتَقَلَّصُ ولا تَنمو.");
         Assert.Contains(allowed, a => a.File.EndsWith("/Metering/ProviderHttp.cs", StringComparison.Ordinal));
@@ -212,7 +224,7 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var raw = Violations(ScanAll([.. sources, copy], allowed), allowed);
         Assert.Equal([$"raw_client_outside_allow_list:{copy.Item1}"], raw);
 
-        var dead = allowed.Append(new Allowed(twilio.File, "-", "injected")).ToList();
+        var dead = allowed.Append(new Allowed(twilio.File, "-", 0, "injected")).ToList();
         Assert.Equal([$"dead_exemption:{twilio.File}"], Violations(ScanAll(sources, dead), dead));
 
         // ‏(‏2026-11-12، W13-6·١٣) فِعلُ S3 يُنادى قَبلَ المُستَدعي في نُسخَةٍ مِن المَخزَنِ الحَقيقِيّ، وفِعلُ الإشعارِ قَبلَ مُستَدعيه ⇐ خَرقٌ عَلى سَطرِ كُلٍّ بِعَدَدِه.
@@ -251,8 +263,9 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
                      ("!.", "await _client!.ListBucketsAsync(ct);"),
                      ("alias", "var alias = _client; await alias.ListBucketsAsync(ct);"),
                      ("argument", "await Probe(_client, ct);"),
-                     // ‏(‏2026-11-13، M6C-RULES-R2-1) الاسمُ المُستَعارُ بِجِسمِ تَعبير — دالَّةٌ مَحَلِّيَّةٌ في الجِسمِ نَفسِه، كَخاصِّيَّةِ المُراجِعِ `Raw => _client`.
-                     ("=>", "IAmazonS3 Raw() => _client; await Raw().DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), ct);"),
+                     // ‏(‏2026-11-13، M6C-RULES-R2-1) الاسمُ المُستَعارُ بِجِسمِ تَعبير — لامبدا في الجِسمِ نَفسِه، كَخاصِّيَّةِ المُراجِعِ `Raw => _client`؛ وبِلا اسمِ
+                     // النَوعِ (M6C-RULES-R2-2) لِيَبقى الصَفُّ صَفَّ قاعِدَةِ الفِعلِ وَحدَها — الخاصِّيَّةُ تُسَمّيه فَيُحَمِّرُها عَدَدُ الرُموزِ أَيضاً.
+                     ("=>", "var raw = () => _client; await raw().DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), ct);"),
                  })
         {
             var injected = sources.Select(x => x == s3 ? (x.File, x.Code.Replace(delete, inject + "\n        " + delete, StringComparison.Ordinal)) : x).ToList();
@@ -264,6 +277,27 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var deadField = Violations(ScanAll(sources, blindField), blindField);
         output.WriteLine($"[8-ج] حَقلٌ مَيِّت: {string.Join(" · ", deadField)}");
         Assert.Equal([$"dead_field:{s3.File}"], deadField);
+
+        // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-2) حَقنُ المُراجِعِ بِحَرفِه — نُسخَةُ S3 ثانِيَةٌ مَحَلِّيَّةٌ تَحذِفُ قَبلَ المُستَدعي — ومِثلُه
+        // `new SmtpClient()` ثانٍ يَتَّصِلُ في قَناةِ SMTP الحَقيقِيَّة ⇐ عَدَدُ رُموزِ المِلَفِّ فَوقَ المُثَبَّت؛ وسَطرٌ بِلا عَدَدٍ ⇐ غَيرُ مُثَبَّت.
+        foreach (var (name, anchor2, inject, drift) in new[]
+                 {
+                     ("/S3FileStorage.cs", delete,
+                      "using var raw = new AmazonS3Client(new BasicAWSCredentials(_opts.AccessKeyId, _opts.SecretAccessKey), new AmazonS3Config { ServiceURL = _opts.Endpoint });\n        await raw.DeleteObjectAsync(_opts.Bucket, NormalizeKey(key), ct);\n        ",
+                      "2→3"),
+                     ("/SmtpEmailChannel.cs", anchor,
+                      "using var second = new SmtpClient();\n            await second.ConnectAsync(_opts.Host, _opts.Port, MailKit.Security.SecureSocketOptions.Auto, ct);\n            ",
+                      "1→2"),
+                 })
+        {
+            var file = sources.Single(x => x.File.EndsWith(name, StringComparison.Ordinal));
+            var injected = sources.Select(x => x == file ? (x.File, x.Code.Replace(anchor2, inject + anchor2, StringComparison.Ordinal)) : x).ToList();
+            var breach = Violations(ScanAll(injected, allowed), allowed);
+            output.WriteLine($"[8-ج] نُسخَةٌ ثانِيَةٌ في {name.TrimStart('/')}: {string.Join(" · ", breach)}");
+            Assert.Equal([$"token_drift:{file.File} {drift}"], breach);
+        }
+        var unpinned = allowed.Select(a => a.File == s3.File ? a with { Tokens = -1 } : a).ToList();
+        Assert.Equal([$"unpinned:{s3.File}"], Violations(ScanAll(sources, unpinned), unpinned));
     }
 
     /// <summary>‏(‏2026-11-13، M6C-RULES-R1-2) <b>كُلُّ شَكلٍ لِلحَقل</b>: <c>?.</c> و<c>!.</c> و<c>?[</c> وُصول، والاسمُ المُستَعارُ والوَسيطُ و<c>return</c> تَسَرُّب — خارِجَ المُستَدعي
@@ -306,5 +340,8 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         // ‏(‏2026-11-13، M6C-RULES-R1-2) والسكربتُ يَرى الأَشكالَ نَفسَها ويُحَمِّرُ الحَقلَ المَيِّتَ مِثلَ التَوأَم.
         Assert.Contains(@"\s*[?!]?\s*\.\s*(\w+)", script, StringComparison.Ordinal);
         Assert.Contains("DEAD FIELD", script, StringComparison.Ordinal);
+        // ‏(‏2026-11-13، M6C-RULES-R2-2) وعَدَدُ الرُموزِ المُثَبَّتُ يُقرَأُ ويُحمِّرُ في السكربتِ مِثلَ التَوأَم.
+        Assert.Contains("TOKEN DRIFT", script, StringComparison.Ordinal);
+        Assert.Contains("UNPINNED", script, StringComparison.Ordinal);
     }
 }

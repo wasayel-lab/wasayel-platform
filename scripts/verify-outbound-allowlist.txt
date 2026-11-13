@@ -1,6 +1,6 @@
 # scripts/verify-outbound-allowlist.txt — مَن يَحِقُّ لَه أَن يُسَمّيَ عَميلاً صادِراً خامّاً في libs/ (الطَبَقَة ٨-ج، ADR-051 §١٨).
 #
-# الصيغَة: <المَسار>|<حَقلُ الـSDK أَو ->|<السَبَب>
+# الصيغَة: <المَسار>|<حَقلُ الـSDK أَو ->|<عَدَدُ رُموزِ النَوعِ الخامِّ في المِلَفّ>|<السَبَب>
 #   الحَقلُ إن سُمِّيَ: كُلُّ وُصولٍ إلى عُضوٍ فيه (عَدا Dispose) يَقَعُ داخِلَ وُسَطاءِ InvokeAsync( أَو HelperAsync( — وإلّا أَحمَر.
 #   و«-»: المِلَفُّ يُسَمّي النَوعَ ولَم يُرَحَّل بَعدُ إلى المُستَدعي المَعدود (بَندُه في الموجَة ١٣ مَذكورٌ في سَبَبِه).
 #
@@ -8,8 +8,13 @@
 # في الكوميتِ نَفسِه (W13-6·١١) فَبَقِيَت 12؛ ثُمَّ 11 (Brevo — W13-6·١٢، وSMTP بَقِيَ بِحَقلِه client)، 10 (نَفاذ — W13-6·١٣، وS3 والإشعارُ بَقِيا بِحَقلِ
 # كُلٍّ مِنهُما _client)، 7 (ميسّر وPayPal وPaddle — W13-6·١٤)، 5 (OTO والنَماذِج — W13-6·١٥). وسَقفُها في
 # OutboundInvokerBoundaryTests. وسَطرٌ لِمِلَفٍّ لا يُسَمّي نَوعاً خامّاً (إعفاءٌ مَيِّت) أَحمَر.
-libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs|-|المُستَدعي المَعدودُ نَفسُه: المالِكُ الوَحيدُ لِـHttpClient في العُدَد، يَبنيه مِن IHttpClientFactory
-libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|client|MailKit SmtpClient — أَفعالُه الأَربَعَةُ (الاتِّصالُ والاعتِمادُ والإرسالُ والانصِراف) داخِلَ وُسَطاءِ InvokeAsync مُنذُ البَند ١٢
-libs/kits/Files/ACommerce.Kit.Files.Providers.S3/S3FileStorage.cs|_client|AWS IAmazonS3 — الرَفعُ داخِلَ وُسَطاءِ InvokeAsync (مَعدودٌ بِبايتاتِه)، والقِراءَةُ والوُجودُ والحَذفُ داخِلَ HelperAsync، مُنذُ البَند ١٣
-libs/templates/ACommerce.Templates.Customer.Marketplace/Services/WebPushService.cs|_client|WebPushClient — فِعلُ الإرسالِ داخِلَ وُسَطاءِ InvokeAsync (سَطرٌ لِكُلِّ اشتِراكٍ قَبِلَته الخِدمَة) مُنذُ البَند ١٣
-libs/kits/Realtime/ACommerce.Kit.Realtime.Client/RealtimeClient.cs|-|مَركَزُنا نَحنُ (/realtime) لا مُزَوِّد، وصِفرُ مُستَهلِكٍ يَحقِنُه — دَينُ القاعِدَة ١ لا إعفاء مُزَوِّد
+#
+# ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-2 — ADR-051 §١٩) **والعَدَدُ مُثَبَّتٌ لِكُلِّ مِلَفّ**: قاعِدَةُ النَوعِ تُعفي المِلَفَّ المُدرَجَ كُلَّه،
+#   وقاعِدَةُ الفِعلِ لا تَرى إلّا الحَقلَ المُسَمّى — فَنُسخَةُ SDK ثانِيَةٌ في مِلَفٍّ مُدرَج (`new AmazonS3Client(…)` مَحَلِّيّاً، أَو `new SmtpClient()` ثانٍ)
+#   كانَت تُرسِلُ خارِجَ المُستَدعي والطَبَقَةُ خَضراء («raw client type tokens: 11 · violations: 0» عِندَ المُراجِع). العَمودُ الثالِثُ عَدَدُ الرُموزِ المَقيسُ
+#   الآن، وأَيُّ فَرقٍ عَنه أَحمَر (TOKEN DRIFT) في السكربتِ وتَوأَمِه، وسَطرٌ بِلا عَدَدٍ أَحمَر (UNPINNED). فَتَغييرُ مِلَفٍّ مُدرَجٍ يَمُرُّ بِسَطرٍ هُنا يُرى في مُراجَعَة.
+libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs|-|5|المُستَدعي المَعدودُ نَفسُه: المالِكُ الوَحيدُ لِـHttpClient في العُدَد، يَبنيه مِن IHttpClientFactory
+libs/kits/Auth/ACommerce.Kit.Auth.Providers.Smtp/SmtpEmailChannel.cs|client|1|MailKit SmtpClient — أَفعالُه الأَربَعَةُ (الاتِّصالُ والاعتِمادُ والإرسالُ والانصِراف) داخِلَ وُسَطاءِ InvokeAsync مُنذُ البَند ١٢
+libs/kits/Files/ACommerce.Kit.Files.Providers.S3/S3FileStorage.cs|_client|2|AWS IAmazonS3 — الرَفعُ داخِلَ وُسَطاءِ InvokeAsync (مَعدودٌ بِبايتاتِه)، والقِراءَةُ والوُجودُ والحَذفُ داخِلَ HelperAsync، مُنذُ البَند ١٣
+libs/templates/ACommerce.Templates.Customer.Marketplace/Services/WebPushService.cs|_client|1|WebPushClient — فِعلُ الإرسالِ داخِلَ وُسَطاءِ InvokeAsync (سَطرٌ لِكُلِّ اشتِراكٍ قَبِلَته الخِدمَة) مُنذُ البَند ١٣
+libs/kits/Realtime/ACommerce.Kit.Realtime.Client/RealtimeClient.cs|-|1|مَركَزُنا نَحنُ (/realtime) لا مُزَوِّد، وصِفرُ مُستَهلِكٍ يَحقِنُه — دَينُ القاعِدَة ١ لا إعفاء مُزَوِّد

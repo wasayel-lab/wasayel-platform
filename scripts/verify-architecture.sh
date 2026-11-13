@@ -310,6 +310,9 @@ echo "✅ Layer 8b green — $PROV_FILES تَعريفاً كُلُّها في ا
 #  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-1 — ADR-051 §١٩) **وما يَلي `=>` أَو `??` لَيسَ إعلاناً**: اختِبارُ الإعلانِ («ما قَبلَه
 #  يَنتَهي بِحَرفِ نَوعٍ ثُمَّ مَسافَة») قَرَأَ `>` في `=>` فَصارَ `private IAmazonS3 Raw => _client;` إعلاناً لا يُعَدّ — والاسمُ المُستَعارُ نادى S3 خارِجَ
 #  المُستَدعي والطَبَقَةُ خَضراء (مَقيسٌ عِندَ المُراجِع: «escapes: 0 · violations: 0»). الآنَ ذِكرٌ يَسبِقُه `=>` أَو `??` تَسَرُّب.
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-2 — ADR-051 §١٩) **وعَدَدُ رُموزِ كُلِّ مِلَفٍّ مُدرَجٍ مُثَبَّت** (العَمودُ الثالِثُ في القائِمَة):
+#  قاعِدَةُ النَوعِ تُعفي المِلَفَّ كُلَّه وقاعِدَةُ الفِعلِ لا تَرى إلّا الحَقلَ المُسَمّى — فَمَرَّت `new AmazonS3Client(…)` مَحَلِّيَّةٌ تُرسِلُ قَبلَ المُستَدعي
+#  («raw client type tokens: 11 · violations: 0» عِندَ المُراجِع). الآنَ أَيُّ فَرقٍ بَينَ المَقيسِ والمُثَبَّتِ أَحمَر (TOKEN DRIFT)، وسَطرٌ بِلا عَدَدٍ أَحمَر (UNPINNED).
 #  ولا رَقَمَ طَبَقَةٍ جَديد: داخِلَ ٨ فَلا تَتَغَيَّرُ أَسماءُ الطَبَقاتِ التِسع. وحارِسُ العَمى كَما فَوقَه: العَدَدُ يُطبَع، وصِفرُ مِلَفٍّ أَو صِفرُ رَمزٍ يُحمِر.
 #  وتَوأَمُها في الاختِبارات: `OutboundInvokerBoundaryTests` (المُصَنِّفُ نَفسُه بِـC#، والحَقنُ المَقيس).
 # ═══════════════════════════════════════════════════════════════════════
@@ -330,8 +333,8 @@ fi
 cat > "$TMP/outbound.pl" <<'PERL'
 use strict; use warnings;
 use open ':std', ':encoding(UTF-8)';
-my %field;
-{ open(my $fh, '<:encoding(UTF-8)', shift @ARGV) or die "allow-list"; while (<$fh>) { chomp; next if /^\s*(#|$)/; my ($p, $f) = split /\|/; $field{$p} = $f if defined $f && $f ne '-'; } close $fh; }
+my (%field, %pin);
+{ open(my $fh, '<:encoding(UTF-8)', shift @ARGV) or die "allow-list"; while (<$fh>) { chomp; next if /^\s*(#|$)/; my ($p, $f, $t) = split /\|/; $field{$p} = $f if defined $f && $f ne '-'; $pin{$p} = (defined $t && $t =~ /^\d+$/) ? $t : -1; } close $fh; }
 my $root = shift @ARGV;
 my $TYPES = qr/\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(/;
 sub strip {
@@ -382,7 +385,8 @@ for my $f (@ARGV) {
             $bad++ unless inside_invoke($s, $pos);
         }
     }
-    print "$rel|$tokens|$acc|$bad|$esc|$named\n";
+    my $pinned = exists $pin{$rel} ? $pin{$rel} : -2;   # -2: غَيرُ مُدرَج، -1: مُدرَجٌ بِلا عَدَد
+    print "$rel|$tokens|$acc|$bad|$esc|$named|$pinned\n";
 }
 PERL
 
@@ -397,6 +401,7 @@ OUT_ACCESSES=$(awk -F'|' '{ n += $3 } END { print n + 0 }' "$TMP/out-raw.txt")
 OUT_ESCAPES=$(awk -F'|' '{ n += $5 } END { print n + 0 }' "$TMP/out-raw.txt")
 OUT_FIELDS=$(awk -F'|' '$6 == 1' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
 OUT_ALLOWED=$(wc -l < "$TMP/out-allowed.txt" | tr -d ' ')
+OUT_PINNED=$(awk -F'|' '$7 >= 0 { n += $7 } END { print n + 0 }' "$TMP/out-raw.txt")
 OUT_VIOL=0
 
 echo "--- Measurement ---"
@@ -407,13 +412,14 @@ echo "  SDK member accesses checked:     $OUT_ACCESSES"
 echo "  SDK field bare uses (escapes):   $OUT_ESCAPES"
 echo "  allow-listed SDK fields:         $OUT_FIELDS"
 echo "  allow-listed files:              $OUT_ALLOWED"
+echo "  pinned tokens (allow-list):      $OUT_PINNED"
 
 if [ "$OUT_SCANNED" -eq 0 ] || [ "$OUT_TOKENS" -eq 0 ]; then
     echo "  ✗ BLIND CHECK: $OUT_SCANNED مِلَفّاً و$OUT_TOKENS رَمزاً — «صِفرُ مُخالَفَة» مِن أَداةٍ لَم تَرَ شَيئاً." >&2
     exit 1
 fi
 
-while IFS='|' read -r file tokens acc bad esc named; do
+while IFS='|' read -r file tokens acc bad esc named pinned; do
     [ -z "$file" ] && continue
     if [ "$tokens" -gt 0 ] && ! grep -qxF "$file" "$TMP/out-allowed.txt"; then
         echo "  ✗ RAW CLIENT outside the allow-list: $file ($tokens رَمزاً) — مَرِّرهُ بِـProviderHttp أَو ProviderCalls."
@@ -421,6 +427,14 @@ while IFS='|' read -r file tokens acc bad esc named; do
     fi
     if [ "$bad" -gt 0 ]; then
         echo "  ✗ SDK VERB outside InvokeAsync/HelperAsync: $file ($bad مِن $acc وُصولاً، مِنها $esc تَسَرُّباً)"
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    # ‏(‏2026-11-13، M6C-RULES-R2-2) عَدَدُ رُموزِ المِلَفِّ المُدرَجِ مُثَبَّتٌ في سَطرِه: نُسخَةُ SDK ثانِيَةٌ لا تَراها قاعِدَةُ الفِعلِ تَرفَعُه.
+    if [ "${pinned:--2}" -eq -1 ]; then
+        echo "  ✗ UNPINNED: $file — سَطرُه بِلا عَدَدِ رُموز (العَمودُ الثالِث): لا يُرى ما يُضافُ إلَيه."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    elif [ "${pinned:--2}" -ge 0 ] && [ "$tokens" -ne "$pinned" ]; then
+        echo "  ✗ TOKEN DRIFT: $file ($tokens رَمزاً والمُثَبَّتُ $pinned) — نُسخَةُ عَميلٍ خامٍّ لا يَراها الحَقلُ المُسَمّى، أَو تَغَيَّرَ المِلَفُّ بِلا سَطرٍ في القائِمَة."
         OUT_VIOL=$((OUT_VIOL + 1))
     fi
     if [ "$named" = 1 ] && [ "$acc" -eq 0 ]; then
