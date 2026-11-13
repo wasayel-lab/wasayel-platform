@@ -455,7 +455,7 @@ public sealed class OtoClient
                     return Fail<JsonElement>(OtoFailures.Unreachable, operation, status, null);
 
                 var root = await ReadJsonAsync(resp, ct);
-                if (!resp.IsSuccessStatusCode || (root is { } r && IsFalse(r, "success")))
+                if (!resp.IsSuccessStatusCode || SaysRefused(root))
                     return Fail<JsonElement>(OtoFailures.Refused, operation, status,
                         root is { } e ? Text(e, "otoErrorCode") : null);
 
@@ -488,12 +488,50 @@ public sealed class OtoClient
     }
 
     /// <summary>‏(W13-6·١٥) النِداءُ المَعدود — مَوسوماً بِاسمِ المُزَوِّد.</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-CNT-1 — ADR-051 §١٩ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والحُكمُ مِن الجِسمِ كَما تَحكُمُ العُدَّة</b>:
+    /// كانَ الإرسالُ <c>_http.SendAsync(stamped, msg, ct)</c> فَيَحكُمُ المُستَدعي بِالحالَةِ وَحدَها — و‏2xx بِـ<c>"success": false</c> عِندَ العُدَّةِ مَرفوضٌ
+    /// (<see cref="PostAsync"/>) وعِندَ العَدِّ مَقبولٌ يُكتَبُ سَطرُه: مَقيسٌ عِندَ المُراجِعِ «kit verdict: Ok=False failure=oto_refused oto=OTO1006 · meter: … Accepted»،
+    /// وتَسجيلُ الوارِدِ بِـPUT مَرفوضٍ ثُمَّ POST يُعَدُّ سَطرَين لِتَسجيلٍ واحِد. الآنَ الجَوابُ يُقرَأُ داخِلَ المُستَدعي (<see cref="ReadAnswerAsync"/>، الحِملُ ذو القارِئ)
+    /// ويُحكَمُ بِـ<see cref="Acceptance"/> — المَحمولُ نَفسُه <see cref="SaysRefused"/> الَّذي يَقرَؤُه الأُنبوب — وتَعودُ إلى الأُنبوبِ نُسخَةُ الجَوابِ بِجِسمِه المَقروء
+    /// (يُطوى الأَصلُ هُناك). وما تَقولُه العُدَّةُ لِكُلِّ شَكلِ جَوابٍ يُثَبِّتُه <c>OtoAnswerVerdictCharacterizationTests</c> قَبلَ التَبديلِ وبَعدَه بِلا تَعديلِ حَرف.</remarks>
     private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Counted(ProviderCall call)
     {
         ArgumentNullException.ThrowIfNull(call);
         var stamped = call.By(ProviderNames.Oto);
-        return (msg, ct) => _http.SendAsync(stamped, msg, ct);
+        return async (msg, ct) => (await _http.SendAsync(stamped, msg, ReadAnswerAsync, a => Acceptance(a.Response.StatusCode, a.Root), ct)).Response;
     }
+
+    /// <summary>‏(‏2026-11-13، M6C-CNT-1) الجَوابُ مَقروءاً داخِلَ المُستَدعي: نُسخَتُه بِجِسمِه المَقروءِ ورُؤوسِه (حالُه ونَصُّ الحالِ والإصدارُ والطَلَب)، وجَذرُ JSON فيه.</summary>
+    private sealed record ReadAnswer(HttpResponseMessage Response, JsonElement? Root);
+
+    /// <summary>‏(‏2026-11-13، M6C-CNT-1) يَقرَأُ الجِسمَ مَرَّةً (مَقروءٌ في الذاكِرَةِ أَصلاً: <c>SendAsync</c> يَنتَظِرُ المُحتَوى كُلَّه) ويَبني جَواباً بِه يَقرَؤُه الأُنبوبُ كَما
+    /// كانَ يَقرَأُ الأَصل — رُؤوسُ المُحتَوى (ومِنها الحُروفُ) مَنسوخَة، فَـ<c>ReadAsStringAsync</c> يَقرَأُ النَصَّ نَفسَه.</summary>
+    private static async Task<ReadAnswer> ReadAnswerAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        var copy = new HttpResponseMessage(resp.StatusCode)
+        {
+            ReasonPhrase = resp.ReasonPhrase,
+            Version = resp.Version,
+            RequestMessage = resp.RequestMessage,
+            Content = new ByteArrayContent(body),
+        };
+        foreach (var h in resp.Headers) copy.Headers.TryAddWithoutValidation(h.Key, h.Value);
+        foreach (var h in resp.Content.Headers) copy.Content.Headers.TryAddWithoutValidation(h.Key, h.Value);
+        return new ReadAnswer(copy, await ReadJsonAsync(copy, ct));
+    }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، M6C-CNT-1 — التَصميم §6.2 بِتَصحيحِ ADR-051 §١٩) <b>حُكمُ العَدِّ عَلى جَوابِ OTO</b>: ‏2xx بِلا <c>"success": false</c> قُبِل؛ و‏2xx بِه، و‏4xx
+    /// (ومِنه ‏401 الَّذي يُعادُ بَعدَه الطَلَبُ بِالنِداءِ نَفسِه)، رُفِض؛ وما سِواهُما مَجهول. و‏2xx لا يُقرَأُ جِسمُه مَقبولٌ — المُزَوِّدُ قَبِلَ ولا نَعرِفُ ما فَعَل.</para>
+    /// </summary>
+    private static ProviderAcceptance Acceptance(HttpStatusCode status, JsonElement? root) => (int)status switch
+    {
+        >= 200 and <= 299 when SaysRefused(root) => new ProviderAcceptance(ProviderOutcome.Refused),
+        >= 200 and <= 299 => new ProviderAcceptance(ProviderOutcome.Accepted),
+        >= 400 and <= 499 => new ProviderAcceptance(ProviderOutcome.Refused),
+        _ => new ProviderAcceptance(ProviderOutcome.Unknown),
+    };
 
     /// <summary>‏(W13-6·١٥) مُبادَلَةُ رَمزِ الوُصول — مُساعِدٌ لا يُعَدّ (العَمَلِيَّةُ الَّتي تَطلُبُه هِيَ المَعدودَة).</summary>
     private Task<HttpResponseMessage> Token(HttpRequestMessage msg, CancellationToken ct)
@@ -538,6 +576,10 @@ public sealed class OtoClient
 
     private static bool IsFalse(JsonElement root, string name)
         => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.False;
+
+    /// <summary>‏(‏2026-11-13، M6C-CNT-1) <b>«رَفَضَت OTO» بِجِسمِها</b> — <c>"success": false</c> في جَوابٍ يُقرَأ: المَحمولُ الواحِدُ الَّذي يَقرَؤُه الأُنبوبُ (<see cref="PostAsync"/>)
+    /// وحُكمُ العَدِّ (<see cref="Acceptance"/>) — فَلا يَقولُ العَدُّ «قُبِل» لِما تَقولُ العُدَّةُ إنّه مَرفوض.</summary>
+    private static bool SaysRefused(JsonElement? root) => root is { } r && IsFalse(r, "success");
 
     /// <summary>حَقلٌ نَصّاً — والرَقَمُ يُقرَأُ نَصّاً كَذلك (<c>otoId</c> رَقَمٌ في رَدِّ
     /// الإنشاءِ ونَصٌّ في رَدِّ الحال، و<c>expires_in</c> نَصٌّ في المِثال).</summary>

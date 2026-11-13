@@ -671,6 +671,25 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
                                   ProviderCall.DeliveryOrderSource, order, 1, true), Assert.Single(rows));
         Assert.Equal(new[] { (id, "accepted") }, await IntentsOfAppAsync(slug));
 
+        // ‏(‏2026-11-13، M6C-CNT-1 — ADR-051 §١٩) وإنشاءٌ يَرُدُّه OTO بِـ‏200 و"success": false (رَصيدٌ نَفِدَ، OTO1006) ⇒ العُدَّةُ «oto_refused»، والنِيَّةُ مَرفوضَةٌ وصِفرُ سَطر.
+        var broke = Guid.NewGuid().ToString("N");
+        var noCredit = new Answer((req, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(req.RequestUri!.AbsolutePath == ACommerce.Kit.Delivery.OtoClient.RefreshTokenPath
+                ? "{\"access_token\":\"A2\",\"success\":true,\"expires_in\":\"3600\"}"
+                : "{\"success\":false,\"otoErrorCode\":\"OTO1006\",\"otoErrorMessage\":\"Credit is not enough\"}"),
+        }));
+        var refusedClient = new ACommerce.Kit.Delivery.OtoClient(new ProviderHttp<ACommerce.Kit.Delivery.OtoClient>(new HttpClient(noCredit), calls),
+            Microsoft.Extensions.Options.Options.Create(new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging }),
+            new ACommerce.Kit.Delivery.OtoTokenCache(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Kit.Delivery.OtoClient>.Instance);
+        var refusedCreate = await refusedClient.CreateOrderAsync(ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Create(slug, broke), "RT-2",
+            new ACommerce.Kit.Delivery.OtoOrderDraft(broke, ACommerce.Kit.Delivery.OtoClient.CashOnDelivery, 0m, 0m, "",
+                new ACommerce.Kit.Delivery.OtoCustomer("w13", "0500000000", "w13", "Riyadh", "SA"), "w13"));
+        var brokeId = $"{OutboundUnits.DeliveryOrderCreate}:{ProviderNames.Oto}:{broke}";
+        output.WriteLine($"[G6·OTO] ‏200 بِـsuccess:false ⇒ العُدَّة {refusedCreate.Failure?.Code}/{refusedCreate.Failure?.OtoErrorCode} · النِيَّة {await OutcomeAsync(brokeId)} · سُطور {(await EntriesAsync(brokeId)).Count}");
+        Assert.Equal((ACommerce.Kit.Delivery.OtoFailures.Refused, "OTO1006"), (refusedCreate.Failure?.Code, refusedCreate.Failure?.OtoErrorCode));
+        Assert.Equal(("refused", 0), (await OutcomeAsync(brokeId), (await EntriesAsync(brokeId)).Count));
+
         // النَموذَج: ‏400 يَحمِلُ استِهلاكاً ⇒ مَقبول، و‏401 بِلا استِهلاكٍ ⇒ مَرفوضٌ بِلا سَطر.
         async Task<string> ModelAsync(HttpStatusCode status, string body)
         {

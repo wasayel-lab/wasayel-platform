@@ -643,6 +643,51 @@ public class ProviderCallsTests(ITestOutputHelper output)
         Assert.Equal(new[] { $"open {id}", $"decide {id} Refused 1", $"open {id}", $"decide {id} Accepted 1" }, recorder.Log);
     }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-CNT-1 — ADR-051 §١٩) <b>جَوابُ OTO يُحكَمُ بِجِسمِه كَما تَحكُمُ العُدَّة</b>: ‏200 بِـ<c>"success": false</c>
+    /// (رَصيدٌ نَفِدَ، OTO1006) مَرفوضٌ ولا سَطر — كانَ مَقبولاً بِحالَتِه وَحدَها والعُدَّةُ تَقولُ «oto_refused»؛ و‏200 بِنَجاحٍ مَقبول؛ و‏400 مَرفوض؛ و‏503 مَجهول؛
+    /// و‏200 لا يُقرَأُ جِسمُه مَقبول (المُزَوِّدُ قَبِل، والعُدَّةُ تَقولُ «oto_unreadable»).</para>
+    /// </summary>
+    [Theory]
+    [InlineData(200, "{\"success\":false,\"otoErrorCode\":\"OTO1006\",\"otoErrorMessage\":\"Credit is not enough\"}", "Refused", false)]
+    [InlineData(200, "{\"success\":true,\"otoId\":540789}", "Accepted", true)]
+    [InlineData(400, "{\"success\":false,\"otoErrorCode\":\"OTO1001\"}", "Refused", false)]
+    [InlineData(503, "<html/>", "Unknown", false)]
+    [InlineData(200, "not json", "Accepted", false)]
+    public async Task An_OTO_answer_is_judged_by_its_body_as_the_kit_judges_it(int status, string body, string outcome, bool ok)
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script((HttpStatusCode.OK, OtoToken), ((HttpStatusCode)status, body));
+        var create = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Create(Store, OtoOrder);
+
+        var res = await Oto(script, recorder).CreateOrderAsync(create, "RT-1", OtoDraft());
+
+        var id = $"{OutboundUnits.DeliveryOrderCreate}:{ProviderNames.Oto}:{OtoOrder}";
+        output.WriteLine($"[G6·OTO] {status} {body} ⇒ العُدَّة {(res.Ok ? "ok" : res.Failure!.Code)} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal(ok, res.Ok);
+        Assert.Equal(new[] { $"open {id}", $"decide {id} {outcome} 1" }, recorder.Log);
+    }
+
+    /// <summary>‏(‏2026-11-13، M6C-CNT-1) <b>تَسجيلٌ واحِدٌ سَطرٌ واحِد</b>: تَحديثُ الوارِدِ (PUT) يَرُدُّه OTO بِـ‏200 و<c>"success": false</c> فَيُعيدُه البابُ إنشاءً (POST — <c>VendorShipping</c>)
+    /// ⇐ المَرفوضُ بِلا سَطرٍ والإنشاءُ سَطر؛ وكانَ الاثنانِ مَقبولَين بِحالَتِهِما فَيُعَدُّ التَسجيلُ مَرَّتَين.</summary>
+    [Fact]
+    public async Task A_refused_webhook_update_and_its_recreate_are_one_accepted_registration()
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script((HttpStatusCode.OK, OtoToken), (HttpStatusCode.OK, "{\"success\": false, \"otoErrorCode\": \"OTO1010\"}"),
+            (HttpStatusCode.OK, "{\"success\": true, \"id\": \"60\", \"message\": \"webhook has been created\"}"));
+        var client = Oto(script, recorder);
+        var update = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Webhook(Store);
+        var recreate = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Webhook(Store);
+
+        var put = await client.RegisterWebhookAsync(update, "RT-1", "https://wasayel.example/x/shipping/oto/order-status", "s1", "59");
+        var post = await client.RegisterWebhookAsync(recreate, "RT-1", "https://wasayel.example/x/shipping/oto/order-status", "s1");
+
+        output.WriteLine($"[G6·OTO] PUT مَردود ثُمَّ POST ⇒ {put.Failure?.Code} · {post.Value} · {string.Join(" → ", script.Seen)} · {string.Join(" → ", recorder.Log)}");
+        Assert.Equal((ACommerce.Kit.Delivery.OtoFailures.Refused, "60"), (put.Failure?.Code, post.Value));
+        Assert.Equal(new[] { "Refused", "Accepted" }, recorder.Log.Where(l => l.StartsWith("decide ", StringComparison.Ordinal)).Select(l => l.Split(' ')[2]));
+    }
+
     private static ACommerce.Templates.Customer.Marketplace.Services.AgentRequest ModelRequest() => new("w13", [], [], "w13-model", MaxTokens: 16);
 
     /// <summary>
