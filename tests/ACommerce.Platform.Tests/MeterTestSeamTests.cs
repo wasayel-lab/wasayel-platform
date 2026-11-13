@@ -35,6 +35,13 @@ namespace ACommerce.Platform.Tests;
 // في الخَلفِيّاتِ الثَلاث: بَقِيَ لِأَنّ خَلفِيّاتِ الاختِبارِ المُزَيَّفَةَ تُنَفِّذُه، ومِنها مِلَفُّ تَوصيفٍ مِن مَوجَةٍ سابِقَة (`SessionCircuitTests.ProbeAgentBackends`) — نَسَقُ
 // أَخَوَي `IOtpChannel` بِحَرفِه، والمَأذونُ السادِسُ جِسمُ الأَخِ ذي `ProviderCall` الافتِراضِيُّ في الواجِهَةِ نَفسِها. **وقارِئُ خِياراتِ OTO بِلا مُنادٍ**
 // (`OtoClient.CheckOtoDeliveryFeeAsync`) مَقعَدٌ بِلا مَأذونٍ كَعُضوَي PayPal. أَمّا عَمَلِيّاتُ OTO الأَربَعُ فَبِلا مَقعَد: `ProviderCall` في التَوقيع.
+//
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ودَخَلَها المَقعَدُ الثامِنَ عَشَر: عُضوُ الواجِهَةِ الصَريحُ
+// `IPaymentProvider.CreateSubscriptionAsync` في PayPal** — كانَ أَخاً بِلا `ProviderCall` يُرسِلُ `billing.paypal.link.create` مَعدوداً ويَأخُذُ المَتجَرَ مِن `req.CustomerId`،
+// بِلا مُنادٍ في وَقتِ التَشغيلِ وبِلا مَقعَد؛ فَصارَ مُساعِداً بِسَبَبِ دَينِه (`uncalled_member`) كَأَخَوَيه. **ويُقالُ حَدُّ هذا الصَفّ**: العُضوُ الصَريحُ (وأَخَواه حينَ
+// يُنادَيانِ عَبرَ الواجِهَة) لا يَبلُغُه مُنادٍ إلّا بِـ`callvirt` عَلى `IPaymentProvider` — والـIL يَحمِلُ طَريقَةَ الواجِهَةِ لا التَنفيذ، فَلا يَراه هذا الصَفّ (مَقيسٌ
+// عِندَ المُراجِع: مُنادٍ مَحقونٌ بِالواجِهَةِ لَم يُرَ، والضابِطُ المُباشِرُ رُئِي). فَحارِسُ ذلكَ الطَريقِ `MeterCompositionTests` (G6d): لا تَسجيلَ لِـ`IPaymentProvider` في
+// المُضيفِ المُرَكَّبِ يُحَلُّ إلى `PayPalPaymentProvider`.
 
 public class MeterTestSeamTests(ITestOutputHelper output)
 {
@@ -160,7 +167,19 @@ public class MeterTestSeamTests(ITestOutputHelper output)
         typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider).GetMethod(nameof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider.GetInvoiceAsync))!,
         // ‏(‏2026-11-12، W13-6·١٥) وقارِئُ خِياراتِ OTO بِصِفرِ مُنادٍ في وَقتِ التَشغيل (التَصميم §3.4).
         typeof(ACommerce.Kit.Delivery.OtoClient).GetMethod(nameof(ACommerce.Kit.Delivery.OtoClient.CheckOtoDeliveryFeeAsync))!,
+        // ‏(‏2026-11-13، M6C-RULES-R3-1) وعُضوُ الواجِهَةِ الصَريحُ في PayPal — المَقعَدُ الثامِنَ عَشَر.
+        ExplicitMember(typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider), typeof(ACommerce.Kit.Payments.IPaymentProvider),
+                       nameof(ACommerce.Kit.Payments.IPaymentProvider.CreateSubscriptionAsync)),
     ];
+
+    /// <summary>‏(‏2026-11-13، M6C-RULES-R3-1) <b>تَنفيذُ عُضوِ واجِهَةٍ صَريحٌ</b> بِعَينِه — مِن خَريطَةِ الواجِهَةِ لا مِن اسمٍ مُزَيَّن؛ والتَنفيذُ العامُّ لا يُقبَل.</summary>
+    internal static MethodInfo ExplicitMember(Type type, Type contract, string name)
+    {
+        var map = type.GetInterfaceMap(contract);
+        return Enumerable.Range(0, map.InterfaceMethods.Length)
+            .Where(i => map.InterfaceMethods[i].Name == name && map.TargetMethods[i].DeclaringType == type && map.TargetMethods[i].IsPrivate)
+            .Select(i => map.TargetMethods[i]).Single();
+    }
 
     /// <summary>‏(‏2026-11-12، W13-6·١٥) <b>أَخُ <c>IAgentBackend</c> بِلا <c>ProviderCall</c></b> — مَقعَدُ خَلفِيّاتِ الاختِبارِ المُزَيَّفَة؛ ومُنادٍ لَه في <c>libs/</c> أَو <c>apps/</c>
     /// يُنادي نَموذَجاً بِلا مَتجَرٍ ولا مُعَرِّف.</summary>
@@ -201,6 +220,10 @@ public class MeterTestSeamTests(ITestOutputHelper output)
                                          || IsConversion(r.Caller) || oldConstructors.Contains(Key(r.Caller))).ToList();
         var callers = refs.Except(sanctioned).ToList();
         output.WriteLine($"[G6c] تَجميعات {assemblies.Count} · أَجسام {bodies} · مَقاعِد {seams.Count} ({string.Join(", ", seams.Select(Name))})");
+        // ‏(‏2026-11-13، M6C-RULES-R3-1) أَعضاءٌ بِلا مُنادٍ أَربَعَة: وعُضوُ الواجِهَةِ الصَريحُ في PayPal مَقعَدُها الرابِع.
+        Assert.Equal(4, UncalledMembers.Length);
+        Assert.Contains(seams, m => m.DeclaringType == typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider) && m.IsPrivate
+                                    && m.Name.EndsWith("IPaymentProvider.CreateSubscriptionAsync", StringComparison.Ordinal));
         output.WriteLine($"[G6c] مَأذون {sanctioned.Count} ({string.Join(", ", sanctioned.Select(r => $"{Name(r.Caller)}→{r.Callee.Name}"))}) · مُنادونَ في libs/apps {callers.Count}");
         foreach (var c in callers) output.WriteLine($"  ✗ {Name(c.Caller)} → {Name(c.Callee)}");
         Assert.True(assemblies.Count >= 40 && bodies > 10_000, $"أَداةٌ عَمياء: {assemblies.Count} تَجميعاً و{bodies} جِسماً.");

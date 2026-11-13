@@ -126,6 +126,9 @@ public static class ProviderHelperReasons
 
     /// <summary>‏(W13-6·١٤) عُضوُ واجِهَةٍ بِصِفرِ مُنادٍ في وَقتِ التَشغيل — <c>PayPalPaymentProvider.CancelSubscriptionAsync</c> و<c>GetInvoiceAsync</c>
     /// (<c>IPaymentProvider</c>، وPayPal لا يُسَجَّلُ عَلَيها): دَينُ القاعِدَةِ ١، مَحروسٌ في G6c.</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وثالِثُهُما عُضوُ الواجِهَةِ الصَريحُ
+    /// <c>IPaymentProvider.CreateSubscriptionAsync</c> في PayPal</b> — كانَ يُعَدُّ بِمَتجَرٍ مِن طَلَبِه؛ و<c>OtoClient.CheckOtoDeliveryFeeAsync</c> رابِعُ مَقاعِدِ السَبَب.
+    /// والنِداءُ عَبرَ الواجِهَةِ لا يَراه G6c، فَحارِسُه G6d: لا تَسجيلَ لِـ<c>IPaymentProvider</c> يُحَلُّ إلى PayPal.</remarks>
     public const string UncalledMember = "uncalled_member";
 
     public static readonly IReadOnlyList<string> All = [OauthToken, StatusPoll, StorageRead, StorageDelete, MetadataTag, CatalogProduct, UncalledMember];

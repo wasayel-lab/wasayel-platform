@@ -35,13 +35,19 @@ namespace ACommerce.Platform.Tests;
 //
 // ‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وOTO وخَلفِيّاتُ النَماذِج**: `AddOtoShipping` بِحَرفِ نِدائِه في `Program.cs` (عُدَّةٌ تُحَلُّ بِنَوعِها)، و`ProviderHttp<IAgentBackend>`
 // يُسَجِّلُه القالِب — والخَلفِيَّةُ لا تُحَلُّ بِنَوعِها بَل يَبنيها المُزَوِّدُ المُسَمّى (`IAgentBackendProvider.For`)، فَتُقرَأُ خَلفِيَّةُ كُلِّ وَكيلٍ كَما تُقرَأُ العُدَّة.
+//
+// ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وPayPal لا يُحَلُّ عَلى `IPaymentProvider`**: أَعضاءُ الواجِهَةِ
+// الثَلاثَةُ في PayPal مَقاعِدُ في G6c (`CancelSubscriptionAsync` و`GetInvoiceAsync` وعُضوُ `CreateSubscriptionAsync` الصَريح)، والـIL لا يَرى نِداءً عَبرَ الواجِهَة
+// (`callvirt IPaymentProvider.…`، وهُوَ طَريقُ `CheckoutPage.razor` و`DealsService`) — فَكانَت «PayPal لا يُسَجَّلُ عَلى `IPaymentProvider`» تَعليقاً لا اختِباراً
+// (`Program.cs`، `PayPalGateway.cs`). وصارَت صَفّاً: فُروعُ `AddPaymentProvider` الثَلاثَةُ بِحَرفِ نِدائِه في `Program.cs` عَلى المُضيفِ المُرَكَّب، وكُلُّ تَسجيلٍ
+// لِلواجِهَةِ يُحَلّ — وضابِطٌ يُسَجِّلُ PayPal عَلَيها فَيَحمَرّ.
 
 public class MeterCompositionTests(ITestOutputHelper output)
 {
     /// <summary>فَرعا <c>AuthChannelProvider.Smtp</c>/<c>.Brevo</c> في <c>Program.cs</c> بِحَرفِ نِدائَيهِما، والإعدادُ وَهمِيّ.</summary>
     internal static readonly string[] EmailBranches = ["brevo", "smtp"];
 
-    private static (WebApplication App, IServiceCollection Services) Compose(bool template, string email = "brevo")
+    private static (WebApplication App, IServiceCollection Services) Compose(bool template, string email = "brevo", Action<IServiceCollection>? also = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -69,6 +75,7 @@ public class MeterCompositionTests(ITestOutputHelper output)
         ACommerce.Kit.Payments.Providers.Paddle.PaddleExtensions.AddPaddleBilling(builder.Services, builder.Configuration);
         // ‏(‏2026-11-12، W13-6·١٥) فَرعُ OTO في Program.cs بِحَرفِ نِدائِه — يُسَجَّلُ دائِماً.
         ACommerce.Kit.Delivery.OtoShippingExtensions.AddOtoShipping(builder.Services, builder.Configuration);
+        also?.Invoke(builder.Services);   // ‏(‏2026-11-13، M6C-RULES-R3-1) فَرعُ عُدَّةِ الدَفعِ العامَّةِ وضابِطُه — صَفُّ IPaymentProvider وَحدَه.
         var services = builder.Services;
         return (builder.Build(), services);
     }
@@ -172,5 +179,50 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.Equal(7, kits.Count);
             Assert.All(kits, k => Assert.Equal((1, false), (k.Invokers, k.Recording)));
         }
+    }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩) <b>لا تَسجيلَ لِـ<c>IPaymentProvider</c> في المُضيفِ المُرَكَّبِ يُحَلُّ إلى
+    /// <c>PayPalPaymentProvider</c></b> — فَالنِداءُ عَبرَ الواجِهَةِ (الَّذي لا يَراه G6c) لا يَبلُغُ مَقاعِدَ PayPal الثَلاثَة. الفُروعُ الثَلاثَةُ لِـ<c>AddPaymentProvider</c>
+    /// بِحَرفِ نِدائِه في <c>Program.cs</c> (الغِيابُ في الإنتاجِ ⇐ المُغلَق، و<c>simulation</c> ⇐ التَجرِبَة، والتَطويرُ ⇐ المُحاكي)، وكُلُّ تَسجيلٍ لِلواجِهَةِ يُحَلُّ
+    /// ويُقرَأُ نَوعُه؛ وPayPal نَفسُه يُحَلُّ بِنَوعِه (الأَداةُ تَراه)؛ والضابِطُ يُسَجِّلُه عَلى الواجِهَةِ فَيُرى.</para>
+    /// </summary>
+    [Fact]
+    public async Task No_IPaymentProvider_registration_in_the_composed_host_resolves_to_PayPal()
+    {
+        var program = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.App", "Program.cs"));
+        Assert.Contains("builder.Services.AddPaymentProvider(\n    isDev, builder.Configuration[PaymentProviderSelection.ProviderKey]);", program.Replace("\r\n", "\n"), StringComparison.Ordinal);
+
+        static async Task<(int Registrations, IReadOnlyList<string> Resolved, bool PayPalKit)> ReadAsync(Action<IServiceCollection> payments)
+        {
+            var (app, collection) = Compose(template: true, also: payments);
+            await using var _ = app;
+            var registrations = collection.Count(d => d.ServiceType == typeof(ACommerce.Kit.Payments.IPaymentProvider));
+            var resolved = app.Services.GetServices<ACommerce.Kit.Payments.IPaymentProvider>().Select(p => p.GetType().Name).ToList();
+            return (registrations, resolved, app.Services.GetService<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>() is not null);
+        }
+
+        var branches = new (string Name, bool IsDevelopment, string? Configured)[]
+        {
+            ("production", false, null), ("simulation", false, ACommerce.Kit.Payments.SimulatedPaymentProvider.ConfiguredValue), ("development", true, null),
+        };
+        var payPal = nameof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider);
+        foreach (var (name, isDevelopment, configured) in branches)
+        {
+            var (registrations, resolved, kit) = await ReadAsync(s => ACommerce.Kit.Payments.PaymentServiceExtensions.AddPaymentProvider(s, isDevelopment, configured));
+            output.WriteLine($"[G6d·IPaymentProvider] ({name}) تَسجيلاتُ الواجِهَة {registrations} · المَحلول {string.Join(", ", resolved)} · PayPal بِنَوعِه {kit}");
+            Assert.True(registrations > 0 && resolved.Count == registrations, $"أَداةٌ عَمياء: {registrations} تَسجيلاً و{resolved.Count} مَحلولاً ({name}).");
+            Assert.True(kit, $"أَداةٌ عَمياء: PayPal لا يُحَلُّ بِنَوعِه في المُضيفِ المُرَكَّب ({name}).");
+            Assert.DoesNotContain(payPal, resolved);
+        }
+
+        // الضابِط: تَسجيلُ PayPal عَلى الواجِهَةِ يُرى — فَالصَفُّ لَيسَ أَعمى عَن الشَكلِ الَّذي يَحرُسُه.
+        var (controlRegistrations, controlResolved, _) = await ReadAsync(s =>
+        {
+            ACommerce.Kit.Payments.PaymentServiceExtensions.AddPaymentProvider(s, false, null);
+            s.AddTransient<ACommerce.Kit.Payments.IPaymentProvider>(sp => sp.GetRequiredService<ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider>());
+        });
+        output.WriteLine($"[G6d·IPaymentProvider] (ضابِط) تَسجيلاتُ الواجِهَة {controlRegistrations} · المَحلول {string.Join(", ", controlResolved)}");
+        Assert.Contains(payPal, controlResolved);
     }
 }

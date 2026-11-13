@@ -523,6 +523,8 @@ public class ProviderCallsTests(ITestOutputHelper output)
     /// <para><b>PayPal</b>: الرَمزُ ومُنتَجُ الكاتالوجِ مُساعِدانِ بِلا نِيَّة، والخُطَّةُ تُعَدُّ بِمِفتاحِ PayPal الَّذي تُرسِلُه العُدَّة (<c>PayPal-Request-Id</c> المُشتَقُّ مِن
     /// المُنتَج) أَيّاً كانَ مُعَرِّفُ المُنادي؛ والرابِطُ بِمِفتاحِه، وعُضوُ الواجِهَةِ بِلا <c>ProviderCall</c> يُعَدُّ لِمَتجَرِ طَلَبِه بِالمِفتاحِ نَفسِه؛ والتَحَقُّقُ مِن التَوقيعِ
     /// بِمُعَرِّفِ الإرسال؛ وعُضوا الواجِهَةِ بِلا مُنادٍ يَمُرّانِ ولا يُعَدّان.</para>
+    /// <para>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩) <b>وعُضوُ الواجِهَةِ بِلا <c>ProviderCall</c> صارَ ثالِثَ المُساعِدَينِ بِسَبَبِ
+    /// دَينِه</b> (<c>uncalled_member</c>): يُرسِلُ طَلَبَه بِحَرفِه ولا نِيَّةَ لَه ولا سَطر — لا مَتجَرَ يُخَمَّنُ مِن <c>req.CustomerId</c>.</para>
     /// </summary>
     [Fact]
     public async Task PayPal_counts_the_plan_under_its_own_request_id_and_leaves_the_token_and_the_product_uncounted()
@@ -557,9 +559,10 @@ public class ProviderCallsTests(ITestOutputHelper output)
         {
             $"open {plan}", $"decide {plan} Accepted 1",
             $"open {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-1", $"decide {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-1 Accepted 1",
-            $"open {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-2", $"decide {OutboundUnits.BillingPayPalLinkCreate}:{ProviderNames.PayPal}:wsl-s-2 Accepted 1",
             $"open {OutboundUnits.BillingPayPalWebhookVerify}:{ProviderNames.PayPal}:TX-1", $"decide {OutboundUnits.BillingPayPalWebhookVerify}:{ProviderNames.PayPal}:TX-1 Accepted 1",
         }, recorder.Log);
+        Assert.Contains("POST /v1/billing/subscriptions", script.Seen[4], StringComparison.Ordinal);   // ‏(M6C-RULES-R3-1) عُضوُ الواجِهَةِ أَرسَلَ — مُساعِداً بِلا نِيَّة
+        Assert.DoesNotContain(recorder.Log, l => l.Contains("wsl-s-2", StringComparison.Ordinal));
     }
 
     /// <summary>

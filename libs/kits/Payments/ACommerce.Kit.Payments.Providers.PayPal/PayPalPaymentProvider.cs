@@ -75,6 +75,8 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     // إلّا بَعدَ المُنتَج (`ProviderCall.Keyed`). والرَمزُ ومُنتَجُ الكاتالوجِ نِداءانِ مُساعِدانِ لا يُعَدّان (`oauth_token`، `catalog_product`)، وعُضوا الواجِهَةِ بِلا
     // مُنادٍ (`CancelSubscriptionAsync`، `GetInvoiceAsync`) مُساعِدانِ بِسَبَبِ دَينِهِما (`uncalled_member`). وعُضوُ الواجِهَةِ `CreateSubscriptionAsync` بِلا
     // `ProviderCall` صَريحٌ يَبني نِداءَه مِن طَلَبِه (المَتجَرُ في `CustomerId` ومِفتاحُ مَرَّة-واحِدَة) — فَلا طَريقَ إلى PayPal بِلا عَدّ.
+    // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **صارَ عُضوُ الواجِهَةِ ذاكَ مُساعِداً ثالِثاً بِسَبَبِ دَينِه**
+    // (`uncalled_member`) لا نِداءً مَعدوداً يُخَمِّنُ المَتجَرَ مِن طَلَبِه: صِفرُ مُنادٍ لَه في وَقتِ التَشغيل، ومَقعَدُه في G6c، وPayPal لا يُحَلُّ عَلى `IPaymentProvider` (G6d).
     private readonly PayPalOptions _opts;
     private readonly ProviderHttp<PayPalPaymentProvider> _http;
     private readonly PayPalTokenCache _tokens;
@@ -340,6 +342,13 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// </summary>
     public async Task<SubscriptionResult> CreateSubscriptionAsync(
         ProviderCall call, SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default)
+        => await SubscribeAsync(Counted(call.Keyed(idempotencyKey)), req, idempotencyKey, ct);
+
+    /// <summary>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩) <b>جِسمُ الاشتِراكِ بِلا نِداءٍ مَبنِيٍّ فيه</b>: يُرسِلُ بِما يُعطاه —
+    /// المَعدودُ مِن <see cref="CreateSubscriptionAsync(ProviderCall, SubscriptionRequest, string, CancellationToken)"/>، والمُساعِدُ بِسَبَبِ دَينِه مِن عُضوِ الواجِهَة.
+    /// والطَلَبُ والجَوابُ بِحَرفِهِما (<c>PaymentsRequestShapeCharacterizationTests</c>).</summary>
+    private async Task<SubscriptionResult> SubscribeAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send, SubscriptionRequest req, string idempotencyKey, CancellationToken ct)
     {
         using var msg = await AuthorizedAsync(HttpMethod.Post, SubscriptionsPath, ct);
 
@@ -352,7 +361,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             ["custom_id"] = req.CustomerId,
         });
 
-        using var resp = await SendAsync(Counted(call.Keyed(idempotencyKey)), msg, ct);
+        using var resp = await SendAsync(send, msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -391,8 +400,13 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// <summary>‏(‏2026-11-12، W13-6·١٤) <b>عُضوُ الواجِهَةِ بِلا <see cref="ProviderCall"/></b> — PayPal لا يُسَجَّلُ عَلى <see cref="IPaymentProvider"/> (<c>PayPalExtensions</c>)
     /// فَلا مُنادِيَ لَه في وَقتِ التَشغيل؛ ويَبني نِداءَه مِن طَلَبِه: المَتجَرُ <c>CustomerId</c> (سلاجُه في <c>custom_id</c>) والمُعَرِّفُ مِفتاحُ مَرَّة-واحِدَة — النِداءُ
     /// الَّذي يَبنيه <c>PayPalGateway</c> بِحَرفِه.</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>صارَ مُساعِداً بِسَبَبِ دَينِه
+    /// (<see cref="ProviderHelperReasons.UncalledMember"/>) كَأَخَوَيه <see cref="CancelSubscriptionAsync"/> و<see cref="GetInvoiceAsync"/></b>: كانَ أَخاً بِلا
+    /// <see cref="ProviderCall"/> يُرسِلُ <c>billing.paypal.link.create</c> مَعدوداً ويُخَمِّنُ المَتجَرَ مِن حَقلِ طَلَبٍ (<c>req.CustomerId</c>) — والقاعِدَة ٦ تَجعَلُ
+    /// المَتجَرَ في يَدِ مَن يَعرِفُه — وبِلا مُنادٍ في وَقتِ التَشغيل (القاعِدَة ١)، وبِلا مَقعَدٍ في G6c. الآن مَقعَدُه الثامِنَ عَشَرَ (<c>MeterTestSeamTests.UncalledMembers</c>)،
+    /// والنِداءُ عَبرَ الواجِهَةِ لا يَبلُغُه لِأَنّ PayPal لا يُحَلُّ عَلى <see cref="IPaymentProvider"/> في المُضيفِ المُرَكَّب (G6d، <c>MeterCompositionTests</c>).</remarks>
     Task<SubscriptionResult> IPaymentProvider.CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct)
-        => CreateSubscriptionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalLinkCreate, req.CustomerId, idempotencyKey), req, idempotencyKey, ct);
+        => SubscribeAsync(Helper(ProviderHelperReasons.UncalledMember), req, idempotencyKey, ct);
 
     // ═══ طَلَبُ دَفعٍ مَرِن — Orders v2 (‏ADR-006) ════════════════════
     //
