@@ -49,21 +49,45 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         return false;
     }
 
-    internal sealed record Scan(string File, int Tokens, int Accesses, int Outside);
+    /// <summary>‏(‏2026-11-13، M6C-RULES-R1-2) و<paramref name="Escapes"/>: ذِكرٌ لِلحَقلِ لَيسَ وُصولاً ولا إعلاناً ولا إسناداً إلَيه (اسمٌ مُستَعار، وَسيط، <c>return</c>) —
+    /// يُعَدُّ في <paramref name="Accesses"/> و<paramref name="Outside"/> كَأَيِّ وُصول.</summary>
+    internal sealed record Scan(string File, int Tokens, int Accesses, int Outside, int Escapes = 0);
+
+    // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-RULES-R1-2 — ADR-051 §١٩) **الحَقلُ يُرى بِكُلِّ شَكلٍ يُستَعمَلُ بِه** — كَما في السكربت: كانَ النَمَطُ
+    // `\b{field}\s*\.` وَحدَه فَمَرَّ `?.` و`!.` والاسمُ المُستَعارُ والحَقلُ وَسيطاً (مَقيسٌ عِندَ المُراجِع: «خارِجَ المُستَدعي 0» عَلى `_client?.ListBucketsAsync`).
+    private static readonly Regex MemberAfter = new(@"\G\s*[?!]?\s*\.\s*(\w+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex IndexAfter = new(@"\G\s*[?!]?\s*\[", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex AssignAfter = new(@"\G\s*(?:=(?![=>])|\?\?=)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex DeclarationEndAfter = new(@"\G\s*[;,)]", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex TypeBefore = new(@"[\w>\]?]\s+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex KeywordBefore = new(@"\b(?:return|await|throw|yield|in|out|ref|is|as|case|when|else|and|or|not|new|nameof)\s+$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     internal static Scan Classify(string file, string code, string? field)
     {
         var s = Strip(code);
         var tokens = RawTypes.Matches(s).Count;
-        int accesses = 0, outside = 0;
+        int accesses = 0, outside = 0, escapes = 0;
         if (!string.IsNullOrEmpty(field) && field != "-")
-            foreach (Match m in new Regex($@"\b{Regex.Escape(field)}\s*\.\s*(\w+)").Matches(s))
+            foreach (Match m in new Regex($@"\b{Regex.Escape(field)}\b").Matches(s))
             {
-                if (m.Groups[1].Value == "Dispose") continue;
+                var end = m.Index + m.Length;
+                var member = MemberAfter.Match(s, end);
+                if (member.Success || IndexAfter.Match(s, end).Success)
+                {
+                    if (member.Success && member.Groups[1].Value == "Dispose") continue;
+                    accesses++;
+                    if (!InsideInvoker(s, m.Index)) outside++;
+                    continue;
+                }
+                if (AssignAfter.Match(s, end).Success) continue;
+                var before = s[Math.Max(0, m.Index - 160)..m.Index];
+                if (DeclarationEndAfter.Match(s, end).Success && TypeBefore.IsMatch(before) && !KeywordBefore.IsMatch(before)) continue;
                 accesses++;
+                escapes++;
                 if (!InsideInvoker(s, m.Index)) outside++;
             }
-        return new Scan(file, tokens, accesses, outside);
+        return new Scan(file, tokens, accesses, outside, escapes);
     }
 
     internal sealed record Allowed(string File, string Field, string Reason);
@@ -91,6 +115,9 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         v.AddRange(scans.Where(s => s.Outside > 0).Select(s => $"sdk_verb_outside_invoker:{s.File} ({s.Outside}/{s.Accesses})"));
         var naming = scans.Where(s => s.Tokens > 0).Select(s => s.File).ToHashSet(StringComparer.Ordinal);
         v.AddRange(allowed.Where(a => !naming.Contains(a.File)).Select(a => $"dead_exemption:{a.File}"));
+        // ‏(‏2026-11-13، M6C-RULES-R1-2) وسَطرٌ يُسَمّي حَقلاً لا وُصولَ إلَيه: قاعِدَةُ الفِعلِ عَمياءُ عَن مِلَفِّه.
+        var byFile = scans.ToDictionary(s => s.File, StringComparer.Ordinal);
+        v.AddRange(allowed.Where(a => a.Field != "-" && byFile.TryGetValue(a.File, out var s) && s.Accesses == 0).Select(a => $"dead_field:{a.File}"));
         return v;
     }
 
@@ -209,6 +236,49 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         var mailBreach = Violations(ScanAll(early, allowed), allowed);
         output.WriteLine($"[8-ج] حَقنُ SMTP: {string.Join(" · ", mailBreach)}");
         Assert.Equal([$"sdk_verb_outside_invoker:{smtp.File} (1/5)"], mailBreach);
+
+        // ‏(‏2026-11-13، M6C-RULES-R1-2) الحَقنُ الَّذي مَرَّ أَخضَرَ عِندَ المُراجِع بِحَرفِه — `_client?.ListBucketsAsync` أَوَّلَ `DeleteAsync` في نُسخَةٍ مِن S3 الحَقيقِيّ —
+        // ومَعَه الاسمُ المُستَعارُ والحَقلُ وَسيطاً ⇐ خَرقٌ عَلى سَطرِه؛ وسَطرُ قائِمَةٍ بِحَقلٍ لا يَذكُرُه المِلَفُّ ⇐ حَقلٌ مَيِّت.
+        var s3 = sources.Single(x => x.File.EndsWith("/S3FileStorage.cs", StringComparison.Ordinal));
+        const string delete = "await _calls.HelperAsync(Deleting,";
+        Assert.Single(Regex.Matches(s3.Code, Regex.Escape(delete)));
+        foreach (var (shape, inject) in new[]
+                 {
+                     ("?.", "await (_client?.ListBucketsAsync(ct) ?? Task.FromResult<Amazon.S3.Model.ListBucketsResponse>(null!));"),
+                     ("!.", "await _client!.ListBucketsAsync(ct);"),
+                     ("alias", "var alias = _client; await alias.ListBucketsAsync(ct);"),
+                     ("argument", "await Probe(_client, ct);"),
+                 })
+        {
+            var injected = sources.Select(x => x == s3 ? (x.File, x.Code.Replace(delete, inject + "\n        " + delete, StringComparison.Ordinal)) : x).ToList();
+            var breach = Violations(ScanAll(injected, allowed), allowed);
+            output.WriteLine($"[8-ج] حَقنُ S3 ({shape}): {string.Join(" · ", breach)}");
+            Assert.Equal([$"sdk_verb_outside_invoker:{s3.File} (1/5)"], breach);
+        }
+        var blindField = allowed.Select(a => a.File == s3.File ? a with { Field = "_neverMentioned" } : a).ToList();
+        var deadField = Violations(ScanAll(sources, blindField), blindField);
+        output.WriteLine($"[8-ج] حَقلٌ مَيِّت: {string.Join(" · ", deadField)}");
+        Assert.Equal([$"dead_field:{s3.File}"], deadField);
+    }
+
+    /// <summary>‏(‏2026-11-13، M6C-RULES-R1-2) <b>كُلُّ شَكلٍ لِلحَقل</b>: <c>?.</c> و<c>!.</c> و<c>?[</c> وُصول، والاسمُ المُستَعارُ والوَسيطُ و<c>return</c> تَسَرُّب — خارِجَ المُستَدعي
+    /// أَحمَرُ وداخِلَه لا؛ والإعلانُ (حَقلاً ووَسيطاً) والإسنادُ إلَيه و<c>Dispose</c> (ولَو بِـ<c>?.</c>) لا تُعَدّ.</summary>
+    [Theory]
+    [InlineData("await (_c?.ListBucketsAsync(ct) ?? Task.FromResult<R>(null!));", 1, 1, 0)]
+    [InlineData("await _c!.ListBucketsAsync(ct);", 1, 1, 0)]
+    [InlineData("var first = _c?[0];", 1, 1, 0)]
+    [InlineData("var alias = _c; await alias.ListBucketsAsync(ct);", 1, 1, 1)]
+    [InlineData("await Probe(_c, ct);", 1, 1, 1)]
+    [InlineData("return _c;", 1, 1, 1)]
+    [InlineData("await _calls.InvokeAsync(call, t => Probe(_c, t), r => ok, ct);", 1, 0, 1)]
+    [InlineData("await _calls.HelperAsync(h, t => _c!.GetObjectAsync(k, t), ct);", 1, 0, 0)]
+    [InlineData("private readonly IAmazonS3 _c; public A(IAmazonS3 c) { _c = c; } public void Dispose() => _c?.Dispose();", 0, 0, 0)]
+    [InlineData("private readonly WebPushClient _c = new(); X() { _c ??= Make(); }", 0, 0, 0)]
+    public void Every_shape_of_the_field_is_seen(string code, int accesses, int outside, int escapes)
+    {
+        var scan = Classify("A.cs", code, "_c");
+        output.WriteLine($"[8-ج] {code} ⇒ وُصول {scan.Accesses} · خارِجَ المُستَدعي {scan.Outside} · تَسَرُّب {scan.Escapes}");
+        Assert.Equal((accesses, outside, escapes), (scan.Accesses, scan.Outside, scan.Escapes));
     }
 
     /// <summary>والطَبَقَةُ في السكربتِ والتَوأَمُ هُنا يَقرَآنِ القائِمَةَ نَفسَها والأَنواعَ نَفسَها — نَصٌّ في السكربتِ لا يَتَباعَدُ عَن هذا المِلَفِّ صامِتاً.</summary>
@@ -222,5 +292,8 @@ public class OutboundInvokerBoundaryTests(ITestOutputHelper output)
         Assert.Contains(@"\.CreateClient\(", script, StringComparison.Ordinal);
         Assert.Contains("InvokeAsync|HelperAsync", script, StringComparison.Ordinal);
         Assert.Contains("Layer 8c", script, StringComparison.Ordinal);
+        // ‏(‏2026-11-13، M6C-RULES-R1-2) والسكربتُ يَرى الأَشكالَ نَفسَها ويُحَمِّرُ الحَقلَ المَيِّتَ مِثلَ التَوأَم.
+        Assert.Contains(@"\s*[?!]?\s*\.\s*(\w+)", script, StringComparison.Ordinal);
+        Assert.Contains("DEAD FIELD", script, StringComparison.Ordinal);
     }
 }

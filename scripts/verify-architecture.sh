@@ -302,6 +302,11 @@ echo "✅ Layer 8b green — $PROV_FILES تَعريفاً كُلُّها في ا
 #    ٢. الفِعل: في مِلَفٍّ مُدرَجٍ بِحَقلِ SDK، وُصولٌ إلى عُضوٍ فيه (عَدا Dispose) خارِجَ وُسَطاءِ `InvokeAsync(` أَو `HelperAsync(` — بِعُمقِ الأَقواس.
 #    ٣. الإعفاءُ المَيِّت: سَطرٌ في القائِمَةِ لِمِلَفٍّ غائِبٍ أَو لا يُسَمّي نَوعاً خامّاً.
 #
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-RULES-R1-2 — ADR-051 §١٩) **والحَقلُ يُرى بِكُلِّ شَكلٍ يُستَعمَلُ بِه**: كانَ النَمَطُ
+#  `\bحَقل\s*\.` وَحدَه — فَمَرَّ `_client?.X(…)` و`_client!.X(…)` والاسمُ المُستَعارُ (`var c = _client; c.X()`) والحَقلُ وَسيطاً (مَقيسٌ عِندَ المُراجِع:
+#  `_client?.ListBucketsAsync` أَوَّلَ `DeleteAsync` ⇐ «violations: 0» والطَبَقَةُ خَضراء). الآنَ كُلُّ ذِكرٍ لِلحَقل: وُصولٌ بِـ`.`/`?.`/`!.`/`[`/`?[` (عَدا
+#  `Dispose`) داخِلَ المُستَدعي أَو أَحمَر؛ والإعلانُ والإسنادُ إلَيه لا يُعَدّان؛ وكُلُّ ذِكرٍ سِواهُما **تَسَرُّبٌ** (`escape`) داخِلَ المُستَدعي أَو أَحمَر.
+#  وسَطرُ قائِمَةٍ يُسَمّي حَقلاً ولا يَقيسُ لَه وُصولاً واحِداً (**حَقلٌ مَيِّت**) أَحمَر.
 #  ولا رَقَمَ طَبَقَةٍ جَديد: داخِلَ ٨ فَلا تَتَغَيَّرُ أَسماءُ الطَبَقاتِ التِسع. وحارِسُ العَمى كَما فَوقَه: العَدَدُ يُطبَع، وصِفرُ مِلَفٍّ أَو صِفرُ رَمزٍ يُحمِر.
 #  وتَوأَمُها في الاختِبارات: `OutboundInvokerBoundaryTests` (المُصَنِّفُ نَفسُه بِـC#، والحَقنُ المَقيس).
 # ═══════════════════════════════════════════════════════════════════════
@@ -349,18 +354,31 @@ for my $f (@ARGV) {
     local $/; my $raw = <$fh>; close $fh;
     my $s = strip($raw);
     my $tokens = () = $s =~ /$TYPES/g;
-    my ($acc, $bad) = (0, 0);
+    my ($acc, $bad, $esc, $named) = (0, 0, 0, 0);
     (my $rel = $f) =~ s{^\Q$root\E/}{};
     $rel =~ s{\\}{/}g;
     if (my $fld = $field{$rel}) {
-        while ($s =~ /\b\Q$fld\E\s*\.\s*(\w+)/g) {
-            my ($m, $pos) = ($1, $-[0]);
-            next if $m eq 'Dispose';
-            $acc++;
+        $named = 1;
+        while ($s =~ /\b\Q$fld\E\b/g) {
+            my ($pos, $end) = ($-[0], $+[0]);
+            my $after = substr($s, $end, 160);
+            my $from = $pos > 160 ? $pos - 160 : 0;
+            my $before = substr($s, $from, $pos - $from);
+            if ($after =~ /^\s*[?!]?\s*\.\s*(\w+)/) {
+                next if $1 eq 'Dispose';
+                $acc++;
+                $bad++ unless inside_invoke($s, $pos);
+                next;
+            }
+            if ($after =~ /^\s*[?!]?\s*\[/) { $acc++; $bad++ unless inside_invoke($s, $pos); next; }
+            next if $after =~ /^\s*(?:=(?![=>])|\?\?=)/;
+            next if $after =~ /^\s*[;,)]/ && $before =~ /[\w>\]?]\s+\z/
+                 && $before !~ /\b(?:return|await|throw|yield|in|out|ref|is|as|case|when|else|and|or|not|new|nameof)\s+\z/;
+            $acc++; $esc++;
             $bad++ unless inside_invoke($s, $pos);
         }
     }
-    print "$rel|$tokens|$acc|$bad\n";
+    print "$rel|$tokens|$acc|$bad|$esc|$named\n";
 }
 PERL
 
@@ -372,6 +390,8 @@ grep -vE '^[[:space:]]*(#|$)' "$OUT_ALLOW" | cut -d'|' -f1 | sort > "$TMP/out-al
 OUT_NAMING=$(awk -F'|' '$2 > 0' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
 OUT_TOKENS=$(awk -F'|' '{ n += $2 } END { print n + 0 }' "$TMP/out-raw.txt")
 OUT_ACCESSES=$(awk -F'|' '{ n += $3 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_ESCAPES=$(awk -F'|' '{ n += $5 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_FIELDS=$(awk -F'|' '$6 == 1' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
 OUT_ALLOWED=$(wc -l < "$TMP/out-allowed.txt" | tr -d ' ')
 OUT_VIOL=0
 
@@ -380,6 +400,8 @@ echo "  .cs files scanned under libs/:   $OUT_SCANNED"
 echo "  files naming a raw client type:  $OUT_NAMING"
 echo "  raw client type tokens:          $OUT_TOKENS"
 echo "  SDK member accesses checked:     $OUT_ACCESSES"
+echo "  SDK field bare uses (escapes):   $OUT_ESCAPES"
+echo "  allow-listed SDK fields:         $OUT_FIELDS"
 echo "  allow-listed files:              $OUT_ALLOWED"
 
 if [ "$OUT_SCANNED" -eq 0 ] || [ "$OUT_TOKENS" -eq 0 ]; then
@@ -387,14 +409,18 @@ if [ "$OUT_SCANNED" -eq 0 ] || [ "$OUT_TOKENS" -eq 0 ]; then
     exit 1
 fi
 
-while IFS='|' read -r file tokens acc bad; do
+while IFS='|' read -r file tokens acc bad esc named; do
     [ -z "$file" ] && continue
     if [ "$tokens" -gt 0 ] && ! grep -qxF "$file" "$TMP/out-allowed.txt"; then
         echo "  ✗ RAW CLIENT outside the allow-list: $file ($tokens رَمزاً) — مَرِّرهُ بِـProviderHttp أَو ProviderCalls."
         OUT_VIOL=$((OUT_VIOL + 1))
     fi
     if [ "$bad" -gt 0 ]; then
-        echo "  ✗ SDK VERB outside InvokeAsync/HelperAsync: $file ($bad مِن $acc وُصولاً)"
+        echo "  ✗ SDK VERB outside InvokeAsync/HelperAsync: $file ($bad مِن $acc وُصولاً، مِنها $esc تَسَرُّباً)"
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    if [ "$named" = 1 ] && [ "$acc" -eq 0 ]; then
+        echo "  ✗ DEAD FIELD: $file — سَطرُه يُسَمّي حَقلاً لا وُصولَ إلَيه (0 وُصول): قاعِدَةُ الفِعلِ عَمياءُ عَن هذا المِلَفّ."
         OUT_VIOL=$((OUT_VIOL + 1))
     fi
 done < "$TMP/out-raw.txt"
