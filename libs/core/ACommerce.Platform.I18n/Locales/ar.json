@@ -2685,5 +2685,22 @@
   "admin.meter.store_empty": "لا عَمَلِيّاتٍ مَعدودَةٌ لِهذا المَتجَرِ في النافِذَة.",
   "admin.meter.by_day": "لِكُلِّ يَوم",
   "admin.meter.by_entrepreneur": "رائِدُ الأَعمالِ لَحظَةَ الكِتابَة",
-  "admin.meter.by_role": "الدَورُ لَحظَةَ الكِتابَة"
+  "admin.meter.by_role": "الدَورُ لَحظَةَ الكِتابَة",
+  "admin.meter.recon_title": "المُطابَقَة — ما وُلِدَ وما عُدَّ وما جُمِع",
+  "admin.meter.recon_error_title": "تَعَذَّرَت المُطابَقَة",
+  "admin.meter.recon_clean": "لا عَيب: كُلُّ مَصدَرٍ في نافِذَةِ وَحدَتِه لَه سَطر، ولا سَطرَ بِلا مَصدَر، والمَجاميعُ تُطابِقُ الدَفتَر — قورِنَ {0}.",
+  "admin.meter.recon_defects": "عُيوبُ المُطابَقَة: {0} — قورِنَ {1}. ومُعَرِّفاتُها يَطبَعُها scripts/meter-reconcile.cs.",
+  "admin.meter.recon_importer": "مَتجَرٌ استَورَدَه المُستَورِد: ما يَكتُبُه المُستَورِدُ بِلا عَدّ (المَتجَرُ والأَعضاءُ والرَسائِلُ وأَحداثُ البِدء) مُستَثنًى مِن المُقارَنَةِ ومَعدودٌ في سَطرِه.",
+  "admin.meter.recon_unit": "قورِن {0} · ناقِص {1} · يَتيم {2} · بَذر {3}",
+  "admin.meter.recon_zero_entry": "مَصادِرُ بِلا سَطرٍ واحِد",
+  "admin.meter.recon_no_sources": "لا مَصادِرَ تُقارَنُ لِهذا المَتجَرِ بَعد.",
+  "admin.meter.recon_outbound": "الصادِر — نِيّاتُ النِداءات",
+  "admin.meter.recon_no_intents": "لا نِداءَ صادِراً مَعدوداً لِهذا المَتجَر.",
+  "admin.meter.recon_intent": "مَقبول {0} · ناقِص {1} · غَيرُ مُسَجَّل {2} · مَجهول {3} · مَرفوض {4}",
+  "admin.meter.recon_aggregates": "المَجاميعُ مُقابِلَ الدَفتَرِ حَتّى المُؤَشِّر",
+  "admin.meter.recon_agg_none": "المُجَمِّعُ لَم يَعمَل بَعد — لا مَجاميعَ تُقارَن.",
+  "admin.meter.recon_agg_clean": "تُطابِقُ الدَفتَرَ في {0} صَفّاً.",
+  "admin.meter.recon_agg_mismatch": "لا تُطابِقُ الدَفتَرَ في {0} صَفّاً.",
+  "admin.meter.recon_presence": "الحُضور — لَقطَةُ كُلِّ يَوم",
+  "admin.meter.recon_absent_day": "لَقطَةٌ غائِبَة"
 }

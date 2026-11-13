@@ -2,8 +2,10 @@
 @using System.Globalization
 @using ACommerce.Platform.Shared.Metering
 @using ACommerce.Templates.Customer.Marketplace.Services.Queries
+@using ACommerce.Templates.Customer.Marketplace.Services.Metering
 @inject ACommerce.Templates.Customer.Marketplace.Services.PlatformAdminGuard PlatformGuard
 @inject MeterQueries Meter
+@inject ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterReconciliation Reconcile
 @inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject L L
 
@@ -12,6 +14,9 @@
     نافِذَةُ ثَلاثينَ يَوماً بِاليَوم (`MeterQueries.StoreWindowDays`): مَجموعُ كُلِّ وَحدَةٍ في النافِذَة، ثُمَّ لِكُلِّ يَوم، ثُمَّ رائِدُ الأَعمالِ والدَورُ
     لَحظَةَ الكِتابَة. والصادِرُ والمُطابَقَةُ لا يُرسَمانِ قَبلَ أَن يَلِدا (البَندانِ ١١ و٢٠) — لا قِسمَ «قَريباً».
     والبَوّابَةُ قَبلَ الاستِعلامِ كَما في الفِهرِس، ومَدخَلُها صَفُّ المَتجَرِ فيه.
+    ‏(‏2026-11-13، W13-6·٢٠ — ADR-051 §٢٤؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَ لِلمُطابَقَةِ قِسمُها: لِكُلِّ وَحدَةِ حِفظٍ ما قورِنَ وما نَقَصَ وما يَتُم، والنِيّاتُ الصادِرَةُ
+    («غَيرُ مُسَجَّلَة» و«مَجهولَة» و«مَرفوضَة»)، والمَجاميعُ مُقابِلَ الدَفتَرِ حَتّى المُؤَشِّر، والحُضورُ لِكُلِّ يَومٍ أَو «لَقطَةٌ غائِبَة» — مِن `MeterReconciliation` الَّذي
+    يُناديه `scripts/meter-reconcile.cs` نَفسُه.
 *@
 
 <RequirePlatformAdmin>
@@ -137,6 +142,114 @@
                                 }
                             </div>
                         }
+
+                        @* ‏(‏2026-11-13، W13-6·٢٠ — ADR-051 §٢٤؛ التَصميم §9 و§11) المُطابَقَةُ والصادِرُ والحُضورُ لِهذا المَتجَر — قِسمٌ بِسِماتِ `data-recon-*` لا `data-meter-*`،
+                           فَما يَقرَؤُه `prove-meter.sh` مِن بِلاطاتِ التَشغيلِ لا يَتَغَيَّر. *@
+                        <div class="st-section-title">@L.Markup("admin.meter.recon_title")</div>
+                        @if (recon is null || recon.State == MeterReconcileState.Error)
+                        {
+                            <div data-recon-state="error">
+                                <AcAlert Variant="danger" Title="@L["admin.meter.recon_error_title"]" Message="@L["admin.meter.error_body"]" />
+                            </div>
+                        }
+                        else if (recon.State == MeterReconcileState.NoLedger)
+                        {
+                            <div data-recon-state="no-ledger">
+                                <AcEmptyState IconName="inbox" Title="@L["admin.meter.no_ledger_title"]" Message="@L["admin.meter.no_ledger_body"]" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div data-recon-state="data" data-recon-compared="@Num(recon.Compared)" data-recon-defects="@Num(recon.Defects)">
+                                @if (recon.Defects == 0)
+                                {
+                                    <AcAlert Variant="info" Message="@L.Format("admin.meter.recon_clean", Num(recon.Compared))" />
+                                }
+                                else
+                                {
+                                    <AcAlert Variant="danger" Message="@L.Format("admin.meter.recon_defects", Num(recon.Defects), Num(recon.Compared))" />
+                                }
+                                @if (recon.ImporterTenants.Count > 0)
+                                {
+                                    <div data-recon-importer="@Slug">
+                                        <AcAlert Variant="warning" Message="@L["admin.meter.recon_importer"]" />
+                                    </div>
+                                }
+
+                                <div class="studio-list">
+                                    @foreach (var u in recon.Units.Where(u => u.Compared + u.Missing + u.Orphans + u.Excluded + u.Undated > 0))
+                                    {
+                                        <div class="studio-list-row" style="cursor:default;" data-recon-unit="@u.Unit" data-recon-missing="@Num(u.Missing)" data-recon-orphans="@Num(u.Orphans)">
+                                            <div class="studio-list-body"><strong>@UnitLabel(u.Unit)</strong> <code>@u.Unit</code></div>
+                                            <span class="st-chip">@L.Format("admin.meter.recon_unit", Num(u.Compared), Num(u.Missing), Num(u.Orphans), Num(u.Seed))</span>
+                                            @if (u.ZeroEntryStores.Count > 0)
+                                            {
+                                                <span class="st-chip" data-recon-zero-entry="@u.Unit">@L.Markup("admin.meter.recon_zero_entry")</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                @if (recon.Units.All(u => u.Compared + u.Missing + u.Orphans + u.Excluded + u.Undated == 0))
+                                {
+                                    <div class="st-card" data-recon-sources="0">@L.Markup("admin.meter.recon_no_sources")</div>
+                                }
+
+                                <div class="st-section-title">@L.Markup("admin.meter.recon_outbound")</div>
+                                @if (recon.Intents.All(i => i.Intents + i.Orphans == 0))
+                                {
+                                    <div class="st-card" data-recon-intents="0">@L.Markup("admin.meter.recon_no_intents")</div>
+                                }
+                                else
+                                {
+                                    <div class="studio-list">
+                                        @foreach (var i in recon.Intents.Where(i => i.Intents + i.Orphans > 0))
+                                        {
+                                            <div class="studio-list-row" style="cursor:default;" data-recon-intent="@i.Unit" data-recon-unrecorded="@Num(i.Unrecorded)" data-recon-unknown="@Num(i.Unknown)" data-recon-refused="@Num(i.Refused)">
+                                                <div class="studio-list-body"><strong>@UnitLabel(i.Unit)</strong> <code>@i.Unit</code></div>
+                                                <span class="st-chip">@L.Format("admin.meter.recon_intent", Num(i.Accepted), Num(i.Missing), Num(i.Unrecorded), Num(i.Unknown), Num(i.Refused))</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="st-section-title">@L.Markup("admin.meter.recon_aggregates")</div>
+                                <div class="st-card" data-recon-mismatches="@Num(recon.Mismatches.Count)">
+                                    @if (recon.Cursor is null)
+                                    {
+                                        @L.Markup("admin.meter.recon_agg_none")
+                                    }
+                                    else if (recon.Mismatches.Count == 0)
+                                    {
+                                        @L.Markup("admin.meter.recon_agg_clean", Num(recon.AggregateRows))
+                                    }
+                                    else
+                                    {
+                                        @L.Markup("admin.meter.recon_agg_mismatch", Num(recon.Mismatches.Count))
+                                    }
+                                </div>
+
+                                <div class="st-section-title">@L.Markup("admin.meter.recon_presence")</div>
+                                <div class="studio-list">
+                                    @foreach (var day in recon.Presence.DayKeys.Reverse().Take(MeterQueries.StoreWindowDays))
+                                    {
+                                        <div class="studio-list-row" style="cursor:default;" data-recon-day="@day" data-recon-absent="@(recon.Presence.AbsentDays.Contains(day) ? "1" : "0")">
+                                            <div class="studio-list-body"><strong>@day</strong></div>
+                                            @if (recon.Presence.AbsentDays.Contains(day))
+                                            {
+                                                <span class="st-chip">@L.Markup("admin.meter.recon_absent_day")</span>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var p in recon.PresenceRows.Where(p => p.Day == day).OrderBy(p => p.Unit, StringComparer.Ordinal))
+                                                {
+                                                    <span class="st-chip" data-recon-presence-unit="@p.Unit">@UnitLabel(p.Unit) @Num(p.Quantity)</span>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -149,12 +262,15 @@
     [Parameter] public string Slug { get; set; } = "";
 
     MeterReading? reading;
+    MeterReconciliationReport? recon;
 
     protected override async Task OnParametersSetAsync()
     {
         // البَوّابَةُ قَبلَ أَيِّ استِعلام — كالفِهرِس.
         if (!(await PlatformGuard.EvaluateAsync()).Allowed) return;
         reading = await Meter.StoreAsync(Slug);
+        // ‏(‏2026-11-13، W13-6·٢٠) والمُطابَقَةُ بَعدَ البَوّابَةِ كَالقِراءَة — بِالدالَّةِ الَّتي يُناديها السكربتُ مَحصورَةً بِهذا المَتجَر.
+        recon = await Reconcile.StoreAsync(Slug);
     }
 
     /// <summary>اسمُ الوَحدَةِ مِن القامُوس، ورَمزُها حينَ لا يَعرِفُها المُعجَم.</summary>
