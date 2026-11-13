@@ -242,6 +242,51 @@
       "feature": "subscriptions",
       "reconcile": "intents",
       "source": "PaddlePaymentProvider.CreateTransactionAsync through ProviderHttp — one entry when POST /transactions answers 2xx; request id = our reference (PaddleTransactionPolicy.Reference); app = the store slug (POST /admin/tenants/{slug}/plan/paddle-link)"
+    },
+    {
+      "code": "delivery.order.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "DealShipping.ShipAsync through PlaceAsync — the OTO client's CreateOrderAsync through ProviderHttp; one entry when POST /rest/v2/createOrder answers 2xx; request id = our order id (DealShipping.OrderIdOf, the first deal of the vendor's cart), so a repeated create of the same order is one operation; source = the order id; app = the store slug; the access-token exchange before it is a helper, not counted"
+    },
+    {
+      "code": "delivery.order.status",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "the OTO client's GetOrderStatusAsync through ProviderHttp — one entry per accepted POST /rest/v2/orderStatus; request id = {orderId}:check:{fresh call id} (DealShipping.ShipAsync, before the deal moves), {orderId}:recover:{fresh call id} (PlaceAsync, after a create whose answer was lost) or {orderId}:notice:{status}:{timestamp} (ReceiveAsync, the signed status event, so OTO's redelivery of one event is one entry); source = the order id; app = the store slug"
+    },
+    {
+      "code": "delivery.webhook.register",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "VendorShippingService (paste and register) — the OTO client's RegisterWebhookAsync through ProviderHttp; one entry when POST or PUT /rest/v2/webhook answers 2xx; request id = a fresh call id (an update refused by another account and then created again is two operations); app = the store slug"
+    },
+    {
+      "code": "delivery.vendor.register",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "VendorShippingService.RegisterAsync — the OTO client's RegisterVendorAsync through ProviderHttp on the marketplace credential; one entry when POST /rest/v2/register answers 2xx; request id = the audit row written before the call (AuditWriter.WriteAsync returns it); app = the store slug"
+    },
+    {
+      "code": "model.call",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "studio.build",
+      "reconcile": "intents",
+      "source": "IAgentBackend.CallAsync — the Anthropic, Gemini and Chat-Completions-compatible backends through ProviderHttp; one entry when usage is read from the answer (the tokens were spent, even beside an error), refused on a 4xx without usage, unknown otherwise; request id = a fresh call id per call (each analysis attempt is its own call); app = _platform (the studio design agent AgentService and the admin incubator FeasibilityAnalysisService); ModelCallRecord keeps the per-operation split"
     }
   ]
 }

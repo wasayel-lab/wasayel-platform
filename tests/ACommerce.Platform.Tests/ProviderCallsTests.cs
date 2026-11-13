@@ -552,4 +552,173 @@ public class ProviderCallsTests(ITestOutputHelper output)
         Assert.Equal(new[] { $"open {id}", $"decide {id} {outcome} 1" }, recorder.Log);
         Assert.Equal(status == 201, result.FailureReason is null);
     }
+
+    // ═══ (‏2026-11-12، W13-6·١٥ — التَصميم §6.2) OTO ونِداءُ النَموذَج ═══════════════════════════════════════════════════════════════════
+
+    private static ACommerce.Kit.Delivery.OtoClient Oto(HttpMessageHandler handler, OutboundRecorder recorder)
+        => new(new ProviderHttp<ACommerce.Kit.Delivery.OtoClient>(new HttpClient(handler), new ProviderCalls(recorder)),
+               Options.Create(new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging }),
+               new ACommerce.Kit.Delivery.OtoTokenCache(), NullLogger<ACommerce.Kit.Delivery.OtoClient>.Instance);
+
+    private const string OtoToken = "{\"access_token\":\"A1\",\"success\":true,\"expires_in\":\"3600\"}";
+    private const string OtoOrder = "0f8fad5bd9cb469fa165705ed7eb6e2a";
+
+    private static ACommerce.Kit.Delivery.OtoOrderDraft OtoDraft() => new(OtoOrder, ACommerce.Kit.Delivery.OtoClient.CashOnDelivery, 0m, 0m, "",
+        new ACommerce.Kit.Delivery.OtoCustomer("w13", "0500000000", "w13", "Riyadh", "SA"), "w13");
+
+    /// <summary>
+    /// <para><b>OTO</b> (التَصميم §6.2؛ صُفوفُ G6): الطَلَبُ نَفسُه يُسأَلُ عَنه عِندَ الشَحنِ (<c>check</c>) وبَعدَ الإشعارِ (<c>notice</c>) ⇐ <b>سَطران</b>، وإعادَةُ OTO لِلإشعارِ
+    /// نَفسِه ⇐ سَطرٌ واحِد، والاستِردادُ (<c>recover</c>) سَطرٌ ثالِث؛ والإنشاءُ بِمُعَرِّفِ طَلَبِنا مَرَّتَينِ ⇐ سَطرٌ واحِد؛ والوارِدُ بِمُعَرِّفٍ جَديد؛ والبائِعُ بِمُعَرِّفِ سَطرِ
+    /// أَثَرِه. ومُبادَلَتا الرَمزِ (البائِعُ والسوق) وقارِئُ الخِياراتِ بِلا مُنادٍ يَمُرّانِ بِلا نِيَّة. والمَصدَرُ الطَلَبُ نَفسُه، والمُزَوِّدُ تَسِمُه العُدَّة.</para>
+    /// </summary>
+    [Fact]
+    public async Task OTO_counts_one_order_status_under_check_and_notice_as_two_the_create_by_our_order_and_leaves_the_tokens_uncounted()
+    {
+        var recorder = new MemoryRecorder();
+        var tracking = "{\"success\":true,\"orderId\":\"" + OtoOrder + "\",\"otoId\":\"540789\",\"status\":\"searchingDriver\"}";
+        var script = new Script((HttpStatusCode.OK, OtoToken),
+            (HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}"), (HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}"),
+            (HttpStatusCode.OK, tracking), (HttpStatusCode.OK, tracking), (HttpStatusCode.OK, tracking), (HttpStatusCode.OK, tracking),
+            (HttpStatusCode.OK, "{\"success\": true, \"id\": \"59\"}"),
+            (HttpStatusCode.OK, OtoToken), (HttpStatusCode.OK, OtoRouteHandler.RegisterAnswer),
+            (HttpStatusCode.OK, "{\"success\":true,\"deliveryCompany\":[]}"));
+        var client = Oto(script, recorder);
+        var create = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Create(Store, OtoOrder);
+        var check = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Status(Store, OtoOrder,
+            ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Check, ProviderCall.FreshRequestId());
+        var notice = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Status(Store, OtoOrder,
+            ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Notice, "delivered:1595941360328");
+        var recover = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Status(Store, OtoOrder,
+            ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Recover, ProviderCall.FreshRequestId());
+        var webhook = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Webhook(Store);
+        var audit = Guid.NewGuid();
+        var vendor = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Vendor(Store, audit);
+
+        for (var i = 0; i < 2; i++) Assert.True((await client.CreateOrderAsync(create, "RT-1", OtoDraft())).Ok);
+        Assert.True((await client.GetOrderStatusAsync(check, "RT-1", OtoOrder)).Ok);
+        for (var i = 0; i < 2; i++) Assert.True((await client.GetOrderStatusAsync(notice, "RT-1", OtoOrder)).Ok);
+        Assert.True((await client.GetOrderStatusAsync(recover, "RT-1", OtoOrder)).Ok);
+        Assert.True((await client.RegisterWebhookAsync(webhook, "RT-1", "https://wasayel.example/s/shipping/oto/order-status", "w13-secret")).Ok);
+        Assert.True((await client.RegisterVendorAsync(vendor, "MKT-1",
+            new ACommerce.Kit.Delivery.OtoVendorRegistration("SA", "Riyadh", "v@example.com", "966500000000", "F", "L", false, "w13"))).Ok);
+        Assert.True((await client.CheckOtoDeliveryFeeAsync("RT-1", new ACommerce.Kit.Delivery.OtoFeeQuery("Riyadh", "Jeddah", 1m))).Ok);
+
+        string Id(string unit, string request) => $"{unit}:{ProviderNames.Oto}:{request}";
+        var accepted = Accepted(recorder);
+        var entries = accepted.Distinct(StringComparer.Ordinal).ToList();
+        var statuses = entries.Count(e => e.StartsWith(OutboundUnits.DeliveryOrderStatus + ":", StringComparison.Ordinal));
+        output.WriteLine($"[G6] OTO: طَلَبات {script.Seen.Count} · مَقبول {accepted.Count} · سُطور {entries.Count} (حالات {statuses}): {string.Join(" | ", entries)}");
+        Assert.Equal(11, script.Seen.Count);
+        Assert.Equal(8, accepted.Count);
+        Assert.Equal(new[]
+        {
+            Id(OutboundUnits.DeliveryOrderCreate, OtoOrder),
+            Id(OutboundUnits.DeliveryOrderStatus, $"{OtoOrder}:check:{check.RequestId.Split(':')[2]}"),
+            Id(OutboundUnits.DeliveryOrderStatus, $"{OtoOrder}:notice:delivered:1595941360328"),
+            Id(OutboundUnits.DeliveryOrderStatus, $"{OtoOrder}:recover:{recover.RequestId.Split(':')[2]}"),
+            Id(OutboundUnits.DeliveryWebhookRegister, webhook.RequestId),
+            Id(OutboundUnits.DeliveryVendorRegister, audit.ToString("N")),
+        }, entries);
+        Assert.Equal(16, recorder.Log.Count);
+        Assert.Equal((ProviderCall.DeliveryOrderSource, OtoOrder, ProviderCall.DeliveryOrderSource, OtoOrder), (create.SourceType, create.SourceId, check.SourceType, check.SourceId));
+        Assert.Null(webhook.SourceType);
+    }
+
+    /// <summary><b>‏401 ثُمَّ رَمزٌ جَديدٌ عَمَلِيَّةٌ واحِدَة</b>: الطَلَبُ الأَوَّلُ مَرفوضٌ بِرَمزٍ قَديم، والعُدَّةُ تُعيدُه مَرَّةً بِالنِداءِ نَفسِه فَيُقبَل — النِيَّةُ نَفسُها مَرفوضَةً ثُمَّ مَقبولَة
+    /// (والقاعِدَةُ تَرفَعُها مَقبولَةً — <c>MeterSql.IntentAccept</c>، صَفُّه الحَيُّ في <c>LiveProviderCallsProofTests</c>)، والرَمزانِ بِلا نِيَّة.</summary>
+    [Fact]
+    public async Task An_OTO_401_retried_with_a_fresh_token_is_one_operation_refused_then_accepted()
+    {
+        var recorder = new MemoryRecorder();
+        var script = new Script((HttpStatusCode.OK, OtoToken), (HttpStatusCode.Unauthorized, "{}"), (HttpStatusCode.OK, OtoToken),
+            (HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}"));
+        var create = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Create(Store, OtoOrder);
+
+        var res = await Oto(script, recorder).CreateOrderAsync(create, "RT-1", OtoDraft());
+
+        var id = $"{OutboundUnits.DeliveryOrderCreate}:{ProviderNames.Oto}:{OtoOrder}";
+        output.WriteLine($"[G6] OTO 401 ⇒ {string.Join(" → ", script.Seen)} · {string.Join(" → ", recorder.Log)}");
+        Assert.True(res.Ok);
+        Assert.Equal(4, script.Seen.Count);
+        Assert.Equal(new[] { $"open {id}", $"decide {id} Refused 1", $"open {id}", $"decide {id} Accepted 1" }, recorder.Log);
+    }
+
+    private static ACommerce.Templates.Customer.Marketplace.Services.AgentRequest ModelRequest() => new("w13", [], [], "w13-model", MaxTokens: 16);
+
+    /// <summary>
+    /// <para><b>نِداءُ النَموذَجِ يُقبَلُ حينَ يُقرَأُ استِهلاكُه</b> (التَصميم §6.2: «model → usage measured, not ‹no error›»): ‏200 بِاستِهلاكٍ مَقبول؛ و<b>‏400 بِاستِهلاكٍ مَقبولٌ</b> —
+    /// التَوكِناتُ أُنفِقَت وإن جاءَ الجَوابُ خَطَأً؛ و‏401 بِلا استِهلاكٍ مَرفوض؛ و‏200 بِلا استِهلاكٍ و‏503 مَجهولان. و<b><c>ModelCallRecord</c> لا يَتَغَيَّر</b>: سَطرُه يُبنى مِن
+    /// جَوابِ الخَلفِيَّةِ كَما كان، فَخَطَأُ ‏400 «لَم يُقَس» عِندَه وإن عَدَّه الدَفتَر.</para>
+    /// </summary>
+    [Theory]
+    [InlineData(200, true, "Accepted", true)]
+    [InlineData(400, true, "Accepted", false)]
+    [InlineData(401, false, "Refused", false)]
+    [InlineData(200, false, "Unknown", false)]
+    [InlineData(503, false, "Unknown", false)]
+    public async Task A_model_call_is_accepted_when_its_usage_is_read_even_beside_an_error(int status, bool usage, string outcome, bool measuredInRecord)
+    {
+        var recorder = new MemoryRecorder();
+        var body = (status, usage) switch
+        {
+            (200, true) => "{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"usage\":{\"input_tokens\":7,\"output_tokens\":3}}",
+            (_, true) => "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\"},\"usage\":{\"input_tokens\":7,\"output_tokens\":0}}",
+            (200, false) => "{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}]}",
+            _ => "{\"type\":\"error\"}",
+        };
+        var backend = new ACommerce.Templates.Customer.Marketplace.Services.AnthropicBackend(
+            new ProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(new HttpClient(new Script(((HttpStatusCode)status, body))), new ProviderCalls(recorder)),
+            new ACommerce.Templates.Customer.Marketplace.Services.AgentProfile("Studio", "anthropic", null, "k", null, null));
+        var call = ACommerce.Templates.Customer.Marketplace.Services.ModelCalls.Platform();
+
+        var resp = await backend.CallAsync(call, ModelRequest(), CancellationToken.None);
+
+        var id = $"{OutboundUnits.ModelCall}:{ProviderNames.Anthropic}:{call.RequestId}";
+        var line = ACommerce.Templates.Customer.Marketplace.Services.Metering.ModelCallRecord.For(
+            MeterSentinels.Platform, null, backend.ProviderName, "w13-model", "build", resp.Usage, resp.Error is null);
+        output.WriteLine($"[G6] النَموذَج {status} (استِهلاكٌ في الجِسم: {usage}) ⇒ {string.Join(" → ", recorder.Log)} · ModelCallRecord.UsageMeasured={line.UsageMeasured}");
+        Assert.Equal(new[] { $"open {id}", $"decide {id} {outcome} 1" }, recorder.Log);
+        Assert.Equal(MeterSentinels.Platform, call.App);
+        Assert.Equal(measuredInRecord, line.UsageMeasured);
+    }
+
+    /// <summary><b>كُلُّ خَلفِيَّةٍ تَسِمُ نِداءَها بِاسمِها</b> — Anthropic وGemini ومُتَوافِقُ Chat Completions (اسمٌ واحِدٌ لِكُلِّ عُنوانِه)؛ والأَخُ بِلا <c>ProviderCall</c>
+    /// يُعَدُّ لِمَتجَرٍ غَيرِ مَعروفٍ (<c>_unresolved</c>) فَيُرى ولا يَضيع.</summary>
+    [Fact]
+    public async Task Each_model_backend_stamps_its_provider_and_the_ProviderCall_less_overload_counts_as_unresolved()
+    {
+        var log = new List<(string Id, string App)>();
+        var recorder = new AppRecorder(log);
+        var usage = "{\"usage\":{\"input_tokens\":1,\"output_tokens\":1},\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1},"
+                    + "\"content\":[],\"candidates\":[],\"choices\":[{\"message\":{\"content\":\"ok\"}}]}";
+        ProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend> Http()
+            => new(new HttpClient(new Script((HttpStatusCode.OK, usage))), new ProviderCalls(recorder));
+        var profile = new ACommerce.Templates.Customer.Marketplace.Services.AgentProfile("Studio", "x", "https://model-compat.test/", "k", null, "groq");
+        var backends = new ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend[]
+        {
+            new ACommerce.Templates.Customer.Marketplace.Services.AnthropicBackend(Http(), profile),
+            new ACommerce.Templates.Customer.Marketplace.Services.GeminiBackend(Http(), profile),
+            new ACommerce.Templates.Customer.Marketplace.Services.OpenAIBackend(Http(), profile),
+        };
+        foreach (var b in backends) await b.CallAsync(ACommerce.Templates.Customer.Marketplace.Services.ModelCalls.Platform(), ModelRequest(), CancellationToken.None);
+        await backends[0].CallAsync(ModelRequest(), CancellationToken.None);
+
+        output.WriteLine($"[G6] الخَلفِيّات ⇒ {string.Join(" | ", log.Select(l => $"{l.Id}@{l.App}"))}");
+        Assert.Equal(new[] { ProviderNames.Anthropic, ProviderNames.Gemini, ProviderNames.OpenAiCompatible, ProviderNames.Anthropic },
+                     log.Select(l => l.Id.Split(':')[1]));
+        Assert.All(log, l => Assert.StartsWith(OutboundUnits.ModelCall + ":", l.Id, StringComparison.Ordinal));
+        Assert.Equal(new[] { MeterSentinels.Platform, MeterSentinels.Platform, MeterSentinels.Platform, MeterSentinels.Unresolved }, log.Select(l => l.App));
+    }
+
+    /// <summary>كاتِبٌ يُسَجِّلُ مُعَرِّفَ النِيَّةِ ومَتجَرَها.</summary>
+    private sealed class AppRecorder(List<(string Id, string App)> log) : OutboundRecorder
+    {
+        public override Task OpenAsync(ProviderCall call, CancellationToken ct)
+        {
+            lock (log) log.Add((call.Id, call.App));
+            return Task.CompletedTask;
+        }
+
+        public override Task DecideAsync(ProviderCall call, ProviderAcceptance acceptance) => Task.CompletedTask;
+    }
 }

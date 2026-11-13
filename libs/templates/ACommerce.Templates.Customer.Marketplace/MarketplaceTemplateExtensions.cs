@@ -72,6 +72,10 @@ public static class MarketplaceTemplateExtensions
         services.AddSingleton<
             ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider,
             ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1) عَميلُ الخَلفِيّاتِ الثَلاثِ واحِدٌ مِن المَصنَعِ بِالمُستَدعي المَعدود — كانَت تَبني ثَلاثَةً بِـ`new`.
+        // **بِلا مُهلَةِ عَميل**: المُهلَةُ مِن الطَلَب (`AgentCallBound`، ‏2026-10-24) كَما كانَت عَلى العُمَلاءِ الثَلاثَة.
+        ACommerce.Platform.Shared.Metering.ProviderHttpExtensions.AddProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(services,
+            (_, client) => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
         // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) مِفتاحُ وَكيلِ التَصميم — مُطفَأٌ ما لَم يُضَأ `Studio:Agent:Enabled`؛ ويَسأَلُه الوَكيلُ قَبلَ أَيِّ نِداء.
         services.AddSingleton(sp => Services.Incubator.StudioAgentSwitch.From(
             sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));

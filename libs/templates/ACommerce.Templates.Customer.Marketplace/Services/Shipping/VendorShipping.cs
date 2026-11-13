@@ -688,10 +688,12 @@ public sealed class VendorShippingService
                 return new(RegisterRateLimited, before, null);
             }
 
-            await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
+            var attempt = await _audit.WriteAsync(tenantSlug, owner, vendor.Name, RegisterAuditAction, "provider", entryId,
                 note: RegisterNote, ip: ip, ct: ct);
             // (‏2026-10-13، G5 (xiii)): الرَمزُ مَقصوصاً — القِراءَةُ نَفسُها الَّتي فَتَحَت هذا المَسار (`Input == Register`)، فَلا يَكونُ null هُنا.
-            var registered = await _oto.RegisterVendorAsync(VendorShippingSurface.MarketplaceTokenOf(_opts)!, sent.ToOto(), ct);
+            // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والنِداءُ مَعدودٌ بِمُعَرِّفِ سَطرِ الأَثَرِ الَّذي سَبَقَه — المُحاوَلَةُ نَفسُها.
+            var registered = await _oto.RegisterVendorAsync(Deals.ShippingCalls.Vendor(tenantSlug, attempt),
+                VendorShippingSurface.MarketplaceTokenOf(_opts)!, sent.ToOto(), ct);
             if (registered.Value is not { } account)
             {
                 _log.LogInformation("[OTO] vendor {Slug}/{Owner} ← register refused ({Code})",
@@ -823,9 +825,10 @@ public sealed class VendorShippingService
 
         // ٢) الوارِدُ بِسِرٍّ جَديدٍ وبِرَمزِ البائِعِ نَفسِه: يُحَدَّثُ تَسجيلُه القائِم، وتَسجيلٌ يَرُدُّه حِسابٌ آخَرُ يُنشَأُ مِن جَديد.
         var secret = OtoWebhookSignature.NewSecret();
-        var registered = await _oto.RegisterWebhookAsync(token, inboundUrl, secret, kept?.WebhookId, ct);
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كُلُّ تَسجيلٍ نِداءٌ مَعدودٌ بِمُعَرِّفٍ جَديد — والتَحديثُ المَردودُ ثُمَّ الإنشاءُ نِداءان.
+        var registered = await _oto.RegisterWebhookAsync(Deals.ShippingCalls.Webhook(tenantSlug), token, inboundUrl, secret, kept?.WebhookId, ct);
         if (!registered.Ok && kept?.WebhookId is not null && registered.Failure!.Code == OtoFailures.Refused)
-            registered = await _oto.RegisterWebhookAsync(token, inboundUrl, secret, null, ct);
+            registered = await _oto.RegisterWebhookAsync(Deals.ShippingCalls.Webhook(tenantSlug), token, inboundUrl, secret, null, ct);
 
         // ٣) السِرُّ يُستَبدَلُ حينَ تَقبَلُه OTO وَحدَه؛ وإلّا يُكتَبُ رَمزُ فَشَلِها ويَبقى القَديم.
         if (registered.Value is { } webhookId)

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using ACommerce.Platform.Shared.Metering;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
 
@@ -79,6 +80,50 @@ public interface IAgentBackend
     string Endpoint { get; }
 
     Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct);
+
+    // ─── النِداءُ المَعدود (‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1–§6.2) ─────────────────────────────────────────
+    // **`ProviderCall` أَوَّلَ الوُسَطاء**: المُنادي يَحمِلُ المَتجَرَ (`ModelCalls.Platform`)، والخَلفِيَّةُ تَسِمُه بِاسمِها وتُرسِلُه بِمُستَدعيها المَعدود — فَكُلُّ
+    // مُنادٍ في `libs/` و`apps/` يُنادي هذا لا أَخاه أَعلاه (يَحرُسُه `MeterTestSeamTests`، G6c). **والأَخُ بِلا `ProviderCall` يَبقى لِسَبَبٍ مَقيس** (القاعِدَة ٣):
+    // خَلفِيّاتُ الاختِبارِ المُزَيَّفَةُ تُنَفِّذُه — ومِنها مِلَفُّ تَوصيفٍ مِن مَوجَةٍ سابِقَة (`SessionCircuitTests.ProbeAgentBackends`) — فَلِهذا تَنفيذٌ افتِراضِيٌّ يُمَرِّرُ
+    // إلَيه، والخَلفِيّاتُ الثَلاثُ الَّتي تُغادِرُ العَمَلِيَّةَ تُنَفِّذُه هِيَ وتَعُدّ (نَسَقُ `IOtpChannel`، W13-6·١١).
+    /// <summary>نِداءُ النَموذَجِ المَعدود — يُقبَلُ حينَ يُقرَأُ استِهلاكُه مِن الجَواب (التَصميم §6.2: «model → usage measured»).</summary>
+    Task<AgentBackendResponse> CallAsync(ProviderCall call, AgentRequest req, CancellationToken ct) => CallAsync(req, ct);
+}
+
+/// <summary>
+/// <para><b>نِداءاتُ النَموذَجِ المَعدودَة</b> (‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨): وَحدَتُها <c>model.call</c> ومُعَرِّفُها جَديدٌ لِكُلِّ نِداء (كُلُّ نِداءٍ
+/// تَوكِناتُه). <b>والمَتجَرُ المَنَصَّة</b>: المُنادونَ اليَومَ وَكيلُ التَصميمِ في الاستوديو (<c>AgentService</c>) وتَحليلُ الحاضِنَةِ لِمُشرِفِ المَنَصَّة
+/// (<c>FeasibilityAnalysisService</c>) — لا مَتجَرَ يُنادي نَموذَجاً.</para>
+/// </summary>
+public static class ModelCalls
+{
+    /// <summary>نِداءٌ عَلى مُستَوى المَنَصَّة — المُزَوِّدُ تَسِمُه الخَلفِيَّة.</summary>
+    public static ProviderCall Platform() => ProviderCall.ForChannel(OutboundUnits.ModelCall, MeterSentinels.Platform, ProviderCall.FreshRequestId());
+
+    /// <summary>نِداءُ الأَخِ بِلا <c>ProviderCall</c> — مَتجَرُه غَيرُ مَعروف (<c>_unresolved</c>) فَيُعَدُّ ويُرى ولا يَضيع (نَسَقُ <c>TwilioSmsChannel</c>).</summary>
+    internal static ProviderCall Unresolved() => ProviderCall.ForChannel(OutboundUnits.ModelCall, MeterSentinels.Unresolved, ProviderCall.FreshRequestId());
+
+    /// <summary>
+    /// <para><b>القَبولُ مِن الاستِهلاكِ لا مِن الحالَة</b> (التَصميم §6.2): جَوابٌ يُقرَأُ مِنه استِهلاكٌ مَقبولٌ — ولَو جاءَ مَعَ خَطَأ، فَالتَوكِناتُ أُنفِقَت — وما سِواه
+    /// مِن ‏4xx مَرفوض، وما بَقِيَ مَجهول (‏2xx بِلا استِهلاكٍ مَقروءٍ لا يُثبِتُ إنفاقاً، و5xx لا يَقولُ شَيئاً). و<c>ModelCallRecord</c> لا يَتَغَيَّر: هذا حُكمُ الدَفتَرِ وَحدَه.</para>
+    /// </summary>
+    public static ProviderAcceptance Accepted(ModelAnswer answer, Func<JsonElement, AgentUsage?> usage)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(answer.Json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && usage(doc.RootElement) is not null)
+                return new ProviderAcceptance(ProviderOutcome.Accepted);
+        }
+        catch (JsonException) { }
+        return answer.Status is >= 400 and <= 499 ? new ProviderAcceptance(ProviderOutcome.Refused) : new ProviderAcceptance(ProviderOutcome.Unknown);
+    }
+}
+
+/// <summary>جَوابُ النَموذَجِ مَقروءاً قَبلَ أَن يُطوى: حالَتُه وجِسمُه — يَقرَؤُه القَبولُ (<see cref="ModelCalls.Accepted"/>) ثُمَّ الخَلفِيَّةُ كَما كانَت تَقرَأُ الجَواب.</summary>
+public sealed record ModelAnswer(int Status, string Json)
+{
+    public bool IsSuccessStatusCode => Status is >= 200 and <= 299;
 }
 
 
@@ -195,13 +240,15 @@ public static class AgentCallBound
 // الخَلفيّات خيارات-صِرفَة: تَأخُذ <see cref="AgentProfile"/> مَحلولاً ولا
 // تَقرَأ إعدادات ولا بيئَة بِنَفسِها. كُلّ الحَلّ في AgentProfileResolver،
 // والاختِيار المُسَمّى في AgentBackendProvider.
+// ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **والعَميلُ يُعطى ولا يُبنى** — `ProviderHttp<IAgentBackend>` مِن الحاوِيَةِ
+// (`AddProviderHttp<IAgentBackend>` في القالِب، بِلا مُهلَةِ عَميل: المُهلَةُ مِن الطَلَب)، والطَلَبُ بِعُنوانٍ مُطلَقٍ مِن مِلَفِّ الوَكيل.
 public static class AgentBackendFactory
 {
-    public static IAgentBackend Create(AgentProfile profile) => profile.Provider switch
+    public static IAgentBackend Create(ProviderHttp<IAgentBackend> http, AgentProfile profile) => profile.Provider switch
     {
-        "gemini" => new GeminiBackend(profile),
-        "openai" => new OpenAIBackend(profile),
-        _        => new AnthropicBackend(profile)
+        "gemini" => new GeminiBackend(http, profile),
+        "openai" => new OpenAIBackend(http, profile),
+        _        => new AnthropicBackend(http, profile)
     };
 }
 
@@ -209,25 +256,30 @@ public static class AgentBackendFactory
 public sealed class AnthropicBackend : IAgentBackend
 {
     private readonly string _apiKey;
-    private static readonly HttpClient Http = new()
-    {
-        BaseAddress = new Uri("https://api.anthropic.com/"),
-        Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
-    };
+    // ‏(‏2026-11-12، W13-6·١٥): العُنوانُ الَّذي كانَ `BaseAddress` لِعَميلٍ ساكِن — والعَميلُ صارَ `ProviderHttp` يُعطى، والمُهلَةُ مِن الطَلَب (AgentCallBound).
+    private static readonly Uri BaseUri = new("https://api.anthropic.com/");
+    private readonly ProviderHttp<IAgentBackend> _http;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AnthropicBackend(AgentProfile profile) => _apiKey = profile.ApiKey;
+    public AnthropicBackend(ProviderHttp<IAgentBackend> http, AgentProfile profile)
+    {
+        _http = http;
+        _apiKey = profile.ApiKey;
+    }
 
     public string ProviderName => "anthropic";
     public string DefaultModel => "claude-sonnet-4-6";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
-    public string Endpoint => Http.BaseAddress!.ToString();
+    public string Endpoint => BaseUri.ToString();
 
-    public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
+    public Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct) => CallAsync(ModelCalls.Unresolved(), req, ct);
+
+    public async Task<AgentBackendResponse> CallAsync(ProviderCall call, AgentRequest req, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(call);
         // ── Prompt caching ──
         // نَضَع cache_control عَلى آخِر أَداة → يُخَزَّن قِسم tools كامِلاً.
         // وَنَضَع cache_control عَلى system block → يُخَزَّن system+tools.
@@ -266,7 +318,7 @@ public sealed class AnthropicBackend : IAgentBackend
             messages
         };
 
-        using var http = new HttpRequestMessage(HttpMethod.Post, "v1/messages")
+        using var http = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseUri, "v1/messages"))
         {
             Content = JsonContent.Create(body, options: JsonOpts)
         };
@@ -276,11 +328,13 @@ public sealed class AnthropicBackend : IAgentBackend
         using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await Http.SendAsync(http, bound.Token);
-            var json = await resp.Content.ReadAsStringAsync(bound.Token);
+            var resp = await _http.SendAsync(call.By(ProviderNames.Anthropic), http,
+                async (r, _) => new ModelAnswer((int)r.StatusCode, await r.Content.ReadAsStringAsync(bound.Token)),
+                a => ModelCalls.Accepted(a, ReadUsage), bound.Token);
+            var json = resp.Json;
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
+                    AgentErrorText.Http(ProviderName, Endpoint, resp.Status, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             string? text = null;
@@ -384,25 +438,30 @@ public sealed class AnthropicBackend : IAgentBackend
 public sealed class GeminiBackend : IAgentBackend
 {
     private readonly string _apiKey;
-    private static readonly HttpClient Http = new()
-    {
-        BaseAddress = new Uri("https://generativelanguage.googleapis.com/"),
-        Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
-    };
+    // ‏(‏2026-11-12، W13-6·١٥): العُنوانُ الَّذي كانَ `BaseAddress` لِعَميلٍ ساكِن — والعَميلُ صارَ `ProviderHttp` يُعطى، والمُهلَةُ مِن الطَلَب (AgentCallBound).
+    private static readonly Uri BaseUri = new("https://generativelanguage.googleapis.com/");
+    private readonly ProviderHttp<IAgentBackend> _http;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public GeminiBackend(AgentProfile profile) => _apiKey = profile.ApiKey;
+    public GeminiBackend(ProviderHttp<IAgentBackend> http, AgentProfile profile)
+    {
+        _http = http;
+        _apiKey = profile.ApiKey;
+    }
 
     public string ProviderName => "gemini";
     public string DefaultModel => "gemini-2.0-flash";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey);
-    public string Endpoint => Http.BaseAddress!.ToString();
+    public string Endpoint => BaseUri.ToString();
 
-    public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
+    public Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct) => CallAsync(ModelCalls.Unresolved(), req, ct);
+
+    public async Task<AgentBackendResponse> CallAsync(ProviderCall call, AgentRequest req, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(call);
         var contents = req.Messages.Select(ToGeminiContent).ToArray();
         var body = new
         {
@@ -428,14 +487,22 @@ public sealed class GeminiBackend : IAgentBackend
 
         var url = $"v1beta/models/{req.Model}:generateContent?key={Uri.EscapeDataString(_apiKey)}";
 
+        // ‏(W13-6·١٥): الطَلَبُ الَّذي كانَ يَبنيه `PostAsJsonAsync` بِحَرفِه — ‏`JsonContent.Create` بِالخِياراتِ نَفسِها، والعُنوانُ مُطلَقاً بِالضَمِّ الَّذي يُجريه العَميل.
+        using var http = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseUri, new Uri(url, UriKind.RelativeOrAbsolute)))
+        {
+            Content = JsonContent.Create(body, options: JsonOpts)
+        };
+
         using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await Http.PostAsJsonAsync(url, body, JsonOpts, bound.Token);
-            var json = await resp.Content.ReadAsStringAsync(bound.Token);
+            var resp = await _http.SendAsync(call.By(ProviderNames.Gemini), http,
+                async (r, _) => new ModelAnswer((int)r.StatusCode, await r.Content.ReadAsStringAsync(bound.Token)),
+                a => ModelCalls.Accepted(a, ReadUsage), bound.Token);
+            var json = resp.Json;
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
+                    AgentErrorText.Http(ProviderName, Endpoint, resp.Status, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             string? text = null;
@@ -562,26 +629,25 @@ public sealed class OpenAIBackend : IAgentBackend
 {
     private readonly string _apiKey;
     private readonly string _providerName;
-    private readonly HttpClient _http;
+    // ‏(‏2026-11-12، W13-6·١٥): العُنوانُ الَّذي كانَ `BaseAddress` لِعَميلٍ يُبنى لِكُلِّ مِلَفّ — والعَميلُ صارَ `ProviderHttp` يُعطى، والمُهلَةُ مِن الطَلَب (AgentCallBound).
+    private readonly Uri _base;
+    private readonly ProviderHttp<IAgentBackend> _http;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public OpenAIBackend(AgentProfile profile)
+    public OpenAIBackend(ProviderHttp<IAgentBackend> http, AgentProfile profile)
     {
+        _http = http;
         _apiKey = profile.ApiKey;
         var baseUrl = (profile.BaseUrl ?? "https://api.openai.com/").TrimEnd('/') + "/";
-        _http = new HttpClient
-        {
-            BaseAddress = new Uri(baseUrl),
-            Timeout = System.Threading.Timeout.InfiniteTimeSpan   // المُهلَةُ مِن الطَلَب: AgentCallBound
-        };
+        _base = new Uri(baseUrl);
         _providerName = (profile.ProviderLabel ?? InferProvider(baseUrl)).ToLowerInvariant();
     }
 
     /// <summary>العُنوان الفِعليّ — لِلتَحَقُّق ولِتَمييز الخَلفيّات في السِجِلّ.</summary>
-    public string BaseUrl => _http.BaseAddress!.ToString();
+    public string BaseUrl => _base.ToString();
 
     /// <inheritdoc/>
     public string Endpoint => BaseUrl;
@@ -599,8 +665,11 @@ public sealed class OpenAIBackend : IAgentBackend
     public string DefaultModel => "gpt-4o";
     public bool IsConfigured => !string.IsNullOrEmpty(_apiKey) || _providerName == "ollama";
 
-    public async Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct)
+    public Task<AgentBackendResponse> CallAsync(AgentRequest req, CancellationToken ct) => CallAsync(ModelCalls.Unresolved(), req, ct);
+
+    public async Task<AgentBackendResponse> CallAsync(ProviderCall call, AgentRequest req, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(call);
         // OpenAI يُخَزِّن prefixes تلقائيّاً (>1024 token) — لا config مَطلوب.
         var messages = new List<object>
         {
@@ -625,7 +694,7 @@ public sealed class OpenAIBackend : IAgentBackend
             max_completion_tokens = req.MaxTokens
         };
 
-        using var http = new HttpRequestMessage(HttpMethod.Post, "v1/chat/completions")
+        using var http = new HttpRequestMessage(HttpMethod.Post, new Uri(_base, "v1/chat/completions"))
         {
             Content = JsonContent.Create(body, options: JsonOpts)
         };
@@ -634,11 +703,13 @@ public sealed class OpenAIBackend : IAgentBackend
         using var bound = AgentCallBound.Start(req.Wait, ct);
         try
         {
-            using var resp = await _http.SendAsync(http, bound.Token);
-            var json = await resp.Content.ReadAsStringAsync(bound.Token);
+            var resp = await _http.SendAsync(call.By(ProviderNames.OpenAiCompatible), http,
+                async (r, _) => new ModelAnswer((int)r.StatusCode, await r.Content.ReadAsStringAsync(bound.Token)),
+                a => ModelCalls.Accepted(a, ReadUsage), bound.Token);
+            var json = resp.Json;
             if (!resp.IsSuccessStatusCode)
                 return new AgentBackendResponse(null, null,
-                    AgentErrorText.Http(ProviderName, Endpoint, (int)resp.StatusCode, Truncate(json, 500)));
+                    AgentErrorText.Http(ProviderName, Endpoint, resp.Status, Truncate(json, 500)));
 
             using var doc = JsonDocument.Parse(json);
             var choices = doc.RootElement.GetProperty("choices");

@@ -18,6 +18,19 @@ public sealed class ProviderHttp<TKit>(HttpClient http, ProviderCalls calls)
     public Task<HttpResponseMessage> SendAsync(ProviderCall call, HttpRequestMessage request, CancellationToken ct)
         => calls.InvokeAsync(call, t => http.SendAsync(request, t), Classify, ct);
 
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٥ — التَصميم §6.2: «model → usage measured, not ‹no error›») <b>طَلَبٌ مَعدودٌ قَبولُه مِن جَوابِه لا مِن حالَتِه</b>:
+    /// <paramref name="read"/> يَقرَأُ الجَوابَ قَبلَ أَن يُطوى، و<paramref name="accepted"/> يَحكُمُ عَلى ما قُرِئ. مُستَهلِكُه الأَوَّلُ خَلفِيّاتُ النَماذِجِ الثَلاث:
+    /// النِداءُ يُقبَلُ حينَ يُقرَأُ استِهلاكُه — ولَو جاءَ مَعَ خَطَأٍ — لا حينَ يُجيبُ ‏2xx. والاستِثناءُ مَجهولٌ ويُعادُ رَميُه كَما في <see cref="SendAsync(ProviderCall, HttpRequestMessage, CancellationToken)"/>.</para>
+    /// </summary>
+    public Task<T> SendAsync<T>(ProviderCall call, HttpRequestMessage request, Func<HttpResponseMessage, CancellationToken, Task<T>> read,
+                                Func<T, ProviderAcceptance> accepted, CancellationToken ct)
+        => calls.InvokeAsync(call, async t =>
+        {
+            using var response = await http.SendAsync(request, t).ConfigureAwait(false);
+            return await read(response, t).ConfigureAwait(false);
+        }, accepted, ct);
+
     /// <summary>‏(‏2026-11-12، W13-6·١٣) <b>طَلَبٌ مُساعِدٌ لا يُعَدّ</b> (رَمزُ OAuth، استِطلاعُ الحالَة) — بِالعَميلِ نَفسِه، والجَوابُ كَما هُوَ.</summary>
     public Task<HttpResponseMessage> SendHelperAsync(ProviderHelper helper, HttpRequestMessage request, CancellationToken ct)
         => calls.HelperAsync(helper, t => http.SendAsync(request, t), ct);

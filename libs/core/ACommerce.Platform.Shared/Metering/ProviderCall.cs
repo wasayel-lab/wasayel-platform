@@ -62,6 +62,12 @@ public sealed record ProviderCall(string Unit, string Provider, string App, stri
     /// (<c>PayPalCatalogPolicy.PlanRequestId</c>). فَالطَلَبُ المُعادُ بِالمُسَوَّدَةِ نَفسِها يَحمِلُ المُعَرِّفَ نَفسَه، كَما يَراه PayPal.</para>
     /// </summary>
     public ProviderCall Keyed(string requestId) => this with { RequestId = requestId };
+
+    // ─── (‏2026-11-12، W13-6·١٥ — التَصميم §6.2) طَلَبُ الشَحنِ مَصدَراً ───────────────────────────────────────────────────────────────────
+    // **مَصدَرُ إنشاءِ طَلَبِ الشَحنِ وسُؤالِ حالِه الطَلَبُ نَفسُه** (مُعَرِّفُنا)، ومُعَرِّفُ الطَلَبِ يُمَيِّزُ العَمَلِيَّة. مُستَهلِكُه الأَوَّلُ في وَقتِ التَشغيل
+    // `ShippingCalls` (القالِب).
+    /// <summary>‏(W13-6·١٥) نَوعُ مَصدَرِ إنشاءِ طَلَبِ الشَحنِ وسُؤالِ حالِه: مُعَرِّفُ طَلَبِنا عِندَ الناقِل.</summary>
+    public const string DeliveryOrderSource = "delivery_order";
 }
 
 /// <summary>

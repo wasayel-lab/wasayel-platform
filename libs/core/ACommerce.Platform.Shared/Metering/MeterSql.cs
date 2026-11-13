@@ -68,11 +68,14 @@ public static class MeterSql
 
     /// <summary>المَقبول — في مُعامَلَةِ سَطرِه: مِن المُعَلَّقِ أَو المَجهول (فَالمَجهولُ ثُمَّ المَقبولُ بِالمُعَرِّفِ نَفسِه سَطرٌ واحِد)، ونِيَّةٌ لَم تُكتَب
     /// (تَعَذَّرَت قَبلَ النِداء) تُكتَبُ مَقبولَةً — فَلا سَطرَ بِلا نِيَّة.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ومِن المَرفوضِ أَيضاً — المَقبولُ وَحدَه نِهائِيّ</b>: عَمَلِيَّةٌ واحِدَةٌ قَد تُرفَضُ ثُمَّ تُقبَلُ
+    /// بِالمُعَرِّفِ نَفسِه — <c>OtoClient</c> يُعيدُ الطَلَبَ مَرَّةً بَعدَ ‏401 بِرَمزٍ جَديد، ومِفتاحُ PayPal يُعادُ بَعدَ ‏429 — فَكانَ السَطرُ يُكتَبُ والنِيَّةُ تَبقى «مَرفوضَة»
+    /// بِجِوارِه. والمَرفوضُ والمَجهولُ ما زالا لا يُكتَبانِ فَوقَ مَقبول (<see cref="IntentDecide"/>).</remarks>
     public const string IntentAccept =
         "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome, decided_at) "
         + "values (@id, @unit, @provider, @app, @request, 'accepted', transaction_timestamp()) "
         + "on conflict (id) do update set outcome = 'accepted', decided_at = transaction_timestamp() "
-        + "where meter.outbound_intent.outcome in ('pending', 'unknown')";
+        + "where meter.outbound_intent.outcome in ('pending', 'unknown', 'refused')";
 
     /// <summary>المَرفوضُ والمَجهول: مِن المُعَلَّقِ وَحدَه — فَلا يُكتَبُ فَوقَ مَقبولٍ ولا فَوقَ نَتيجَةٍ سَبَقَت؛ ونِيَّةٌ لَم تُكتَب تُكتَبُ بِنَتيجَتِها.</summary>
     public const string IntentDecide =

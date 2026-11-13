@@ -628,4 +628,66 @@ public class LiveProviderCallsProofTests(ITestOutputHelper output)
                              (await q.LoadAsync<ACommerce.Templates.Customer.Marketplace.Services.Deals.Deal>(id))!.Status);
         }
     }
+
+    /// <summary>
+    /// <para>‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.2) <b>OTO والنَموذَجُ عَلى كاتِبِ المُضيفِ المُرَكَّب</b>: إنشاءُ طَلَبِ شَحنٍ يَرُدُّه OTO ‏401 بِرَمزٍ قَديمٍ ثُمَّ
+    /// يَقبَلُه بَعدَ رَمزٍ جَديد — عَمَلِيَّةٌ واحِدَة: سَطرٌ واحِدٌ و<b>النِيَّةُ مَقبولَة</b> (المَرفوضُ لا يَبقى بِجِوارِ سَطرِه — <c>MeterSql.IntentAccept</c>)، بِمَتجَرِه
+    /// ومالِكِه ومِيزَتِه <c>delivery</c> ومَصدَرِه الطَلَبِ نَفسِه؛ والرَمزانِ بِلا نِيَّة. ونِداءُ نَموذَجٍ بِـ‏400 يَحمِلُ استِهلاكاً ⇐ سَطرٌ لِلمَنَصَّةِ بِمِيزَتِه
+    /// <c>studio.build</c>، و‏401 بِلا استِهلاكٍ ⇐ نِيَّةٌ مَرفوضَةٌ بِلا سَطر.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_OTO_create_refused_then_accepted_is_one_entry_with_an_accepted_intent_and_a_model_call_counts_its_usage()
+    {
+        if (!Enabled) return;
+        await using var host = LiveTemplateDoorHost.Build();
+        var slug = NewSlug();
+        var owner = Guid.NewGuid();
+        await using (var s = host.Store.LightweightSession()) { s.Insert(new Tenant { Id = slug, Name = "مَتجَرُ الشَحن", OwnerUserId = owner }); await s.SaveChangesAsync(); }
+        var writer = new UsageLedgerWriter(host.Store, host.Services.GetRequiredService<IMemoryCache>(), new CapturedLog());
+        var calls = new ProviderCalls(writer);
+        var order = Guid.NewGuid().ToString("N");
+        var replies = new Queue<HttpStatusCode>([HttpStatusCode.OK, HttpStatusCode.Unauthorized, HttpStatusCode.OK, HttpStatusCode.OK]);
+        var oto = new Answer((req, _) =>
+        {
+            var status = replies.Dequeue();
+            var body = req.RequestUri!.AbsolutePath == ACommerce.Kit.Delivery.OtoClient.RefreshTokenPath
+                ? "{\"access_token\":\"A1\",\"success\":true,\"expires_in\":\"3600\"}" : "{\"success\":true,\"otoId\":540789}";
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) });
+        });
+        var client = new ACommerce.Kit.Delivery.OtoClient(new ProviderHttp<ACommerce.Kit.Delivery.OtoClient>(new HttpClient(oto), calls),
+            Microsoft.Extensions.Options.Options.Create(new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging }),
+            new ACommerce.Kit.Delivery.OtoTokenCache(), Microsoft.Extensions.Logging.Abstractions.NullLogger<ACommerce.Kit.Delivery.OtoClient>.Instance);
+        var create = ACommerce.Templates.Customer.Marketplace.Services.Deals.ShippingCalls.Create(slug, order);
+
+        var created = await client.CreateOrderAsync(create, "RT-1", new ACommerce.Kit.Delivery.OtoOrderDraft(order, ACommerce.Kit.Delivery.OtoClient.CashOnDelivery, 0m, 0m, "",
+            new ACommerce.Kit.Delivery.OtoCustomer("w13", "0500000000", "w13", "Riyadh", "SA"), "w13"));
+
+        var id = $"{OutboundUnits.DeliveryOrderCreate}:{ProviderNames.Oto}:{order}";
+        var rows = await EntriesAsync(id);
+        output.WriteLine($"[G6·OTO] ‏401 ثُمَّ ‏200 ⇒ {created.Ok} · النِيَّة {await OutcomeAsync(id)} · {string.Join(" | ", rows)} · نِيّاتُ المَتجَر {(await IntentsOfAppAsync(slug)).Count}");
+        Assert.True(created.Ok);
+        Assert.Equal("accepted", await OutcomeAsync(id));
+        Assert.Equal(new EntryRow(OutboundUnits.DeliveryOrderCreate, slug, owner.ToString("D"), MeterSentinels.Unresolved, "delivery", ProviderNames.Oto,
+                                  ProviderCall.DeliveryOrderSource, order, 1, true), Assert.Single(rows));
+        Assert.Equal(new[] { (id, "accepted") }, await IntentsOfAppAsync(slug));
+
+        // النَموذَج: ‏400 يَحمِلُ استِهلاكاً ⇒ مَقبول، و‏401 بِلا استِهلاكٍ ⇒ مَرفوضٌ بِلا سَطر.
+        async Task<string> ModelAsync(HttpStatusCode status, string body)
+        {
+            var backend = new ACommerce.Templates.Customer.Marketplace.Services.AnthropicBackend(
+                new ProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(new HttpClient(new Answer((_, _) =>
+                    Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) }))), calls),
+                new ACommerce.Templates.Customer.Marketplace.Services.AgentProfile("Studio", "anthropic", null, "k", null, null));
+            var call = ACommerce.Templates.Customer.Marketplace.Services.ModelCalls.Platform();
+            await backend.CallAsync(call, new ACommerce.Templates.Customer.Marketplace.Services.AgentRequest("w13", [], [], "w13-model", MaxTokens: 16), CancellationToken.None);
+            return call.By(ProviderNames.Anthropic).Id;   // الخَلفِيَّةُ تَسِمُ النِداءَ بِاسمِها
+        }
+        var spent = await ModelAsync(HttpStatusCode.BadRequest, "{\"type\":\"error\",\"usage\":{\"input_tokens\":7,\"output_tokens\":0}}");
+        var refused = await ModelAsync(HttpStatusCode.Unauthorized, "{\"type\":\"error\"}");
+        var model = await EntriesAsync(spent);
+        output.WriteLine($"[G6·النَموذَج] ‏400 بِاستِهلاك ⇒ {await OutcomeAsync(spent)} · {string.Join(" | ", model)} · ‏401 بِلا استِهلاك ⇒ {await OutcomeAsync(refused)}");
+        Assert.Equal(("accepted", "refused", 0), (await OutcomeAsync(spent), await OutcomeAsync(refused), (await EntriesAsync(refused)).Count));
+        Assert.Equal((MeterSentinels.Platform, MeterSentinels.Platform, "studio.build", ProviderNames.Anthropic, 1L, true),
+                     (Assert.Single(model).App, model[0].Entrepreneur, model[0].Feature, model[0].Provider, model[0].Quantity, model[0].SameTransactionAsIntent));
+    }
 }

@@ -81,7 +81,7 @@ public class PrivacyRecipientsTests(ITestOutputHelper output)
     [InlineData("openai", "http://localhost:11434/v1", "Ollama")]
     public void Every_backend_provider_name_has_a_display_name(string provider, string? baseUrl, string expected)
     {
-        var backend = AgentBackendFactory.Create(new AgentProfile("Analysis", provider, baseUrl, "k", null, null));
+        var backend = AgentBackendFactory.Create(new HttpClient(), new AgentProfile("Analysis", provider, baseUrl, "k", null, null));
         Assert.Equal(new[] { expected }, PrivacyRecipients.LanguageModels([backend.ProviderName]));
     }
 

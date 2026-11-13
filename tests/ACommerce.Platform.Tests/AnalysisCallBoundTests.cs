@@ -61,20 +61,28 @@ public class AnalysisCallBoundTests(ITestOutputHelper output)
 
     /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-24، S15 K)</b>: العَميلُ في كُلِّ خَلفِيَّةٍ بِلا مُهلَة، وكُلُّ نِداءٍ يَبدَأُ مُهلَتَه
     /// مِن <c>AgentRequest.Wait</c> ويُمَرِّرُها إلى الإرسالِ وقِراءَةِ الجِسمِ مَعاً، ويَقولُ انقِضاءَها بِنَصِّ المُهلَةِ قَبلَ الاستِثناءِ العامّ.</summary>
+    /// <remarks>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والعَميلُ صارَ واحِداً مِن المَصنَعِ يُعطى لِلخَلفِيّات</b>
+    /// (<c>ProviderHttp&lt;IAgentBackend&gt;</c>، المُستَدعي المَعدود) — فَلا عَميلَ يُبنى في <c>AgentBackends.cs</c> ولا «Timeout =» فيه: «بِلا مُهلَةِ عَميل» يُقرَأُ
+    /// في تَسجيلِه الواحِدِ في القالِب (<c>AddProviderHttp&lt;…IAgentBackend&gt;</c>)، والإرسالُ <c>_http.SendAsync(…, bound.Token)</c>. والوَعدُ نَفسُه: المُهلَةُ
+    /// مِن الطَلَبِ تَبدَأُ في كُلِّ نِداءٍ وتَحمِلُها قِراءَةُ الجِسم، وفَرعُها يَسبِقُ الاستِثناءَ العامّ.</remarks>
     [Fact]
     public void Every_backend_client_leaves_the_bound_to_the_request_and_each_call_starts_it()
     {
         var code = Backends();
         var all = Regex.Matches(code, @"Timeout\s*=").Count;
-        output.WriteLine($"«Timeout =» في AgentBackends.cs: {all}");
-        Assert.Equal(3, all);
+        var registration = Endpoints();
+        var at = registration.IndexOf("AddProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(", StringComparison.Ordinal);
+        output.WriteLine($"«Timeout =» في AgentBackends.cs: {all} · تَسجيلُ العَميلِ في القالِب عِندَ {at}");
+        Assert.Equal(0, all);
+        Assert.True(at > 0, "عَميلُ الخَلفِيّاتِ لا يُسَجَّلُ في القالِب.");
+        Assert.Contains("client.Timeout = System.Threading.Timeout.InfiniteTimeSpan", registration[at..registration.IndexOf(';', at)], StringComparison.Ordinal);
         foreach (var name in BackendClasses)
         {
             var body = ClassBody(code, name);
-            Assert.Contains("Timeout = System.Threading.Timeout.InfiniteTimeSpan", body);
+            Assert.Contains("private readonly ProviderHttp<IAgentBackend> _http;", body);
             var start = body.IndexOf("using var bound = AgentCallBound.Start(req.Wait, ct);", StringComparison.Ordinal);
             Assert.True(start >= 0, $"{name}: النِداءُ لا يَبدَأُ مُهلَتَه.");
-            Assert.Matches(@"await (Http|_http)\.(SendAsync\(http|PostAsJsonAsync\(url, body, JsonOpts), bound\.Token\)", body);
+            Assert.Matches(@"await _http\.SendAsync\(call\.By\(ProviderNames\.\w+\), http,[^;]*bound\.Token\);", body);
             Assert.Contains("ReadAsStringAsync(bound.Token)", body);
             Assert.DoesNotContain("ReadAsStringAsync(ct)", body);
             var timeout = body.IndexOf("catch (Exception ex) when (AgentCallBound.Expired(ex, bound, ct))", StringComparison.Ordinal);

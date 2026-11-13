@@ -76,6 +76,10 @@ internal sealed class OtoCapturingLogger : ILogger<OtoClient>
 
 public class OtoClientTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) نِداءٌ مَعدودٌ لِلعُدَّةِ بِلا مُضيف — العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c> فَلا يُسَجِّل (التَحويلُ الضِمنِيّ)، والوَحدَةُ لا تُقرَأ.</summary>
+    private static readonly ACommerce.Platform.Shared.Metering.ProviderCall Call =
+        ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.DeliveryOrderStatus, "oto-tests", "r1");
+
     private const string Refresh = "RT-permanent-0001";
 
     private static OtoOptions Opts(string environment = OtoEnvironment.Staging) => new()
@@ -127,7 +131,7 @@ public class OtoClientTests
         var client = Client(handler, Opts(OtoEnvironment.Production));
         Assert.Null(client.BaseUrl);
 
-        var res = await client.CreateOrderAsync(Refresh, CashDraft());
+        var res = await client.CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.Equal(OtoFailures.NotConfigured, res.Failure!.Code);
         Assert.Empty(handler.Requests);
     }
@@ -208,8 +212,8 @@ public class OtoClientTests
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}")
             .Then(HttpStatusCode.OK, "{\"success\":true,\"status\":\"new\",\"orderId\":\"o\"}");
 
-        await Client(handler, cache: cache).CreateOrderAsync(Refresh, CashDraft());
-        await Client(handler, cache: cache).GetOrderStatusAsync(Refresh, "o");
+        await Client(handler, cache: cache).CreateOrderAsync(Call, Refresh, CashDraft());
+        await Client(handler, cache: cache).GetOrderStatusAsync(Call, Refresh, "o");
 
         Assert.Equal(1, handler.TokenCalls);
         Assert.Equal(1, cache.FetchCount);
@@ -253,8 +257,8 @@ public class OtoClientTests
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":1}")
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":2}");
 
-        await Client(handler, cache: cache).CreateOrderAsync(Refresh, CashDraft());
-        await Client(handler, cache: cache).CreateOrderAsync(Refresh, CashDraft());
+        await Client(handler, cache: cache).CreateOrderAsync(Call, Refresh, CashDraft());
+        await Client(handler, cache: cache).CreateOrderAsync(Call, Refresh, CashDraft());
 
         Assert.Equal(1, handler.TokenCalls);
         Assert.Equal("ACCESS-1", cache.Cached(key, DateTimeOffset.UtcNow.AddSeconds(3000)));
@@ -272,7 +276,7 @@ public class OtoClientTests
             .ThenToken("NEW")
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}");
 
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft());
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft());
 
         Assert.True(res.Ok);
         Assert.Equal(2, handler.TokenCalls);
@@ -293,7 +297,7 @@ public class OtoClientTests
             .ThenToken()
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":540789}");
 
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft("deal-1"));
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft("deal-1"));
 
         Assert.True(res.Ok);
         Assert.Equal(new OtoCreatedOrder("deal-1", "540789"), res.Value);
@@ -324,7 +328,7 @@ public class OtoClientTests
             .ThenToken()
             .Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":\"30514281\"}");
 
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft("deal-2"));
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft("deal-2"));
         Assert.Equal("30514281", res.Value!.OtoId);
     }
 
@@ -340,7 +344,7 @@ public class OtoClientTests
                 "\"printAWBURL\":\"https://app.tryoto.com/print/awb?enc=y\",\"shipmentId\":\"DCA87E10\"," +
                 "\"success\":true,\"otoId\":\"30514281\",\"status\":\"returnShipmentProcessing\"}");
 
-        var res = await Client(handler).GetOrderStatusAsync(Refresh, "OID-23331-9749");
+        var res = await Client(handler).GetOrderStatusAsync(Call, Refresh, "OID-23331-9749");
 
         Assert.True(res.Ok);
         Assert.Equal(new OtoOrderState("OID-23331-9749", "30514281", "returnShipmentProcessing",
@@ -454,9 +458,9 @@ public class OtoClientTests
     {
         var handler = new OtoScriptedHandler();
         Assert.Equal(OtoFailures.NotConfigured,
-            (await Client(handler, Opts("")).CreateOrderAsync(Refresh, CashDraft())).Failure!.Code);
+            (await Client(handler, Opts("")).CreateOrderAsync(Call, Refresh, CashDraft())).Failure!.Code);
         Assert.Equal(OtoFailures.NotConfigured,
-            (await Client(handler).GetOrderStatusAsync("  ", "o")).Failure!.Code);
+            (await Client(handler).GetOrderStatusAsync(Call, "  ", "o")).Failure!.Code);
         Assert.Empty(handler.Requests);
     }
 
@@ -464,7 +468,7 @@ public class OtoClientTests
     public async Task Configured_staging_with_a_token_is_not_refused_as_not_configured()
     {
         var handler = new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":1}");
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft());
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.True(res.Ok);
         Assert.Equal(2, handler.Requests.Count);
     }
@@ -476,7 +480,7 @@ public class OtoClientTests
     public async Task A_refused_refresh_token_is_token_refused_and_nothing_else_is_called(HttpStatusCode status, string body)
     {
         var handler = new OtoScriptedHandler().Then(status, body);
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft());
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft());
 
         Assert.Equal(OtoFailures.TokenRefused, res.Failure!.Code);
         Assert.Single(handler.Requests);
@@ -499,7 +503,7 @@ public class OtoClientTests
     public async Task A_5xx_from_the_token_endpoint_is_unreachable_like_every_other_call()
     {
         var handler = new OtoScriptedHandler().Then(HttpStatusCode.ServiceUnavailable, "<html/>");
-        var res = await Client(handler).CreateOrderAsync(Refresh, CashDraft());
+        var res = await Client(handler).CreateOrderAsync(Call, Refresh, CashDraft());
 
         Assert.Equal(OtoFailures.Unreachable, res.Failure!.Code);
         Assert.Equal(503, res.Failure.HttpStatus);
@@ -526,11 +530,11 @@ public class OtoClientTests
     [Fact]
     public async Task A_network_failure_or_a_5xx_is_unreachable_and_never_throws()
     {
-        var thrown = await Client(new OtoScriptedHandler().ThenThrow()).CreateOrderAsync(Refresh, CashDraft());
+        var thrown = await Client(new OtoScriptedHandler().ThenThrow()).CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.Equal(OtoFailures.Unreachable, thrown.Failure!.Code);
 
         var server = await Client(new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.ServiceUnavailable, "<html/>"))
-            .GetOrderStatusAsync(Refresh, "o");
+            .GetOrderStatusAsync(Call, Refresh, "o");
         Assert.Equal(OtoFailures.Unreachable, server.Failure!.Code);
         Assert.Equal(503, server.Failure.HttpStatus);
     }
@@ -539,7 +543,7 @@ public class OtoClientTests
     public async Task A_reachable_answer_is_not_unreachable()
     {
         var res = await Client(new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.OK, "{\"status\":\"new\"}"))
-            .GetOrderStatusAsync(Refresh, "o");
+            .GetOrderStatusAsync(Call, Refresh, "o");
         Assert.True(res.Ok);
     }
 
@@ -555,12 +559,12 @@ public class OtoClientTests
             .Then(HttpStatusCode.OK, "{\"success\":false,\"otoErrorCode\":\"OTO1002\"}");
         var client = Client(handler);
 
-        var credit = await client.CreateOrderAsync(Refresh, CashDraft());
+        var credit = await client.CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.Equal(OtoFailures.Refused, credit.Failure!.Code);
         Assert.Equal("OTO1006", credit.Failure.OtoErrorCode);
         Assert.Equal(400, credit.Failure.HttpStatus);
 
-        var falseOk = await client.GetOrderStatusAsync(Refresh, "o");
+        var falseOk = await client.GetOrderStatusAsync(Call, Refresh, "o");
         Assert.Equal(OtoFailures.Refused, falseOk.Failure!.Code);
         Assert.Equal("OTO1002", falseOk.Failure.OtoErrorCode);
     }
@@ -569,7 +573,7 @@ public class OtoClientTests
     public async Task A_successful_answer_is_not_refused()
     {
         var res = await Client(new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.OK, "{\"success\":true,\"otoId\":9}"))
-            .CreateOrderAsync(Refresh, CashDraft());
+            .CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.True(res.Ok);
         Assert.Null(res.Failure);
     }
@@ -581,7 +585,7 @@ public class OtoClientTests
     public async Task A_success_that_cannot_be_read_is_unreadable(string body)
     {
         var res = await Client(new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.OK, body))
-            .CreateOrderAsync(Refresh, CashDraft());
+            .CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.Equal(OtoFailures.Unreadable, res.Failure!.Code);
     }
 
@@ -589,7 +593,7 @@ public class OtoClientTests
     public async Task A_readable_success_is_not_unreadable()
     {
         var res = await Client(new OtoScriptedHandler().ThenToken().Then(HttpStatusCode.OK, "{\"otoId\":\"7\"}"))
-            .CreateOrderAsync(Refresh, CashDraft());
+            .CreateOrderAsync(Call, Refresh, CashDraft());
         Assert.Equal("7", res.Value!.OtoId);
     }
 
@@ -609,9 +613,9 @@ public class OtoClientTests
             .Then(HttpStatusCode.InternalServerError, "{}");
         var client = Client(handler, log: log);
 
-        await client.CreateOrderAsync(Refresh, CashDraft());
-        await client.CreateOrderAsync(Refresh, CashDraft());
-        await client.GetOrderStatusAsync(Refresh, "o");
+        await client.CreateOrderAsync(Call, Refresh, CashDraft());
+        await client.CreateOrderAsync(Call, Refresh, CashDraft());
+        await client.GetOrderStatusAsync(Call, Refresh, "o");
 
         Assert.True(handler.Requests.Count >= 4, $"أَداة عَمياء: {handler.Requests.Count} طَلَباً.");
         Assert.True(log.Lines.Count >= 2, $"أَداة عَمياء: {log.Lines.Count} سَطرَ لوغ.");
@@ -655,7 +659,7 @@ public class OtoClientTests
             .ThenToken("ACCESS-VENDOR")
             .Then(HttpStatusCode.OK, "{\"success\": true, \"id\": \"59\", \"message\": \"webhook has been created\"}");
 
-        var res = await Client(handler).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret);
+        var res = await Client(handler).RegisterWebhookAsync(Call, Refresh, InboundUrl, IssuedSecret);
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal("59", res.Value);
@@ -682,7 +686,7 @@ public class OtoClientTests
             .ThenToken()
             .Then(HttpStatusCode.OK, "{\"success\": true, \"message\": \"webhook has been updated\"}");
 
-        var res = await Client(handler).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret, existingId: "59");
+        var res = await Client(handler).RegisterWebhookAsync(Call, Refresh, InboundUrl, IssuedSecret, existingId: "59");
 
         Assert.True(res.Ok, res.Failure?.Code);
         Assert.Equal("59", res.Value);
@@ -706,10 +710,10 @@ public class OtoClientTests
             .Then(HttpStatusCode.BadRequest, "{\"success\": false, \"otoErrorCode\": \"OTO1001\"}");
         var client = Client(handler, log: log);
 
-        Assert.Equal(OtoFailures.Unreadable, (await client.RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
-        Assert.Equal(OtoFailures.Refused, (await client.RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret, "59")).Failure!.Code);
+        Assert.Equal(OtoFailures.Unreadable, (await client.RegisterWebhookAsync(Call, Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
+        Assert.Equal(OtoFailures.Refused, (await client.RegisterWebhookAsync(Call, Refresh, InboundUrl, IssuedSecret, "59")).Failure!.Code);
         Assert.Equal(OtoFailures.NotConfigured,
-            (await Client(handler, Opts("")).RegisterWebhookAsync(Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
+            (await Client(handler, Opts("")).RegisterWebhookAsync(Call, Refresh, InboundUrl, IssuedSecret)).Failure!.Code);
 
         Assert.Equal(3, handler.Requests.Count);
         Assert.True(log.Lines.Count >= 1, $"أَداة عَمياء: {log.Lines.Count} سَطرَ لوغ.");

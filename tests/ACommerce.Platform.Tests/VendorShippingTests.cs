@@ -33,6 +33,10 @@ namespace ACommerce.Platform.Tests;
 
 public class VendorShippingTests(ITestOutputHelper output)
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) نِداءٌ مَعدودٌ لِلعُدَّةِ بِلا مُضيف — العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c> فَلا يُسَجِّل (التَحويلُ الضِمنِيّ)، والوَحدَةُ لا تُقرَأ.</summary>
+    private static readonly ACommerce.Platform.Shared.Metering.ProviderCall Call =
+        ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.DeliveryOrderStatus, "oto-tests", "r1");
+
     private const string Slug = DealShipTests.Slug;
     private static readonly Guid Seller = DealShipTests.Seller;
     private static readonly Guid Stranger = Guid.Parse("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
@@ -939,8 +943,8 @@ public class VendorShippingTests(ITestOutputHelper output)
             .Then(HttpStatusCode.OK, OtoRouteHandler.RegisterAnswer);
         var client = new OtoClient(new HttpClient(handler), Options.Create(Opts()), new OtoTokenCache(), NullLogger<OtoClient>.Instance);
 
-        var plain = await client.RegisterVendorAsync(Marketplace, (Form() with { CrNumber = "999" }).ToOto());
-        var vat = await client.RegisterVendorAsync(Marketplace, Form(vat: true).ToOto());
+        var plain = await client.RegisterVendorAsync(Call, Marketplace, (Form() with { CrNumber = "999" }).ToOto());
+        var vat = await client.RegisterVendorAsync(Call, Marketplace, Form(vat: true).ToOto());
 
         Assert.Equal(new OtoRegisteredVendor("_refreshToken_", "https://login.tryoto.com/XYZ"), plain.Value);
         Assert.True(vat.Ok);
@@ -980,10 +984,10 @@ public class VendorShippingTests(ITestOutputHelper output)
         var client = new OtoClient(new HttpClient(handler), Options.Create(Opts()), new OtoTokenCache(), log);
 
         for (var i = 0; i < 3; i++)
-            Assert.Equal(OtoFailures.Unreadable, (await client.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
-        Assert.Equal(OtoFailures.Refused, (await client.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
+            Assert.Equal(OtoFailures.Unreadable, (await client.RegisterVendorAsync(Call, Marketplace, Form().ToOto())).Failure!.Code);
+        Assert.Equal(OtoFailures.Refused, (await client.RegisterVendorAsync(Call, Marketplace, Form().ToOto())).Failure!.Code);
         var closed = new OtoClient(new HttpClient(handler), Options.Create(Opts(environment: "")), new OtoTokenCache(), log);
-        Assert.Equal(OtoFailures.NotConfigured, (await closed.RegisterVendorAsync(Marketplace, Form().ToOto())).Failure!.Code);
+        Assert.Equal(OtoFailures.NotConfigured, (await closed.RegisterVendorAsync(Call, Marketplace, Form().ToOto())).Failure!.Code);
 
         Assert.True(log.Lines.Count >= 4, $"أَداةٌ عَمياء: {log.Lines.Count} سَطرَ لوغ.");
         foreach (var line in log.Lines)

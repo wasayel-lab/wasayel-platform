@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Configuration;
 
 namespace ACommerce.Templates.Customer.Marketplace.Services;
@@ -120,11 +121,18 @@ public interface IAgentBackendProvider
 public sealed class AgentBackendProvider : IAgentBackendProvider
 {
     private readonly IConfiguration _cfg;
+    private readonly ProviderHttp<IAgentBackend> _http;
     private readonly ConcurrentDictionary<string, AgentProfile> _profiles =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<BackendKey, IAgentBackend> _backends = new();
 
-    public AgentBackendProvider(IConfiguration cfg) => _cfg = cfg;
+    /// <summary>‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1) <b>والعَميلُ يُعطى لِكُلِّ خَلفِيَّة</b>: <paramref name="http"/> مِن الحاوِيَة
+    /// (<c>AddProviderHttp&lt;IAgentBackend&gt;</c> في القالِب) — كانَت كُلُّ خَلفِيَّةٍ تَبني عَميلَها بِـ<c>new</c> فَلا يَمُرُّ نِداؤُها بِالمُستَدعي المَعدود.</summary>
+    public AgentBackendProvider(ProviderHttp<IAgentBackend> http, IConfiguration cfg)
+    {
+        _http = http;
+        _cfg = cfg;
+    }
 
     public AgentProfile ProfileFor(string agentName)
         => _profiles.GetOrAdd(agentName, n => AgentProfileResolver.Resolve(_cfg, n));
@@ -132,7 +140,7 @@ public sealed class AgentBackendProvider : IAgentBackendProvider
     public IAgentBackend For(string agentName)
     {
         var profile = ProfileFor(agentName);
-        return _backends.GetOrAdd(BackendKey.From(profile), _ => AgentBackendFactory.Create(profile));
+        return _backends.GetOrAdd(BackendKey.From(profile), _ => AgentBackendFactory.Create(_http, profile));
     }
 
     public string ModelFor(string agentName)

@@ -36,6 +36,22 @@ public static class ProviderNames
 
     /// <summary>‏(‏2026-11-12، W13-6·١٤) فَوتَرَةُ اشتِراكِ المَتجَرِ عَبرَ Paddle (<c>PaddlePaymentProvider</c>) — اسمُ العُدَّة، لا سلاجُ تَعريفِها.</summary>
     public const string Paddle = "paddle";
+
+    // ─── (‏2026-11-12، W13-6·١٥ — التَصميم §3.4 و§6.2) الشَحنُ وخَلفِيّاتُ النَماذِج ───────────────────────────────────────────────────────
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) ناقِلُ الطُرودِ عَبرَ OTO (<c>OtoClient</c>) — اسمُ العُدَّةِ لا سلاجُ تَعريفِها في الكاتالوج (يُمنَعُ في الكود،
+    /// <c>ProviderCatalogTests</c>).</summary>
+    public const string Oto = "oto";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) خَلفِيَّةُ النَموذَجِ عِندَ Anthropic (<c>AnthropicBackend</c>).</summary>
+    public const string Anthropic = "anthropic";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) خَلفِيَّةُ النَموذَجِ عِندَ Gemini (<c>GeminiBackend</c>).</summary>
+    public const string Gemini = "gemini";
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٥) <b>خَلفِيَّةُ Chat Completions المُتَوافِقَة</b> (<c>OpenAIBackend</c>) — اسمٌ واحِدٌ لِكُلِّ عُنوانٍ يَخدُمُه (OpenAI وGroq
+    /// وCerebras وOpenRouter وOllama…): التَسمِيَةُ الحُرَّةُ مِن الإعدادِ (<c>ProviderLabel</c>) لا تَدخُلُ عَموداً يُجمَعُ عَلَيه، وتَبقى في <c>ModelCallRecord.Provider</c>.</summary>
+    public const string OpenAiCompatible = "openai_compatible";
 }
 
 /// <summary>رُموزُ الوَحَداتِ الصادِرَةِ الَّتي يَبنيها مُنادٍ في وَقتِ التَشغيل — بِحَرفِ صُفوفِها في المُعجَم.</summary>
@@ -93,4 +109,21 @@ public static class OutboundUnits
 
     /// <summary>مُعامَلَةٌ تُنشَأُ عِندَ Paddle — <c>PaddlePaymentProvider.CreateTransactionAsync</c>.</summary>
     public const string BillingPaddleTransactionCreate = "billing.paddle.transaction.create";
+
+    // ─── (‏2026-11-12، W13-6·١٥ — التَصميم §3.4 و§6.2) الشَحنُ عَبرَ OTO ونِداءُ النَموذَج ─────────────────────────────────────────────────
+
+    /// <summary>طَلَبُ شَحنٍ يُنشَأُ عِندَ OTO — <c>OtoClient.CreateOrderAsync</c>؛ مُعَرِّفُ الطَلَبِ مُعَرِّفُ طَلَبِنا (<c>DealShipping.OrderIdOf</c>).</summary>
+    public const string DeliveryOrderCreate = "delivery.order.create";
+
+    /// <summary>حالُ طَلَبِ الشَحنِ يُسأَل — <c>OtoClient.GetOrderStatusAsync</c>؛ مُعَرِّفُ الطَلَبِ <c>{orderId}:{check|recover|notice}:{trigger}</c>.</summary>
+    public const string DeliveryOrderStatus = "delivery.order.status";
+
+    /// <summary>عُنوانُ الوارِدِ يُسَجَّلُ أَو يُحَدَّثُ عِندَ حِسابِ البائِع — <c>OtoClient.RegisterWebhookAsync</c>.</summary>
+    public const string DeliveryWebhookRegister = "delivery.webhook.register";
+
+    /// <summary>بائِعٌ يُسَجَّلُ عِندَ OTO بِالاعتِمادِ السوقِيّ — <c>OtoClient.RegisterVendorAsync</c>؛ مُعَرِّفُ الطَلَبِ سَطرُ الأَثَرِ المَكتوبُ قَبلَه.</summary>
+    public const string DeliveryVendorRegister = "delivery.vendor.register";
+
+    /// <summary>نِداءُ نَموذَجِ لُغَة — <c>IAgentBackend.CallAsync</c> بِخَلفِيّاتِه الثَلاث؛ يُقبَلُ حينَ يُقرَأُ استِهلاكُه مِن الجَواب.</summary>
+    public const string ModelCall = "model.call";
 }

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -298,12 +299,15 @@ public static class OtoShippingExtensions
         // الرَمزُ مُفرَد — الشَيءُ الوَحيدُ الَّذي يَجِبُ أَن يَعيشَ أَطوَلَ مِن الطَلَب.
         services.AddSingleton<OtoTokenCache>();
 
-        services.AddHttpClient<OtoClient>(client =>
+        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والتَسجيلُ بِالمُستَدعي المَعدود**: `AddProviderHttp<OtoClient>` بِالسَقفِ نَفسِه
+        // عَلى العَميلِ المُسَمّى بِاسمِ الصِنف (الاسمُ الَّذي كانَ يُعطيه `AddHttpClient<OtoClient>`)، والعَميلُ عابِرٌ كَما كانَ العَميلُ المُطَبَّع.
+        services.AddProviderHttp<OtoClient>((_, client) =>
         {
             // سَقفٌ احتِياطيٌّ **ضِعفُ** مُهلَتِنا الداخِلِيَّة، لِتَسبِقَ مُهلَتُنا دائِماً
             // فَيَثبُتَ رَمزُ الخَطَإ بَدَلَ أَن يَتَبَدَّلَ بِسِباق — حُجَّةُ جارَيه.
             client.Timeout = OtoEnvironment.Timeout(options.TimeoutSeconds) * 2;
         });
+        services.AddTransient<OtoClient>();
 
         return services;
     }

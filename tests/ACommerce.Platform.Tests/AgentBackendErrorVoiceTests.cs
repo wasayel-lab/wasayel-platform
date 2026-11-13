@@ -53,7 +53,7 @@ public class AgentBackendErrorVoiceTests
         await using var server = await FakeLlmServer.StartAsync(
             HttpStatusCode.Unauthorized, GroqUnauthorizedBody);
 
-        var backend = new OpenAIBackend(new AgentProfile(
+        var backend = new OpenAIBackend(new HttpClient(), new AgentProfile(
             Name:          AgentNames.Analysis,
             Provider:      "openai",
             BaseUrl:       server.BaseUrl,
@@ -87,7 +87,7 @@ public class AgentBackendErrorVoiceTests
         await using var server = await FakeLlmServer.StartAsync(
             HttpStatusCode.OK, "{\"choices\":[]}");
 
-        var backend = new OpenAIBackend(new AgentProfile(
+        var backend = new OpenAIBackend(new HttpClient(), new AgentProfile(
             AgentNames.Analysis, "openai", server.BaseUrl, "k", "m", "cerebras"));
 
         var resp = await backend.CallAsync(AnyRequest(), CancellationToken.None);
@@ -105,7 +105,7 @@ public class AgentBackendErrorVoiceTests
     [Fact]
     public void MissingBaseUrl_FallsBackToOpenAiAndSaysSo()
     {
-        var backend = new OpenAIBackend(new AgentProfile(
+        var backend = new OpenAIBackend(new HttpClient(), new AgentProfile(
             AgentNames.Analysis, "openai", null, "gsk-shaped-but-openai-bound", null, null));
 
         Assert.Equal("openai", backend.ProviderName);
@@ -115,7 +115,7 @@ public class AgentBackendErrorVoiceTests
     [Fact]
     public void ExplicitLabel_WinsOverInference()
     {
-        var backend = new OpenAIBackend(new AgentProfile(
+        var backend = new OpenAIBackend(new HttpClient(), new AgentProfile(
             AgentNames.Analysis, "openai", "https://api.example.test/v1", "k", null, "groq"));
 
         Assert.Equal("groq", backend.ProviderName);

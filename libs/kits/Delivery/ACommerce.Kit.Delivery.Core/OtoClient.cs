@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -118,12 +119,17 @@ public sealed class OtoClient
         "lostOrDamaged", "destroyed",
     };
 
-    private readonly HttpClient _http;
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.1–§6.2؛ تَوصيفُه `OtoModelRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // `ProviderHttp<OtoClient>` مالِكُه، وكُلُّ عَمَلِيَّةٍ تُغادِرُ العَمَلِيَّةَ تَأخُذُ `ProviderCall` أَوَّلَ وُسَطائِها (القاعِدَة ٦): المُنادي يَعرِفُ المَتجَرَ وسَبَبَ
+    // النِداء (`ShippingCalls` في القالِب)، والعُدَّةُ تَسِمُه بِاسمِ المُزَوِّد (`ProviderNames.Oto`). **ومُبادَلَةُ الرَمزِ نِداءٌ مُساعِد** (`oauth_token`)، وقارِئُ
+    // الخِياراتِ بِلا مُنادٍ في وَقتِ التَشغيلِ مُساعِدٌ بِسَبَبِ دَينِه (`uncalled_member`). والاستِثناءُ يَعودُ كَما هُوَ بَعدَ أَن يُعَدَّ مَجهولاً، فَتَصنيفُ العَميلِ لِأَخطائِه
+    // (`OtoFailures`) لا يَتَغَيَّر. وبِناءُ العَميلِ بِـ`HttpClient` في الاختِبارِ يَبقى بِالتَحويلِ الضِمنِيِّ (مَقعَدُ اختِبار، G6c).
+    private readonly ProviderHttp<OtoClient> _http;
     private readonly OtoOptions _opts;
     private readonly OtoTokenCache _tokens;
     private readonly ILogger<OtoClient> _log;
 
-    public OtoClient(HttpClient http, IOptions<OtoOptions> opts, OtoTokenCache tokens, ILogger<OtoClient> log)
+    public OtoClient(ProviderHttp<OtoClient> http, IOptions<OtoOptions> opts, OtoTokenCache tokens, ILogger<OtoClient> log)
     {
         _http = http;
         _opts = opts.Value;
@@ -155,7 +161,7 @@ public sealed class OtoClient
     public async Task<OtoResult<IReadOnlyList<OtoDeliveryOption>>> CheckOtoDeliveryFeeAsync(
         string refreshToken, OtoFeeQuery query, CancellationToken ct = default)
     {
-        var res = await PostAsync(refreshToken, CheckOtoDeliveryFeePath, new Dictionary<string, object?>
+        var res = await PostAsync(Uncalled, refreshToken, CheckOtoDeliveryFeePath, new Dictionary<string, object?>
         {
             ["originCity"]      = query.OriginCity,
             ["destinationCity"] = query.DestinationCity,
@@ -198,9 +204,9 @@ public sealed class OtoClient
     /// عَناصِرِه) — فَإغفالُهُما هُنا غَيرُ مَقيس، يَتبَعُه سِجِلُّ المالِكِ «ب» S7·٣ (١) ولا يُظَنُّ بِه.</para>
     /// </summary>
     public async Task<OtoResult<OtoCreatedOrder>> CreateOrderAsync(
-        string refreshToken, OtoOrderDraft draft, CancellationToken ct = default)
+        ProviderCall call, string refreshToken, OtoOrderDraft draft, CancellationToken ct = default)
     {
-        var res = await PostAsync(refreshToken, CreateOrderPath, new Dictionary<string, object?>
+        var res = await PostAsync(Counted(call), refreshToken, CreateOrderPath, new Dictionary<string, object?>
         {
             ["orderId"]          = draft.OrderId,
             ["createShipment"]   = true,
@@ -239,9 +245,9 @@ public sealed class OtoClient
     /// مِن قِسمِ «Tracking › Order Tracking» في الوَثائِقِ العامَّة.</para>
     /// </summary>
     public async Task<OtoResult<OtoOrderState>> GetOrderStatusAsync(
-        string refreshToken, string orderId, CancellationToken ct = default)
+        ProviderCall call, string refreshToken, string orderId, CancellationToken ct = default)
     {
-        var res = await PostAsync(refreshToken, OrderStatusPath, new Dictionary<string, object?>
+        var res = await PostAsync(Counted(call), refreshToken, OrderStatusPath, new Dictionary<string, object?>
         {
             ["orderId"] = orderId,
         }, "orderStatus", ct);
@@ -272,7 +278,7 @@ public sealed class OtoClient
     /// timestamp (in milliseconds)») — وهي ما يَدخُلُ النَصَّ المُوَقَّع — والثالِثُ لِطَلَباتٍ بِبادِئَةٍ لا نُرسِلُها.</para>
     /// </summary>
     public async Task<OtoResult<string>> RegisterWebhookAsync(
-        string refreshToken, string url, string secretKey, string? existingId = null, CancellationToken ct = default)
+        ProviderCall call, string refreshToken, string url, string secretKey, string? existingId = null, CancellationToken ct = default)
     {
         var body = new Dictionary<string, object?>
         {
@@ -283,7 +289,7 @@ public sealed class OtoClient
         };
         if (existingId is not null) body["id"] = existingId;
 
-        var res = await PostAsync(refreshToken, WebhookPath, body, "webhook", ct,
+        var res = await PostAsync(Counted(call), refreshToken, WebhookPath, body, "webhook", ct,
             existingId is null ? HttpMethod.Post : HttpMethod.Put);
         if (!res.Ok) return OtoResult<string>.Fail(res.Failure!);
 
@@ -316,7 +322,7 @@ public sealed class OtoClient
     /// كَيفَ يُفَعِّلُه صاحِبُه. ولا يُكتَبُ جِسمٌ ولا رَدٌّ في لوغ — فيهِما بَياناتُ البائِعِ ورَمزُه.</para>
     /// </summary>
     public async Task<OtoResult<OtoRegisteredVendor>> RegisterVendorAsync(
-        string marketplaceToken, OtoVendorRegistration vendor, CancellationToken ct = default)
+        ProviderCall call, string marketplaceToken, OtoVendorRegistration vendor, CancellationToken ct = default)
     {
         var body = new Dictionary<string, object?>
         {
@@ -340,7 +346,7 @@ public sealed class OtoClient
             body["streetName"]  = vendor.StreetName;
         }
 
-        var res = await PostAsync(marketplaceToken, RegisterPath, body, "register", ct);
+        var res = await PostAsync(Counted(call), marketplaceToken, RegisterPath, body, "register", ct);
         if (!res.Ok) return OtoResult<OtoRegisteredVendor>.Fail(res.Failure!);
 
         if (Text(res.Value, "refreshToken") is not { } token)
@@ -372,7 +378,7 @@ public sealed class OtoClient
             Content = Json(new Dictionary<string, object?> { ["refresh_token"] = refreshToken }),
         };
 
-        var sent = await SendAsync(msg, "refreshToken", ct);
+        var sent = await SendAsync(Token, msg, "refreshToken", ct);
         if (sent.Value is not { } resp) return OtoResult<OtoAccessToken>.Fail(sent.Failure!);
         using (resp)
         {
@@ -411,7 +417,11 @@ public sealed class OtoClient
     /// (<c>otoErrorCode</c>، مِثالُ الوَثيقَة: «‏OTO1006 · Credit is not enough»)؛ جِسمٌ
     /// لا يُقرَأ ← <see cref="OtoFailures.Unreadable"/>.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والإرسالُ يَمُرُّ بِالمُستَدعي</b>: <paramref name="send"/> مَعدودٌ
+    /// (<see cref="Counted"/>) أَو مُساعِدٌ بِلا مُنادٍ (<see cref="Uncalled"/>)، والرَمزُ مُساعِدٌ (<see cref="Token"/>)، والطَلَبُ والمُهلَةُ والتَصنيفُ هُنا بِحَرفِها.
+    /// <b>وإعادَةُ ‏401 بِالنِداءِ نَفسِه</b>: العَمَلِيَّةُ واحِدَة، فَمَرفوضٌ ثُمَّ مَقبولٌ بِالمُعَرِّفِ نَفسِه سَطرٌ واحِدٌ ونِيَّةٌ مَقبولَة (<c>MeterSql.IntentAccept</c>).</remarks>
     private async Task<OtoResult<JsonElement>> PostAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
         string refreshToken, string path, object body, string operation, CancellationToken ct,
         HttpMethod? method = null)
     {
@@ -430,7 +440,7 @@ public sealed class OtoClient
             using var msg = new HttpRequestMessage(method ?? HttpMethod.Post, BaseUrl + path) { Content = Json(body) };
             msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
 
-            var sent = await SendAsync(msg, operation, ct);
+            var sent = await SendAsync(send, msg, operation, ct);
             if (sent.Value is not { } resp) return OtoResult<JsonElement>.Fail(sent.Failure!);
             using (resp)
             {
@@ -457,13 +467,14 @@ public sealed class OtoClient
     }
 
     private async Task<OtoResult<HttpResponseMessage>> SendAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
         HttpRequestMessage msg, string operation, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(OtoEnvironment.Timeout(_opts.TimeoutSeconds));
         try
         {
-            return OtoResult<HttpResponseMessage>.Success(await _http.SendAsync(msg, cts.Token));
+            return OtoResult<HttpResponseMessage>.Success(await send(msg, cts.Token));
         }
         catch (HttpRequestException)
         {
@@ -475,6 +486,23 @@ public sealed class OtoClient
             return Fail<HttpResponseMessage>(OtoFailures.Unreachable, operation, null, null);
         }
     }
+
+    /// <summary>‏(W13-6·١٥) النِداءُ المَعدود — مَوسوماً بِاسمِ المُزَوِّد.</summary>
+    private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Counted(ProviderCall call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var stamped = call.By(ProviderNames.Oto);
+        return (msg, ct) => _http.SendAsync(stamped, msg, ct);
+    }
+
+    /// <summary>‏(W13-6·١٥) مُبادَلَةُ رَمزِ الوُصول — مُساعِدٌ لا يُعَدّ (العَمَلِيَّةُ الَّتي تَطلُبُه هِيَ المَعدودَة).</summary>
+    private Task<HttpResponseMessage> Token(HttpRequestMessage msg, CancellationToken ct)
+        => _http.SendHelperAsync(new ProviderHelper(ProviderNames.Oto, ProviderHelperReasons.OauthToken), msg, ct);
+
+    /// <summary>‏(W13-6·١٥) قارِئُ الخِياراتِ بِصِفرِ مُنادٍ في وَقتِ التَشغيل (التَصميم §3.4: «دَينُ القاعِدَةِ ١ لا وَحدَة») — يَمُرُّ ولا يُعَدّ، وأَوَّلُ مُنادٍ لَه
+    /// في <c>libs/</c> أَو <c>apps/</c> يُحَمِّرُ <c>MeterTestSeamTests</c> (G6c) فَيولَدُ مَعَه صَفُّ وَحدَة.</summary>
+    private Task<HttpResponseMessage> Uncalled(HttpRequestMessage msg, CancellationToken ct)
+        => _http.SendHelperAsync(new ProviderHelper(ProviderNames.Oto, ProviderHelperReasons.UncalledMember), msg, ct);
 
     // ═══ أَدَوات ═══════════════════════════════════════════════════════
 

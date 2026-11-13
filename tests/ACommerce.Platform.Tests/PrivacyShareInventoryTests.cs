@@ -58,9 +58,14 @@ public class PrivacyShareInventoryTests(ITestOutputHelper output)
 
     /// <summary>‏(‏2026-11-12، W13-6·١١ — ADR-051 §١٨) <b>المُستَدعي المَعدودُ لَيسَ جِهَة</b>: <c>ProviderHttp</c> يَحمِلُ <c>HttpClient</c> لِيَملِكَه عَن العُدَد، ولا يُرسِلُ
     /// إلّا ما تُرسِلُه عُدَّةٌ تَحمِلُه — وكُلُّ عُدَّةٍ تُسَمّى بِاسمِها أَعلاه. فَيُستَثنى بِاسمِه، ويَحمَرُّ الاستِثناءُ إن لَم يَعُد يَحمِلُ عَميلاً (صَفُّ الجَرد).</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ومَن يُناوِلُ الخَلفِيّاتِ مُستَدعيَها لَيسَ جِهَةً كَذلك</b>: <c>AgentBackendProvider</c>
+    /// يَأخُذُ <c>ProviderHttp&lt;IAgentBackend&gt;</c> مِن الحاوِيَةِ و<c>AgentBackendFactory</c> يُمَرِّرُه إلى الخَلفِيَّةِ الَّتي يَبنيها — ولا يُرسِلُ أَيٌّ مِنهُما شَيئاً؛
+    /// والجِهَةُ هِيَ الخَلفِيّاتُ الثَلاثُ بِأَسمائِها في <see cref="Listed"/> (<c>share_llm</c>).</remarks>
     internal static readonly IReadOnlyDictionary<string, string> Invokers = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["ProviderHttp"] = "libs/core/ACommerce.Platform.Shared/Metering/ProviderHttp.cs",
+        ["AgentBackendProvider"] = "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentProfiles.cs",
+        ["AgentBackendFactory"] = "libs/templates/ACommerce.Templates.Customer.Marketplace/Services/AgentBackends.cs",
     };
     private static readonly Regex TypeDecl = new(@"\b(?:class|record)\s+(\w+)", RegexOptions.Compiled);
 

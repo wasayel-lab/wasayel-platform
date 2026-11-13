@@ -32,6 +32,9 @@ namespace ACommerce.Platform.Tests;
 // ‏(‏2026-11-12، W13-6·١٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ونَفاذٌ ومَخزَنُ الكائِناتِ وخِدمَةُ الإشعار**: فَرعُ `AuthChannelProvider.Nafath` (`AddNafathChannel`،
 // عَميلُه `ProviderHttp`) وفَرعُ `FileStorageChoice.S3` (`AddS3FileStorage`، عُدَّةُ SDK تَحمِلُ `ProviderCalls`) في `Program.cs`، و`WebPushService` في القالِب —
 // والثَلاثُ تُسَجَّلُ بِبانٍ أَطوَلَ تَختارُه الحاوِيَةُ لا بِمَصنَع، فَهذا الصَفُّ هُوَ ما يَرى أَنّها اختارَت الباني الَّذي يُسَجِّل (لا مَقعَدَ الاختِبار).
+//
+// ‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وOTO وخَلفِيّاتُ النَماذِج**: `AddOtoShipping` بِحَرفِ نِدائِه في `Program.cs` (عُدَّةٌ تُحَلُّ بِنَوعِها)، و`ProviderHttp<IAgentBackend>`
+// يُسَجِّلُه القالِب — والخَلفِيَّةُ لا تُحَلُّ بِنَوعِها بَل يَبنيها المُزَوِّدُ المُسَمّى (`IAgentBackendProvider.For`)، فَتُقرَأُ خَلفِيَّةُ كُلِّ وَكيلٍ كَما تُقرَأُ العُدَّة.
 
 public class MeterCompositionTests(ITestOutputHelper output)
 {
@@ -64,6 +67,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
         builder.Configuration[ACommerce.Kit.Payments.Providers.Paddle.PaddleEnvironment.EnvironmentKey] = "live";
         ACommerce.Kit.Payments.Providers.PayPal.PayPalExtensions.AddPayPalSubscriptions(builder.Services, builder.Configuration);
         ACommerce.Kit.Payments.Providers.Paddle.PaddleExtensions.AddPaddleBilling(builder.Services, builder.Configuration);
+        // ‏(‏2026-11-12، W13-6·١٥) فَرعُ OTO في Program.cs بِحَرفِ نِدائِه — يُسَجَّلُ دائِماً.
+        ACommerce.Kit.Delivery.OtoShippingExtensions.AddOtoShipping(builder.Services, builder.Configuration);
         var services = builder.Services;
         return (builder.Build(), services);
     }
@@ -82,7 +87,13 @@ public class MeterCompositionTests(ITestOutputHelper output)
                    typeof(ACommerce.Templates.Customer.Marketplace.Services.WebPushService),
                    // ‏(‏2026-11-12، W13-6·١٤) عُدَدُ الدَفعِ الثَلاث — ميسّر مِن القالِب، وPayPal وPaddle حينَ يُضبَطُ اعتِمادُهُما.
                    typeof(ACommerce.Kit.Payments.MoyasarClient), typeof(ACommerce.Kit.Payments.Providers.PayPal.PayPalPaymentProvider),
-                   typeof(ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider) }.Select(services.GetService).OfType<object>()
+                   typeof(ACommerce.Kit.Payments.Providers.Paddle.PaddlePaymentProvider),
+                   // ‏(‏2026-11-12، W13-6·١٥) وعَميلُ OTO.
+                   typeof(ACommerce.Kit.Delivery.OtoClient) }.Select(services.GetService).OfType<object>()
+            // ‏(W13-6·١٥) وخَلفِيَّةُ كُلِّ وَكيلٍ كَما يَبنيها المُزَوِّدُ المُسَمّى — حينَ يُسَجِّلُه القالِب.
+            .Concat(services.GetService<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider>() is { } agents
+                ? new object[] { agents.For(ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Studio), agents.For(ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Analysis) }
+                : Array.Empty<object>())
             .Select(kit =>
             {
                 var invokers = kit.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
@@ -102,6 +113,7 @@ public class MeterCompositionTests(ITestOutputHelper output)
         Assert.Contains("builder.Services.AddS3FileStorage(", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddPayPalSubscriptions(builder.Configuration);", program, StringComparison.Ordinal);
         Assert.Contains("builder.Services.AddPaddleBilling(builder.Configuration);", program, StringComparison.Ordinal);
+        Assert.Contains("builder.Services.AddOtoShipping(builder.Configuration);", program, StringComparison.Ordinal);
         Assert.Contains("AddCustomerMarketplaceTemplate", program, StringComparison.Ordinal);
 
         foreach (var email in EmailBranches)
@@ -120,7 +132,12 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.True(descriptors.IsService(typeof(IEmailOtpChannel)));
             Assert.True(clients.Count > 0, "أَداةٌ عَمياء: صِفرُ عَميلٍ صادِرٍ في المُضيفِ المُرَكَّب.");
             // ‏(W13-6·١٣) خَمسٌ لا اثنَتان: والنَفاذُ والمَخزَنُ وخِدمَةُ الإشعار. ‏(W13-6·١٤) ثَمانٍ: وعُدَدُ الدَفعِ الثَلاث.
-            Assert.True(kits.Count == 8, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 8 ({email}).");
+            // ‏(W13-6·١٥) إحدى عَشرَة: وOTO وخَلفِيَّتا الوَكيلَين (Studio وAnalysis).
+            Assert.True(kits.Count == 11, $"أَداةٌ عَمياء: {kits.Count} عُدَّةً صادِرَةً لا 11 ({email}).");
+            Assert.Contains(kits, k => k.Kit == "OtoClient");
+            Assert.Equal(2, kits.Count(k => k.Kit is "AnthropicBackend" or "GeminiBackend" or "OpenAIBackend"));
+            Assert.Contains(clients, c => c.Kit is "OtoClient");
+            Assert.Contains(clients, c => c.Kit is "IAgentBackend");
             Assert.Equal(new[] { "MoyasarClient", "PayPalPaymentProvider", "PaddlePaymentProvider" },
                          kits.Select(k => k.Kit).Where(k => k is "MoyasarClient" or "PayPalPaymentProvider" or "PaddlePaymentProvider"));
             Assert.Equal(new[] { "MoyasarClient", "PaddlePaymentProvider", "PayPalPaymentProvider" },
@@ -151,7 +168,8 @@ public class MeterCompositionTests(ITestOutputHelper output)
             Assert.All(clients, c => Assert.False(c.Recording));
             // ‏(W13-6·١٣) أَربَعٌ لا اثنَتان: والنَفاذُ والمَخزَن — وخِدمَةُ الإشعارِ يُسَجِّلُها القالِبُ فَلا تُرى بِدونِه.
             // ‏(W13-6·١٤) سِتٌّ: وPayPal وPaddle — وميسّر يُسَجِّلُه القالِبُ فَلا يُرى بِدونِه.
-            Assert.Equal(6, kits.Count);
+            // ‏(W13-6·١٥) سَبعٌ: وOTO — وخَلفِيّاتُ النَماذِجِ يُسَجِّلُها القالِبُ فَلا تُرى بِدونِه.
+            Assert.Equal(7, kits.Count);
             Assert.All(kits, k => Assert.Equal((1, false), (k.Invokers, k.Recording)));
         }
     }

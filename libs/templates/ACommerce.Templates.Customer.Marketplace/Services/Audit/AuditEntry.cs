@@ -38,7 +38,9 @@ public sealed class AuditWriter
 
     public const string PlatformScope = "_platform";
 
-    public async Task WriteAsync(
+    /// <summary>يَكتُبُ السَطرَ ويُعيدُ مُعَرِّفَه (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): أَوَّلُ مُستَهلِكٍ لَه <c>VendorShippingService.RegisterAsync</c> — مُعَرِّفُ
+    /// نِداءِ تَسجيلِ البائِعِ المَعدودِ سَطرُ الأَثَرِ الَّذي يَسبِقُه.</summary>
+    public async Task<Guid> WriteAsync(
         string scope, Guid? actorId, string actorName,
         string action, string entityType, string entityId,
         string? note = null, string? ip = null, string? userAgent = null,
@@ -57,6 +59,7 @@ public sealed class AuditWriter
         await using var s = _store.LightweightSession(scope);
         s.Store(entry);
         await s.SaveChangesAsync(ct);
+        return entry.Id;
     }
 
     /// <summary>

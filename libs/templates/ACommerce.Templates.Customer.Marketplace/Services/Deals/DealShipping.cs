@@ -1,6 +1,7 @@
 using ACommerce.Kit.Delivery;
 using ACommerce.Platform.Providers;
 using ACommerce.Platform.I18n;
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Services.Shipping;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -733,7 +734,7 @@ public sealed class DealShipping
             // (‏2026-10-29، د13 «ب»): **وطَلَبٌ واحِدٌ لِصَفَقاتِ البائِعِ مِن السَلَّةِ نَفسِها** — ما كانَ مِنها جاهِزاً لِلشَحنِ الآنَ بِالبَوّابَةِ نَفسِها ولا طَلَبَ لَه،
             // بِتَرتيبِ وِلادَتِها؛ وصَفقَةٌ بِلا أَخَواتٍ (أَو بِلا أُختٍ جاهِزَة) وَحدَها كَما كانَت بِحَرفِها.
             var members = await ShipTogetherAsync(tenantSlug, deal, by, ct);
-            var placed = await PlaceAsync(token, members, city!, ct);
+            var placed = await PlaceAsync(tenantSlug, token, members, city!, ct);
             if (placed.Value is not { } order) return DealShipResult.Refused(placed.Failure!.Code, deal);
 
             if (members.Count > 1)
@@ -757,7 +758,9 @@ public sealed class DealShipping
         // نَجاحُ «Create Order» طَلَبٌ لا شُحنَة: تُسأَلُ OTO قَبلَ أَن تَتَحَرَّكَ الصَفقَة — ولا «شَحنَ» بِلا شُحنَةٍ وبوليصَة.
         // (‏2026-10-29، د13: والمُعَرِّفُ مِن مَرجِعِ الصَفقَةِ المَكتوب — `current` لا `deal`: صَفقَةٌ في طَلَبِ أُختِها مُعَرِّفُ طَلَبِها غَيرُ مُعَرِّفِها.)
         var orderId = OrderIdOf(current);
-        var state = (await _oto.GetOrderStatusAsync(token, orderId, CancellationToken.None)).Value;
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): سُؤالُ الحالِ قَبلَ الانتِقالِ عَمَلِيَّةٌ مَعدودَةٌ بِغَرَضِها `check` وزِنادٍ جَديد — كُلُّ نَقرَةٍ سُؤالٌ مِن OTO.
+        var state = (await _oto.GetOrderStatusAsync(ShippingCalls.Status(tenantSlug, orderId, ShippingCalls.Check, ProviderCall.FreshRequestId()),
+            token, orderId, CancellationToken.None)).Value;
         var siblings = await OrderSiblingsAsync(tenantSlug, current, orderId, CancellationToken.None);
 
         // وطَلَبٌ أَغلَقَته OTO لا يَعودُ إلى شُحنَة: يُكتَبُ حالُه فَيَختَفي «أَكمِل الشَّحن» ويُرَدُّ بِرَمزِه لا بِـ`shipment_unconfirmed` كُلَّ نَقرَة
@@ -883,14 +886,19 @@ public sealed class DealShipping
     /// بِالعُطلِ نَفسِه قَبلَ أَن يَبلُغَ نُقطَةَ الحال، ويَعودُ الفَشَلُ الأَصلِيُّ بِرَمزِه. كُلفَتُه نِداءُ رَمزٍ ثانٍ لا طَلَبٌ ولا سُؤال —
     /// مَقيسٌ في <c>DealShipTests</c>.)</para>
     /// </summary>
-    private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string token, IReadOnlyList<Deal> members, string city, CancellationToken ct)
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٨ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والنِداءانِ مَعدودان</b>: الإنشاءُ بِمُعَرِّفِ طَلَبِنا نَفسِه
+    /// (فَإعادَةُ الإنشاءِ لِلطَلَبِ نَفسِه عَمَلِيَّةٌ واحِدَة، وOTO تَرُدُّ الثانِيَ «OTO1063»)، والاستِردادُ سُؤالُ حالٍ بِغَرَضِه <c>recover</c> وزِنادٍ جَديد —
+    /// و<paramref name="tenantSlug"/> مَتجَرُهُما.</remarks>
+    private async Task<OtoResult<OtoCreatedOrder>> PlaceAsync(string tenantSlug, string token, IReadOnlyList<Deal> members, string city, CancellationToken ct)
     {
-        var created = await _oto.CreateOrderAsync(token, DraftFor(members, city), ct);
+        var draft = DraftFor(members, city);
+        var created = await _oto.CreateOrderAsync(ShippingCalls.Create(tenantSlug, draft.OrderId), token, draft, ct);
         if (created.Ok || created.Failure!.Code is OtoFailures.NotConfigured or OtoFailures.TokenRefused)
             return created;
 
         var ours = OrderIdOf(members[0]);
-        var held = await _oto.GetOrderStatusAsync(token, ours, CancellationToken.None);
+        var held = await _oto.GetOrderStatusAsync(ShippingCalls.Status(tenantSlug, ours, ShippingCalls.Recover, ProviderCall.FreshRequestId()),
+            token, ours, CancellationToken.None);
         return held.Value is { OtoId: { } otoId } state
                && string.Equals(state.OrderId, ours, StringComparison.Ordinal)
                && !string.IsNullOrWhiteSpace(otoId)
@@ -947,7 +955,10 @@ public sealed class DealShipping
         // الإشعارُ إشارَةٌ لا بُرهان: حالُ الطَلَبِ مِن OTO نَفسِها قَبلَ أَيِّ كِتابَة — بِرَمزٍ يُفَكُّ الآنَ لا قَبلَ التَوقيع (G5 (viii)).
         if (!TryOpenToken(tenantSlug, carrier, out var token))
             return new(OtoOrderStatusGate.CarrierUnavailable, deal);
-        var fetched = await _oto.GetOrderStatusAsync(token, notice.OrderId, ct);
+        // (‏2026-11-12، W13-6·١٥ — ADR-051 §١٨): والسُؤالُ بَعدَ الإشعارِ مَعدودٌ بِغَرَضِه `notice` وزِنادُه حَدَثُ الحالِ نَفسُه (الحالُ وخَتمُه كَما وَقَّعَتهُما OTO) —
+        // فَإعادَةُ OTO لِلإشعارِ نَفسِه سُؤالٌ واحِدٌ في الدَفتَر، وإشعارٌ بِحالٍ أُخرى سُؤالٌ آخَر.
+        var fetched = await _oto.GetOrderStatusAsync(ShippingCalls.Status(tenantSlug, notice.OrderId, ShippingCalls.Notice, ShippingCalls.EventOf(notice)),
+            token, notice.OrderId, ct);
         if (fetched.Value is not { } state)
             return new(OtoOrderStatusGate.StateUnconfirmed, deal, fetched.Failure!.Code);
 
@@ -1133,3 +1144,36 @@ public sealed record VendorCarrier(string RefreshToken, string? WebhookSecret)
 /// <summary>جَوابُ <see cref="DealShipping.StoreCarrierAsync"/> — مَعجَمٌ مُغلَقٌ مِن ثَلاثَة (‏2026-10-29، قَرارُ المالِك د9 (٢) «ب»): لا ناقِلَ لِلمَتجَر،
 /// أَو ناقِل، أَو تَعَذَّرَت قِراءَةُ مَداخِلِ بائِعيه — والثالِثُ لا يُقرَأُ «لا ناقِل».</summary>
 public enum StoreCarrier { None, Ready, Unreadable }
+
+/// <summary>
+/// <para><b>نِداءاتُ الشَحنِ المَعدودَة</b> (‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٨؛ التَصميم §6.2) — يَبنيها مَن يَعرِفُ المَتجَر (<see cref="DealShipping"/>،
+/// <see cref="VendorShippingService"/>)، والعُدَّةُ تَسِمُها بِاسمِ المُزَوِّد. <b>الإنشاءُ بِمُعَرِّفِ طَلَبِنا</b>؛ و<b>سُؤالُ الحالِ</b> <c>{orderId}:{غَرَض}:{زِناد}</c> —
+/// <c>check</c> عِندَ الشَحن و<c>recover</c> بَعدَ إنشاءٍ ضاعَ رَدُّه، وزِنادُهُما جَديدٌ لِكُلِّ نَقرَة، و<c>notice</c> بَعدَ الإشعارِ وزِنادُه حَدَثُ الحال؛ ومَصدَرُهُما
+/// الطَلَبُ نَفسُه. و<b>تَسجيلُ الوارِد</b> بِمُعَرِّفٍ جَديد، و<b>تَسجيلُ البائِع</b> بِمُعَرِّفِ سَطرِ الأَثَرِ المَكتوبِ قَبلَه.</para>
+/// </summary>
+public static class ShippingCalls
+{
+    public const string Check = "check";
+    public const string Recover = "recover";
+    public const string Notice = "notice";
+
+    /// <summary>إنشاءُ طَلَبِ الشَحن — مُعَرِّفُه ومَصدَرُه مُعَرِّفُ طَلَبِنا.</summary>
+    public static ProviderCall Create(string tenantSlug, string orderId)
+        => ProviderCall.ForChannel(OutboundUnits.DeliveryOrderCreate, tenantSlug, orderId).About(ProviderCall.DeliveryOrderSource, orderId);
+
+    /// <summary>سُؤالُ حالِ الطَلَبِ لِغَرَضٍ بِزِنادِه.</summary>
+    public static ProviderCall Status(string tenantSlug, string orderId, string purpose, string trigger)
+        => ProviderCall.ForChannel(OutboundUnits.DeliveryOrderStatus, tenantSlug, $"{orderId}:{purpose}:{trigger}")
+                       .About(ProviderCall.DeliveryOrderSource, orderId);
+
+    /// <summary>زِنادُ الإشعار: حَدَثُ الحالِ كَما وَقَّعَته OTO — الحالُ وخَتمُ وَقتِه (<c>orderId:status:timestamp</c> نَصُّ التَوقيع).</summary>
+    public static string EventOf(OtoOrderStatusNotice notice) => $"{notice.Status}:{notice.Timestamp}";
+
+    /// <summary>تَسجيلُ عُنوانِ الوارِدِ أَو تَحديثُه — كُلُّ نِداءٍ عَمَلِيَّتُه.</summary>
+    public static ProviderCall Webhook(string tenantSlug)
+        => ProviderCall.ForChannel(OutboundUnits.DeliveryWebhookRegister, tenantSlug, ProviderCall.FreshRequestId());
+
+    /// <summary>تَسجيلُ البائِعِ بِالاعتِمادِ السوقِيّ — مُعَرِّفُه سَطرُ الأَثَرِ الَّذي يَسبِقُه.</summary>
+    public static ProviderCall Vendor(string tenantSlug, Guid auditId)
+        => ProviderCall.ForChannel(OutboundUnits.DeliveryVendorRegister, tenantSlug, auditId.ToString("N"));
+}
