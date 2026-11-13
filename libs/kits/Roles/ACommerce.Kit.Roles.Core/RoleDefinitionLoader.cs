@@ -70,7 +70,11 @@ public static class RoleDefinitionLoader
                 throw new InvalidOperationException(
                     $"تَعريف الدَور «{slug}» يُعلِن slug مُختَلِفاً: «{d.Slug}».");
 
-            var violations = RoleDefinitionValidator.Validate(d);
+            // ‏(‏2026-11-13، W13-6·١٧ — ‏ADR-051 §٢١) **والمِترُ يُسأَلُ هُنا بِدالَّتِه المُنفَصِلَة** (`RoleMeterValidator`): المُصادِقُ القائِمُ بِرُموزِه
+            // لا يُمَسّ، وخُروقُ الاثنَينِ تُجمَعُ في رِسالَةٍ واحِدَةٍ تُفشِلُ الإقلاع (‏ADR-038: يُجابُ بِكُلِّ الخُروق) — كَمُحَمِّلِ المُزَوِّدينَ في §٢٠.
+            var violations = RoleDefinitionValidator.Validate(d).Select(x => (x.Code, x.MessageAr))
+                .Concat(RoleMeterValidator.Validate(d).Select(x => (x.Code, x.MessageAr)))
+                .ToList();
             if (violations.Count > 0)
                 throw new InvalidOperationException(
                     $"تَعريف الدَور «{slug}» لا يَجتاز المُصادَقَة: " +

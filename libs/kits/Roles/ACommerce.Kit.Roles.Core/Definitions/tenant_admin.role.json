@@ -29,5 +29,6 @@
     "publicProfile": null,
     "extras": []
   },
-  "dealPatternAffinity": null
+  "dealPatternAffinity": null,
+  "meter": "presence.role"
 }

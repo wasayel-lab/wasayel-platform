@@ -82,7 +82,11 @@ public sealed class TenantRoleService : TenantDefinitionService<TenantRoleDefini
         try { parsed = RoleDefinitionLoader.ParseDefinition(doc.DefinitionJson); }
         catch (Exception ex) { return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message); }
 
-        var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed);
+        // ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١) **وبابُ الاعتِمادِ يَرُدُّ مِفتاحَ المِترِ كَبابِ الاقتِراح** (`meter_authored_by_tenant`): وَثيقَةٌ مُعَلَّقَةٌ
+        // كُتِبَت بِاليَدِ أَو سَبَقَت القاعِدَةَ لا تَصيرُ حَيَّةً وهي تَحمِلُه. وحِزامُ القِراءَةِ لا يَسأَلُ عَنه — فَلا يُسقِطُ مُعتَمَداً قَديماً.
+        var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed)
+            .Concat(RoleMeterValidator.ValidateTenantMeter(doc.DefinitionJson).Select(m => new RoleDefinitionViolation(m.Code, m.MessageAr)))
+            .ToList();
         if (violations.Count > 0)
             return (false, "لا يَجتاز المُصادَقَة: " +
                            string.Join(" | ", violations.Select(v => v.Code)));

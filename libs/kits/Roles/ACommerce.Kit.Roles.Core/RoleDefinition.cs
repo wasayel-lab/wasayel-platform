@@ -172,6 +172,17 @@ public sealed record RoleDefinition
     /// فَنُقِلَ كَما هو ومَعَه اختِبار يُثَبِّتُه.</para>
     /// </summary>
     public string? DealPatternAffinity { get; init; }
+
+    /// <summary>
+    /// <para><b>مِترُ الدَور</b> (‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١؛ التَصميم §7): كَيفَ يُعَدُّ هذا الدَورُ في جانِبِ التِقنِيَة —
+    /// <c>"presence.role"</c> (كُلُّ دَورٍ مُجَسَّدٍ في مَتجَرٍ حُضورٌ لَه كُلَّ يَوم) أَو <c>"none"</c>، مِن <see cref="RoleMeterUnits"/>.
+    /// يُصادِقُه <see cref="RoleMeterValidator"/> عِندَ الإقلاع، و<c>null</c> في مِلَفِّ كاتالوجٍ يُفشِلُه بِـ<c>meter_missing</c>.</para>
+    /// <para><b>ولا يُؤَلِّفُه مُستَأجِر</b>: تَعريفُ الدَورِ المُؤَلَّفِ لا يَحمِلُ المِفتاحَ — بابا الكِتابَةِ يَرُدّانِه بِـ<c>meter_authored_by_tenant</c>
+    /// (<see cref="RoleMeterValidator.ValidateTenantMeter"/>)، والمَنَصَّةُ تُسنِدُ مِترَه (<see cref="TenantRoleSet.MeterOf"/>). وحِزامُ القِراءَةِ
+    /// لا يَسأَلُ عَنه، فَلا يُسقِطُ مُعتَمَداً قَديماً. <b>ولا يَبلُغُ ما يُجَسَّدُ أَو يُعرَض</b>: <c>ToTemplate</c> و<c>InstantiateRole</c> لا يَنقُلانِه
+    /// (بَصَماتُ <c>DefinitionFingerprintCharacterizationTests</c>). <b>ولا سِعرَ</b>: يُسَمّي ما يُعَدُّ لا ما يُدفَع (القاعِدَة ١٦).</para>
+    /// </summary>
+    public string? Meter { get; init; }
 }
 
 /// <summary>

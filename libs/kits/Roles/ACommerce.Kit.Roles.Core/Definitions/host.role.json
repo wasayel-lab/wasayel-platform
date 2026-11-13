@@ -36,5 +36,6 @@
     "publicProfile": "vendorProfile",
     "extras": []
   },
-  "dealPatternAffinity": "rental"
+  "dealPatternAffinity": "rental",
+  "meter": "presence.role"
 }

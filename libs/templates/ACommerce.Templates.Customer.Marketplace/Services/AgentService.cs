@@ -1339,8 +1339,13 @@ public sealed class AgentToolExecutor
             return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message);
         }
 
+        // ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١) **ومِفتاحُ المِترِ يُرَدُّ هُنا** (`meter_authored_by_tenant`): مِترُ الدَورِ المُؤَلَّفِ تُسنِدُه المَنَصَّة
+        // (`TenantRoleSet.MeterOf`)، ووَثيقَةٌ تَحمِلُ المِفتاحَ يُسقِطُها ثُنائِيٌّ أَقدَم. دالَّةٌ مُنفَصِلَةٌ عَلى النَصِّ كَما كُتِب، وخُروقُ الاثنَينِ في رِسالَةٍ واحِدَة.
         var violations = ACommerce.Kit.Roles.RoleDefinitionValidator
-            .ValidateTenantDefinition(parsed);
+            .ValidateTenantDefinition(parsed)
+            .Concat(ACommerce.Kit.Roles.RoleMeterValidator.ValidateTenantMeter(definitionJson)
+                .Select(m => new ACommerce.Kit.Roles.RoleDefinitionViolation(m.Code, m.MessageAr)))
+            .ToList();
         if (violations.Count > 0)
             return (false, $"رُفِضَ تَعريف الدَور «{parsed.Slug}»: " +
                            string.Join(" | ", violations.Select(v => $"{v.Code}: {v.MessageAr}")));

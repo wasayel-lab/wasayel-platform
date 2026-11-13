@@ -30,6 +30,8 @@ namespace ACommerce.Platform.Shared.Metering;
 //   `IHttpClientFactory` في الإطارِ نَفسِه) — مُستَهلِكُها الأَوَّلُ في وَقتِ التَشغيلِ قَناةُ Twilio (`ACommerce.Kit.Auth.Providers.Twilio`) ومُنادوها: بابُ الرَمزِ
 //   (`AuthHandlers`، ولِأَجلِه صارَت `ACommerce.Kit.Auth.Core` تُشيرُ إلى هذه المَكتَبَة) والاستوديو و`AccountContacts`، وكاتِبُها `UsageLedgerWriter` في القالِب.
 //   والعُدَدُ الباقِيَةُ تَدخُلُ واحِدَةً بَعدَ أُخرى (البُنودُ ١٢–١٥).
+// ‏(‏2026-11-13، W13-6·١٧ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وبَوّابَةُ إقلاعِ الأَدوارِ تَقرَأُ المُعجَم**: `RoleMeterValidator` (في `ACommerce.Kit.Roles.Core`، ولِأَجلِه
+//   صارَت تُشيرُ إلى هذه المَكتَبَة) يَسأَلُ `MeterUnitCatalog.Default` عِندَ تَحميلِ مِلَفّاتِ الأَدوار: أَوَحدَةٌ مِترُ الدَورِ أَم لا، وأَحُضورٌ هِيَ أَم عَمَلِيَّة.
 
 /// <summary>
 /// <para><b>وَحدَةُ عَدٍّ واحِدَة</b> — صَفٌّ في <c>meter-units.json</c>. تُعلِنُ <b>جانِبَها</b> (<see cref="MeterSides"/>: تَشغيلٌ أَو تِقنِيَة)
