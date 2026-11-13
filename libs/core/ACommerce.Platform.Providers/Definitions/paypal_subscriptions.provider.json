@@ -7,5 +7,6 @@
   "physicalGoodsOnly": false,
   "credential": { "kind": "platform_key", "fields": [] },
   "webhook": null,
+  "meter": { "presence": "platform" },
   "revocation": { "ar": "يُبَدَّل سِرُّ المَنَصَّةِ مِن لَوحَةِ النَشر — ولا يُسحَبُ مِن شاشَةِ مُستَأجِر.", "en": null }
 }

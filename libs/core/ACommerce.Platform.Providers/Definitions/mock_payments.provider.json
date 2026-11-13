@@ -7,5 +7,6 @@
   "physicalGoodsOnly": false,
   "credential": { "kind": "none", "fields": [] },
   "webhook": null,
+  "meter": { "presence": "none" },
   "revocation": { "ar": "لا اعتِمادَ يُسحَب — لا شَيءَ مُخَزَّن.", "en": null }
 }

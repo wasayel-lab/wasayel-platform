@@ -113,6 +113,18 @@ public sealed record ProviderWebhookDefinition
 }
 
 /// <summary>
+/// <para><b>مِترُ المُزَوِّد — الحُضورُ وَحدَه</b> (‏2026-11-13، الموجَة ١٣ W13-6·١٦؛ التَصميم §7): <c>"meter": { "presence": … }</c>. وأُسقِطَت
+/// «العَمَلِيّاتُ» مِن الشَكلِ لِأَنّ قارِئَها الوَحيدَ كانَ اختِباراً (القاعِدَة ١): عَمَلِيّاتُ المُزَوِّدِ تُعَدُّ عِندَ نِدائِه (<c>ProviderCall</c>) لا مِن
+/// هُنا. فَمِفتاحٌ آخَرُ تَحتَ <c>meter</c> يُفشِلُ القِراءَةَ (<c>UnmappedMemberHandling.Disallow</c>). <b>ولا سِعرَ</b>: الحَقلُ يُسَمّي ما يُعَدُّ لا ما
+/// يُدفَع (القاعِدَة ١٦؛ قَرارُ المالِك: الأَسعارُ لاحِقاً في دَفتَرٍ تَملِكُه المَنَصَّة).</para>
+/// </summary>
+public sealed record ProviderMeterDefinition
+{
+    /// <summary>قيمَةٌ مِن <see cref="ProviderMeterPresences"/>؛ <c>null</c> أَو فارِغٌ ⇐ <c>meter_missing</c>.</summary>
+    public string? Presence { get; init; }
+}
+
+/// <summary>
 /// <para><b>تَعريفُ مُزَوِّدٍ — مُواطِنٌ رابِعٌ في عائِلَةِ مِلَفّاتِ
 /// السِياسَة</b> بَعدَ <c>*.role.json</c> و<c>*.plan.json</c> والثيم:
 /// مَورِدٌ مَضمون + فِهرِس + <c>UnmappedMemberHandling.Disallow</c> +
@@ -155,6 +167,15 @@ public sealed record ProviderDefinition
     /// المُزَوِّدِ نَفسِه — نَصٌّ يُقرَأ، لِأَنّ سَحبَ الرَبطِ عِندَنا
     /// لا يُبطِلُ ما عِندَه.</summary>
     public IReadOnlyDictionary<string, string?> Revocation { get; init; } = ProviderText.Empty;
+
+    /// <summary>
+    /// <para><b>مِترُ الحُضور</b> (‏2026-11-13، الموجَة ١٣ W13-6·١٦ — ‏ADR-051 §٢٠، وسَطرٌ في ‏ADR-012): كَيفَ يُعَدُّ هذا المُزَوِّدُ في جانِبِ التِقنِيَة،
+    /// بِقيمَةٍ مِن مَعجَمٍ مُغلَق (<see cref="ProviderMeterPresences"/>) يُصادِقُها <see cref="ProviderMeterValidator"/> عِندَ الإقلاعِ عَلى مَصفوفَةِ نَوعِ
+    /// الاعتِماد. و<c>null</c> غِيابٌ يُفشِلُ الإقلاعَ بِـ<c>meter_missing</c> — فَـ<c>"none"</c> قيمَةٌ تُكتَبُ لا غِيابٌ يُسكَتُ عَنه.</para>
+    /// <para><b>وغائِبٌ عَمّا يُعرَضُ لِلمُستَأجِر</b>: لا تَقرَؤُه شاشَةُ الاستوديو ولا سَطحُ الرَبط (بَصمَةُ العَرضِ في
+    /// <c>DefinitionFingerprintCharacterizationTests</c>)، ولا يُؤَلِّفُه مُستَأجِرٌ لِأَنّ المُستَأجِرَ لا يُؤَلِّفُ تَعريفَ مُزَوِّدٍ أَصلاً (‏(ب) أَعلاه).</para>
+    /// </summary>
+    public ProviderMeterDefinition? Meter { get; init; }
 
     /// <summary>
     /// <para><b>أَيَربِطُه مُستَأجِرٌ مِن شاشَتِه؟</b> — والجَوابُ

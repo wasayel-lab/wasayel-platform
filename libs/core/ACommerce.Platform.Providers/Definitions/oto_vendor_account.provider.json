@@ -27,5 +27,6 @@
     ]
   },
   "webhook": { "path": "/{slug}/shipping/oto/order-status", "verify": "webhook_secret" },
+  "meter": { "presence": "vendor_binding" },
   "revocation": { "ar": "إبطالُ رَمزِ التَّحديثِ أَو تَبديلُه مِن حِسابِكَ عِندَ OTO نَفسِها لا مِن هُنا؛ ورَمزٌ جَديدٌ يُلصَقُ في سَطحِ البائِعِ يَحِلُّ مَحَلَّ القَديمِ عِندَنا.", "en": null }
 }

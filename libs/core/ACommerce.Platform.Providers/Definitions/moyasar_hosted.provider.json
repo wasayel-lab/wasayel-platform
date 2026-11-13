@@ -19,5 +19,6 @@
     ]
   },
   "webhook": null,
+  "meter": { "presence": "store_binding" },
   "revocation": { "ar": "احذِف الرابِطَ مِن لَوحَة مُيَسِّر، ثُمَّ اسحَب الرَبطَ هُنا.", "en": null }
 }
