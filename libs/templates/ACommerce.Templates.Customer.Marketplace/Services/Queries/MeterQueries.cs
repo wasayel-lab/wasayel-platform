@@ -77,6 +77,30 @@ public sealed record MeterReading(
                .GroupBy(dimension, StringComparer.Ordinal)
                .Select(g => (g.Key, g.Sum(r => r.Entries)))
                .OrderByDescending(v => v.Item2).ThenBy(v => v.Key, StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// <para><b>سُطورُ جانِبِ التِقنِيَة</b> (‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ التَصميم §11 صَفُّ <c>/admin/meter</c>؛ ADR-051 §١٣ سَطرُه
+    /// المُؤَرَّخ): ما يَترُكُه <see cref="OperationRows"/> بِالمِرشَحِ نَفسِه مَقلوباً — فَالجانِبانِ مِن قِراءَةٍ واحِدَةٍ لا يَختَلِطان ولا يَسقُطُ بَينَهُما سَطر.
+    /// والدَوالُّ الثَلاثُ أَدناه وَحدَها تَقرَؤُها، ومُستَهلِكُها قِسمُ «التِقنِيَة» في الفِهرِس.</para>
+    /// </summary>
+    private IEnumerable<MeterCountRow> TechnologyRows => Rows.Where(r => !IsOperation(r.Unit));
+
+    /// <summary>
+    /// <para><b>المَتاجِرُ الحاضِرَةُ في النافِذَة</b>، مُرَتَّبَة: كُلُّ مَتجَرٍ لَه سَطرُ حُضور — ومِنها الخامِلُ الَّذي لا سَطرَ تَشغيلٍ لَه، فَلا يُدرِجُه
+    /// <see cref="Apps"/>؛ ولَولا هذه لَم يُبلَغ بِنَقرَةٍ مِن الفِهرِس (القاعِدَة ١٢).</para>
+    /// </summary>
+    public IReadOnlyList<string> PresenceApps() => TechnologyRows.Select(r => r.App).Distinct().Order(StringComparer.Ordinal).ToList();
+
+    /// <summary>وَحَداتُ حُضورِ مَتجَرٍ بِكَمِّيّاتِها (<see cref="MeterCountRow.Quantity"/> — لِوَحدَةٍ تَحمِلُ عَدَداً كَـ<c>presence.api_key</c>)، مُرَتَّبَةً بِالرَمز.</summary>
+    public IReadOnlyList<(string Unit, long Quantity)> Presence(string app)
+        => TechnologyRows.Where(r => r.App == app)
+               .GroupBy(r => r.Unit, StringComparer.Ordinal)
+               .Select(g => (g.Key, g.Sum(r => r.Quantity)))
+               .OrderBy(u => u.Key, StringComparer.Ordinal).ToList();
+
+    /// <summary>رائِدُ الأَعمالِ عَلى سُطورِ حُضورِ مَتجَر — مالِكُه لَحظَةَ اللَقطَة (أَو حارِسٌ كَـ<c>_unowned</c>)، مُرَتَّباً: مَدخَلُ صَفحَتِه لِمَتجَرٍ خامِل.</summary>
+    public IReadOnlyList<string> PresenceEntrepreneurs(string app)
+        => TechnologyRows.Where(r => r.App == app).Select(r => r.Entrepreneur).Distinct().Order(StringComparer.Ordinal).ToList();
 }
 
 /// <summary>

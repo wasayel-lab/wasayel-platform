@@ -21,6 +21,10 @@ namespace ACommerce.Platform.Tests;
 // `read_before_guard` يَعُدُّ القُرّاءَ مِن `@inject` نَفسِها (كُلُّ اسمٍ مَحقونٍ إلّا ما لا يَقرَأُ حالَةً مَخزونَة: البَوّابَةُ والقامُوسُ والثَقافَة) ويُلزِمُ كُلَّ ذِكرٍ لَها
 // في `@code` أَن يَقَعَ بَعدَ سَطرِ البَوّابَةِ **وفي دالَّتِها** — ودالَّةُ دَورَةِ حَياةٍ أُخرى تَقرَأُ بِلا بَوّابَة. و`page_unguarded` يُلزِمُ سِماتِ `data-recon-` بِالحارِسِ
 // كَـ`data-meter-state`. والحالَةُ الحَيَّةُ (المَجهولُ وغَيرُ المُشرِفِ لا تُقرَأُ لَهُما المُطابَقَة، والمُشرِفُ عَلى المُضيفِ نَفسِه تُقرَأُ لَه مَرَّة) في `LiveMeterAdminProofTests` (٣).
+// ‏(‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والفِهرِسُ يَبلُغُ كُلَّ مَتجَرٍ ورائِدَ أَعمالِه بِنَقرَة**: كانَ قائِمَةَ تَشغيلٍ
+// ورائِدُ الأَعمالِ فيه نَصّ، فَالمَتجَرُ الخامِلُ (حُضورٌ وَحدَه) وصَفحَةُ مالِكِه لا يُبلَغانِ إلّا بِكِتابَةِ العُنوان — والفاحِصُ أَخضَرُ لِأَنّه يَسأَلُ عَن رابِطِ المَتجَرِ
+// وَحدَه. فَرَمزانِ: `index_owner_unlinked` (خانَةُ رائِدِ الأَعمالِ في قِسمَيِ الفِهرِسِ لا تَربِطُ صَفحَتَه خَلفَ `Guid.TryParse`) و`presence_unlinked` (لا قِسمَ
+// تِقنِيَةٍ يَقرَأُ `reading.PresenceApps()` ويَربِطُ صَفحَةَ المَتجَر)، و`data-meter-presence` سِمَةٌ مَحروسَةٌ ثالِثَة. والحَيُّ في `LiveMeterAdminProofTests` G11·F و(٧).
 public class MeterAdminReachabilityTests(ITestOutputHelper output)
 {
     private const string TemplateRoot = "libs/templates/ACommerce.Templates.Customer.Marketplace";
@@ -48,9 +52,12 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     /// <summary>رُموزُ الخَرقِ — مُعجَمٌ مُغلَق: <c>link_missing</c> (لا رابِطَ إلى الفِهرِسِ داخِلَ قِسمِ المُشرِفِ في <c>AdminHome</c> بَعدَ رابِطِ المُراقَبَة) ·
     /// <c>store_unlinked</c> (الفِهرِسُ لا يَربِطُ صَفحَةَ المَتجَر) · <c>route_missing</c> (لا <c>@page</c> بِالمَسارِ) · <c>page_unguarded</c> (المُحتَوى خارِجَ
     /// <c>&lt;RequirePlatformAdmin&gt;</c>) · <c>read_before_guard</c> (القِراءَةُ لا تَسبِقُها البَوّابَة) · <c>session_in_page</c> (جَلسَةُ Marten أَو مَخزَنُه في الصَفحَة) ·
-    /// ‏(W13-6·٢١) <c>owner_unlinked</c> (خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَرِ لا تَربِطُ صَفحَتَه).</summary>
+    /// ‏(W13-6·٢١) <c>owner_unlinked</c> (خانَةُ رائِدِ الأَعمالِ في صَفحَةِ المَتجَرِ لا تَربِطُ صَفحَتَه) ·
+    /// ‏(W13-6·Z-R1·١) <c>index_owner_unlinked</c> (خانَةُ رائِدِ الأَعمالِ في أَحَدِ قِسمَيِ الفِهرِسِ لا تَربِطُ صَفحَتَه) · <c>presence_unlinked</c> (لا قِسمَ
+    /// تِقنِيَةٍ في الفِهرِسِ يَربِطُ صَفحَةَ كُلِّ مَتجَرٍ حاضِر).</summary>
     internal static readonly IReadOnlyList<string> Codes =
-        ["link_missing", "store_unlinked", "route_missing", "page_unguarded", "read_before_guard", "session_in_page", "owner_unlinked"];
+        ["link_missing", "store_unlinked", "route_missing", "page_unguarded", "read_before_guard", "session_in_page", "owner_unlinked",
+         "index_owner_unlinked", "presence_unlinked"];
 
     private static readonly string[] SessionTokens =
         ["IDocumentSession", "IQuerySession", "IDocumentStore", "LightweightSession", "QuerySession(", "SaveChangesAsync"];
@@ -103,7 +110,7 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
     }
 
     /// <summary>‏(W13-6·E-R1·١) سِماتُ الصَفحَةِ الَّتي لا تُرسَمُ إلّا خَلفَ الحارِس: الحالَةُ (لازِمَة) وقِسمُ المُطابَقَة (حَيثُ وُجِد).</summary>
-    internal static readonly IReadOnlyList<string> GuardedMarkers = ["data-meter-state", "data-recon-"];
+    internal static readonly IReadOnlyList<string> GuardedMarkers = ["data-meter-state", "data-recon-", "data-meter-presence"];
 
     /// <summary>خُروقُ <c>AdminHome</c>: الرابِطُ داخِلَ <c>&lt;RequirePlatformAdmin&gt;</c> وبَعدَ رابِطِ <c>/admin/monitor</c> (بِجِوارِه — التَصميم §11).</summary>
     internal static IReadOnlyList<string> HomeBreaches(string adminHome)
@@ -162,6 +169,43 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         return guard >= 0 && link > guard ? [] : ["owner_unlinked"];
     }
 
+    /// <summary>‏(W13-6·Z-R1·١) رابِطُ صَفحَةِ المَتجَرِ في صَفِّ الفِهرِس — في قِسمِ التَشغيلِ وفي قِسمِ التِقنِيَة.</summary>
+    internal const string IndexStoreLink = "href=\"/admin/meter/stores/@app\"";
+
+    /// <summary>‏(W13-6·Z-R1·١) قارِئا الفِهرِسِ اللَّذانِ تَسبِقانِ خانَةَ رائِدِ الأَعمالِ في قِسمَيه — ومَطلَعُ قِسمِ التِقنِيَة.</summary>
+    internal const string OpsOwners = "reading.By(r => r.Entrepreneur, app)";
+    internal const string PresenceOwners = "reading.PresenceEntrepreneurs(app)";
+    internal const string PresenceList = "reading.PresenceApps()";
+
+    /// <summary>
+    /// <para>‏(‏2026-11-14، W13-6·Z-R1·١ — M6Z-1) <b>الفِهرِسُ يَبلُغُ كُلَّ مَتجَرٍ ورائِدَ أَعمالِه</b>: (أ) <c>presence_unlinked</c> — بَعدَ <see cref="PresenceList"/>
+    /// صَفٌّ بِـ<c>data-meter-presence-app</c> ورابِطُ صَفحَةِ المَتجَر (<see cref="IndexStoreLink"/>)، قَبلَ <c>@code</c>؛ (ب) <c>index_owner_unlinked</c> — في كُلِّ قِسمٍ
+    /// خانَةُ رائِدِ الأَعمالِ (مِن <see cref="OpsOwners"/> حَتّى سِمَةِ <c>data-meter-unresolved</c>، ومِن <see cref="PresenceOwners"/> حَتّى <c>reading.Presence(app)</c>)
+    /// فيها <c>Guid.TryParse(value</c> ثُمَّ <see cref="OwnerLink"/> — فَالحارِسُ لا يُربَط.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> IndexLinkBreaches(string index)
+    {
+        var found = new List<string>();
+        var code = WriteEndpointGuardTests.StripMarkupComments(index);
+        var body = code.IndexOf("@code", StringComparison.Ordinal);
+        var markup = body < 0 ? code : code[..body];
+        var list = markup.IndexOf(PresenceList, StringComparison.Ordinal);
+        var tech = list < 0 ? "" : markup[list..];
+        if (list < 0 || !tech.Contains("data-meter-presence-app=\"@app\"", StringComparison.Ordinal) || !tech.Contains(IndexStoreLink, StringComparison.Ordinal))
+            found.Add("presence_unlinked");
+        static bool Linked(string text, string from, string to)
+        {
+            var a = text.IndexOf(from, StringComparison.Ordinal);
+            var b = a < 0 ? -1 : text.IndexOf(to, a, StringComparison.Ordinal);
+            var cell = a >= 0 && b > a ? text[a..b] : "";
+            var guard = cell.IndexOf("Guid.TryParse(value", StringComparison.Ordinal);
+            return guard >= 0 && cell.IndexOf(OwnerLink, guard, StringComparison.Ordinal) > guard;
+        }
+        if (!Linked(markup, OpsOwners, "data-meter-unresolved") || !Linked(markup, PresenceOwners, "reading.Presence(app)"))
+            found.Add("index_owner_unlinked");
+        return found;
+    }
+
     /// <summary>‏(W13-6·E-R1·١) قِراءاتُ كُلِّ صَفحَةٍ بِأَسمائِها — وصَفحَةُ المَتجَرِ اثنَتان مُنذُ البَند ٢٠: العَدُّ والمُطابَقَة.</summary>
     internal static readonly IReadOnlyList<string> IndexReads = ["Meter.TodayAsync"];
     internal static readonly IReadOnlyList<string> StoreReads = ["Meter.StoreAsync", "Reconcile.StoreAsync"];
@@ -173,6 +217,7 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
             .Concat(PageBreaches(store, StoreRoute, StoreReads))
             .Concat(PageBreaches(owner, OwnerRoute, OwnerReads))
             .Concat(OwnerLinkBreaches(store))
+            .Concat(IndexLinkBreaches(index))
             .Distinct().ToList();
 
     [Fact]
@@ -184,9 +229,15 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
         var owner = OwnerPage();
         var links = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(home), Regex.Escape($"href=\"{IndexRoute}\"")).Count;
         var ownerLinks = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(store), Regex.Escape(OwnerLink)).Count;
+        var indexStoreLinks = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(index), Regex.Escape(IndexStoreLink)).Count;
+        var indexOwnerLinks = Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(index), Regex.Escape(OwnerLink)).Count;
         var found = Breaches(home, index, store, owner);
         output.WriteLine($"[G11] صَفَحاتٌ مَفحوصَة 3 · رَوابِطُ AdminHome إلى {IndexRoute}: {links} · رَوابِطُ صَفحَةِ المَتجَرِ إلى صَفحَةِ رائِدِ الأَعمال: {ownerLinks} · خُروق {found.Count}"
                          + (found.Count == 0 ? "" : ": " + string.Join(", ", found)));
+        // ‏(W13-6·Z-R1·١) الفِهرِسُ بِقِسمَيه: رابِطُ صَفحَةِ المَتجَرِ ورابِطُ صَفحَةِ رائِدِ الأَعمالِ في كُلٍّ.
+        output.WriteLine($"[G11] الفِهرِس: رَوابِطُ صَفحَةِ المَتجَر {indexStoreLinks} · رَوابِطُ صَفحَةِ رائِدِ الأَعمال {indexOwnerLinks} (قِسمُ التَشغيلِ وقِسمُ التِقنِيَة)");
+        Assert.Equal(2, indexStoreLinks);
+        Assert.Equal(2, indexOwnerLinks);
         // ‏(W13-6·E-R1·١) ما قَرَأَه الفاحِصُ لِكُلِّ صَفحَة: القُرّاءُ المَحقونونَ ونِداءاتُهم — وكُلُّها بَعدَ البَوّابَة؛ وسِماتُ المُطابَقَةِ داخِلَ الحارِس.
         var pages = new (string Name, string Page, IReadOnlyList<string> Named)[] { ("index", index, IndexReads), ("store", store, StoreReads), ("owner", owner, OwnerReads) };
         foreach (var (name, page, named) in pages)
@@ -256,7 +307,20 @@ public class MeterAdminReachabilityTests(ITestOutputHelper output)
             ("read_before_guard", home, index, reconOutsideGated, owner),
             ("read_before_guard", home, index, unnamedReader, owner),
             ("page_unguarded", home, index, reconMarkerOutside, owner),
+            // ‏(W13-6·Z-R1·١) الفِهرِسُ بِقِسمَيه: كُلُّ رابِطٍ يُحقَنُ وَحدَه — الأَوَّلُ في قِسمِ التَشغيلِ والأَخيرُ في قِسمِ التِقنِيَة.
+            ("index_owner_unlinked", home, ReplaceAt(index, OwnerLink, "href=\"#\"", last: false), store, owner),
+            ("index_owner_unlinked", home, ReplaceAt(index, OwnerLink, "href=\"#\"", last: true), store, owner),
+            ("index_owner_unlinked", home, index.Replace("Guid.TryParse(value, out _)", "true", StringComparison.Ordinal), store, owner),
+            ("presence_unlinked", home, ReplaceAt(index, IndexStoreLink, "href=\"#\"", last: true), store, owner),
+            ("presence_unlinked", home, index.Replace(PresenceList, "reading.Apps()", StringComparison.Ordinal), store, owner),
+            ("page_unguarded", home, index.Replace("<RequirePlatformAdmin>", "<div data-meter-presence-apps=\"0\"></div>\n<RequirePlatformAdmin>", StringComparison.Ordinal), store, owner),
         };
+        static string ReplaceAt(string text, string what, string with, bool last)
+        {
+            var at = last ? text.LastIndexOf(what, StringComparison.Ordinal) : text.IndexOf(what, StringComparison.Ordinal);
+            Assert.True(at >= 0 && text.IndexOf(what, StringComparison.Ordinal) != text.LastIndexOf(what, StringComparison.Ordinal), $"حَقنٌ أَعمى: «{what}»");
+            return text.Remove(at, what.Length).Insert(at, with);
+        }
         var produced = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var (codeName, h, i, s, o) in injections)
         {

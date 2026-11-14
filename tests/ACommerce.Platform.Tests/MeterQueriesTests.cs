@@ -180,6 +180,41 @@ public class MeterQueriesTests(ITestOutputHelper output)
         Assert.True(MeterReading.IsOperation("deal.create") && MeterReading.IsOperation("zz.unknown") && !MeterReading.IsOperation("presence.store"));
     }
 
+    /// <summary>
+    /// <para><b>وجانِبُ التِقنِيَةِ لِقِسمِه في الفِهرِس</b> (‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ التَصميم §11): كُلُّ مَتجَرٍ لَه سَطرُ حُضورٍ — ومِنها
+    /// الخامِلُ الَّذي لا يُدرِجُه <see cref="MeterReading.Apps"/> — بِوَحَداتِه مَجموعَةَ الكَمِّيَّة (وَحدَةٌ تَحمِلُ عَدَداً تُجمَعُ كَمِّيَّتُها لا سُطورُها)،
+    /// ورائِدِ أَعمالِه لَحظَةَ اللَقطَة؛ ولا سَطرَ تَشغيلٍ يَدخُلُها، ولا تَمَسُّ أَرقامَ التَشغيل.</para>
+    /// </summary>
+    [Fact]
+    public void The_technology_side_lists_every_present_store_with_its_units_quantities_and_owner_and_nothing_from_operations()
+    {
+        var plain = Sample();
+        var mixed = plain with
+        {
+            Rows =
+            [
+                .. plain.Rows,
+                new("2026-11-12", "a", "e1", MeterSentinels.SystemJob, "tenants", "_none", "presence.store", 1, 1, 1),
+                new("2026-11-12", "a", "e1", "vendor", "roles", "_none", "presence.role", 2, 2, 0),
+                new("2026-11-12", "a", "e1", MeterSentinels.SystemJob, "api", "_none", "presence.api_key", 1, 3, 0),
+                new("2026-11-12", "idle", MeterSentinels.Unowned, MeterSentinels.SystemJob, "tenants", "_none", "presence.store", 1, 1, 1),
+            ],
+        };
+        output.WriteLine($"[queries] التِقنِيَة: المَتاجِر [{string.Join(", ", mixed.PresenceApps())}] · a «{string.Join(" · ", mixed.Presence("a").Select(u => $"{u.Unit} {u.Quantity}"))}» "
+                         + $"رائِدُه [{string.Join(", ", mixed.PresenceEntrepreneurs("a"))}] · idle «{string.Join(" · ", mixed.Presence("idle").Select(u => $"{u.Unit} {u.Quantity}"))}» "
+                         + $"رائِدُه [{string.Join(", ", mixed.PresenceEntrepreneurs("idle"))}] · مَتاجِرُ التَشغيل [{string.Join(", ", mixed.Apps())}]");
+        Assert.Equal(new[] { "a", "idle" }, mixed.PresenceApps());
+        Assert.Equal(new[] { ("presence.api_key", 3L), ("presence.role", 2L), ("presence.store", 1L) }, mixed.Presence("a"));
+        Assert.Equal(new[] { ("presence.store", 1L) }, mixed.Presence("idle"));
+        Assert.Equal(new[] { "e1" }, mixed.PresenceEntrepreneurs("a"));
+        Assert.Equal(new[] { MeterSentinels.Unowned }, mixed.PresenceEntrepreneurs("idle"));
+        Assert.Empty(mixed.Presence("b"));
+        Assert.Empty(plain.PresenceApps());
+        Assert.Equal(plain.Apps(), mixed.Apps());
+        Assert.DoesNotContain("idle", mixed.Apps());
+        Assert.Equal(plain.Entries(), mixed.Entries());
+    }
+
     private static string Source() => File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
         "Services", "Queries", "MeterQueries.cs"));
 

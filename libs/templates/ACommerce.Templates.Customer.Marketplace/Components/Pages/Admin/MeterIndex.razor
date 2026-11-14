@@ -14,7 +14,9 @@
     صادِقَةٌ عَمِلَ المُجَمِّعُ أَم لَم يَعمَل.
     والمَدخَلُ رابِطٌ في `AdminHome.razor` بِجِوارِ لَوحَةِ المُراقَبَة (القاعِدَة ١٢)، والبابُ `RequirePlatformAdmin`، **والبَوّابَةُ قَبلَ الاستِعلام**:
     طَلَبٌ مَجهولٌ لا يُقرَأُ لَه الدَفتَرُ أَصلاً، لا يُقرَأُ ثُمَّ يُحجَب (نَمَطُ `TenantEdit.razor`).
-    ورائِدُ الأَعمالِ نَصٌّ لا رابِط: صَفحَتُه تَلِدُ مَعَ البَند ٢١، ومَدخَلٌ إلى صَفحَةٍ غائِبَةٍ أَسوَأُ مِن غِيابِه.
+    ‏(‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ ADR-051 §١٣ سَطرُه المُؤَرَّخ) **وُلِدَت الصَفَحاتُ الَّتي كانَ الفِهرِسُ يَنتَظِرُها** (البُنودُ ١٩ و٢٠ و٢١):
+    خانَةُ رائِدِ الأَعمالِ رابِطٌ إلى `/admin/meter/owners/{id}` لِمُعَرِّفِ الحِسابِ وَحدَه (الحارِسُ نَصٌّ) كَصَفحَةِ المَتجَر، وصَفُّ التَشغيلِ رابِطانِ لا يَتَداخَلان؛
+    وقِسمُ «التِقنِيَة» يَعرِضُ حُضورَ اليَومِ لِكُلِّ مَتجَرٍ — ولَو خامِلاً لا عَمَلِيَّةَ لَه — رابِطاً إلى صَفحَتِه، فَلا مَتجَرَ يُبلَغُ بِكِتابَةِ عُنوانِه وَحدَه.
     وسِماتُ `data-meter-*` قَرائِنُ لِلبُرهانِ (`scripts/prove-meter.sh`) بِأَرقامٍ ثابِتَةِ الثَقافَة.
 *@
 
@@ -93,11 +95,26 @@
                             <div class="studio-list" data-meter-apps="@Num(reading.Apps().Count)">
                                 @foreach (var app in reading.Apps())
                                 {
-                                    <a class="studio-list-row" href="/admin/meter/stores/@app" data-meter-app="@app">
+                                    @* ‏(W13-6·Z-R1·١) رابِطانِ لا يَتَداخَلان: السلاجُ إلى صَفحَةِ المَتجَر، ومُعَرِّفُ رائِدِ الأَعمالِ إلى صَفحَتِه. *@
+                                    <div class="studio-list-row" style="cursor:default;" data-meter-app="@app">
                                         <span class="studio-list-icon"><AcIcon Name="store" Size="18" /></span>
                                         <div class="studio-list-body">
-                                            <strong>@app</strong>
-                                            <span>@L.Markup("admin.meter.entrepreneur", string.Join(" · ", reading.By(r => r.Entrepreneur, app).Select(e => e.Value)))</span>
+                                            <a href="/admin/meter/stores/@app"><strong>@app</strong></a>
+                                            <span>
+                                                @L.Markup("admin.meter.entrepreneur_label")
+                                                @foreach (var (value, i) in reading.By(r => r.Entrepreneur, app).Select((e, i) => (e.Value, i)))
+                                                {
+                                                    if (i > 0) { <text> · </text> }
+                                                    if (Guid.TryParse(value, out _))
+                                                    {
+                                                        <a href="/admin/meter/owners/@value" data-meter-entrepreneur="@value"><code>@value</code></a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <code data-meter-entrepreneur="@value">@value</code>
+                                                    }
+                                                }
+                                            </span>
                                             <span data-meter-unresolved="@Num(reading.Unresolved(app))" data-meter-seed="@Num(reading.Seed(app))">
                                                 @L.Markup("admin.meter.unresolved_seed", Num(reading.Unresolved(app)), Num(reading.Seed(app)))
                                             </span>
@@ -106,7 +123,49 @@
                                         {
                                             <span class="st-chip" data-meter-unit="@unit" data-entries="@Num(entries)">@UnitLabel(unit) @Num(entries)</span>
                                         }
-                                    </a>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* ‏(‏2026-11-14، W13-6·Z-R1·١ — M6Z-1؛ التَصميم §11) **جانِبُ التِقنِيَة**: كُلُّ مَتجَرٍ لَه سَطرُ حُضورٍ اليَوم — ومِنها الخامِلُ الَّذي لا يُدرِجُه قِسمُ
+                           التَشغيل — صَفٌّ يَربِطُ صَفحَتَه بِوَحَداتِ حُضورِه وكَمِّيّاتِها ورائِدِ أَعمالِه لَحظَةَ اللَقطَة. بِسِماتِ `data-meter-presence-*` لا `data-meter-app`
+                           ولا `data-meter-unit`، فَما يَقرَؤُه `prove-meter.sh` وصُفوفُ G11 مِن قِسمِ التَشغيلِ لا يَتَغَيَّر. *@
+                        <div class="st-section-title">@L.Markup("admin.meter.side_technology")</div>
+                        @if (reading.PresenceApps().Count == 0)
+                        {
+                            <div class="st-card" data-meter-presence-apps="0">@L.Markup("admin.meter.presence_empty_today")</div>
+                        }
+                        else
+                        {
+                            <div class="studio-list" data-meter-presence-apps="@Num(reading.PresenceApps().Count)">
+                                @foreach (var app in reading.PresenceApps())
+                                {
+                                    <div class="studio-list-row" style="cursor:default;" data-meter-presence-app="@app">
+                                        <span class="studio-list-icon"><AcIcon Name="store" Size="18" /></span>
+                                        <div class="studio-list-body">
+                                            <a href="/admin/meter/stores/@app"><strong>@app</strong></a>
+                                            <span>
+                                                @L.Markup("admin.meter.entrepreneur_label")
+                                                @foreach (var (value, i) in reading.PresenceEntrepreneurs(app).Select((e, i) => (e, i)))
+                                                {
+                                                    if (i > 0) { <text> · </text> }
+                                                    if (Guid.TryParse(value, out _))
+                                                    {
+                                                        <a href="/admin/meter/owners/@value" data-meter-presence-entrepreneur="@value"><code>@value</code></a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <code data-meter-presence-entrepreneur="@value">@value</code>
+                                                    }
+                                                }
+                                            </span>
+                                        </div>
+                                        @foreach (var (unit, quantity) in reading.Presence(app))
+                                        {
+                                            <span class="st-chip" data-meter-presence-unit="@unit" data-quantity="@Num(quantity)">@UnitLabel(unit) @Num(quantity)</span>
+                                        }
+                                    </div>
                                 }
                             </div>
                         }

@@ -357,6 +357,13 @@ check "$([ "$CODE" = 200 ] && grep -q 'href="/admin/meter"' "$F" && echo 1 || ec
 req "$J_ADM" GET /admin/meter
 check "$([ "$CODE" = 200 ] && [ "$(unit_in "data-meter-app=\"$SLUG\"")" = 1 ] && echo 1 || echo 0)" \
     "GET /admin/meter → $CODE · المَتاجِر «$(attr data-meter-app)» · /$SLUG deal.create $(unit_in "data-meter-app=\"$SLUG\"")"
+# ‏(‏2026-11-14، W13-6·Z-R1·١ — M6Z-1) P4·ب · الفِهرِسُ يَبلُغُ بِنَقرَةٍ كُلَّ مَتجَرٍ حاضِرٍ اليَوم (قِسمُ «التِقنِيَة» = مَتاجِرُ سُطورِ الحُضورِ في دَفتَرِ اليَوم، ولِكُلٍّ رابِطُ
+# صَفحَتِه) ورائِدَ أَعمالِ المَتجَرِ الجَديدِ (خانَتُه رابِطُ صَفحَتِه).
+PA_DB="$(q "select coalesce(string_agg(app, ',' order by app collate \"C\"), '') from (select distinct app from meter.usage_entry where unit in ($TECH) and occurred_at >= ((transaction_timestamp() at time zone 'Asia/Riyadh')::date::timestamp at time zone 'Asia/Riyadh')) t")"
+PA_PAGE="$(attr data-meter-presence-app)"; PA_UNLINKED=0
+for a in ${PA_DB//,/ }; do grep -q "href=\"/admin/meter/stores/$a\"" "$F" || PA_UNLINKED=$((PA_UNLINKED + 1)); done
+check "$([ "$CODE" = 200 ] && [ -n "$PA_DB" ] && [ "$PA_PAGE" = "$PA_DB" ] && [ "$PA_UNLINKED" = 0 ] && grep -q "href=\"/admin/meter/owners/$OWNER\"" "$F" && echo 1 || echo 0)" \
+    "P4·ب · GET /admin/meter → التِقنِيَة «$PA_PAGE» = حاضِرو الدَفتَرِ اليَوم «$PA_DB» · بِلا رابِطِ صَفحَة $PA_UNLINKED · رابِطُ رائِدِ الأَعمالِ $OWNER $(grep -c "href=\"/admin/meter/owners/$OWNER\"" "$F")"
 P4="$(store_page "$J_ADM")"
 check "$([ "$P4" = "data · absent ·  · 5 · 1" ] && has "$F" "$(ar admin.meter.agg_absent)" && grep -q "data-meter-entrepreneur=\"$OWNER\"" "$F" && echo 1 || echo 0)" \
     "P4 · /admin/meter/stores/$SLUG → «$P4» · «$(ar admin.meter.agg_absent)» · رائِدُ الأَعمالِ $OWNER"

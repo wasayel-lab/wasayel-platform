@@ -479,6 +479,9 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
     // ─── (٦) جانِبُ التِقنِيَةِ في الجَدوَلِ نَفسِه: لا يَدخُلُ مَجموعَ التَشغيلِ ولا بُعدَيه ولا قائِمَةَ الفِهرِس ─────────────────────────
     // (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·١ — M6D-SEC-R1-1 وM6D-CNT-2 وM6D-RULES-R1-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ). لَقطَةُ الحُضورِ تَكتُبُ
     // سُطورَ `presence.*` بِدَورِ `_system` (أَو الدَورِ المَعدودِ لِسَطرِ الدَور) عِندَ بِدايَةِ اليَوم؛ والصُفوفُ أَعلاه بِلا سَطرِ حُضور، فَكانَت عَمياءَ عَن الخَلط.
+    // ‏(‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمَتجَرُ الخامِلُ لا يُدرَجُ تَحتَ العَمَلِيّاتِ ولا يَضيع**: كانَ هذا
+    // الصَفُّ يُثَبِّتُ غِيابَه عَن الفِهرِسِ وَحدَه — فَلا يُبلَغُ إلّا بِكِتابَةِ عُنوانِه. الآنَ يُثَبِّتُ أَنّه في قِسمِ «التِقنِيَة» بِرابِطِ صَفحَتِه ورابِطِ صَفحَةِ مالِكِه
+    // لَحظَةَ اللَقطَة، وبِصِفرِ عَمَلِيَّة، وقِسمُ التَشغيلِ كَما كانَ حَرفاً.
 
     private const string Idle = "mq-idle";
 
@@ -507,7 +510,8 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
         await PresenceAsync(l, App, "presence.store", MeterSentinels.SystemJob, $"owner-{App}");
         await PresenceAsync(l, App, "presence.role", "vendor", $"owner-{App}");
         await PresenceAsync(l, App, "presence.auth_channel", MeterSentinels.SystemJob, $"owner-{App}");
-        await PresenceAsync(l, Idle, "presence.store", MeterSentinels.SystemJob, MeterSentinels.Unowned);
+        var idleOwner = Guid.NewGuid().ToString();                         // ‏(W13-6·Z-R1·١) مالِكُ الخامِلِ حِسابٌ — فَخانَتُه رابِط
+        await PresenceAsync(l, Idle, "presence.store", MeterSentinels.SystemJob, idleOwner);
         var sides = await TextAsync(l.Cs, "select string_agg(app || ' ' || unit || ' ' || n, ' · ' order by app, unit) from (select app, unit, count(*) n from meter.usage_entry group by app, unit) t");
         var lines = new Lines();
         var q = new MeterQueries(l.Store, lines);
@@ -527,6 +531,14 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
         Assert.Single(store.Days(App));
         Assert.Equal(0L, idle.Entries(Idle));
         Assert.Equal(new[] { App }, today.Apps());
+        // ‏(W13-6·Z-R1·١) والخامِلُ في جانِبِ التِقنِيَةِ مِن القِراءَةِ نَفسِها: حُضورُه ومالِكُه، وصِفرُ عَمَلِيَّة.
+        output.WriteLine($"[G11·F] جانِبُ التِقنِيَةِ اليَوم: المَتاجِر [{string.Join(", ", today.PresenceApps())}] · {Idle} «{string.Join(" · ", today.Presence(Idle).Select(u => $"{u.Unit} {u.Quantity}"))}» "
+                         + $"مالِكُه [{string.Join(", ", today.PresenceEntrepreneurs(Idle))}] عَمَلِيّاتُه {today.Entries(Idle)} · {App} «{string.Join(" · ", today.Presence(App).Select(u => $"{u.Unit} {u.Quantity}"))}»");
+        Assert.Equal(new[] { Idle, App }, today.PresenceApps());
+        Assert.Equal(new[] { ("presence.store", 1L) }, today.Presence(Idle));
+        Assert.Equal(new[] { idleOwner }, today.PresenceEntrepreneurs(Idle));
+        Assert.Equal(0L, today.Entries(Idle));
+        Assert.Equal(new[] { ("presence.auth_channel", 1L), ("presence.role", 1L), ("presence.store", 1L) }, today.Presence(App));
         Assert.Empty(lines.All);
 
         var admin = default(Probe);
@@ -552,6 +564,74 @@ public class LiveMeterAdminProofTests(ITestOutputHelper output)
             Assert.Contains(Text("admin.meter.store_empty"), idlePage, StringComparison.Ordinal);
             Assert.Equal(App, Attr(index, "data-meter-app"));
             Assert.Equal("1", Attr(index, "data-meter-apps"));
+            // ‏(W13-6·Z-R1·١) قِسمُ التِقنِيَة: الخامِلُ صَفٌّ بِرابِطِ صَفحَتِه ومالِكِه، وشاراتُه خارِجَ سِماتِ التَشغيل.
+            output.WriteLine($"[G11·F] الفِهرِس — التِقنِيَة: المَتاجِر «{Attr(index, "data-meter-presence-app")}» ({Attr(index, "data-meter-presence-apps")}) · "
+                             + $"الوَحَدات «{Attr(index, "data-meter-presence-unit")}» · رُوّادُ الأَعمال «{Attr(index, "data-meter-presence-entrepreneur")}» · "
+                             + $"رابِطُ /{Idle} {index.Contains($"href=\"/admin/meter/stores/{Idle}\"", StringComparison.Ordinal)} · رابِطُ مالِكِه {index.Contains($"href=\"/admin/meter/owners/{idleOwner}\"", StringComparison.Ordinal)}");
+            Assert.Equal($"{Idle},{App}", Attr(index, "data-meter-presence-app"));
+            Assert.Equal("2", Attr(index, "data-meter-presence-apps"));
+            Assert.Contains($"href=\"/admin/meter/stores/{Idle}\"", index, StringComparison.Ordinal);
+            Assert.Contains($"href=\"/admin/meter/owners/{idleOwner}\"", index, StringComparison.Ordinal);
+            Assert.Equal($"{idleOwner},owner-{App}", Attr(index, "data-meter-presence-entrepreneur"));
+            Assert.Equal("presence.store,presence.auth_channel,presence.role,presence.store", Attr(index, "data-meter-presence-unit"));
+            Assert.DoesNotContain("data-meter-unit=\"presence.", index, StringComparison.Ordinal);
+            Assert.DoesNotContain($"data-meter-app=\"{Idle}\"", index, StringComparison.Ordinal);
+        }
+        finally { await CleanAsync(host, admin is null ? [] : [admin]); }
+        Assert.Empty(lines.All);
+    }
+
+    // ─── (٧) الفِهرِسُ يَبلُغُ كُلَّ مَتجَرٍ ورائِدَ أَعمالِه بِنَقرَة — ثُمَّ تُفتَحُ الصَفحَتانِ مِن رابِطَيهِما ────────────────────────────────────────
+    // (‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·١ — M6Z-1؛ التَصميم §11 صَفُّ `/admin/meter`؛ القاعِدَة ١٢). مَتجَرٌ يَعمَلُ ومالِكُه حِساب، ومَتجَرٌ مالِكُه حارِسٌ
+    // (`_unowned`)، ومَتجَرٌ خامِلٌ مالِكُه حِسابٌ آخَر: رابِطٌ لِكُلِّ مُعَرِّفِ حِسابٍ في القِسمَينِ ولا رابِطَ لِلحارِس، ورابِطٌ لِكُلِّ مَتجَر — والصَفحَتانِ عِندَ
+    // رابِطَيهِما تُرسَمانِ لِلمُشرِف (`data-meter-state="data"`) بِلا سَطرِ عُطل.
+
+    [Fact]
+    public async Task The_index_links_every_operating_and_every_present_store_and_each_account_entrepreneur_and_both_pages_open_from_them()
+    {
+        if (!Enabled) return;
+        await using var l = await Ledger.CreateAsync(output, boot: true);
+        var ownerA = Guid.NewGuid().ToString();
+        var ownerB = Guid.NewGuid().ToString();
+        await ExecAsync(l.Cs,
+            "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, generation) "
+            + $"select 'deal.create:{App}:' || gen_random_uuid(), 'deal.create', 1, '{App}', '{ownerA}', '_none', 'deal_status', '_none', 'deal', gen_random_uuid()::text, "
+            + "(select max(generation) from meter.generation) from generate_series(1, 2)");
+        await ExecAsync(l.Cs,
+            "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, generation) "
+            + $"values ('deal.create:{Other}:' || gen_random_uuid(), 'deal.create', 1, '{Other}', '{MeterSentinels.Unowned}', '_none', 'deal_status', '_none', 'deal', gen_random_uuid()::text, "
+            + "(select max(generation) from meter.generation))");
+        await PresenceAsync(l, App, "presence.store", MeterSentinels.SystemJob, ownerA);
+        await PresenceAsync(l, Idle, "presence.store", MeterSentinels.SystemJob, ownerB);
+
+        var lines = new Lines();
+        var reconciler = new Lines();
+        var admin = default(Probe);
+        await using var host = HostReading(l.Store, lines, reconciler);
+        try
+        {
+            admin = await UserAsync(host, consented: false, platformAdmin: true);
+            var index = await IndexPageAsync(host, admin.Token);
+            var owners = Regex.Matches(index, @"href=""/admin/meter/owners/(?<id>[^""]+)""").Select(m => m.Groups["id"].Value).ToList();
+            var stores = Regex.Matches(index, @"href=""/admin/meter/stores/(?<s>[^""]+)""").Select(m => m.Groups["s"].Value).ToList();
+            output.WriteLine($"[G11·G] الفِهرِس: التَشغيل «{Attr(index, "data-meter-app")}» رُوّادُه «{Attr(index, "data-meter-entrepreneur")}» · التِقنِيَة «{Attr(index, "data-meter-presence-app")}» "
+                             + $"رُوّادُه «{Attr(index, "data-meter-presence-entrepreneur")}» · رَوابِطُ المَتاجِر [{string.Join(", ", stores)}] · رَوابِطُ رُوّادِ الأَعمال {owners.Count}");
+            Assert.Equal($"{Other},{App}", Attr(index, "data-meter-app"));
+            Assert.Equal($"{MeterSentinels.Unowned},{ownerA}", Attr(index, "data-meter-entrepreneur"));
+            Assert.Equal($"{Idle},{App}", Attr(index, "data-meter-presence-app"));
+            Assert.Equal($"{ownerB},{ownerA}", Attr(index, "data-meter-presence-entrepreneur"));
+            Assert.Equal(new[] { Other, App, Idle, App }, stores);                    // ‏قِسمُ التَشغيلِ ثُمَّ قِسمُ التِقنِيَة، بِتَرتيبِ الرَمز
+            Assert.Equal(new[] { ownerA, ownerB, ownerA }, owners);                   // ‏الحارِسُ `_unowned` نَصٌّ لا رابِط
+            Assert.DoesNotContain($"href=\"/admin/meter/owners/{MeterSentinels.Unowned}\"", index, StringComparison.Ordinal);
+
+            // ‏والصَفحَتانِ عِندَ رابِطَيهِما: صَفحَةُ الخامِلِ بِصِفرِ عَمَلِيَّة، وصَفحَةُ مالِكِه.
+            var idlePage = await StorePageAsync(host, admin.Token, Idle);
+            var ownerPage = await RenderAsync<MeterOwner>(host, admin.Token, $"/admin/meter/owners/{ownerB}", new() { [nameof(MeterOwner.Id)] = Guid.Parse(ownerB) });
+            output.WriteLine($"[G11·G] /admin/meter/stores/{Idle}: «{Attr(idlePage, "data-meter-state")}» المَجموع «{Attr(idlePage, "data-meter-total")}» · "
+                             + $"/admin/meter/owners/{ownerB}: «{Attr(ownerPage, "data-meter-state")}» · سُطورُ سِجِلّ {lines.All.Length}+{reconciler.All.Length}");
+            Assert.Equal("data", Attr(idlePage, "data-meter-state"));
+            Assert.Equal("0", Attr(idlePage, "data-meter-total"));
+            Assert.Equal("data", Attr(ownerPage, "data-meter-state"));
         }
         finally { await CleanAsync(host, admin is null ? [] : [admin]); }
         Assert.Empty(lines.All);
