@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth.Server;
@@ -34,6 +35,8 @@ namespace ACommerce.Platform.Tests;
 // وصَفحَةُ المَتجَرِ المُتَبَنّى: رائِدا أَعمالِه — المالِكُ الآنَ رابِطٌ إلى صَفحَتِه و`_unowned` نَصٌّ لا رابِط. (٢) **بِلا دَفتَر** ← «لا بَيانات» ولا مَتاجِرَ تُقرَأ.
 // (٣) **المَجهولُ وغَيرُ المُشرِف** لا يُرسَمُ لَهُما رَقَمٌ **ولا يُقرَأُ لَهُما الدَفتَرُ ولا السِجِلّ** (قارِئٌ عَلى قاعِدَةٍ غائِبَةٍ يَكتُبُ سَطرَ [meter-page] لِأَيِّ قِراءَة).
 // والصُفوفُ في `LiveMeterAdminProofTests` لِلصَفحَتَينِ الأُخرَيَينِ كَما هِيَ — هذا المِلَفُّ لا يَمَسُّها.
+// ‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) (٤) **فَرعُ المَجموعِ بَعدَ المُجَمِّعِ المَبنِيّ**:
+// رائِدا أَعمالٍ في يَومٍ ومَتجَرٍ ووَحدَةٍ واحِدَة، ثُمَّ `V1.Meter --once`، ثُمَّ ذَيلٌ لِكِلَيهِما — ولِكُلٍّ: المَجموعُ = سُطورُه تَحتَ المُؤَشِّر، والذَيلُ = سُطورُه فَوقَه.
 
 [Collection(LiveProofCollection.Name)]
 public class LiveMeterOwnerProofTests(ITestOutputHelper output)
@@ -46,6 +49,7 @@ public class LiveMeterOwnerProofTests(ITestOutputHelper output)
     private const string Adopted = "mo-mutabanna";
     private const string Own = "mo-lahu";
     private const string Sold = "mo-manqul";
+    private const string Shared = "mo-mushtarak";
 
     // ─── القاعِدَةُ والسِجِلّ ─────────────────────────────────────────────────────────────────────────────────
 
@@ -324,5 +328,117 @@ public class LiveMeterOwnerProofTests(ITestOutputHelper output)
         finally { await CleanAsync(host, member is null ? [] : [member]); }
         output.WriteLine($"[G11·owner] صَفَحاتٌ مُصَيَّرَة 2 · قِراءاتٌ لِلدَفتَرِ والسِجِلّ {reader.All.Length}");
         Assert.Empty(reader.All);
+    }
+
+    // ─── (٤) فَرعُ المَجموع: تَحتَ المُؤَشِّرِ وفَوقَه، لِكُلِّ رائِدِ أَعمالٍ ما نُسِبَ إلَيه وَحدَه ───────────────────────────────────────
+    // ‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الصَفُّ (١) لا يُشَغِّلُ المُجَمِّعَ فَقِراءَتُه ذَيلٌ
+    // كُلُّها، وشَرطُ فَرعِ المَجموعِ (`MeterQueries.AggOwnerFilter`) لا يَقيسُه صَفٌّ حَيّ — مَقيسٌ عِندَ المُراجِعِ عَلى fd77819: «and (a.entrepreneur = @owner or
+    // a.entrepreneur <> @owner)» يُدخِلُ مَجموعَ كُلِّ رائِدِ أَعمالٍ في صَفحَةِ كُلِّ رائِدِ أَعمالٍ والصُفوفُ كُلُّها خَضراء «Passed: 11». وما فَوقَ المُؤَشِّرِ في صَفحَةِ
+    // /admin/meter/owners/{id} يَأتي مِن هذا الفَرعِ وَحدَه حينَ يَعمَلُ المُجَمِّعُ كَما يَصِفُه DEPLOY §٢·ك.
+
+    /// <summary>
+    /// <para><c>apps/V1.Meter</c> المَبنِيُّ نَفسُه <c>--once</c> (القاعِدَة ١٤) عَلى قاعِدَةِ الصَفّ. <b>والنُسخَةُ الثالِثَة</b> مِن هذا المُشَغِّلِ بَعدَ
+    /// <c>LiveMeterAdminProofTests.AggregateOnceAsync</c> و<c>LiveMeterReconciliationProofTests.AggregateAsync</c> — فَشَرطُ الاستِخراجِ (ثَلاثَةُ مُستَهلِكين،
+    /// القاعِدَة ١) بَلَغَ، ويُستَخرَجُ في جَولَةٍ تَمَسُّ الثَلاثَةَ مَعاً لا في إصلاحٍ يَمَسُّ واحِداً.</para>
+    /// </summary>
+    private async Task<(int Code, string Output)> AggregateOnceAsync(string cs)
+    {
+        var tfm = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar));
+        var dll = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.Meter", "bin", tfm.Parent!.Name, tfm.Name, "V1.Meter.dll");
+        Assert.True(File.Exists(dll), $"المُجَمِّعُ غَيرُ مَبنِيّ: {dll} — يُبنى الحَلُّ قَبلَ الخُطوَةِ الحَيَّة (ci.yml).");
+        var psi = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = ThemeZeroEquivalenceTests.RepoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        psi.ArgumentList.Add(dll);
+        psi.ArgumentList.Add("--once");
+        psi.Environment["ConnectionStrings__Postgres"] = cs;
+        using var p = Process.Start(psi)!;
+        var stdout = p.StandardOutput.ReadToEndAsync();
+        var stderr = p.StandardError.ReadToEndAsync();
+        using var limit = new CancellationTokenSource(TimeSpan.FromSeconds(180));
+        try { await p.WaitForExitAsync(limit.Token); }
+        catch (OperationCanceledException) { p.Kill(entireProcessTree: true); Assert.Fail("المُجَمِّعُ لَم يَخرُج في 180 ثانِيَة."); }
+        var text = (await stdout + await stderr).Trim();
+        output.WriteLine($"[G11·owner·agg] V1.Meter --once ⇒ خُروج {p.ExitCode}: {text}");
+        return (p.ExitCode, text);
+    }
+
+    /// <summary>سُطورُ رائِدِ أَعمالٍ في الدَفتَرِ مِن جانِبِ التَشغيلِ (<see cref="MeterReading.IsOperation"/>): تَحتَ المُؤَشِّرِ وفَوقَه — العَدُّ الَّذي تُقاسُ بِه صَفحَتُه.</summary>
+    private static async Task<(long Below, long Above)> LedgerOfAsync(string cs, string entrepreneur)
+    {
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(
+            "select e.unit, (e.generation, e.writer_xid, e.id) <= (c.after_gen, c.after_xid, c.after_id) from meter.usage_entry e "
+            + "cross join meter.agg_cursor c where c.singleton and e.entrepreneur = @k", conn);
+        cmd.Parameters.AddWithValue("k", entrepreneur);
+        long below = 0, above = 0;
+        await using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+            if (MeterReading.IsOperation(r.GetString(0)))
+            {
+                if (r.GetBoolean(1)) below++;
+                else above++;
+            }
+        return (below, above);
+    }
+
+    [Fact]
+    public async Task Below_and_above_the_cursor_each_owner_reads_only_what_was_attributed_to_him_at_write_time()
+    {
+        if (!Enabled) return;
+        await using var db = await Db.CreateAsync("mo");
+        var store = db.Store;
+        output.WriteLine($"[G11·owner·agg] {db.Name}: {(await MeterBoot.EnsureAsync(store)).Line}");
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var (k1, k2) = (MeterScope.OwnerOf(first), MeterScope.OwnerOf(second));
+        await using (var g = store.LightweightSession())
+        {
+            g.Insert(new Tenant { Id = Shared, Name = "مَتجَرٌ يُكتَبُ فيه لِاثنَين", OwnerUserId = first, CreatedAt = DateTime.UtcNow });
+            await g.SaveChangesAsync();
+        }
+        // ‏رائِدا أَعمالٍ في يَومٍ ومَتجَرٍ ووَحدَةٍ واحِدَة — فَما يَفصِلُ مَجموعَيهِما في agg_daily عَمودُ رائِدِ الأَعمالِ وَحدَه.
+        await DealsAsync(store, Shared, k1, 3);
+        await DealsAsync(store, Shared, k2, 2);
+        var (code, _) = await AggregateOnceAsync(db.Cs);
+        Assert.Equal(0, code);
+        await DealsAsync(store, Shared, k1, 1);                                  // ‏ذَيلٌ فَوقَ المُؤَشِّرِ لِكِلَيهِما
+        await DealsAsync(store, Shared, k2, 2);
+        var daily = await TextAsync(db.Cs, "select coalesce(string_agg(to_char(day, 'YYYY-MM-DD') || ' ' || app || ' ' || unit || ' ' || "
+                                           + $"case entrepreneur when '{k1}' then 'k1' when '{k2}' then 'k2' else entrepreneur end || ' ' || entries, ' · ' order by unit, entrepreneur), '') "
+                                           + "from meter.agg_daily");
+        var sameKey = await TextAsync(db.Cs, $"select count(distinct entrepreneur) from meter.agg_daily where app = '{Shared}' and unit = 'deal.create'");
+        var all = await TextAsync(db.Cs, "select count(*) from meter.usage_entry");
+        output.WriteLine($"[G11·owner·agg] agg_daily «{daily}» · رُوّادُ أَعمالِ deal.create في {Shared} {sameKey} · الدَفتَر {all}");
+        Assert.Equal("2", sameKey);
+
+        var lines = new Lines();
+        var q = new MeterQueries(store, lines);
+        long readTotal = 0, ledgerTotal = 0;
+        foreach (var (name, id, key) in new[] { ("k1", first, k1), ("k2", second, k2) })
+        {
+            var reading = (await q.OwnerAsync(id)).Reading;
+            var (below, above) = await LedgerOfAsync(db.Cs, key);
+            var aggregated = reading.Entries() - reading.TailEntries();
+            output.WriteLine($"[G11·owner·agg] {name}: المَجموعُ {aggregated} + الذَيلُ {reading.TailEntries()} = {reading.Entries()} · "
+                             + $"دَفتَرُه: تَحتَ المُؤَشِّرِ {below} + فَوقَه {above} = {below + above} · المُجَمِّعُ {reading.AggregatorRan}");
+            Assert.Equal(MeterReadState.Data, reading.State);
+            Assert.True(reading.AggregatorRan);
+            Assert.True(below > 0 && above > 0, $"{name}: الصَفُّ لا يَقيسُ الفَرعَين: {below} · {above}");
+            Assert.Equal(below, aggregated);                                     // ‏فَرعُ المَجموعِ: سُطورُه هُوَ تَحتَ المُؤَشِّر — لا سُطورُ الآخَر
+            Assert.Equal(above, reading.TailEntries());
+            Assert.Equal(below + above, reading.Entries());
+            readTotal += reading.Entries();
+            ledgerTotal += below + above;
+        }
+        // ‏الضابِطُ السالِب: الصَفحَتانِ لا تَتَقاسَمانِ سَطراً — مَجموعُهُما الدَفتَرُ كُلُّه، وكُلُّ سَطرٍ فيه لِأَحَدِهِما.
+        Assert.Equal(long.Parse(all, CultureInfo.InvariantCulture), ledgerTotal);
+        Assert.Equal(ledgerTotal, readTotal);
+        Assert.Empty(lines.All);
     }
 }

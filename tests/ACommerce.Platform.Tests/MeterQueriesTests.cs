@@ -199,11 +199,15 @@ public class MeterQueriesTests(ITestOutputHelper output)
         var commit = source.IndexOf("await tx.CommitAsync(ct);", StringComparison.Ordinal);
         var owned = source.IndexOf("owned.AddRange(await _tenants.ListOwnedByAsync(id, ct));", StringComparison.Ordinal);
         var data = source.IndexOf("return new MeterReading(MeterReadState.Data,", StringComparison.Ordinal);
-        output.WriteLine($"[queries·owner] المَجموع: «{MeterQueries.AggOwnerFilter}» {agg.Contains(MeterQueries.AggOwnerFilter, StringComparison.Ordinal)} · الذَيل: «{MeterQueries.TailOwnerFilter}» "
-                         + $"{tail.Contains(MeterQueries.TailOwnerFilter, StringComparison.Ordinal)} · شَرطُ مَتجَر {sql.Contains(".app = @app", StringComparison.Ordinal)} · "
+        // ‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1) **شَرطُ كُلِّ فَرعٍ بِحَرفِه لا بِاحتِوائِه**: كانَ الصَفُّ يَسأَلُ أَيَحوي فَرعُ المَجموعِ
+        // «a.entrepreneur = @owner» — مَقيسٌ عِندَ المُراجِعِ عَلى fd77819: «and (a.entrepreneur = @owner or a.entrepreneur <> @owner)» يَحويه ويُدخِلُ كُلَّ رُوّادِ الأَعمالِ والصَفُّ أَخضَر.
+        var aggWhere = Regex.Match(agg, @" a where (?<w>.*)$", RegexOptions.Singleline).Groups["w"].Value.Trim();
+        var tailWhere = Regex.Match(tail, @" e where (?<w>.*?)\) r group by ", RegexOptions.Singleline).Groups["w"].Value.Trim();
+        output.WriteLine($"[queries·owner] المَجموع: «{aggWhere}» · الذَيل: «{tailWhere}» · شَرطُ مَتجَر {sql.Contains(".app = @app", StringComparison.Ordinal)} · "
                          + $"الإيداع {commit} < مَتاجِرُه الآن {owned} < الرَدّ {data} · المِفتاح OwnerOf {source.Contains("MeterScope.OwnerOf(o)", StringComparison.Ordinal)}");
-        Assert.Contains("a.entrepreneur = @owner", agg, StringComparison.Ordinal);
-        Assert.Contains("e.entrepreneur = @owner", tail, StringComparison.Ordinal);
+        Assert.Equal("a.day >= @from and a.entrepreneur = @owner", aggWhere);
+        Assert.Equal($"e.occurred_at >= (@from::timestamp at time zone '{MeterSql.DayZone}') and e.entrepreneur = @owner and (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i)",
+            tailWhere);
         Assert.DoesNotContain(".app = @app", sql, StringComparison.Ordinal);
         Assert.Contains("(e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i)", tail, StringComparison.Ordinal);
         Assert.Contains($"e.occurred_at >= (@from::timestamp at time zone '{MeterSql.DayZone}')", tail, StringComparison.Ordinal);

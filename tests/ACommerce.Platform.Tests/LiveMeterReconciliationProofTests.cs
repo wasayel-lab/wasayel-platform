@@ -120,6 +120,35 @@ public class LiveMeterReconciliationProofTests(ITestOutputHelper output)
         }
     }
 
+    /// <summary>‏(W13-6·E-R2·١) صُفوفٌ تُبَدَّلُ لِحَقنٍ ثُمَّ تُعادُ بِأَعمِدَتِها كُلِّها — والشَرطُ لا يَمَسُّ العَمودَ المُبَدَّل، فَما يُحذَفُ عِندَ الإعادَةِ هُوَ ما بُدِّلَ بِعَينِه.</summary>
+    private static async Task<IAsyncDisposable> AlteredAsync(string cs, string table, string set, string where, params (string Name, object Value)[] ps)
+    {
+        var backup = "meter.mr_backup_" + Guid.NewGuid().ToString("N")[..8];
+        await ExecAsync(cs, $"create table {backup} as select * from {table} where {where}", ps);
+        await ExecAsync(cs, $"update {table} set {set} where {where}", ps);
+        return new Revert(cs, table, where, ps, backup);
+    }
+
+    private sealed class Revert(string cs, string table, string where, (string Name, object Value)[] ps, string backup) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            await ExecAsync(cs, $"delete from {table} where {where}", ps);
+            await ExecAsync(cs, $"insert into {table} select * from {backup}");
+            await ExecAsync(cs, $"drop table {backup}");
+        }
+    }
+
+    /// <summary>بُعدٌ مِن أَبعادِ عَدَمِ التَطابُقِ بِاسمِ عَمودِه في <c>agg_daily</c>.</summary>
+    private static string Dimension(MeterAggregateMismatch m, string column) => column switch
+    {
+        "entrepreneur" => m.Entrepreneur,
+        "role" => m.Role,
+        "feature" => m.Feature,
+        "provider" => m.Provider,
+        _ => throw new ArgumentOutOfRangeException(nameof(column), column, "عَمودٌ لا يُقارَن"),
+    };
+
     private MeterReconciliationReport Print(string label, MeterReconciliationReport r)
     {
         foreach (var line in r.Lines()) output.WriteLine($"[G13·{label}] {line}");
@@ -370,6 +399,24 @@ public class LiveMeterReconciliationProofTests(ITestOutputHelper output)
             Assert.Equal(1, r.ExitCode);
         }
         Assert.Equal(0, Print("agg-restored", await MeterReconciliation.RunAsync(store)).ExitCode);
+
+        // ‏٧-ب (‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1) · صَفُّ agg_daily مَنسوبٌ إلى غَيرِ صاحِبِه ⇐ عَدَمانِ عَلى مَفاتيحِه السَبعَة،
+        // خُروج 1 — لِكُلِّ بُعدٍ لا تَراه (يَوم، مَتجَر، وَحدَة): رائِدُ الأَعمالِ والدَورُ والمِيزَةُ والمُزَوِّد. والعَدُّ والكَمِّيَّةُ كَما هُما، فَالمُقارَنَةُ بِالثَلاثَةِ نَظيفَةٌ عَلَيه.
+        Assert.Equal(1, await CountAsync(db.Cs, "select count(*) from meter.agg_daily where app = @app and unit = 'deal.create'", ("app", B)));
+        foreach (var column in MeterSql.AggDailyKey.Except(["day", "app", "unit"]))
+        {
+            await using (await AlteredAsync(db.Cs, "meter.agg_daily", $"{column} = {column} || '-x'", "app = @app and unit = 'deal.create'", ("app", B)))
+            {
+                var r = Print($"agg-{column}", await MeterReconciliation.RunAsync(store));
+                Assert.Equal((2, 1), (r.Mismatches.Count, r.ExitCode));
+                var ledgerSide = Assert.Single(r.Mismatches, m => m.DailyEntries == 0);
+                var dailySide = Assert.Single(r.Mismatches, m => m.LedgerEntries == 0);
+                Assert.Equal((B, "deal.create", 3L, 3L), (ledgerSide.App, ledgerSide.Unit, ledgerSide.LedgerEntries, dailySide.DailyEntries));
+                Assert.Equal(Dimension(ledgerSide, column) + "-x", Dimension(dailySide, column));
+                Assert.Contains(r.Lines(), l => l.Contains($" · {column} {Dimension(dailySide, column)} · ", StringComparison.Ordinal) && l.EndsWith("ledger 0/0 · agg_daily 3/3", StringComparison.Ordinal));
+            }
+        }
+        Assert.Equal(0, Print("agg-dims-restored", await MeterReconciliation.RunAsync(store)).ExitCode);
 
         // ٨ · رِسالَةٌ مَبذورَة ⇐ لا عَيب، و«seed 1» يُطبَع.
         using (MeterScope.Seed())

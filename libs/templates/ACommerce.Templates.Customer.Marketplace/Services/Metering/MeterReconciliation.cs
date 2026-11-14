@@ -45,7 +45,19 @@ public sealed record MeterIntentCheck(
 }
 
 /// <summary>(يَوم، مَتجَر، وَحدَة) لا يُطابِقُ فيه <c>agg_daily</c> دَفتَرَه حَتّى المُؤَشِّر.</summary>
-public sealed record MeterAggregateMismatch(string Day, string App, string Unit, long LedgerEntries, long DailyEntries, long LedgerQuantity, long DailyQuantity);
+/// <remarks>‏(‏2026-11-14، W13-6·E-R2·١ — M6E-CNT-R2-1) <b>بِمَفاتيحِ الجَدوَلِ السَبعَة</b>: ومَعَه رائِدُ الأَعمالِ والدَورُ والمِيزَةُ والمُزَوِّد (<see cref="MeterDayCount"/>)،
+/// فارِغَةً حينَ لا يَحمِلُها العَدّ.</remarks>
+public sealed record MeterAggregateMismatch(string Day, string App, string Unit, long LedgerEntries, long DailyEntries, long LedgerQuantity, long DailyQuantity)
+{
+    public string Entrepreneur { get; init; } = "";
+    public string Role { get; init; } = "";
+    public string Feature { get; init; } = "";
+    public string Provider { get; init; } = "";
+
+    /// <summary>الأَبعادُ الأَربَعَةُ في سَطرِ الطِباعَة — ولا شَيءَ حينَ لا يَحمِلُها العَدّ، فَسَطرُ (يَوم، مَتجَر، وَحدَة) بِحُروفِه.</summary>
+    public string Dimensions => Entrepreneur.Length + Role.Length + Feature.Length + Provider.Length == 0
+        ? "" : $" · entrepreneur {Entrepreneur} · role {Role} · feature {Feature} · provider {Provider}";
+}
 
 /// <summary>الحُضور: الأَيّامُ مِن نافِذَتِه حَتّى اليَوم، والمُكتَمِلُ مِنها، والغائِبُ («لَقطَةٌ غائِبَة»)، وسُطورُ أَيّامٍ بِلا مُطالَبَة (يَتيمَة).</summary>
 public sealed record MeterPresenceCheck(int Days, int Completed, IReadOnlyList<string> AbsentDays, int Orphans)
@@ -104,7 +116,7 @@ public sealed record MeterReconciliationReport(
         }
         lines.Add($"{Tag} aggregates · cursor {Cursor ?? "(none)"} · rows {AggregateRows} · mismatches {Mismatches.Count}");
         foreach (var m in Mismatches.Take(MeterReconciliation.Samples))
-            lines.Add($"{Tag}   mismatch {m.Day} {m.App} {m.Unit} · ledger {m.LedgerEntries}/{m.LedgerQuantity} · agg_daily {m.DailyEntries}/{m.DailyQuantity}");
+            lines.Add($"{Tag}   mismatch {m.Day} {m.App} {m.Unit}{m.Dimensions} · ledger {m.LedgerEntries}/{m.LedgerQuantity} · agg_daily {m.DailyEntries}/{m.DailyQuantity}");
         lines.Add($"{Tag} presence · days {Presence.Days} · completed {Presence.Completed} · absent {Presence.AbsentDays.Count}"
                   + (Presence.AbsentDays.Count == 0 ? "" : $" ({string.Join(", ", Presence.AbsentDays.Take(MeterReconciliation.Samples))})")
                   + $" · orphans {Presence.Orphans} · entries {PresenceRows.Sum(r => r.Entries)}");
@@ -234,9 +246,12 @@ public sealed class MeterReconciliation(IDocumentStore store, ILogger<MeterRecon
     }
 
     /// <summary><b>المَجاميعُ — دالَّةٌ نَقِيَّة</b>: لِكُلِّ (يَوم، مَتجَر، وَحدَة) في أَيٍّ مِن الطَرَفَين، عَدُّ الدَفتَرِ حَتّى المُؤَشِّرِ وكَمِّيَّتُه = <c>agg_daily</c> — بِالضَبطِ لا تَقريباً.</summary>
+    /// <remarks>‏(‏2026-11-14، W13-6·E-R2·١ — M6E-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمِفتاحُ مَفاتيحُ <c>agg_daily</c> السَبعَة</b>: بَعدَ الوَحدَةِ رائِدُ الأَعمالِ والدَورُ
+    /// والمِيزَةُ والمُزَوِّد (<see cref="MeterDayCount"/>) — فَمَجموعٌ تَحتَ غَيرِ صاحِبِه عَدَمانِ لا تَطابُق. وتُلحَقُ بِآخِرِ المِفتاحِ فَتَرتيبُ عَدٍّ لا يَحمِلُها كَما كانَ حَرفاً
+    /// (<c>MeterAggregateReconcileCharacterizationTests</c>).</remarks>
     public static IReadOnlyList<MeterAggregateMismatch> CompareAggregates(IReadOnlyList<MeterDayCount> ledger, IReadOnlyList<MeterDayCount> daily)
     {
-        static string Key(MeterDayCount c) => $"{c.Day}|{c.App}|{c.Unit}";
+        static string Key(MeterDayCount c) => $"{c.Day}|{c.App}|{c.Unit}|{c.Entrepreneur}|{c.Role}|{c.Feature}|{c.Provider}";
         var l = ledger.ToDictionary(Key, StringComparer.Ordinal);
         var d = daily.ToDictionary(Key, StringComparer.Ordinal);
         return l.Keys.Union(d.Keys, StringComparer.Ordinal).Order(StringComparer.Ordinal)
@@ -245,7 +260,10 @@ public sealed class MeterReconciliation(IDocumentStore store, ILogger<MeterRecon
             .Select(x =>
             {
                 var c = x.L ?? x.D!;
-                return new MeterAggregateMismatch(c.Day, c.App, c.Unit, x.L?.Entries ?? 0, x.D?.Entries ?? 0, x.L?.Quantity ?? 0, x.D?.Quantity ?? 0);
+                return new MeterAggregateMismatch(c.Day, c.App, c.Unit, x.L?.Entries ?? 0, x.D?.Entries ?? 0, x.L?.Quantity ?? 0, x.D?.Quantity ?? 0)
+                {
+                    Entrepreneur = c.Entrepreneur, Role = c.Role, Feature = c.Feature, Provider = c.Provider,
+                };
             }).ToList();
     }
 

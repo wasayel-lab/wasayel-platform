@@ -37,7 +37,16 @@ public sealed record MeterLedgerRow(string Id, string Unit, string App, string R
 public sealed record MeterIntentRow(string Id, string Unit, string App, string Outcome, bool Stale);
 
 /// <summary>عَدُّ يَومٍ ومَتجَرٍ ووَحدَة — مِن الدَفتَرِ (حَتّى المُؤَشِّر) أَو مِن <c>agg_daily</c> — بِيَومِ <see cref="MeterSql.DayZone"/> بِصيغَةِ <c>YYYY-MM-DD</c>.</summary>
-public sealed record MeterDayCount(string Day, string App, string Unit, long Entries, long Quantity);
+/// <remarks>‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1) <b>ومَعَه أَبعادُ مِفتاحِ <c>agg_daily</c> الأَربَعَةُ الأُخرى</b>
+/// (<see cref="MeterSql.AggDailyKey"/>) حينَ تُقرَأُ المَجاميع: رائِدُ الأَعمالِ والدَورُ والمِيزَةُ والمُزَوِّد — فَمَجموعٌ مَنسوبٌ إلى غَيرِ صاحِبِه لا يُطابِقُ دَفتَرَه.
+/// وفارِغَةٌ في عَدِّ الحُضورِ (يَومٌ ومَتجَرٌ ووَحدَة)؛ والفارِغُ لا يُطابِقُ قيمَةً في الدَفتَر، فَالحَرّاسُ تَبدَأُ بِـ<c>_</c> والقيَمُ لا تَفرَغ.</remarks>
+public sealed record MeterDayCount(string Day, string App, string Unit, long Entries, long Quantity)
+{
+    public string Entrepreneur { get; init; } = "";
+    public string Role { get; init; } = "";
+    public string Feature { get; init; } = "";
+    public string Provider { get; init; } = "";
+}
 
 /// <summary>ما قَرَأَه قارِئُ مَصدَرٍ لِوَحدَة: مَصادِرُها، وما لا تاريخَ لَه (حَقلُ الوَقتِ غائِبٌ أَو لا يُقرَأ — لا يُقارَنُ ويُطبَع).</summary>
 public sealed record MeterSourceRead(IReadOnlyList<MeterSource> Sources, int Undated);
@@ -257,6 +266,10 @@ public static class MeterSourceReaders
     /// <summary>
     /// <para><b>المَجاميعُ مُقابِلَ الدَفتَرِ حَتّى المُؤَشِّر</b> (التَصميم §9، COR-6d): لِكُلِّ (يَوم، مَتجَر، وَحدَة) عَدُّ السُطورِ الَّتي <c>(generation, writer_xid, id) ≤ المُؤَشِّر</c>
     /// وكَمِّيَّتُها، ومَجموعُ <c>agg_daily</c> — واليَومُ بِتَعبيرِ المُجَمِّعِ نَفسِه. وبِلا مُؤَشِّرٍ فَالدَفتَرُ «حَتّى المُؤَشِّر» فارِغ، والمَجاميعُ يَجِبُ أَن تَكونَ كَذلِك.</para>
+    /// <para>‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>بِمَفاتيحِ <c>agg_daily</c> السَبعَة لا الثَلاثَة</b>
+    /// (<see cref="MeterSql.AggDailyKey"/>، و<see cref="AggregateDimensions"/> ما سِوى اليَومِ والمَتجَرِ والوَحدَة): كانَ الطَرَفانِ يُجمَعانِ بِـ(يَوم، مَتجَر، وَحدَة) فَصَفٌّ
+    /// كَتَبَه المُجَمِّعُ تَحتَ غَيرِ رائِدِ أَعمالِه أَو دَورِه يُطابِقُ نَظيفاً (مَقيسٌ حَيّاً: تَبديلُ عَمودِ رائِدِ الأَعمالِ في صَفٍّ «mismatches 0 → exit 0») —
+    /// وصَفحَةُ رائِدِ الأَعمالِ تَقرَأُ ما تَحتَ المُؤَشِّرِ مِن ذلكَ الصَفّ.</para>
     /// </summary>
     internal static async Task<(string? Cursor, IReadOnlyList<MeterDayCount> Ledger, IReadOnlyList<MeterDayCount> Daily)> AggregatesAsync(
         NpgsqlConnection conn, NpgsqlTransaction tx, string? app, CancellationToken ct)
@@ -270,27 +283,34 @@ public static class MeterSourceReaders
         if (cursor is { } c)
         {
             await using var cmd = new NpgsqlCommand(
-                $"select to_char((occurred_at at time zone '{Zone}')::date, 'YYYY-MM-DD'), app, unit, count(*)::bigint, sum(quantity)::bigint from {Ledger} "
-                + "where (generation, writer_xid, id) <= (@g, @x::xid8, @i)" + (app is null ? "" : " and app = @app") + " group by 1, 2, 3", conn, tx);
+                $"select to_char((occurred_at at time zone '{Zone}')::date, 'YYYY-MM-DD'), app, unit, count(*)::bigint, sum(quantity)::bigint, {AggregateDimensions} from {Ledger} "
+                + "where (generation, writer_xid, id) <= (@g, @x::xid8, @i)" + (app is null ? "" : " and app = @app") + " group by 1, 2, 3, 6, 7, 8, 9", conn, tx);
             cmd.Parameters.AddWithValue("g", c.G);
             cmd.Parameters.AddWithValue("x", c.X);
             cmd.Parameters.AddWithValue("i", c.I);
             if (app is not null) cmd.Parameters.AddWithValue("app", app);
             await using var r = await cmd.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct)) ledger.Add(new MeterDayCount(r.GetString(0), r.GetString(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4)));
+            while (await r.ReadAsync(ct)) ledger.Add(DimensionsOf(r, new MeterDayCount(r.GetString(0), r.GetString(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4))));
         }
 
         var daily = new List<MeterDayCount>();
         await using (var cmd = new NpgsqlCommand(
-            "select to_char(day, 'YYYY-MM-DD'), app, unit, sum(entries)::bigint, sum(quantity)::bigint from meter.agg_daily"
-            + (app is null ? "" : " where app = @app") + " group by 1, 2, 3", conn, tx))
+            $"select to_char(day, 'YYYY-MM-DD'), app, unit, sum(entries)::bigint, sum(quantity)::bigint, {AggregateDimensions} from meter.agg_daily"
+            + (app is null ? "" : " where app = @app") + " group by 1, 2, 3, 6, 7, 8, 9", conn, tx))
         {
             if (app is not null) cmd.Parameters.AddWithValue("app", app);
             await using var r = await cmd.ExecuteReaderAsync(ct);
-            while (await r.ReadAsync(ct)) daily.Add(new MeterDayCount(r.GetString(0), r.GetString(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4)));
+            while (await r.ReadAsync(ct)) daily.Add(DimensionsOf(r, new MeterDayCount(r.GetString(0), r.GetString(1), r.GetString(2), r.GetInt64(3), r.GetInt64(4))));
         }
         return (cursor is { } k ? $"{k.G}|{k.X}|{k.I}" : null, ledger, daily);
     }
+
+    /// <summary>‏(W13-6·E-R2·١) أَعمِدَةُ مِفتاحِ <c>agg_daily</c> سِوى اليَومِ والمَتجَرِ والوَحدَة، بِتَرتيبِ <see cref="MeterSql.AggDailyKey"/> — يُجمَعُ بِها الطَرَفانِ
+    /// ويُقرَأُ مِنها البُعدُ (الأَعمِدَةُ 5–8). وعَمودٌ يُضافُ إلى المِفتاحِ ولا يُضافُ هُنا يُحَمِّرُ <c>MeterReconciliationTests</c>.</summary>
+    internal static readonly string AggregateDimensions = string.Join(", ", MeterSql.AggDailyKey.Except(["day", "app", "unit"]));
+
+    private static MeterDayCount DimensionsOf(NpgsqlDataReader r, MeterDayCount c)
+        => c with { Entrepreneur = r.GetString(5), Role = r.GetString(6), Feature = r.GetString(7), Provider = r.GetString(8) };
 
     /// <summary>
     /// <para><b>الحُضور</b> (‏<c>presence_claims</c>): الأَيّامُ ذاتُ المُطالَبَةِ المُكتَمِلَة، واليَومُ بِساعَةِ القاعِدَةِ بِمِنطَقَةِ المَنَصَّة، وسُطورُ وَحَداتِ الحُضورِ

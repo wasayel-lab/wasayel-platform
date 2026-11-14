@@ -118,6 +118,48 @@ public class MeterReconciliationTests(ITestOutputHelper output)
         Assert.Single(MeterReconciliation.CompareAggregates([], [ledger[0]]));
     }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثانِيَة · W13-6·E-R2·١ — M6E-CNT-R2-1) <b>مَجموعٌ مَنسوبٌ إلى غَيرِ صاحِبِه عَدَمانِ عَلى مَفاتيحِ <c>agg_daily</c> السَبعَة</b>
+    /// (<see cref="MeterSql.AggDailyKey"/>): كانَت المُقارَنَةُ بِـ(يَوم، مَتجَر، وَحدَة) فَصَفٌّ بِعَدَدِه وكَمِّيَّتِه نَفسَيهِما تَحتَ رائِدِ أَعمالٍ آخَرَ يُطابِقُ نَظيفاً — وصَفحَةُ رائِدِ
+    /// الأَعمالِ تَقرَأُ ما تَحتَ المُؤَشِّرِ مِن ذلكَ الصَفّ. الآن لِكُلِّ بُعدٍ مِن الأَربَعَةِ الَّتي لا تَراها الثَلاثَة: ما في الدَفتَرِ بِلا مَجموعٍ وما في المَجموعِ بِلا دَفتَر، كُلٌّ بِأَبعادِه
+    /// وسَطرُه يُسَمّيها. والضابِطُ: الطَرَفانِ بِالثَلاثَةِ وَحدَها مُتَساويان (فَما كانَ يُطابِقُ نَظيفاً هُوَ هذا بِعَينِه).</para>
+    /// </summary>
+    [Fact]
+    public void An_aggregate_written_under_another_entrepreneur_role_feature_or_provider_is_two_mismatches_on_the_seven_keys()
+    {
+        var right = new MeterDayCount("2026-11-13", "a", "deal.create", 3, 3) { Entrepreneur = "e1", Role = "_none", Feature = "deal_status", Provider = "_none" };
+        var cases = new (string Dimension, MeterDayCount Wrong)[]
+        {
+            ("entrepreneur", right with { Entrepreneur = "e2" }),
+            ("role", right with { Role = "seller" }),
+            ("feature", right with { Feature = "chat" }),
+            ("provider", right with { Provider = "twilio" }),
+        };
+        static MeterAggregateMismatch Side(MeterDayCount c, bool ledger)
+            => new(c.Day, c.App, c.Unit, ledger ? c.Entries : 0, ledger ? 0 : c.Entries, ledger ? c.Quantity : 0, ledger ? 0 : c.Quantity)
+            { Entrepreneur = c.Entrepreneur, Role = c.Role, Feature = c.Feature, Provider = c.Provider };
+        static MeterDayCount ThreeKeys(MeterDayCount c) => c with { Entrepreneur = "", Role = "", Feature = "", Provider = "" };
+
+        Assert.Empty(MeterReconciliation.CompareAggregates([right], [right]));
+        foreach (var (dimension, wrong) in cases)
+        {
+            var ms = MeterReconciliation.CompareAggregates([right], [wrong]);
+            var lines = new MeterReconciliationReport(MeterReconcileState.Data, null, [], [], "1|5|x", 1, ms, new MeterPresenceCheck(1, 1, [], 0), [], [], 41).Lines()
+                .Where(l => l.StartsWith($"{MeterReconciliation.LogTag}   mismatch ", StringComparison.Ordinal)).ToList();
+            output.WriteLine($"[G13·pure·agg] {dimension}: {ms.Count} · {string.Join(" | ", lines)} · بِالثَلاثَة {MeterReconciliation.CompareAggregates([ThreeKeys(right)], [ThreeKeys(wrong)]).Count}");
+            Assert.Equal(2, ms.Count);
+            Assert.Contains(Side(right, ledger: true), ms);
+            Assert.Contains(Side(wrong, ledger: false), ms);
+            Assert.Contains($"{MeterReconciliation.LogTag}   mismatch 2026-11-13 a deal.create · entrepreneur {right.Entrepreneur} · role {right.Role} · feature {right.Feature} · "
+                            + $"provider {right.Provider} · ledger 3/3 · agg_daily 0/0", lines);
+            Assert.Contains($"{MeterReconciliation.LogTag}   mismatch 2026-11-13 a deal.create · entrepreneur {wrong.Entrepreneur} · role {wrong.Role} · feature {wrong.Feature} · "
+                            + $"provider {wrong.Provider} · ledger 0/0 · agg_daily 3/3", lines);
+            Assert.Empty(MeterReconciliation.CompareAggregates([ThreeKeys(right)], [ThreeKeys(wrong)]));
+        }
+        // ‏والأَبعادُ المَفحوصَةُ هِيَ ما في مِفتاحِ الجَدوَلِ سِوى الثَلاثَة — عَمودٌ يُضافُ إلى المِفتاحِ ولا يُقارَنُ يُحَمِّرُ هذا السَطر.
+        Assert.Equal(MeterSql.AggDailyKey.Except(["day", "app", "unit"]), cases.Select(c => c.Dimension));
+    }
+
     // ─── الحُضور ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
