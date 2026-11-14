@@ -24,6 +24,13 @@ namespace ACommerce.Platform.Tests;
 // في الخَلفِيَّةِ بِتَوقيتٍ لا يَملِكُه الإقلاع، فَتُطبَعُ ولا تُقارَن. و`meter.*` خارِجَ `platform` أَصلاً: يُطبَعُ عَدُّه لِلبُرهانِ وَحدَه — فَهُوَ الَّذي يَنمو
 // بِالتَبديل (`store.create` تَحتَ `_seed`)، و`platform` لا يَتَحَرَّك.
 //
+// ‏(‏2026-11-14، مُراجَعَةُ الاكتِمال · W13-6·Z-R1·٣ — M6Z-CNT-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ **تَعديلُ تَوصيفٍ مُسَجَّلٌ في ADR-051 والقَرارُ لِلمالِك**)
+// **واستِثناءٌ ثانٍ مَكتوبٌ بِسَبَبِه — وُجودُ `mt_doc_envelope` لا صُفوفُه**: حامِلُ الحُضورِ (`PresenceSnapshot.CarryAsync`، ‏36769e4) يَحفَظُ عَبرَ صُندوقِ
+// Wolverine الصادِرِ في جَلسَةِ Marten (`MartenOutbox`)، وعَمَلِيّاتُ الصُندوقِ تُعلِنُ نَوعَ وَثيقَتِها `Wolverine.Envelope`، فَيُنشِئُ Marten جَدوَلَها المُسَجَّلَ
+// كَسولاً عِندَ أَوَّلِ حِفظ — نَحوَ ثانِيَتَينِ بَعدَ `ApplicationStarted`، أَي بَعدَ أَن يُجيبَ `/health/ready`. فَوُجودُه في البَصمَةِ رَهنُ لَحظَةِ الإطفاءِ لا البَذر
+// (مَقيسٌ عِندَ a052257: أَحمَرُ في المَجموعَةِ الحَيَّةِ كامِلَةً «platform.mt_doc_envelope: المُثَبَّت غائِب · المَقيس 0»، وأَخضَرُ وَحدَه). فَيُطبَعُ ولا يُقارَنُ
+// وُجودُه؛ **وصُفوفُه تُقارَنُ بِالصِفرِ في كُلِّ تَوقيت** — الصُندوقُ يَكتُبُ `wolverine_%` لا الوَثيقَة — فَصَفٌّ واحِدٌ فيه يَحمَرّ. والجَداوِلُ المُثَبَّتَةُ أَدناه بِحَرفِها.
+//
 // **والأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها** (القاعِدَة ١٠): تَطبَعُ عَدَدَ الجَداوِلِ المُقارَنَةِ وصُفوفَ كُلٍّ، وتَفشَلُ عَلى صِفرِ جَدوَلٍ أَو صِفرِ مَتجَرٍ
 // مَبذور، وعَلى جَدوَلٍ زائِدٍ أَو ناقِصٍ أَو رَقَمٍ مُختَلِف — في الإقلاعَين.
 
@@ -38,6 +45,10 @@ public class LiveMeterSeededFootprintCharacterizationProofTests(ITestOutputHelpe
 
     /// <summary>جَداوِلُ طابورِ Wolverine — تُطبَعُ ولا تُقارَن (بادِئَةٌ حَرفِيَّة).</summary>
     private const string ExcludedPrefix = "wolverine_";
+
+    /// <summary>(‏2026-11-14، W13-6·Z-R1·٣ — M6Z-CNT-1؛ يُلحَقُ) <b>جَدوَلُ وَثيقَةِ Wolverine</b> — يُنشِئُه Marten كَسولاً عِندَ أَوَّلِ حِفظٍ عَبرَ صُندوقِ Wolverine الصادِر
+    /// (حامِلُ الحُضور، بَعدَ <c>/health/ready</c>): وُجودُه يُطبَعُ ولا يُقارَن، وصُفوفُه تُقارَنُ بِالصِفر.</summary>
+    private const string EnvelopeTable = "mt_doc_envelope";
 
     /// <summary><b>البَصمَةُ المُثَبَّتَةُ بَعدَ الإقلاعِ البارِد</b> — صُفوفُ كُلِّ جَدوَلٍ في <c>platform</c> (عَدا <c>wolverine_</c>)، مَقيسَةً عِندَ <c>9ebb170</c>
     /// عَلى Postgres 16 مَحَلِّيٍّ فارِغ.</summary>
@@ -212,13 +223,18 @@ public class LiveMeterSeededFootprintCharacterizationProofTests(ITestOutputHelpe
     /// <summary>يُقارِنُ المَقيسَ بِالمُثَبَّت ويَطبَعُ الشَكلَ والفُروق — ويُعيدُ الفُروق.</summary>
     private List<string> Compare(string phase, List<(string Schema, string Table, long Rows)> all, IReadOnlyDictionary<string, long> pinned)
     {
-        var compared = all.Where(t => t.Schema == Schema && !t.Table.StartsWith(ExcludedPrefix, StringComparison.Ordinal))
+        var compared = all.Where(t => t.Schema == Schema && !t.Table.StartsWith(ExcludedPrefix, StringComparison.Ordinal) && t.Table != EnvelopeTable)
                           .ToDictionary(t => t.Table, t => t.Rows, StringComparer.Ordinal);
         var excluded = all.Where(t => t.Schema == Schema && t.Table.StartsWith(ExcludedPrefix, StringComparison.Ordinal)).ToList();
         foreach (var (table, rows) in compared.OrderBy(t => t.Key, StringComparer.Ordinal))
             output.WriteLine($"[seed-footprint·{phase}] {Schema}.{table} = {rows}");
         output.WriteLine($"[seed-footprint·{phase}] جَداوِلُ مُقارَنَة {compared.Count} · صُفوفُها {compared.Values.Sum()} · مُستَثناةٌ بِـ«{ExcludedPrefix}%» {excluded.Count}"
             + (excluded.Count == 0 ? "" : ": " + string.Join(", ", excluded.Select(t => $"{t.Table}={t.Rows}"))));
+        var envelope = all.Where(t => t.Schema == Schema && t.Table == EnvelopeTable).Select(t => t.Rows).ToList();
+        output.WriteLine($"[seed-footprint·{phase}] {Schema}.{EnvelopeTable} (وُجودُه يُطبَعُ ولا يُقارَن، وصُفوفُه بِالصِفر): "
+            + (envelope.Count == 0 ? "غائِب" : $"حاضِرٌ بِـ{envelope[0]} صَفّاً"));
+        Assert.True(envelope.All(rows => rows == 0),
+            $"وَثيقَةُ Wolverine صارَت تُكتَب: {Schema}.{EnvelopeTable} = {string.Join(",", envelope)} — الصُندوقُ يَكتُبُ wolverine_% وَحدَها، فَهذا تَغَيُّرٌ لا تَوقيت.");
         foreach (var g in all.Where(t => t.Schema != Schema).GroupBy(t => t.Schema))
             output.WriteLine($"[seed-footprint·{phase}] خارِجَ {Schema} (يُطبَعُ ولا يُقارَن): {g.Key} — جَداوِل {g.Count()} · صُفوف {g.Sum(t => t.Rows)}"
                 + ": " + string.Join(", ", g.Select(t => $"{t.Table}={t.Rows}")));
