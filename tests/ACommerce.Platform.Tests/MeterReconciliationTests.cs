@@ -312,20 +312,29 @@ public class MeterReconciliationTests(ITestOutputHelper output)
     }
 
     /// <summary><b>المُستَورِدُ استِثناءٌ مُسَمّى بِوَحَداتِه</b>: ما يَكتُبُه <c>TargetWriter</c> بِلا مُستَمِعٍ مِن نَوعٍ مَعدود (مُثَبَّتٌ <c>ImporterExcluded</c> في G18) وَحَداتُه هِيَ
-    /// قائِمَةُ الاستِثناء — لا أَقَلَّ ولا أَكثَر؛ وجَداوِلُ <c>ImportedRecord</c> الَّتي تَكتُبُها المَنَصَّةُ لا تَجعَلُ مَتجَراً مُستَورَداً.</summary>
+    /// قائِمَةُ الاستِثناء — لا أَقَلَّ ولا أَكثَر؛ وجَداوِلُ <c>ImportedRecord</c> الَّتي تَكتُبُها المَنَصَّةُ لا تَجعَلُ مَتجَراً مُستَورَداً.
+    /// ‏(‏2026-11-14، W13-6·E-R3·١ — M6E-CNT-R3-1) <b>والمُنتَظَرُ مِن ثَلاثَةِ مَصادِرَ مُستَقِلَّة</b>، لا مِن G18 وَحدَه: ما يَكتُبُه بِلا مُستَمِع (G18)، وما تَحذِفُه
+    /// إعادَتُه (<c>TargetWriter.ResetTenantAsync</c>) بِـ<c>DeleteWhere&lt;T&gt;</c> مِن نَوعٍ مَعدود، وكُلُّ وَحدَةِ حَدَثٍ في المُعجَمِ ما دامَت جُملَتُها الخامّةُ
+    /// تَحذِفُ <c>mt_events</c> المَتجَرِ كُلَّه — فَكانَ <c>event_ids:OfferSubmitted</c> خارِجَ القائِمَةِ والحارِسُ مُشتَقٌّ مِن G18 وَحدَه فَلا يَراه. وأَيُّ طَرَفٍ
+    /// يَنجَرِفُ (القائِمَةُ، أَو الإعادَةُ تَحذِفُ نَوعاً مَعدوداً جَديداً، أَو تَكُفُّ عَن حَذفِ الأَحداث) يُحَمِّرُه.</summary>
     [Fact]
-    public void The_importer_exclusion_covers_exactly_the_units_the_importer_writes_without_the_listener()
+    public void The_importer_exclusion_covers_exactly_the_units_the_importer_writes_without_the_listener_or_its_reset_deletes()
     {
+        var catalog = MeterUnitCatalog.Default;
+        var units = catalog.Units.Where(u => u.Boundary == MeterBoundaries.Persistence).ToList();
+        // ‏النَوعُ المَعدودُ ← قارِئُه: الوَثيقَةُ بِقاعِدَتِها في المُصَنِّفِ ووَحدَتِها في المُعجَم، والحَدَثُ بِبادِئَتِه — لا قاموسٌ مَكتوب؛ وغَيرُ المَعدودِ لا قارِئَ لَه.
+        string? ReaderOf(string type)
+        {
+            var doc = MeterRules.DocumentRules.FirstOrDefault(r => r.Key.Name == type);
+            if (doc.Key is not null) return catalog.Find(doc.Value.UnitWith(MeterGenesis.Default)!)?.Reconcile;
+            return MeterRules.StreamRules.Keys.Any(t => t.Name == type) ? MeterReconcilers.EventIdsPrefix + type : null;
+        }
+
+        // ‏(١) ما يَكتُبُه بِلا مُستَمِع — G18.
         var excludedTypes = MeterSeedWritersTests.Pinned.Where(p => p.Fate == MeterSeedWritersTests.Fate.ImporterExcluded)
             .Select(p => p.Type).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
-        var units = MeterUnitCatalog.Default.Units.Where(u => u.Boundary == MeterBoundaries.Persistence).ToList();
-        var byType = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            [nameof(Tenant)] = MeterReconcilers.TenantIds, [nameof(User)] = MeterReconcilers.UserIds, [nameof(Message)] = MeterReconcilers.MessageIds,
-        };
-        var expected = excludedTypes.Select(t => byType.TryGetValue(t, out var r) ? r : MeterReconcilers.EventIdsPrefix + t)
-            .Order(StringComparer.Ordinal).ToList();
-        output.WriteLine($"[G13·pure] أَنواعُ المُستَورِدِ المُستَثناةُ في G18: {string.Join(", ", excludedTypes)} · قُرّاؤُها {string.Join(", ", expected)}");
+        var written = excludedTypes.Select(t => ReaderOf(t) ?? $"(لا قارِئَ لِـ{t})").ToList();
+        output.WriteLine($"[G13·pure] أَنواعُ المُستَورِدِ المُستَثناةُ في G18: {string.Join(", ", excludedTypes)} · قُرّاؤُها {string.Join(", ", written)}");
         Assert.True(excludedTypes.Count >= 4, $"أَداةٌ عَمياء: {excludedTypes.Count} نَوعاً.");
         // ‏والرِسالَةُ يَكتُبُها المَوضِعُ العامُّ نَفسُه (`UpsertAsync<T>`، مُثَبَّتٌ في G18 بِنَوعِه الأَوَّلِ User) — مَقيسَةٌ هُنا بِمَوضِعِها في المُستَورِدَين.
         foreach (var importer in new[] { "AshareImporter.cs", "EjarImporter.cs" })
@@ -334,7 +343,27 @@ public class MeterReconciliationTests(ITestOutputHelper output)
             Assert.Contains("_target.UpsertAsync(TenantSlug, msgs)", text, StringComparison.Ordinal);
             Assert.Contains("new Message", text, StringComparison.Ordinal);
         }
-        expected = [.. expected.Append(MeterReconcilers.MessageIds).Order(StringComparer.Ordinal)];
+        written.Add(MeterReconcilers.MessageIds);
+
+        // ‏(٢) و(٣) ما تَحذِفُه الإعادَة — جِسمُ `ResetTenantAsync` مِن مِلَفِّه: كُلُّ `DeleteWhere<T>` نَوعُه مَعدود، وجُملَةُ `mt_events` الخامّةُ ⇐ كُلُّ وَحدَةِ حَدَث.
+        var writer = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "tools", "ACommerce.Importer", "TargetWriter.cs"));
+        var start = writer.IndexOf("public async Task ResetTenantAsync(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "TargetWriter.ResetTenantAsync غائِبَة — لا يُعرَفُ ما تَحذِفُه الإعادَة.");
+        var end = writer.IndexOf("\n    public ", start + 1, StringComparison.Ordinal);
+        var reset = end < 0 ? writer[start..] : writer[start..end];
+        var deleted = System.Text.RegularExpressions.Regex.Matches(reset, @"DeleteWhere<(\w+)>").Select(m => m.Groups[1].Value).Distinct(StringComparer.Ordinal).ToList();
+        var deletedCounted = deleted.Where(t => ReaderOf(t) is not null).ToList();
+        var wipesEvents = System.Text.RegularExpressions.Regex.IsMatch(reset, @"DELETE\s+FROM\s+platform\.mt_events\s+WHERE\s+tenant_id\s*=\s*@t", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var eventUnits = units.Select(u => u.Reconcile!).Where(r => r.StartsWith(MeterReconcilers.EventIdsPrefix, StringComparison.Ordinal)).ToList();
+        output.WriteLine($"[G13·pure] الإعادَةُ تَحذِفُ {deleted.Count} نَوعاً بِـDeleteWhere ({string.Join(", ", deleted)}) · مِنها مَعدودَة {deletedCounted.Count} ({string.Join(", ", deletedCounted)})"
+                         + $" · تَحذِفُ mt_events المَتجَرِ كُلَّه {(wipesEvents ? "نَعَم" : "لا")} ⇐ وَحَداتُ حَدَث {(wipesEvents ? eventUnits.Count : 0)}");
+        Assert.True(deleted.Count >= 5 && deleted.Contains("ImportedRecord"), $"أَداةٌ عَمياء: {deleted.Count} نَوعاً في جِسمِ الإعادَة.");
+        Assert.True(eventUnits.Count >= 4, $"أَداةٌ عَمياء: {eventUnits.Count} وَحدَةَ حَدَث.");
+        Assert.All(eventUnits, r => Assert.NotNull(MeterSourceReaders.EventTypeOf(r)));
+
+        var expected = written.Concat(deletedCounted.Select(t => ReaderOf(t)!)).Concat(wipesEvents ? eventUnits : [])
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+        output.WriteLine($"[G13·pure] المُنتَظَرُ {expected.Count}: {string.Join(", ", expected)} · القائِمَةُ {MeterSourceReaders.ImporterReconcilers.Count}");
         Assert.Equal(expected, MeterSourceReaders.ImporterReconcilers.Order(StringComparer.Ordinal));
         Assert.All(MeterSourceReaders.ImporterReconcilers, r => Assert.Contains(units, u => u.Reconcile == r));
         Assert.Equal(["AttributeDefinitions", "AttributeValues", "CategoryAttributeMappings", "DiscoveryRegions"],

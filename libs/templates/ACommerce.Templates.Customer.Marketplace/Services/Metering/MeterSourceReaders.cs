@@ -80,11 +80,14 @@ public static class MeterSourceReaders
 
     /// <summary>الوَحَداتُ الَّتي يَكتُبُ المُستَورِدُ مَصادِرَها بِلا مُستَمِع (‏<c>TargetWriter</c>: المَتجَرُ والأَعضاءُ والرَسائِلُ وثَلاثَةُ أَحداثِ بِدءٍ — مُثَبَّتَةٌ
     /// <c>ImporterExcluded</c> في <c>MeterSeedWritersTests</c>) ويَحذِفُها عِندَ إعادَةِ الاستيراد (<c>TargetWriter.cs:96-97</c>) — فَلا تُقارَنُ في مَتجَرِه.</summary>
+    /// <remarks>‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثالِثَة · W13-6·E-R3·١ — M6E-CNT-R3-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وشَطرُ الأَحداثِ كُلُّ وَحدَةِ
+    /// حَدَثٍ لا الثَلاثُ الَّتي يَكتُبُها</b>: الإعادَةُ تَحذِفُ <b>كُلَّ</b> أَحداثِ المَتجَرِ ومَجاريه بِجُملَةٍ خامّة (<c>DELETE FROM platform.mt_events WHERE tenant_id = @t</c>)،
+    /// لا ما كَتَبَه المُستَورِدُ وَحدَه — فَعَرضٌ عَدَّه المُستَمِعُ في مَتجَرٍ مُستَورَدٍ كانَ سَطرُه يَتيماً بَعدَها (مَقيس: «orphans 1 … exit 1»). فَالشَطرُ مُشتَقٌّ مِن
+    /// أَنواعِ <see cref="MeterRules.StreamRules"/> لا قائِمَةٌ مَكتوبَة، ونَوعُ وِلادَةٍ يُضافُ غَداً يُستَثنى بِلا سَطر؛ و<c>MeterReconciliationTests</c> يَشتَقُّ
+    /// المُنتَظَرَ مِن G18 ومِن <c>DeleteWhere&lt;T&gt;</c> الإعادَةِ ومِن جُملَتِها الخامّةِ فَيَحمَرُّ إن انجَرَفَ طَرَف.</remarks>
     public static readonly IReadOnlyList<string> ImporterReconcilers =
         [MeterReconcilers.TenantIds, MeterReconcilers.UserIds, MeterReconcilers.MessageIds,
-         MeterReconcilers.EventIdsPrefix + nameof(ACommerce.Kit.Listings.ListingCreated),
-         MeterReconcilers.EventIdsPrefix + nameof(ACommerce.Kit.Subscriptions.SubscriptionCreated),
-         MeterReconcilers.EventIdsPrefix + nameof(ACommerce.Kit.Support.TicketCreated)];
+         .. MeterRules.StreamRules.Keys.Select(t => MeterReconcilers.EventIdsPrefix + t.Name)];
 
     /// <summary>أَلِهذه القيمَةِ قارِئ؟ — القائِمَةُ المُغلَقَة: قُرّاءُ الوَثائِقِ السِتَّة، والحَدَثُ بِاسمِ نَوعٍ يَعُدُّه المُصَنِّف، والنِيّات، ومُطالَباتُ الحُضور.</summary>
     public static bool Reads(string? reconcile) => reconcile switch

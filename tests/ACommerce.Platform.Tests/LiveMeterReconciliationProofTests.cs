@@ -439,6 +439,88 @@ public class LiveMeterReconciliationProofTests(ITestOutputHelper output)
         Assert.Equal(0, await CountAsync(db.Cs, "select count(*) from pg_tables where schemaname = 'meter' and tablename like 'mr_backup_%'"));
     }
 
+    /// <summary>
+    /// <para>‏(‏2026-11-14، مُراجَعَةُ إغلاقِ المَرحَلَةِ هـ الثالِثَة · W13-6·E-R3·١ — M6E-CNT-R3-1) <b>إعادَةُ المُستَورِدِ تَحذِفُ كُلَّ أَحداثِ مَتجَرِه، لا ما كَتَبَه وَحدَه</b>:
+    /// عَرضٌ عَدَّه المُستَمِعُ في مَتجَرٍ مُستَورَدٍ <see cref="C"/> مُستَثنًى قَبلَ الإعادَةِ («importer-excluded 1») وبَعدَها (لا يَتيم)، خُروج 0؛ وبِلا سِجِلِّ المُستَورِدِ
+    /// سَطرُه يَتيمٌ بِاسمِه، خُروج 1 — فَالاستِثناءُ هُوَ ما يَحمِيه لا غِيابُ الحَدَث. والجُملَتانِ تُقرَآنِ مِن <c>TargetWriter.cs</c> نَفسِه لا نُسخَةً مِنهُما، وتَبقى
+    /// سُطورُ <c>ImportedRecord</c> كَما يَكتُبُها الاستيرادُ ثانِيَةً بَعدَ الإعادَة؛ ومَتجَرٌ <see cref="A"/> بِلا مُستَورِدٍ يَجعَلُ المُقارَنَ غَيرَ صِفر.</para>
+    /// </summary>
+    [Fact]
+    public async Task An_importer_reset_deletes_every_event_of_its_store_so_a_listener_counted_offer_there_is_excluded_not_orphaned()
+    {
+        if (!Enabled) return;
+        await using var db = await Db.CreateAsync("mr");
+        var store = db.Store;
+        output.WriteLine($"[G13·reset] {db.Name}: {(await MeterBoot.EnsureAsync(store)).Line}");
+
+        // ‏المَتجَرانِ والعَرضُ بِجَلَساتِ التَطبيق — المُستَمِعُ يَعُدُّها؛ وسِجِلُّ المُستَورِدِ بِمَخزَنِه (بِلا مُستَمِع) يَجعَلُ C مُستَورَداً.
+        await using (var g = store.LightweightSession())
+        {
+            g.Insert(new Tenant { Id = A, Name = "مَتجَرٌ بِلا مُستَورِد" });
+            g.Insert(new Tenant { Id = C, Name = "مَتجَرٌ مُستَورَدٌ بِعَرض" });
+            await g.SaveChangesAsync();
+        }
+        var offerId = Guid.NewGuid();
+        await using (var s = store.LightweightSession(C))
+        {
+            s.Events.StartStream<ACommerce.Kit.Offers.Offer>(offerId, new ACommerce.Kit.Offers.OfferSubmitted(
+                offerId, Guid.NewGuid(), Guid.NewGuid(), "عارِضُ المُطابَقَة", 1m, null, 24.7, 46.6, DateTime.UtcNow.AddMinutes(15), DateTime.UtcNow));
+            await s.SaveChangesAsync();
+        }
+        await store.Storage.Database.EnsureStorageExistsAsync(typeof(ImportedRecord));     // ‏الجَدوَلُ يُنشِئُه التَطبيق، والمُستَورِدُ بِلا إنشاءِ مُخَطَّط
+        using (var importer = DetachedStore(db.Cs))
+        await using (var s = importer.LightweightSession(C))
+        {
+            s.Store(new ImportedRecord { Id = "Users/1", Table = "Users", SourceId = "1", ImportedAt = DateTime.UtcNow });
+            await s.SaveChangesAsync();
+        }
+        string offerEntry;
+        await using (var conn = new NpgsqlConnection(db.Cs))
+        {
+            await conn.OpenAsync();
+            await using var cmd = new NpgsqlCommand("select id from meter.usage_entry where unit = 'offer.submit' and app = @app", conn);
+            cmd.Parameters.AddWithValue("app", C);
+            offerEntry = (string)(await cmd.ExecuteScalarAsync())!;
+        }
+        output.WriteLine($"[G13·reset] سَطرُ العَرض {offerEntry}");
+        Assert.Equal(1, await CountAsync(db.Cs, "select count(*) from platform.mt_events where tenant_id = @t", ("t", C)));
+
+        // ١ · قَبلَ الإعادَة: مَصدَرُ العَرضِ مُستَثنًى بِعَدَدِه، خُروج 0.
+        var before = Print("reset-before", await MeterReconciliation.RunAsync(store));
+        Assert.Equal([C], before.ImporterTenants);
+        Assert.Equal((0, 0, 0, 1), (Unit(before, "offer.submit").Compared, Unit(before, "offer.submit").Missing, Unit(before, "offer.submit").Orphans, Unit(before, "offer.submit").Excluded));
+        Assert.Contains($"{MeterReconciliation.LogTag} offer.submit · compared 0 · missing 0 · orphans 0 · zero-entry stores 0 · seed 0 · importer-excluded 1", before.Lines());
+        Assert.Equal((1, 0), (Unit(before, "store.create").Compared, before.ExitCode));
+
+        // ٢ · جُملَتا الإعادَةِ الخامّتانِ بِحُروفِهِما مِن مِلَفِّهِما ⇐ أَحداثُ المَتجَرِ ومَجاريه صِفر، والسَطرُ باقٍ (لا يَتَغَيَّر) ولا يُعَدُّ يَتيماً — خُروج 0.
+        var writer = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "tools", "ACommerce.Importer", "TargetWriter.cs"));
+        const string open = "cmd.CommandText = \"\"\"";
+        var from = writer.IndexOf(open, writer.IndexOf("public async Task ResetTenantAsync(", StringComparison.Ordinal), StringComparison.Ordinal) + open.Length;
+        var resetSql = writer[from..writer.IndexOf("\"\"\";", from, StringComparison.Ordinal)].Trim();
+        output.WriteLine($"[G13·reset] جُملَتا الإعادَةِ مِن TargetWriter.cs: {resetSql.ReplaceLineEndings(" ")}");
+        Assert.Contains("DELETE FROM platform.mt_events", resetSql, StringComparison.Ordinal);
+        Assert.Contains("DELETE FROM platform.mt_streams", resetSql, StringComparison.Ordinal);
+        await ExecAsync(db.Cs, resetSql, ("t", C));
+        Assert.Equal(0, await CountAsync(db.Cs, "select count(*) from platform.mt_events where tenant_id = @t", ("t", C)));
+        Assert.Equal(1, await CountAsync(db.Cs, "select count(*) from meter.usage_entry where id = @id", ("id", offerEntry)));
+        var after = Print("reset-after", await MeterReconciliation.RunAsync(store));
+        Assert.Equal([C], after.ImporterTenants);
+        Assert.Equal((0, 0, 0, 0), (Unit(after, "offer.submit").Compared, Unit(after, "offer.submit").Missing, Unit(after, "offer.submit").Orphans, Unit(after, "offer.submit").Excluded));
+        Assert.Contains($"{MeterReconciliation.LogTag} offer.submit · compared 0 · missing 0 · orphans 0 · zero-entry stores 0 · seed 0", after.Lines());
+        Assert.Equal(0, after.ExitCode);
+
+        // ٣ · الحالُ نَفسُها بِلا سِجِلِّ المُستَورِد ⇐ المَتجَرُ لَيسَ مُستَورَداً، وسَطرُ العَرضِ يَتيمٌ بِاسمِه — خُروج 1.
+        var records = store.Options.FindOrResolveDocumentType(typeof(ImportedRecord)).TableName.QualifiedName;
+        await ExecAsync(db.Cs, $"delete from {records} where tenant_id = @t", ("t", C));
+        var bare = Print("reset-no-record", await MeterReconciliation.RunAsync(store));
+        Assert.Empty(bare.ImporterTenants);
+        Assert.Equal((0, 0, 1), (Unit(bare, "offer.submit").Compared, Unit(bare, "offer.submit").Missing, Unit(bare, "offer.submit").Orphans));
+        Assert.Equal([offerEntry], Unit(bare, "offer.submit").OrphanIds);
+        Assert.Contains($"{MeterReconciliation.LogTag}   orphan {offerEntry}", bare.Lines());
+        Assert.Equal((2, 0, 0), (Unit(bare, "store.create").Compared, Unit(bare, "store.create").Missing, Unit(bare, "store.create").Orphans));
+        Assert.Equal((1, 1), (bare.Defects, bare.ExitCode));
+    }
+
     [Fact]
     public async Task Zero_sources_compared_is_a_blind_run_and_a_database_without_the_ledger_is_not_reconciled_and_not_created()
     {
