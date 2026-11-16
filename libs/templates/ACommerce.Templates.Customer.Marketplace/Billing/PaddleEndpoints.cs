@@ -1,10 +1,12 @@
 using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 
 namespace ACommerce.Templates.Customer.Marketplace.Billing;
 
@@ -72,6 +74,8 @@ public static class PaddleEndpoints
             HttpContext http, IDocumentSession session, PaddleGateway paddle,
             Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار).
+            MeterScope.Current?.FillPlatformRole(MeterSentinels.Provider);
             var raw = await new StreamReader(http.Request.Body).ReadToEndAsync(http.RequestAborted);
 
             var gate = PaddleWebhookGuard.Gate(
@@ -126,7 +130,7 @@ public static class PaddleEndpoints
                     await session.LoadAsync<PaddleTransactionRecord>(reference, ct)))
                 return PaddleSurface.Failed(slug, PaddleSurface.AlreadySettled);
 
-            var result = await paddle.CreateTransactionAsync(draft, reference, ct);
+            var result = await paddle.CreateTransactionAsync(PaddleSurface.CreateCall(slug, reference), draft, reference, ct);
 
             // ورِسالَةُ Paddle تُعرَض كَما هي — رَمزُها ونَصُّها.
             // و«فَشِلَ الإنشاء» وَحدَها تُرسِل المُشرِفَ يُخَمِّن.
@@ -148,7 +152,7 @@ public static class PaddleEndpoints
                 Services.Subscriptions.PaddleBillingService.TransactionAuditAction,
                 "TenantPlan", slug, note: $"{reference} · {result.TransactionId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── إعدادُ صَفحَةِ الدَفعِ الساكِنَة ────────────────────────
         //

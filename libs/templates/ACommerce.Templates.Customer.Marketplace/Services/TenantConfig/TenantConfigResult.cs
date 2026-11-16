@@ -92,10 +92,37 @@ public static class TenantConfigCodes
     /// <summary>نَوع أَيقونَة PWA غَير مَدعوم.</summary>
     public const string IconBadType = "icon_bad_type";
 
+    /// <summary><b>اختِيارُ أَدوارٍ لا يُطابِقُ دَوراً واحِداً مِن الكاتالوج</b> (‏2026-10-28، قَرارُ المالِك د62 — «لا تَتَهاوَن في الأَدوار»):
+    /// كانَ <c>roles/save</c> يَحفَظُه صِفرَ أَدوارٍ فَيُدخِلُ المَتجَرَ الوَضعَ المَوروث. يَرُدُّه السَطحانِ (الاستوديو والإدارَة) بِرِسالَةٍ مِن
+    /// القامُوس (<c>roles.save.err_empty_selection</c>).</summary>
+    public const string RolesEmptySelection = "roles_empty_selection";
+
+    /// <summary><b>نَمَطُ سَلَّةٍ خارِجَ المَعجَم</b> (‏2026-10-29، قَرارُ المالِك د2) — <c>CartModes.Unknown</c> نَفسُه: المُصادِقُ يَرُدُّه، والسَطحُ يَقولُه مِن القامُوس
+    /// (<c>studio.app_branding.err_cart_mode</c> في <c>StudioAppBranding.razor</c> — ‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى: كانَ التَعليقُ يُسَمّي مِفتاحاً لا وُجودَ لَه).</summary>
+    public const string CartModeUnknown = Patterns.CartModes.Unknown;
+
+    /// <summary><b>تَجميعُ فِئَةٍ خارِجَ المَعجَم</b> (‏2026-10-29، قَرارُ المالِك د25) — <c>CategoryKinds.Unknown</c> نَفسُه: يَرُدُّه
+    /// <c>CategoriesSaveService.Parse</c>، وتَقولُه الصَفَحاتُ الثَلاثُ مِن القامُوس (<c>categories.kind.err_unknown</c>).</summary>
+    public const string CategoryKindUnknown = Patterns.CategoryKinds.Unknown;
+
+    /// <summary><b>حَقلُ هُوِيَّةٍ فاتَ حَدَّه</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2) — رُموزُ بابِ الإنشاءِ نَفسُها
+    /// (<c>StudioStoreCreate</c>) بِأَرقامِها: كانَ حِفظُ الهُوِيَّةِ يَقبَلُ اسماً بِمِئَتَي أَلفِ حَرفٍ فَتَصيرُ صَفحَةُ المَتجَرِ خَمسَةَ عَشَرَ مِليونَ بايت.</summary>
+    public const string NameTooLong = Incubator.StudioStoreCreate.NameTooLong;
+    public const string TagLineTooLong = Incubator.StudioStoreCreate.TagLineTooLong;
+    public const string CityTooLong = Incubator.StudioStoreCreate.CityTooLong;
+
+    /// <summary><b>دَورٌ يَدخُلُ المَتجَرَ ومُضيفُه (<c>{slug}-{rolehost}</c>) اسمُ مَتجَرٍ قائِم</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — <see cref="RoleHostCollision"/>).
+    /// يَقولُه السَطحانِ مِن القامُوس (<c>roles.save.err_role_host_taken</c>).</summary>
+    public const string RoleHostTaken = "role_host_taken";
+
     /// <summary>المُعجَم كامِلاً — مَقروءٌ في <see cref="TenantConfigResult.Reject"/>
     /// وفي فاحِصِ الانغِلاق.</summary>
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType,
+        BadFormat, Empty, NameRequired, ColorInvalid, NoScope, IconTooLarge, IconBadType, RolesEmptySelection,
+        CartModeUnknown,   // ‏2026-10-29، قَرارُ المالِك د2
+        CategoryKindUnknown,   // ‏2026-10-29، قَرارُ المالِك د25
+        NameTooLong, TagLineTooLong, CityTooLong,   // ‏2026-11-07، W13-1·SEC2-C1-2
+        RoleHostTaken,   // ‏2026-11-07، W13-4·C2b·4
     };
 }

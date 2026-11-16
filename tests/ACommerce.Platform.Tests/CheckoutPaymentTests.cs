@@ -1,3 +1,4 @@
+using ACommerce.Kit.Payments;
 using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using Xunit;
 
@@ -58,8 +59,21 @@ public class CheckoutPaymentTests
     {
         var roots = new[] { Path.Combine(RepoRoot, "libs"), Path.Combine(RepoRoot, "apps") };
 
+        // ─── استِثناءٌ مُسَمّى — ‏2026-10-12 (‏ADR-033 الخُطوَة 3) ─────────────────
+        // ‏`"cod"` هُنا **مُفرَدَةُ OTO لا رَمزُ إتمامِ الشِراء**: قيمَةُ `payment_method` في
+        // طَلَبِ `createOrder` كَما تَقولُها وَثيقَتُهم («‏Possible values: cod, paid»)،
+        // ويُرسِلُها العَميلُ نَفسُه إلى OTO — فَلَها كاتِبٌ، وهُوَ ما يَسأَلُ عَنه هذا
+        // الفاحِص. والمِلَفُّ مُسَمّى بِحَرفِه لا بِنَمَط، وإن زالَ مِنه الحَرفُ أَحمَرَّ الصَفُّ
+        // حَتّى يُرفَعَ الاستِثناء.
+        var pinned = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["libs/kits/Delivery/ACommerce.Kit.Delivery.Core/OtoClient.cs"] =
+                "قيمَةُ payment_method عِندَ OTO — يُرسِلُها OtoClient.CreateOrderAsync نَفسُه.",
+        };
+
         var scanned = 0;
         var hits = new List<string>();
+        var pinnedSeen = new List<string>();
 
         foreach (var root in roots)
         foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
@@ -71,11 +85,16 @@ public class CheckoutPaymentTests
 
             scanned++;
             var text = File.ReadAllText(file);
-            if (text.Contains("\"cod\"", StringComparison.Ordinal))
-                hits.Add(Path.GetRelativePath(RepoRoot, file));
+            if (!text.Contains("\"cod\"", StringComparison.Ordinal)) continue;
+            var rel = Path.GetRelativePath(RepoRoot, file).Replace('\\', '/');
+            if (pinned.ContainsKey(rel)) pinnedSeen.Add(rel);
+            else hits.Add(rel);
         }
 
         Assert.True(scanned > 200, $"أَداةٌ عَمياء: فُحِصَ {scanned} مِلَفّاً.");
+        Assert.True(pinnedSeen.Count == pinned.Count,
+            "استِثناءٌ مُسَمّى لَم يَعُد يَحمِلُ الحَرف — يُرفَع: "
+            + string.Join("، ", pinned.Keys.Except(pinnedSeen)));
         Assert.True(hits.Count == 0,
             "الرَمزُ \"cod\" ما زالَ في المَصدَر، ولا تُرسِلُه استِمارَةٌ: "
             + string.Join("، ", hits));
@@ -147,23 +166,18 @@ public class CheckoutPaymentTests
             "الشاشَةُ تَكتُبُ الرَمزَ حَرفِيّاً — وذاكَ طَرَفٌ يَنجَرِف.");
     }
 
-    /// <summary><b>ومَسارُ العَودَةِ يَحمِلُ ما مَلَأَه المُشتَري</b> —
-    /// فَلا يُعيدُ كِتابَةَ عُنوانِه بَعدَ رَفضٍ لَيسَ مِن
-    /// صُنعِه.</summary>
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-28، قَرارُ المالِك د60)</b> — كانَ <c>The_refusal_path_carries_back_everything_the_buyer_typed</c>: المَسارُ يُعيدُ
+    /// الاسمَ والجَوّالَ والعُنوانَ في الاستِعلامِ «فَلا يُعيدُ كِتابَةَ عُنوانِه». والآن ما كَتَبَه مَحفوظٌ في سَلَّتِه (<c>CheckoutDetails</c>)، فَلا يُعيدُ
+    /// كِتابَتَه أَيضاً — والمَسارُ رَقمُ الخُطوَةِ ورَمزُ الرَفضِ مُرَمَّزاً، ولا شَيءَ مِن بَياناتِه (CWE-598).</summary>
     [Fact]
-    public void The_refusal_path_carries_back_everything_the_buyer_typed()
+    public void The_refusal_path_returns_to_step_two_with_its_code_alone_and_no_buyer_detail()
     {
-        var path = CheckoutPaymentPolicy.RefusalPath(
-            CheckoutPayMethods.CardUnavailable, "أَبو خالِد", "+966500000000", "الرياض، حَيّ النَخيل");
+        var path = CheckoutPaymentPolicy.RefusalPath(CheckoutPayMethods.CardUnavailable);
 
-        Assert.StartsWith("checkout?step=2&", path, StringComparison.Ordinal);
-        Assert.Contains($"err={CheckoutPayMethods.CardUnavailable}", path, StringComparison.Ordinal);
-        Assert.Contains("name=", path, StringComparison.Ordinal);
-        Assert.Contains("phone=", path, StringComparison.Ordinal);
-        Assert.Contains("addr=", path, StringComparison.Ordinal);
-
-        // مُرَمَّزٌ لا خام — فاصِلَةٌ أَو مِسافَةٌ في العُنوانِ لا تَكسِرُه.
-        Assert.DoesNotContain(" ", path, StringComparison.Ordinal);
+        Assert.Equal($"checkout?step=2&err={CheckoutPayMethods.CardUnavailable}", path);
+        foreach (var field in new[] { "name=", "phone=", "addr=" })
+            Assert.DoesNotContain(field, path, StringComparison.Ordinal);
+        Assert.Equal("checkout?step=2&err=a%20b", CheckoutPaymentPolicy.RefusalPath("a b"));   // مُرَمَّزٌ لا خام
     }
 
     // ═══ ٣) الجَدوَلُ النَقِيّ — بِطَرَفَيه ═════════════════════════════
@@ -182,8 +196,9 @@ public class CheckoutPaymentTests
     public void Cash_on_delivery_never_reaches_the_provider_in_any_store()
     {
         foreach (var collects in new[] { true, false })
+        foreach (var canCharge in new[] { true, false })
         {
-            var (method, refusal) = CheckoutPaymentPolicy.Decide("cash", collects);
+            var (method, refusal) = CheckoutPaymentPolicy.Decide("cash", collects, canCharge);
             Assert.Equal(CheckoutPayMethods.CashOnDelivery, method);
             Assert.Null(refusal);
             Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
@@ -193,7 +208,7 @@ public class CheckoutPaymentTests
     [Fact]
     public void Card_in_a_store_that_collects_reaches_the_provider()
     {
-        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true);
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true, providerCanCharge: true);
         Assert.Equal(CheckoutPayMethods.Card, method);
         Assert.Null(refusal);
         Assert.True(CheckoutPaymentPolicy.CallsProvider(method));
@@ -204,9 +219,95 @@ public class CheckoutPaymentTests
     [Fact]
     public void Card_in_a_store_that_does_not_collect_is_refused_with_a_code()
     {
-        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: false);
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: false, providerCanCharge: true);
         Assert.Equal(CheckoutPayMethods.CardUnavailable, refusal);
         Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
+    }
+
+    // ═══ ٤) المُزَوِّدُ يُسأَلُ عَن قُدرَتِه قَبلَ أَن يُنادى — ‏ADR-032 §٢‑د ═══
+    //
+    // **المَدخَلُ الَّذي كانَ يَضُرّ** (موجَزُ الفَجَوات P0-1، ‏2026-10-10): رابِطٌ
+    // مُستَضافٌ مَلصوقٌ يَقلِبُ `PaymentProviderConfigured` فَتُعرَضُ البِطاقَةُ
+    // وتُنادي `IPaymentProvider` العامَّ — وهُوَ في الإنتاجِ
+    // `UnavailablePaymentProvider` يَرُدُّ `Failed` دائِماً. فَيُختَمُ
+    // `payment_status = Failed` عَلى الصَفقَةِ وتَبقى `Offered`. وكانَ بِلا
+    // اختِبارٍ يُحمِرُّ إن عاد — وهذِه الأَربَعَةُ هي ذاكَ الاختِبار.
+
+    /// <summary><b>الموجِبُ خَلِيَّةٌ واحِدَة</b>: المَتجَرُ يَقبِضُ
+    /// والمُزَوِّدُ يَستَطيع. <b>والسالِبُ ثَلاث</b> — ومِنها الخَلِيَّةُ
+    /// الَّتي كانَت مَفتوحَة: رابِطٌ مَلصوقٌ ومُزَوِّدٌ لا يَقبِض.</summary>
+    [Theory]
+    [InlineData(true,  true,  true)]
+    [InlineData(true,  false, false)]   // P0-1 بِعَينِه: كانَ `true`
+    [InlineData(false, true,  false)]
+    [InlineData(false, false, false)]
+    public void Card_is_offered_only_when_the_store_collects_and_the_provider_can_charge(
+        bool collects, bool canCharge, bool offered)
+        => Assert.Equal(offered, CheckoutPaymentPolicy.CardOffered(collects, canCharge));
+
+    /// <summary>وطَلَبُ بِطاقَةٍ في تِلكَ الخَلِيَّةِ <b>يُرَدُّ بِرَمزٍ</b>
+    /// ولا يُبَدَّلُ صامِتاً ولا يُنادى المُزَوِّد.</summary>
+    [Fact]
+    public void Card_is_refused_with_a_code_when_the_platform_provider_cannot_charge_even_with_a_pasted_link()
+    {
+        var (method, refusal) = CheckoutPaymentPolicy.Decide("card", paymentProviderConfigured: true, providerCanCharge: false);
+        Assert.Equal(CheckoutPayMethods.CashOnDelivery, method);
+        Assert.Equal(CheckoutPayMethods.CardUnavailable, refusal);
+        Assert.False(CheckoutPaymentPolicy.CallsProvider(method));
+    }
+
+    /// <summary><b>مَن يَستَطيعُ القَبضَ ومَن لا</b>: الفَشَلُ المُغلَقُ
+    /// (مُزَوِّدُ الإنتاجِ بِلا تَهيئَة) لا؛ والمُحاكي والتَجرِبَةُ المُعلَنَةُ
+    /// نَعَم — وهُما لا يُسَجَّلانِ خارِجَ التَطويرِ إلّا بِكِتابَةٍ صَريحَة
+    /// (‏ADR-025).</summary>
+    [Fact]
+    public void The_closed_failure_provider_cannot_charge_and_the_development_providers_can()
+    {
+        Assert.False(PaymentChargeSurface.CanCharge(new UnavailablePaymentProvider()));
+        Assert.False(PaymentChargeSurface.CanCharge(null));
+        Assert.True(PaymentChargeSurface.CanCharge(new MockPaymentProvider()));
+        Assert.True(PaymentChargeSurface.CanCharge(new SimulatedPaymentProvider()));
+    }
+
+    /// <summary>
+    /// <para>مَقطَعُ نُقطَةِ إتمامِ الشِراءِ مِن اسمِها إلى خاتِمَتِها <c>.RequireStoreWritable();</c> — لا نافِذَةَ بِعَدَدِ مَحارِف.
+    /// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-1 الجَولَة ٢، مَعلومَة؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: كانَ المَقطَعُ أَوَّلَ ‏4000 مِحرَفٍ بَعدَ الاسم،
+    /// والسَطرُ المَطلوبُ انتَقَلَ مِن ‏3596 إلى ‏3900 في التَيّار — فَتَعليقٌ بِنَحوِ مِئَةِ مِحرَفٍ فَوقَه يُحمِرُّ الصَفَّ لِسَبَبٍ لا يَخُصُّه.)</para>
+    /// </summary>
+    internal static string SubmitSegment(string text)
+    {
+        var start = text.IndexOf("/{slug}/checkout/submit", StringComparison.Ordinal);
+        Assert.True(start > 0, "نُقطَةُ إتمامِ الشِراءِ غَير مَوجودَة — الأَداةُ عَمياء.");
+        var end = text.IndexOf(".RequireStoreWritable();", start, StringComparison.Ordinal);
+        Assert.True(end > start, "خاتِمَةُ نُقطَةِ إتمامِ الشِراءِ غَيرُ مَوجودَة — الأَداةُ عَمياء.");
+        return text.Substring(start, end - start);
+    }
+
+    /// <summary>والشاشَةُ والنُقطَةُ تَسأَلانِ المُسنَدَ نَفسَه — فَلا تَعرِضُ
+    /// الشاشَةُ خِياراً سَتَرُدُّه النُقطَة.</summary>
+    [Fact]
+    public void Both_readers_ask_the_provider_whether_it_can_charge()
+    {
+        Assert.Contains("PaymentChargeSurface.CanCharge(Payments)", CheckoutRazor(), StringComparison.Ordinal);
+
+        var body = SubmitSegment(Endpoints());
+        Assert.True(body.Length > 4000, $"أَداةٌ عَمياء: مَقطَعُ النُقطَةِ {body.Length} مِحرَفاً — أَقَلُّ مِن النافِذَةِ الَّتي حَلَّ مَحَلَّها.");
+        Assert.Contains("PaymentChargeSurface.CanCharge(payments)", body, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والمَقطَعُ يُقاسُ قَبلَ أَن يُوثَقَ بِه</b> (القاعِدَة ١٠؛ ‏2026-10-25): سَطرُ المُسنَدِ بَعدَ تَعليقٍ يَتَجاوَزُ ‏4000 مِحرَفٍ يُرى، وما
+    /// بَعدَ الخاتِمَةِ — في النُقطَةِ التالِيَة — لا يُرى، وغِيابُ الخاتِمَةِ يُحمِرّ.</summary>
+    [Fact]
+    public void The_submit_segment_ends_at_the_endpoint_not_at_a_character_window()
+    {
+        const string Ask = "PaymentChargeSurface.CanCharge(payments)";
+        var longComment = "app.MapPost(\"/{slug}/checkout/submit\", async () => {\n// " + new string('x', 4200) + "\nvar ok = " + Ask + ";\n})\n.RequireStoreWritable();";
+        Assert.Contains(Ask, SubmitSegment(longComment), StringComparison.Ordinal);
+
+        var after = "app.MapPost(\"/{slug}/checkout/submit\", async () => { })\n.RequireStoreWritable();\napp.MapPost(\"/{slug}/other\", () => " + Ask + ");";
+        Assert.DoesNotContain(Ask, SubmitSegment(after), StringComparison.Ordinal);
+
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => SubmitSegment("app.MapPost(\"/{slug}/checkout/submit\", async () => { });"));
     }
 
     [Fact]

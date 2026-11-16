@@ -31,6 +31,29 @@ public sealed record OfferAccepted(System.Guid Id, System.DateTime At);
 public sealed record OfferRejected(System.Guid Id, System.DateTime At);
 public sealed record OfferExpired(System.Guid Id, System.DateTime At);
 
+/// <summary>
+/// <para><b>اسمُ مُقَدِّمِ العَرضِ يُبَدَّلُ في المَجرى نَفسِه</b> (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ قَرارا المالِك د52 (١) ود53 (٤)): مُصدِرُه الوَحيدُ
+/// مَحوُ الحِسابِ (<c>AccountErasure.EraseEvents</c>) — يُلحَقُ مَعَ <see cref="OfferWithdrawn"/> لِعَرضٍ مُعَلَّقٍ في مُعامَلَةِ الحَذف. ولِماذا حَدَثٌ لا كِتابَةٌ
+/// عَلى اللَقطَة: اللَقطَةُ إسقاطٌ مُباشِر، وحَدَثٌ يُلحَقُ لِمَجراها في الجَلسَةِ نَفسِها يَكتُبُ الإسقاطُ فَوقَ ما خُزِّنَ يَدَوِيّاً مِن المَخزَن — الاسمُ الأَصلِيُّ
+/// يَعود (مَقيسٌ عَلى Postgres، بِأَيِّ تَرتيب). فَالمَحوُ في المَجرى: كُلُّ قارِئٍ — لَقطَةً أَو مَجرى — يَراه، وإعادَةُ بِناءِ الإسقاطِ تُعيدُه.</para>
+/// </summary>
+public sealed record OffererRenamed(System.Guid Id, string OffererName, System.DateTime At);
+
+/// <summary>
+/// <para><b>عَرضٌ انتَهَت مُدَّتُه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO8؛ تَوصيفُه <c>8041dd7</c>): بَلَغَت اللَحظَةُ <see cref="Offer.ExpiresAt"/> — والوَقتُ
+/// الَّذي كَتَبَه التَقديمُ (الآنَ + المُهلَة) لا يُمَدَّد. دالَّةٌ نَقِيَّةٌ واحِدَةٌ يَسأَلُها بابُ القَبولِ (بَعدَ المالِكِ وقَبلَ أَيِّ كِتابَة، فَيَرُدُّ بِـ<see cref="Code"/>)،
+/// وصَفحَةُ الإعلانِ فَلا تَرسُمُ «قبول» لِمُنتَهٍ، و«عُروضي» فَتُسَمّيه «مُنتَهي» لا «قَيد المُراجَعَة». ولا حَدَثَ يُكتَب: <see cref="OfferExpired"/> بِلا مُصدِر
+/// كَما كانَ — الانتِهاءُ يُقرَأُ مِن الوَقتِ ولا يُخَزَّن.</para>
+/// <para>والحَدُّ نَفسُه الَّذي تَستَعمِلُه قائِمَتا العُروضِ في الاستِعلام (<c>ExpiresAt &gt; now</c> «قائِم»): المُنتَهي هُوَ ما لَيسَ قائِماً.</para>
+/// </summary>
+public static class OfferExpiry
+{
+    /// <summary>رَمزُ رَدِّ القَبولِ — تَقرَؤُه صَفحَةُ الإعلانِ بِـ<c>listings.detail.err_offer_expired</c>.</summary>
+    public const string Code = "offer_expired";
+
+    public static bool ExpiredAt(Offer offer, System.DateTime now) => now >= offer.ExpiresAt;
+}
+
 /// <summary>الحالات: pending → accepted | rejected | withdrawn | expired.</summary>
 public enum OfferStatus { Pending, Accepted, Rejected, Withdrawn, Expired }
 
@@ -69,6 +92,7 @@ public sealed class Offer
     public void Apply(OfferAccepted  e) { Status = OfferStatus.Accepted;  ResolvedAt = e.At; }
     public void Apply(OfferRejected  e) { Status = OfferStatus.Rejected;  ResolvedAt = e.At; }
     public void Apply(OfferExpired   e) { Status = OfferStatus.Expired;   ResolvedAt = e.At; }
+    public void Apply(OffererRenamed e) { OffererName = e.OffererName; }
 }
 
 /// <summary>حالات الرِحلَة بَعدَ القَبول:

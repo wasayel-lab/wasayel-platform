@@ -1,0 +1,269 @@
+namespace ACommerce.Platform.Shared.Metering;
+
+/// <summary>
+/// <para><b>عَقدُ الجَدوَلِ الواحِد</b> — أَسماءُ المُخَطَّطِ والجَداوِلِ والأَعمِدَةِ وجُمَلُ الكِتابَة، مَكتوبَةً مَرَّةً يَقرَؤُها الكاتِبون
+/// (مُستَمِعُ الحِفظ، والصادِرُ واللَقطاتُ لاحِقاً) والإقلاعُ والمُجَمِّع (البَند ٤). والجَداوِلُ نَفسُها تُعلَنُ في ميزَةِ Weasel
+/// (<c>UsageLedgerFeature</c> في القالِب) بِهذه الأَسماءِ لا بِنُسَخٍ مِنها.</para>
+/// <para><b>جَداوِلُ خامٌ في مُخَطَّطِ <c>meter</c> لا وَثائِقُ Marten</b> (التَصميم §4، مَقيس D1–D4): وَثيقَةٌ مُقتَرِنَةٌ تَأخُذُ مُستَأجِرَ الجَلسَةِ لا
+/// المَتجَر، ووَثيقَةٌ وَحيدَةُ الإيجارِ لا تَحمِلُ عَموداً افتِراضُه مُعَرِّفُ المُعامَلَةِ الكاتِبَة، وحَدَثٌ يُلحِقُه المُستَمِعُ يَسقُطُ صامِتاً.</para>
+/// </summary>
+public static class MeterSql
+{
+    public const string Schema = "meter";
+
+    /// <summary>الدَفتَر — سَطرٌ لِكُلِّ عَمَلِيَّة (أَو حُضور)، لا يَتَغَيَّر.</summary>
+    public const string UsageEntry = "usage_entry";
+    /// <summary>نافِذَةُ مُطابَقَةِ كُلِّ وَحدَة: أَوَّلُ إقلاعٍ عَرَفَها (التَصميم §9).</summary>
+    public const string UnitEpoch = "unit_epoch";
+    /// <summary>جيلُ العُنقود (التَصميم §10.1): يُفتَحُ جَديدٌ حينَ يَرى الإقلاعُ مُعَرِّفَ مُعامَلَةٍ في الجيلِ الجاري فَوقَ العُنقود (استِعادَة).</summary>
+    public const string Generation = "generation";
+
+    /// <summary>أَعمِدَةُ الدَفتَرِ بِتَرتيبِها — والثَلاثَةُ الأَخيرَةُ لا يُمَرِّرُها الكاتِبُ إلّا الجيل.</summary>
+    public static readonly IReadOnlyList<string> UsageEntryColumns =
+    [
+        "id", "unit", "quantity", "app", "entrepreneur", "role", "feature", "provider", "source_type", "source_id",
+        "occurred_at", "generation", "writer_xid",
+    ];
+
+    /// <summary>
+    /// <para><b>كِتابَةُ السَطر</b> — بِعَلاماتِ <c>?</c> الَّتي يَقرَؤُها <c>QueueSqlCommand</c>، بِتَرتيبِ <see cref="UsageEntry"/> ثُمَّ الجيل.
+    /// <c>ON CONFLICT (id) DO NOTHING</c>: الإعادَةُ بِالمُعَرِّفِ نَفسِه لا تُفشِلُ الحِفظَ ولا تُضاعِفُ العَدّ (D4).</para>
+    /// <para><b>والجيلُ</b> ما خَبَّأَه الإقلاعُ (<c>MeterBoot</c>)؛ و<c>0</c> «لَم يُقلِعِ التَطبيقُ عَلى هذا المَخزَن» (تَركيبٌ لا يَمُرُّ بِـ<c>Program.cs</c>:
+    /// الاختِباراتُ والمُضيفُ المُصَغَّر) — فَيُؤخَذُ آخِرُ جيلٍ مَفتوح، أَو 1 عَلى قاعِدَةٍ لَم يُفتَح فيها جيل (وهُوَ ما يَفتَحُه الإقلاعُ الأَوَّل).
+    /// <c>COALESCE</c> لا يُقَيِّمُ ما بَعدَ أَوَّلِ قيمَة، فَالجيلُ المُخَبَّأُ لا يَقرَأُ الجَدوَل.</para>
+    /// </summary>
+    public const string Insert =
+        "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, generation) "
+        + "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, coalesce(nullif(?, 0), (select max(g.generation) from meter.generation g), 1)) "
+        + "on conflict (id) do nothing";
+
+    /// <summary>قُفلُ الإقلاعِ داخِلَ مُعامَلَتِه — نُسخَتانِ تُقلِعانِ مَعاً لا تَفتَحانِ جيلَين.</summary>
+    public const string BootLock = "select pg_advisory_xact_lock(hashtext('meter.boot'))";
+
+    /// <summary>الجيلُ الجاري، أَو <c>null</c> عَلى دَفتَرٍ لَم يُفتَح فيه جيل.</summary>
+    public const string CurrentGeneration = "select max(generation) from meter.generation";
+
+    /// <summary><b>كاشِفُ التَراجُع</b> (R3/R4): سَطرٌ في الجيلِ الجاري مُعَرِّفُ مُعامَلَتِه فَوقَ العُنقودِ = قاعِدَةٌ استُعيدَت في عُنقودٍ جَديد.</summary>
+    public const string RegressionInGeneration =
+        "select exists(select 1 from meter.usage_entry e where e.generation = @g and e.writer_xid > pg_current_xact_id())";
+
+    /// <summary>يَفتَحُ جيلاً — وقِيَمُ بِدايَتِه افتِراضُ القاعِدَة.</summary>
+    public const string OpenGeneration = "insert into meter.generation (generation) values (@g)";
+
+    /// <summary>نافِذَةُ وَحدَةٍ يَعرِفُها هذا الإقلاع — مَرَّةً واحِدَة؛ والصَفُّ القائِمُ لا يُمَسّ.</summary>
+    public const string EnsureEpoch = "insert into meter.unit_epoch (unit) values (@u) on conflict (unit) do nothing";
+
+    // ═══ الصادِر (‏2026-11-12، W13-6·١١ — ADR-051 §١٨؛ التَصميم §6.2) ═══════════════════════════════════════════════════════════════
+    // نِيَّةٌ تُعلَنُ قَبلَ النِداءِ في مُعامَلَتِها، ونَتيجَتُها بَعدَه — والمَقبولُ سَطرٌ ونَتيجَةٌ في مُعامَلَةٍ واحِدَة. والمَجهولُ عَلى النِيَّةِ لا في السَطر:
+    // السَطرُ لا يَتَغَيَّر، فَلا يُكتَبُ ما قَد يَنقَلِبُ. كاتِبُها الوَحيدُ `UsageLedgerWriter` في القالِب.
+
+    /// <summary>نِيَّاتُ الصادِر — صَفٌّ لِكُلِّ نِداءٍ مَعدودٍ بِمُعَرِّفِ سَطرِه (<c>{unit}:{provider}:{requestId}</c>)، ونَتيجَتُه مُعجَمٌ مُغلَق: تولَدُ
+    /// <c>pending</c>، وتَنتَهي <c>accepted</c> أَو <c>refused</c> أَو <c>unknown</c>.</summary>
+    public const string OutboundIntent = "outbound_intent";
+
+    /// <summary>النِيَّةُ قَبلَ النِداء — مَرَّةً؛ والمُعَرِّفُ القائِمُ (إعادَةٌ بِالطَلَبِ نَفسِه) لا يُمَسّ، ولا تَرجِعُ نَتيجَتُه <c>pending</c>.</summary>
+    public const string IntentOpen =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome) values (@id, @unit, @provider, @app, @request, 'pending') "
+        + "on conflict (id) do nothing";
+
+    /// <summary>المَقبول — في مُعامَلَةِ سَطرِه: مِن المُعَلَّقِ أَو المَجهول (فَالمَجهولُ ثُمَّ المَقبولُ بِالمُعَرِّفِ نَفسِه سَطرٌ واحِد)، ونِيَّةٌ لَم تُكتَب
+    /// (تَعَذَّرَت قَبلَ النِداء) تُكتَبُ مَقبولَةً — فَلا سَطرَ بِلا نِيَّة.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٥ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ومِن المَرفوضِ أَيضاً — المَقبولُ وَحدَه نِهائِيّ</b>: عَمَلِيَّةٌ واحِدَةٌ قَد تُرفَضُ ثُمَّ تُقبَلُ
+    /// بِالمُعَرِّفِ نَفسِه — <c>OtoClient</c> يُعيدُ الطَلَبَ مَرَّةً بَعدَ ‏401 بِرَمزٍ جَديد، ومِفتاحُ PayPal يُعادُ بَعدَ ‏429 — فَكانَ السَطرُ يُكتَبُ والنِيَّةُ تَبقى «مَرفوضَة»
+    /// بِجِوارِه. والمَرفوضُ والمَجهولُ ما زالا لا يُكتَبانِ فَوقَ مَقبول (<see cref="IntentDecide"/>).</remarks>
+    public const string IntentAccept =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome, decided_at) "
+        + "values (@id, @unit, @provider, @app, @request, 'accepted', transaction_timestamp()) "
+        + "on conflict (id) do update set outcome = 'accepted', decided_at = transaction_timestamp() "
+        + "where meter.outbound_intent.outcome in ('pending', 'unknown', 'refused')";
+
+    /// <summary>المَرفوضُ والمَجهول: مِن المُعَلَّقِ وَحدَه — فَلا يُكتَبُ فَوقَ مَقبولٍ ولا فَوقَ نَتيجَةٍ سَبَقَت؛ ونِيَّةٌ لَم تُكتَب تُكتَبُ بِنَتيجَتِها.</summary>
+    public const string IntentDecide =
+        "insert into meter.outbound_intent (id, unit, provider, app, request_id, outcome, decided_at) "
+        + "values (@id, @unit, @provider, @app, @request, @outcome, transaction_timestamp()) "
+        + "on conflict (id) do update set outcome = excluded.outcome, decided_at = transaction_timestamp() "
+        + "where meter.outbound_intent.outcome = 'pending'";
+
+    /// <summary><see cref="Insert"/> بِعَلاماتِ Npgsql المَوضِعِيَّة (<c>$1…$11</c>) — الجُملَةُ نَفسُها بِحَرفِها لِكاتِبٍ عَلى اتِّصالِه لا عَلى جَلسَة.</summary>
+    public static readonly string InsertPositional = Positional(Insert);
+
+    // ═══ الحُضور (‏2026-11-13، W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §4 و§8) ═══════════════════════════════════════════════════════════════
+    // لَقطَةٌ واحِدَةٌ لِكُلِّ يَوم: مُطالَبَةٌ مِفتاحُها اليَومُ تُكتَبُ مَعَ سُطورِها و`completed_at` في مُعامَلَةٍ خامٍ واحِدَة، فَلا يَبقى يَومٌ نِصفَ مَعدود. كاتِبُها
+    // الوَحيدُ `PresenceSnapshot` في القالِب، وسَطرُها كَسَطرِ الحِفظِ إلّا أَنّ `occurred_at` بِدايَةُ يَومِه بِمِنطَقَةِ المَنَصَّة (التَصميم §2) لا لَحظَةُ الكِتابَة.
+
+    /// <summary>مُطالَبَةُ لَقطَةِ الحُضور — صَفٌّ لِكُلِّ يَوم (<see cref="DayZone"/>): <c>day</c> مِفتاحُه، و<c>claimed_at</c>، و<c>completed_at</c> حينَ أُودِعَت سُطورُه.</summary>
+    public const string PresenceClaim = "presence_claim";
+
+    /// <summary>المُطالَبَةُ بِاليَوم — صَفٌّ يَعودُ لِلرابِحِ وَحدَه؛ ومُعالِجٌ ثانٍ يَقِفُ عَلى المِفتاحِ الفَريدِ حَتّى تُودِعَ الأُولى أَو تَتَراجَع، ثُمَّ لا يَعودُ لَه شَيء.</summary>
+    public const string PresenceClaimInsert = "insert into meter.presence_claim (day) values (@day) on conflict (day) do nothing returning day";
+
+    /// <summary>اكتِمالُ اليَوم — في مُعامَلَةِ مُطالَبَتِه وسُطورِه نَفسِها.</summary>
+    public const string PresenceClaimComplete = "update meter.presence_claim set completed_at = transaction_timestamp() where day = @day";
+
+    /// <summary>أَاكتَمَلَت مُطالَبَةُ اليَوم؟ — يَسأَلُه الإقلاعُ قَبلَ أَن يُرسِلَ اليَوم.</summary>
+    public const string PresenceClaimCompleted = "select exists(select 1 from meter.presence_claim where day = @day and completed_at is not null)";
+
+    /// <summary>
+    /// <para><b>حامِلُ اليَومِ في الطابور — صَفٌّ واحِدٌ لِكُلِّ يَوم</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الأولى · W13-6·D-R1·٢ — M6D-CNT-1؛ ADR-051 §٢٣ وسَطرُه المُؤَرَّخ):
+    /// <c>day</c> مِفتاحُه و<c>scheduled_at</c>. يُكتَبُ مَعَ رِسالَةِ ذلكَ اليَومِ المُجَدوَلَةِ في <b>مُعامَلَةٍ واحِدَة</b> (صُندوقُ Marten الصادِر)، فَوُجودُه ⇔ لِليَومِ حامِلٌ
+    /// في الطابور؛ ومُعالِجٌ ثانٍ يَقِفُ عَلى المِفتاحِ الفَريدِ فَيَتَراجَعُ ومَعَه رِسالَتُه — فَلا يَتَضاعَفُ الحامِل. كاتِبُه الوَحيدُ <c>PresenceSnapshot.CarryAsync</c>.</para>
+    /// </summary>
+    public const string PresenceSchedule = "presence_schedule";
+
+    /// <summary>صَفُّ الحامِلِ بِعَلامَةِ <c>?</c> الَّتي يَقرَؤُها <c>QueueSqlCommand</c> — <b>بِلا <c>ON CONFLICT</c> عَمداً</b>: التَكرارُ (‏23505) يَرُدُّ المُعامَلَةَ كُلَّها ومَعَها الرِسالَة.</summary>
+    public const string PresenceScheduleInsert = "insert into meter.presence_schedule (day) values (?)";
+
+    /// <summary>أَلِهذا اليَومِ حامِل؟ — يُسأَلُ قَبلَ المُعامَلَةِ فَلا يُرمى التَكرارُ في المَسارِ المُعتاد؛ والمِفتاحُ الفَريدُ هُوَ الحَكَمُ في السِباق.</summary>
+    public const string PresenceScheduleCarried = "select exists(select 1 from meter.presence_schedule where day = @day)";
+
+    /// <summary>
+    /// <para><b>سَطرُ الحُضور</b> — أَعمِدَةُ <see cref="Insert"/> بِأَسمائِها، و<c>occurred_at</c> بِدايَةُ اليَومِ بِـ<see cref="DayZone"/> (فَيَقَعُ في دَلوِ يَومِه عِندَ المُجَمِّعِ
+    /// والصَفحَة)، والجيلُ بِتَعبيرِ <see cref="Insert"/> نَفسِه. و<c>ON CONFLICT (id) DO NOTHING</c>: المُعَرِّفُ يَحمِلُ اليَوم، فَإعادَتُه لا تُضاعِف.</para>
+    /// </summary>
+    public const string PresenceInsert =
+        "insert into meter.usage_entry (id, unit, quantity, app, entrepreneur, role, feature, provider, source_type, source_id, occurred_at, generation) "
+        + "values (@id, @unit, @quantity, @app, @entrepreneur, @role, @feature, @provider, @source_type, @source_id, (@day::timestamp at time zone '" + DayZone + "'), "
+        + "coalesce(nullif(@generation, 0), (select max(g.generation) from meter.generation g), 1)) "
+        + "on conflict (id) do nothing";
+
+    private static string Positional(string sql)
+    {
+        var n = 0;
+        return System.Text.RegularExpressions.Regex.Replace(sql, @"\?", _ => "$" + ++n);
+    }
+
+    // ═══ المُجَمِّعُ المُستَقِلّ (‏2026-11-12، W13-6·٤ — ADR-051 §١٢؛ التَصميم §10) ═══════════════════════════════════════════════════
+    // جَدوَلاهُ يُعلَنانِ في الميزَةِ نَفسِها فَيُنشِئُهُما إقلاعُ التَطبيق — **والمُجَمِّعُ لا يُنشِئُ شَيئاً**. وجُمَلُ كِتابَتِهِما الثَلاث
+    // (`AggUpsertRange` و`AggCursorSet` و`AggRebuild`) لا يُناديها إلّا `apps/V1.Meter` — يَحرُسُه `MeterIndependenceTests` (G10).
+    // ‏(‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وصارَت أَربَعاً: `AggCursorSet` انقَسَمَ
+    // وِلادَةً (`AggCursorBirth`) وتَقَدُّماً (`AggCursorAdvance`).
+
+    /// <summary>مَجاميعُ المُجَمِّعِ لِكُلِّ يَومٍ ومَتجَرٍ ورائِدِ أَعمالٍ ودَورٍ ومِيزَةٍ ومُزَوِّدٍ ووَحدَة.</summary>
+    public const string AggDaily = "agg_daily";
+    /// <summary>مُؤَشِّرُ المُجَمِّعِ — صَفٌّ واحِد: آخِرُ <c>(generation, writer_xid, id)</c> جُمِعَ.</summary>
+    public const string AggCursor = "agg_cursor";
+
+    /// <summary>مِفتاحُ <see cref="AggDaily"/> بِتَرتيبِه — وما سِواه عَمودانِ يَتَراكَمان: <c>entries</c> و<c>quantity</c>.</summary>
+    public static readonly IReadOnlyList<string> AggDailyKey = ["day", "app", "entrepreneur", "role", "feature", "provider", "unit"];
+
+    /// <summary><b>حَدُّ اليَوم</b> (س٥ في ADR-051 §٩): <c>Asia/Riyadh</c> — وهُوَ <c>CultureTime.DefaultTimeZone</c> (‏<c>ACommerce.Kit.Culture</c>) بِحَرفِه. والمُجَمِّعُ لا يُشيرُ إلى
+    /// عُدَّةِ الثَقافَة (G10: ‏Shared وNpgsql وَحدَهُما)، فَالتَطابُقُ يَحرُسُه اختِبار؛ والسُطورُ بِوَقتِ UTC فَإعادَةُ البِناءِ تُعيدُ التَقسيمَ إن تَغَيَّر.</summary>
+    public const string DayZone = "Asia/Riyadh";
+
+    /// <summary>اسمُ القُفلِ الاستِشارِيِّ لِلجَلسَة: مُجَمِّعٌ واحِدٌ لِكُلِّ قاعِدَة (COR-9).</summary>
+    public const string AggregatorLockName = "meter.aggregator";
+
+    /// <summary>اسمُ تَطبيقِ اتِّصالاتِ المُجَمِّعِ في <c>pg_stat_activity</c> — يَقرَؤُه المُشَغِّلُ والبُرهانُ الحَيّ.</summary>
+    public const string AggregatorApplicationName = "wasayel-meter-agg";
+
+    /// <summary>جَداوِلُ الدَفتَرِ الغائِبَة مِن الأَربَعَةِ الَّتي يَقرَؤُها المُجَمِّع — صَفٌّ لِكُلِّ غائِب، وصِفرٌ = كُلُّها قائِمَة.</summary>
+    public const string LedgerTablesMissing =
+        "select n from unnest(array['meter.usage_entry', 'meter.generation', 'meter.agg_daily', 'meter.agg_cursor']) as n where to_regclass(n) is null order by n";
+
+    /// <summary>قُفلُ الجَلسَة: يَبقى ما بَقِيَ الاتِّصال، ويَسقُطُ بِمَوتِ العَمَلِيَّة.</summary>
+    public const string AggregatorTryLock = "select pg_try_advisory_lock(hashtext('" + AggregatorLockName + "'))";
+
+    /// <summary>حامِلُ القُفلِ في هذه القاعِدَة (المِفتاحُ <c>bigint</c> واحِد: <c>classid</c> نِصفُه الأَعلى و<c>objid</c> الأَدنى).</summary>
+    public const string AggregatorLockHolder =
+        "select l.pid from pg_locks l where l.locktype = 'advisory' and l.granted and l.objsubid = 1 "
+        + "and l.database = (select d.oid from pg_database d where d.datname = current_database()) "
+        + "and ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('" + AggregatorLockName + "')::bigint "
+        + "and l.pid <> pg_backend_pid() limit 1";
+
+    /// <summary>
+    /// <para><b>هل ما زالَت هذه الجَلسَةُ تُمسِكُ القُفل؟</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2) — يُسأَلُ عَلى اتِّصالِ القُفلِ قَبلَ كُلِّ صَفحَة.
+    /// <c>--interval</c> يَترُكُ ذلك الاتِّصالَ خامِلاً طولَ التَشغيل، فَمُهلَةُ خُمولٍ أَو وَسيطُ اتِّصالاتٍ أَو انقِطاعٌ يُنهي جَلسَتَه فَيَسقُطُ القُفلُ ولا يَدري
+    /// المُجَمِّع: نِداءٌ عَلى جَلسَةٍ مَيِّتَةٍ يَرمي، وجَلسَةٌ حَيَّةٌ بِلا قُفلٍ تُجيبُ <c>false</c> — وكِلاهُما «القُفلُ ضاع».</para>
+    /// </summary>
+    public const string AggregatorLockHeldHere =
+        "select exists(select 1 from pg_locks l where l.locktype = 'advisory' and l.granted and l.objsubid = 1 and l.pid = pg_backend_pid() "
+        + "and l.database = (select d.oid from pg_database d where d.datname = current_database()) "
+        + "and ((l.classid::bigint << 32) | l.objid::bigint) = hashtext('" + AggregatorLockName + "')::bigint)";
+
+    /// <summary>المُؤَشِّرُ المَحفوظ، أَو لا صَفّ (لَم يَعمَلِ المُجَمِّعُ بَعد).</summary>
+    public const string AggCursorRead = "select after_gen, after_xid::text, after_id from meter.agg_cursor where singleton";
+
+    /// <summary>الجيلُ الجاري، و1 عَلى دَفتَرٍ لَم يُفتَح فيه جيل (ما تَكتُبُه <see cref="Insert"/> حينَها).</summary>
+    public const string CurrentGenerationOrFirst = "select coalesce(max(generation), 1) from meter.generation";
+
+    /// <summary>
+    /// <para><b>تَراجُعُ المُؤَشِّر</b> (R3/R4): مُؤَشِّرٌ في الجيلِ الجاري ومُعَرِّفُ مُعامَلَتِه فَوقَ العُنقود — أَو مُؤَشِّرٌ في جيلٍ لَم يُفتَح —
+    /// قاعِدَةٌ استُعيدَت ولَم يُقلِعِ التَطبيقُ عَلَيها بَعد. والمُجَمِّعُ يَرفُضُ ولا يَتَقَدَّم (الخُروج ٤)، ومَعَه
+    /// <see cref="RegressionInGeneration"/> لِسُطورِ الجيلِ الجاري.</para>
+    /// </summary>
+    public const string CursorRegression =
+        "select exists(select 1 from meter.agg_cursor c where c.singleton and (c.after_gen > @cur or (c.after_gen = @cur and c.after_xid > pg_current_xact_id())))";
+
+    /// <summary>لَقطَةُ البَدءِ T0 (COR-8) — نَصُّ <c>pg_snapshot</c>.</summary>
+    public const string SnapshotNow = "select pg_current_snapshot()::text";
+
+    /// <summary>رَأسُ الصَفحَة — أَوَّلُ جُملَةٍ في مُعامَلَتِها (<c>REPEATABLE READ</c>) فَيَتَثَبَّتُ بِها لَقطَتُها: الجيلُ الجاري والأُفُق
+    /// (<c>pg_snapshot_xmin</c>: أَقدَمُ مُعامَلَةٍ جارِيَةٍ عَلى العُنقودِ كُلِّه — R2). وما تَحتَ الأُفُقِ انتَهى فَرُؤيَتُه نِهائِيَّة.</summary>
+    public const string PageHead =
+        "select coalesce((select max(g.generation) from meter.generation g), 1), pg_snapshot_xmin(pg_current_snapshot())::text";
+
+    /// <summary>
+    /// <para><b>مَفاتيحُ الصَفحَة — المُؤَشِّرُ <c>(generation, writer_xid, id)</c></b> (D5، R4): ما فَوقَ المُؤَشِّر، والأُفُقُ عَلى الجيلِ الجاري وَحدَه —
+    /// فَالجيلُ المُغلَقُ تامٌّ لا يَنتَظِرُ أُفُقاً، وسَطرٌ بَعدَ الاستِعادَةِ في جيلٍ جَديدٍ يُقرَأُ وإن كانَ مُعَرِّفُ مُعامَلَتِه تَحتَ المُؤَشِّر.</para>
+    /// </summary>
+    public const string PageKeys =
+        "select e.generation, e.writer_xid::text, e.id, e.unit from meter.usage_entry e "
+        + "where (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i) and (e.generation < @cur or e.writer_xid < @h::xid8) "
+        + "order by e.generation, e.writer_xid, e.id limit @n";
+
+    /// <summary>
+    /// <para><b>مَجاميعُ الصَفحَة</b> — المَدى <c>(المُؤَشِّر، آخِرُ مَفاتيحِ الصَفحَة]</c> في لَقطَةِ المُعامَلَةِ نَفسِها هُوَ صُفوفُ الصَفحَةِ بِأَعيانِها:
+    /// كُلُّ ما تَحتَ آخِرِ مِفتاحٍ مِن الجيلِ الجاري تَحتَ الأُفُق، وما في جيلٍ مُغلَقٍ تامّ. واليَومُ بِـ<see cref="DayZone"/>.</para>
+    /// </summary>
+    public const string AggUpsertRange =
+        "insert into meter.agg_daily (day, app, entrepreneur, role, feature, provider, unit, entries, quantity) "
+        + "select (e.occurred_at at time zone '" + DayZone + "')::date, e.app, e.entrepreneur, e.role, e.feature, e.provider, e.unit, count(*), sum(e.quantity) "
+        + "from meter.usage_entry e "
+        + "where (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i) and (e.generation, e.writer_xid, e.id) <= (@lg, @lx::xid8, @li) "
+        + "group by 1, 2, 3, 4, 5, 6, 7 "
+        + "on conflict (day, app, entrepreneur, role, feature, provider, unit) do update "
+        + "set entries = meter.agg_daily.entries + excluded.entries, quantity = meter.agg_daily.quantity + excluded.quantity";
+
+    /// <summary>
+    /// <para>المُؤَشِّرُ يَتَقَدَّمُ إلى آخِرِ مَفاتيحِ الصَفحَة — في مُعامَلَةِ مَجاميعِها نَفسِها: يُودَعانِ مَعاً أَو لا يُودَعُ أَحَدُهُما.</para>
+    /// <para><b>وبِشَرطِ ما قَرَأَتهُ الصَفحَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ · M6A-CNT-2): كانَ يَكتُبُ بِلا شَرطٍ فَوقَ ما كَتَبَه غَيرُه، فَصَفحَةٌ أُعيدَت
+    /// بَعدَ 40001 بِمُؤَشِّرٍ في الذاكِرَةِ جَمَعَت المَدى مَرَّتَين (مَقيس: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 23»).</para>
+    /// <para><b>وجُملَتانِ لا جُملَة</b> (‏2026-11-12، مُراجَعَةُ المَرحَلَةِ أ الجَولَةُ الثانِيَة · M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ <c>AggCursorSet</c>
+    /// ‏<c>insert … on conflict (singleton) do update … where (المُؤَشِّر) = (ما قَرَأَته)</c> — والشَرطُ في فَرعِ التَحديثِ وَحدَه، وفَرعُ <c>insert</c> بِلا شَرط. فَلَمّا
+    /// حَذَفَ <c>--rebuild</c> صَفَّ المُؤَشِّرِ تَحتَ صَفحَةٍ قَرَأَته (مُجَمِّعٌ فَقَدَ قُفلَه)، وَلَدَت تِلكَ الصَفحَةُ مُؤَشِّرَها فَوقَ جَدوَلٍ فُرِّغ، وسَحَبَ المُعيدُ مِنه صِفراً
+    /// (مَقيسٌ عِندَ <c>47f3c2d</c>: «سُطورُ الدَفتَر 13 · مَجاميعُ agg_daily 3»، بِلا خُروجٍ ولا سَطر). الآن: صَفحَةٌ لَم تَقرَأ مُؤَشِّراً <b>تَلِدُه</b>
+    /// (<see cref="AggCursorBirth"/>)، وما سِواها <b>يَتَقَدَّمُ مِمّا قَرَأَ</b> (<see cref="AggCursorAdvance"/>) — وكِلاهُما صَفٌّ واحِدٌ أَو تَتَراجَعُ الصَفحَةُ ولا تَكتُب.
+    /// وفي <c>REPEATABLE READ</c> صَفٌّ حَدَّثَه غَيرُها أَو حَذَفَه بَعدَ لَقطَتِها يَرُدُّه 40001 قَبلَ الشَرط، فَتُعادُ وتَقرَؤُه مِن جَديد.</para>
+    /// </summary>
+    public const string AggCursorBirth =
+        "insert into meter.agg_cursor (singleton, after_gen, after_xid, after_id, pulled_at) values (true, @lg, @lx::xid8, @li, transaction_timestamp()) "
+        + "on conflict (singleton) do nothing";
+
+    /// <summary>تَقَدُّمُ المُؤَشِّرِ مِن <c>(@g, @x, @i)</c> — ما قَرَأَتهُ الصَفحَةُ في لَقطَتِها (<see cref="AggCursorRead"/>) — إلى آخِرِ مَفاتيحِها؛ وصِفرُ صُفوفٍ
+    /// (حُذِفَ أَو تَغَيَّر) ⇐ تَتَراجَعُ الصَفحَة. والسِياقُ في <see cref="AggCursorBirth"/>.</summary>
+    public const string AggCursorAdvance =
+        "update meter.agg_cursor set after_gen = @lg, after_xid = @lx::xid8, after_id = @li, pulled_at = transaction_timestamp() "
+        + "where singleton and (after_gen, after_xid, after_id) = (@g, @x::xid8, @i)";
+
+    /// <summary><b>إعادَةُ البِناء</b> = تَفريغُ المَجاميعِ وحَذفُ المُؤَشِّرِ في مُعامَلَةٍ واحِدَةٍ تَحتَ القُفل؛ ثُمَّ اللَحاقُ كَأَوَّلِ تَشغيل.</summary>
+    /// <remarks>‏(‏2026-11-12، M6A-CNT-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>حَذفٌ لا <c>truncate</c></b>: <c>truncate</c> لا يَحفَظُ اللَقطَة — قارِئٌ بِـ<c>REPEATABLE READ</c>
+    /// ثَبَّتَ لَقطَتَه عَلى المُؤَشِّرِ قَبلَه (رَأسُ <c>MeterQueries</c>، أَو صَفحَةُ مُجَمِّعٍ فَقَدَ قُفلَه) يَرى بَعدَه المَجاميعَ فارِغَةً والمُؤَشِّرَ قائِماً (مَقيسٌ خارِجَ
+    /// المُستَودَع: «agg 0 · cursor 10»، وبِالحَذفِ «agg 10 · cursor 10»)، ويَأخُذُ قُفلاً حَصرِيّاً يَقِفُ لَه كُلُّ قارِئ. والحَذفُ يَحفَظُها، ومَجاميعُ يَومِيَّةٌ بِعَدَدِ
+    /// (يَوم × مَتجَر × وَحدَة…) لا يَثقُلُ حَذفُها.</remarks>
+    public const string AggRebuild = "delete from meter.agg_daily; delete from meter.agg_cursor";
+
+    /// <summary><b>ما أُودِعَ قَبلَ T0 ولَم يُجمَع</b>: سَطرٌ فَوقَ المُؤَشِّرِ مُعامَلَتُه مَرئِيَّةٌ في لَقطَةِ البَدء. <c>--once</c> لا يَنتَهي وهذا صَحيح.</summary>
+    public const string PendingBeforeSnapshot =
+        "select exists(select 1 from meter.usage_entry e where (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i) "
+        + "and pg_visible_in_snapshot(e.writer_xid, @t0::pg_snapshot))";
+
+    /// <summary>مَن يُمسِكُ الأُفُق: الخَلفِيَّةُ (في أَيِّ قاعِدَةٍ عَلى العُنقود — R2) الَّتي مُعَرِّفُ مُعامَلَتِها هُوَ الأُفُق، أَو مُعامَلَةٌ مُعَدَّةٌ بِه.</summary>
+    public const string HorizonBlockers =
+        "select a.pid::text, a.backend_xid::text, coalesce(a.datname, ''), coalesce(a.state, '') from pg_stat_activity a where a.backend_xid = @h::xid8::xid "
+        + "union all select 'prepared ' || p.gid, p.transaction::text, p.database, 'prepared' from pg_prepared_xacts p where p.transaction = @h::xid8::xid";
+
+    /// <summary>تَأَخُّرُ المُجَمِّعِ بِالثَواني: عُمرُ أَقدَمِ سَطرٍ فَوقَ المُؤَشِّر، وصِفرٌ إن لَم يَبقَ شَيء.</summary>
+    public const string Lag =
+        "select coalesce(floor(extract(epoch from clock_timestamp() - min(e.occurred_at)))::bigint, 0) from meter.usage_entry e "
+        + "where (e.generation, e.writer_xid, e.id) > (@g, @x::xid8, @i)";
+}

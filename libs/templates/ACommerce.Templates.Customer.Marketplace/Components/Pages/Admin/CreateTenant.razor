@@ -1,5 +1,4 @@
 @page "/admin/tenants/new"
-@inject IDocumentStore Store
 @inject L L
 
 @*
@@ -34,7 +33,7 @@
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
                     <AcField Label="@(L["admin.new.slug"])" Required="true">
                         <input type="text" name="slug" required maxlength="32"
-                               pattern="[a-z0-9_-]+" class="ac-input"
+                               pattern="[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9])){0,52}" class="ac-input"
                                placeholder="ashare" dir="ltr"
                                value="@Form?["slug"]" />
                     </AcField>
@@ -122,20 +121,12 @@
                             </div>
                             <div>
                                 <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
-                                <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                                <CategoryKindSelect />
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <datalist id="kind-list">
-                    <option value="residential"></option>
-                    <option value="commercial"></option>
-                    <option value="roommate"></option>
-                    <option value="vehicles"></option>
-                    <option value="events"></option>
-                    <option value="leisure"></option>
-                </datalist>
 
                 <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
                     <AcIcon Name="plus" Size="16" /> @L.Markup("admin.new.add_cat")@((MarkupString)"\n                ")
@@ -159,7 +150,7 @@
                     </div>
                     <div>
                         <span class="ac-chip-input-label">@L.Markup("admin.new.cat_kind")</span>
-                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                        <CategoryKindSelect />
                     </div>
                 </div>
             </div>
@@ -198,10 +189,20 @@
     {
         "slug_required" => L["admin.new.err_slug_required"],
         "slug_taken"    => L["admin.new.err_slug_taken"],
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2) بِنَصِّ استِمارَةِ الاستوديو لِلرَمزِ نَفسِه — مَعناهُ واحِد.
+        Services.Incubator.TenantFromAnalysisFactory.SlugReserved => L[Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugReserved)],
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P-08) ورَمزُ الشَكلِ بِنَصِّ الاستوديو وطولُه مِن المُصادِق — كانَ يُعرَضُ الرَمزُ نَفسُه (`_ => err`).
+        Services.Incubator.TenantFromAnalysisFactory.SlugFormat => L.Format(Services.Incubator.StudioStoreCreate.MessageKey(Services.Incubator.TenantFromAnalysisFactory.SlugFormat), ACommerce.Kit.Tenants.StoreHostName.MaxLength),
         "name_required" => L["admin.new.err_name_required"],
         "color_invalid" => L["admin.new.err_color"],
-        "no_categories" => L["admin.new.err_no_categories"],
-        "bad_categories" => L["admin.new.err_bad_categories"],
+        // ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الطولِ في الخادِم — بِنَصِّ الاستوديو لِلرَمزِ نَفسِه، مَعناهُ واحِد.
+        Services.Incubator.StudioStoreCreate.NameTooLong or Services.Incubator.StudioStoreCreate.TagLineTooLong or Services.Incubator.StudioStoreCreate.CityTooLong
+            => L[Services.Incubator.StudioStoreCreate.LengthMessageKey(err)],
+        // ‏رَمزا الفِئاتِ رَمزا المُحَلِّلِ المُشتَرَكِ (`TenantConfigCodes`) مُنذُ ‏2026-10-29 (قَرارُ المالِك د25) — وكانا
+        // `no_categories`/`bad_categories`؛ والنَصّانِ هُما هُما، تَقولُهُما مَفاتيحُهُما القائِمَة.
+        "empty"         => L["admin.new.err_no_categories"],
+        "bad_format"    => L["admin.new.err_bad_categories"],
+        Services.Patterns.CategoryKinds.Unknown => L["categories.kind.err_unknown"],   // ‏2026-10-29، قَرارُ المالِك د25
         _               => err
     };
 }

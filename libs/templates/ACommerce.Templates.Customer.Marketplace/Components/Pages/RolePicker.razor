@@ -1,6 +1,5 @@
 @page "/{slug}/me/role"
 @page "/{slug}/r/{role}/me/role"
-@inject IDocumentStore Store
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject L L
@@ -26,7 +25,7 @@ else if (tenant.Roles.Count == 0)
 {
     @* مَتجَر بِلا أَدوار — لا داعِيَ لِلصَفحَة *@
     <AcEmptyState IconName="info" Title="@L["roles.picker.no_roles_title"]"
-                  ActionLabel="@L["roles.picker.no_roles_action"]" ActionHref="@($"/{Slug}")" />
+                  ActionLabel="@L["roles.picker.no_roles_action"]" ActionHref="@AuthSession.LinkFor(Slug, null, "")" />
 }
 else
 {

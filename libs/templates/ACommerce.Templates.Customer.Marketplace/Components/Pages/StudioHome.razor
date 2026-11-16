@@ -1,7 +1,8 @@
 @page "/studio"
-@page "/studio/ideas"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject Services.Incubator.StudioAuth Auth
-@inject Services.Incubator.FeasibilityAnalysisService Incubator
+@inject ACommerce.Kit.Culture.ICultureContext Culture
+@inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject Services.Queries.TenantDirectory Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Incubator
 @inject L L
@@ -17,41 +18,63 @@
          قائِمَة (فِئات/أَدوار/مُدُن/خَصائِص) مَع فَحص ملكيَّة كُلّ عَمَلِيَّة.
 
     الـ Active يَتَبَدَّل بَين home/ideas حَسَب المَسار.
+
+    ‏(‏2026-11-07، الموجَة ١٣ W13-1·٤ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «حَلِّل فِكرَة» صارَ «أَنشِئ مَتجَراً» إلى استِمارَةِ الإنشاءِ بِلا مِفتاح،
+    والأَزرارُ الثَلاثَةُ الأُخرى إلَيها بِنُصوصِ المَتجَر لا الفِكرَة؛ وقِسمُ الأَفكارِ وإحصاءاتُه تَخرُجُ في W13-1·٥.
 *@
 
-<StudioShell Title="@Title" Active="@(IsIdeas ? "ideas" : "home")">
+<StudioShell Title="@Title" Active="home">
     <TopBarActions>
+        @* رابِطا `/studio/agent` (هُنا وبِطاقَتُه أَسفَلَ) لا يُرسَمانِ لِمَن لا يَفتَحُ لَه بابُ الوَكيل — `StudioAgentDoor.Opens` نَفسُه الَّذي
+           تَسأَلُه الصَفحَة (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3، lens-security-2؛ القاعِدَة ١٢). وأَوَّلُ الشَريطِ بِلا فَراغٍ قَبلَه أَصلاً
+           (Razor يَقُصُّه)، والبِطاقَةُ بِحيلَةِ الفَراغِ أَدناه — فَلِلمُشرِفِ الصَفحَةُ بايتاً كَما كانَت (مَقيس). *@
+        @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) ومِفتاحُ الوَكيلِ أَمامَ بابِه: مُطفَأٌ ⇐ لا رابِط، ولَو فُتِحَ البابُ لِمُشرِفٍ بِمِفتاحِ نَموذَج. *@
+        @if (AgentSwitch.Enabled)
+        {
+        @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
+        {
         <a class="st-btn st-btn-ghost" href="/studio/agent">
             <AcIcon Name="message" Size="14" /> @L.Markup("studio.home.agent_cta")@((MarkupString)"\n        ")
         </a>
+        }
+        }
+        @* روابِطُ صَفحَةِ الفِكرَةِ السِتَّةُ (هُنا خَمسَة، وفي `StudioShell` السادِس) لا تُرسَمُ بِلا مُزَوِّدِ تَحليل — `StudioAnalysisDoor.Opens`
+           نَفسُه الَّذي تَرسُمُ بِه `/studio/new` استِمارَتَها؛ وكانَت تُرسَمُ فَتَبلُغُ كُلُّ نَقرَةٍ «غَيرُ مُتاح» (‏2026-10-24، مُراجَعَةُ تَيّارِ S15
+           الجَولَة 2؛ تَوصيفُه e38c08f؛ القاعِدَة ١٢). والحالَتانِ الفارِغَتانِ تَقولانِ النَصَّ المُغلَقَ مَكانَ الزِرّ.
+           و`@((MarkupString)"…")` المُلاصِقُ لِكُلِّ عُنصُرٍ هُوَ الفَراغُ الَّذي كانَ قَبلَه بِحَرفِه: Razor يُسقِطُ الفَراغَ عَلى حَدِّ الكُتلَة، فَبِه تَبقى
+           الصَفحَةُ بِالمِفتاحِ بايتاً كَما كانَت (مَقيسٌ؛ نَفسُ حيلَةِ تَرحيلِ القامُوس). *@
+        @* ‏(‏2026-11-07، W13-1·٣ — ADR-049) الروابِطُ السِتَّةُ إلى `/studio/new` تُرسَمُ بِلا باب: الصَفحَةُ صارَت استِمارَةَ إنشاءٍ لا تَحتاجُ مِفتاحاً. *@
         <a class="st-btn st-btn-primary" href="/studio/new" style="margin-inline-start:8px;">
-            <AcIcon Name="lightbulb" Size="14" /> @L.Markup("studio.home.new_idea")@((MarkupString)"\n        ")
+            <AcIcon Name="plus" Size="14" /> @L.Markup("studio.home.create_cta")@((MarkupString)"\n        ")
         </a>
     </TopBarActions>
     <ChildContent>
-        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" />
+        <UpgradePrompt Reason="@Upgrade" CurrentTier="@(currentTier ?? "spark")" RenewsOn="@renewsOn" />
 
         <div class="studio-page-head">
-            <h1>@(IsIdeas ? L["studio.home.ideas_title"] : Greeting)</h1>
-            <p>@(IsIdeas ? L["studio.home.ideas_sub"]
-                          : L["studio.home.home_sub"])</p>
+            <h1>@Greeting</h1>
+            <p>@L.Markup("studio.home.home_sub")</p>
         </div>
 
-        @if (!IsIdeas)
-        {
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §١) خَرَجَ مِن الصَفحَةِ مَسارُ `/studio/ideas` وإحصاءا «دِراسات مُكتَمِلَة» و«إجمالي الأَفكار»
+           وقِسمُ الأَفكارِ وحالَتُه الفارِغَة: لا تَحليلَ في الرِحلَة، والدِراساتُ القَديمَةُ يَبلُغُها شَريطُ مَتجَرِها وَحدَه. *@
             @* بِطاقَتان واضِحَتان لِمَساعِدَي الذَّكاء — كُلّ واحِدَة بِغَرَض مُختَلِف. *@
             <div class="studio-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:18px;">
                 <a class="studio-list-row" href="/studio/new" style="align-items:flex-start;">
                     <span class="studio-list-icon" style="background:#fef3c7;color:#854d0e;">
-                        <AcIcon Name="lightbulb" Size="18" />
+                        <AcIcon Name="store" Size="18" />
                     </span>
                     <div class="studio-list-body" style="flex:1;">
-                        <strong>@L.Markup("studio.home.analyze_title")</strong>
-                        <span style="line-height:1.6;">@L.Markup("studio.home.analyze_body")</span>
+                        <strong>@L.Markup("studio.home.create_title")</strong>
+                        <span style="line-height:1.6;">@L.Markup("studio.home.create_body")</span>
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
-                <a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
+                @if (AgentSwitch.Enabled)
+                {
+                @if (StudioAgentDoor.Opens(Agent.IsConfigured, isPlatformAdmin))
+                {
+                @((MarkupString)"\n                ")<a class="studio-list-row" href="/studio/agent" style="align-items:flex-start;">
                     <span class="studio-list-icon ac-chip-info">
                         <AcIcon Name="message" Size="18" />
                     </span>
@@ -61,6 +84,8 @@
                     </div>
                     <span style="color:var(--st-faint);">←</span>
                 </a>
+                }
+                }
             </div>
 
             <div class="studio-stats">
@@ -68,14 +93,6 @@
                     <div class="studio-stat-label">@L.Markup("studio.home.stat_apps")</div>
                     <div class="studio-stat-value">@(myApps?.Count ?? 0)</div>
                     <div class="studio-stat-sub">@L.Markup("studio.home.stat_apps_sub")</div>
-                </div>
-                <div class="studio-stat">
-                    <div class="studio-stat-label">@L.Markup("studio.home.stat_studies")</div>
-                    <div class="studio-stat-value">@(sessions?.Count(s => s.Status == IncubatorStatus.Completed) ?? 0)</div>
-                </div>
-                <div class="studio-stat">
-                    <div class="studio-stat-label">@L.Markup("studio.home.stat_ideas")</div>
-                    <div class="studio-stat-value">@(sessions?.Count ?? 0)</div>
                 </div>
             </div>
 
@@ -86,7 +103,7 @@
                    مَقيسٌ بِالطَبَقَة السادِسَة. والأَخضَرُ الغامِق
                    مَوجودٌ في اللَوحَة سَلَفاً لِهذا بِعَينِه، فَلا لَونَ
                    جَديد يُخترَع. *@
-                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_idea")</a>
+                <a href="/studio/new" style="font-size:12px;color:var(--st-primary-700);text-decoration:none;font-weight:600;">@L.Markup("studio.home.plus_store")</a>
             </div>
             @if (myApps is null)
             {
@@ -98,7 +115,7 @@
                     <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="package" Size="48" /></div>
                     <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_apps")</h3>
                     <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_apps_body")</p>
-                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_idea")</a>
+                    <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.start_store")</a>
                 </div>
             }
             else
@@ -115,7 +132,14 @@
                         <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">
                             @L.Markup("studio.plan.hidden_at") @HiddenAtText(t.Slug)
                         </p>
-                        <p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap;">
+                        @* السِعرُ المُتَّفَقُ عَلَيه قَبلَ التَعليماتِ وأَزرارِ الدَفع — البَندُ ٤ مِن المُوافَقَةِ يَقولُ «يُعرَضُ لَكَ في الاستوديو قَبلَ أَيِّ
+                           دَفع» (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1). وبِلا سِعرٍ مُسَجَّلٍ لا سَطر، و`@((MarkupString)…)` بَعدَ الكُتلَةِ هُوَ الفَراغُ
+                           الَّذي كانَ بَينَ الفِقرَتَينِ بِحَرفِه (Razor يُسقِطُ الفَراغَ عَلى حَدِّ الكُتلَة) — فَالصَفحَةُ بِلا سِعرٍ بايتاً كَما كانَت. *@
+                        @if (PriceLine(t.Slug) is { } priceLine)
+                        {
+                            <p style="margin:6px 0 0;font-size:13px;color:var(--st-muted);">@priceLine</p>
+                        }
+                        @((MarkupString)"\n                        ")<p style="margin:8px 0 0;font-size:13px;white-space:pre-wrap;">
                             @(string.IsNullOrWhiteSpace(transferInstructions)
                                 ? L["studio.plan.transfer_missing"]
                                 : transferInstructions)
@@ -181,6 +205,19 @@
                             <div class="studio-list-body">
                                 <strong>@t.Name</strong>
                                 <span>/@t.Slug · @t.Categories.Count @L.Markup("studio.home.category_unit") · @t.Roles.Count @L.Markup("studio.home.role_unit")</span>
+                                @* سَطرُ الباقَةِ السارِيَة (موجَزُ الفَجَوات P2-4، ‏2026-10-13): لافِتَةُ الباقَةِ أَعلاه لِما خَرَجَ عَن
+                                   السَرَيانِ أَو لَه دَفعٌ مُعَلَّقٌ وَحدَه (`Renewable`)، فَالسارِيَةُ لَم تَكُن تُرى — و‏ADR-003 §٤ يَعِدُ بِها
+                                   بِحالَتِها وتاريخِ انتِهائِها. اسمُها مِن كاتالوجِ باقاتِ المَنَصَّةِ وتاريخُها مِن الوَثيقَة — لا رَقَمَ
+                                   يُختَرَع؛ وبِلا وَثيقَةِ باقَةٍ لا سَطرَ، فَالصَفُّ كَما كانَ بايتاً. *@
+                                @if (ActivePlanLine(t.Slug) is { } planLine)
+                                {
+                                    <span style="display:block;margin-top:4px;">@planLine</span>
+                                    @* والسِعرُ المُتَّفَقُ عَلَيه تَحتَه إن سُجِّل — القَرارُ نَفسُه الَّذي تَقرَؤُه اللافِتَةُ أَعلاه (brief-P2-1). *@
+                                    @if (PriceLine(t.Slug) is { } rowPrice)
+                                    {
+                                        <span style="display:block;margin-top:4px;">@rowPrice</span>
+                                    }
+                                }
                             </div>
                             <span class="st-chip">@(t.Roles.Count == 0 ? L["studio.home.kind_store"] : L["studio.home.kind_multirole"])</span>
                             <span style="color:var(--st-faint);">←</span>
@@ -188,9 +225,8 @@
                     }
                 </div>
             }
-        }
 
-        @if (!IsIdeas && recentDeals.Count > 0)
+        @if (recentDeals.Count > 0)
         {
             <div class="st-section-title">@L.Markup("studio.home.recent_deals")</div>
             <div class="studio-list">
@@ -202,7 +238,7 @@
                             <strong>
                                 @(string.IsNullOrEmpty(d.ListingTitle) ? d.Pattern : d.ListingTitle)
                             </strong>
-                            <span>/@slug · @d.Pattern · @d.UpdatedAt.ToString("HH:mm")</span>
+                            <span>/@slug · @d.Pattern · @Culture.FormatTime(d.UpdatedAt, "HH:mm")</span>
                         </div>
                         <span class="st-chip">@Services.Deals.DealsPolicy.LabelAr(d.Stage)</span>
                     </a>
@@ -210,51 +246,18 @@
             </div>
         }
 
-        <div class="st-section-title">@(IsIdeas ? L["studio.home.analysis_sessions"] : L["studio.home.recent_ideas"])</div>
-        @if (sessions is null)
-        {
-            <div class="st-card">@L.Markup("studio.state.loading")</div>
-        }
-        else if (sessions.Count == 0)
-        {
-            <div class="st-card" style="text-align:center;padding:36px;">
-                <div style="font-size:42px;margin-bottom:6px;"><AcIcon Name="lightbulb" Size="48" /></div>
-                <h3 style="margin:0 0 6px;">@L.Markup("studio.home.no_ideas")</h3>
-                <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.home.no_ideas_body")</p>
-                <a class="st-btn st-btn-primary" href="/studio/new">@L.Markup("studio.home.describe_idea")</a>
-            </div>
-        }
-        else
-        {
-            <div class="studio-list">
-                @foreach (var s in (IsIdeas ? sessions : sessions.Take(5)))
-                {
-                    <a class="studio-list-row" href="@($"/studio/s/{s.Id}")">
-                        <span class="studio-list-icon"><AcIcon Name="@StatusIcon(s.Status)" Size="16" /></span>
-                        <div class="studio-list-body">
-                            <strong>@(string.IsNullOrEmpty(s.ProjectDescription)
-                                ? L["studio.home.no_desc"] : Truncate(s.ProjectDescription, 70))</strong>
-                            <span>@StatusLabel(s.Status) · @s.UpdatedAt.ToString("yyyy-MM-dd HH:mm")</span>
-                        </div>
-                        @if (s.Status == IncubatorStatus.Completed)
-                        { <span class="st-chip st-chip-success">@L.Markup("admin.incubator.quality") @s.AnalysisQualityScore%</span> }
-                        else if (s.Status == IncubatorStatus.Analyzing)
-                        { <span class="st-chip st-chip-warning">@L.Markup("incubator.status.analyzing")</span> }
-                        else if (s.Status == IncubatorStatus.Failed)
-                        { <span class="st-chip st-chip-danger">@L.Markup("incubator.status.failed")</span> }
-                    </a>
-                }
-            </div>
-        }
     </ChildContent>
 </StudioShell>
 
 @code {
     [SupplyParameterFromQuery] public string? Upgrade { get; set; }
-    List<IncubatorSession>? sessions;
     List<Tenant>? myApps;
     List<(string Slug, Services.Deals.Deal Deal)> recentDeals = new();
     string? currentTier;
+    string? renewsOn;   // ‏(2026-10-29، د15) مَوعِدُ تَجَدُّدِ الحِصَّةِ بِساعَةِ الطَلَب، أَو null
+    /// <summary>مُدخَلُ <see cref="StudioAgentDoor.Opens"/> — قَرارُ <see cref="Services.PlatformAdminGuard.Decide"/> عَلى صاحِبِ الجَلسَةِ
+    /// الَّذي تُحَمِّلُه الصَفحَةُ أَصلاً (لا قِراءَةَ ثانِيَة، ولا تَعريفَ ثانٍ لِـ«مُشرِف مَنَصَّة»).</summary>
+    bool isPlatformAdmin;
 
     /// <summary>باقاتُ تَطبيقاتي في وَسايِل، ونَصُّ تَعليمات التَحويل.
     /// وبِلا وَثيقَةِ باقَةٍ لا يُصَيَّر شَيء — التَكافُؤُ الصِفريّ.</summary>
@@ -334,18 +337,37 @@
     ACommerce.Kit.Subscriptions.PaddleTransactionRecord? PendingPaddle(string slug)
         => myPaddle.TryGetValue(slug, out var t) ? t : null;
 
+    /// <summary>سَطرُ الباقَةِ السارِيَةِ لِصَفِّ المَتجَر — اسمُها مِن <c>PlatformPlanCatalog</c> وتاريخُ انتِهائِها مِن
+    /// <c>TenantPlan.ExpiresAt</c>. و<c>null</c> لِكُلِّ ما لَيسَ <c>Active</c> — فَلا سَطرَ بِلا وَثيقَة (التَكافُؤُ الصِفريّ).</summary>
+    string? ActivePlanLine(string slug)
+    {
+        if (PlanState(slug) != ACommerce.Kit.Subscriptions.TenantPlanState.Active) return null;
+        if (!myPlans.TryGetValue(slug, out var p)) return null;
+        var name = ACommerce.Kit.Subscriptions.PlatformPlanCatalog.Find(p.PlanId)?.LabelAr ?? p.PlanId;
+        return L.Format("studio.plan.active_line", name, p.ExpiresAt.ToString("yyyy-MM-dd"));
+    }
+
+    /// <summary>سَطرُ السِعرِ المُتَّفَقِ عَلَيه لِمَتجَرٍ — <c>TenantPlanPolicy.ShownPrice</c> مُنَسَّقاً بِـ<c>Money.Format</c> في قالِبِ
+    /// <c>studio.plan.price_line</c>، و<c>null</c> بِلا سِعرٍ مُسَجَّلٍ فَلا سَطر (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1). يَقرَؤُه
+    /// مَوضِعان: اللافِتَةُ قَبلَ الدَفع، وصَفُّ السارِيَة. <b>والمَبلَغُ بِـ<c>Money.FormatExact</c> لا <c>Money.Format</c></b> (‏2026-10-25،
+    /// مُراجَعَةُ تَيّارِ W8-4): حَقلُ المُشرِفِ يَقبَلُ الهَلَلات، و<c>N0</c> كانَ يَطبَعُ ‏149.99 «‏150 ر.س» و‏0.01 «‏0 ر.س».</summary>
+    string? PriceLine(string slug)
+    {
+        myPlans.TryGetValue(slug, out var p);
+        return ACommerce.Kit.Subscriptions.TenantPlanPolicy.ShownPrice(p) is { } price
+            ? L.Format("studio.plan.price_line", ACommerce.Kit.Culture.Money.FormatExact(price))
+            : null;
+    }
+
     string HiddenAtText(string slug)
     {
         myPlans.TryGetValue(slug, out var p);
         return ACommerce.Kit.Subscriptions.TenantPlanPolicy.HiddenAt(p)?.ToString("yyyy-MM-dd") ?? "—";
     }
 
-    [Microsoft.AspNetCore.Components.Inject] NavigationManager Nav { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Incubator.StudioTierService TierSvc { get; set; } = default!;
     [Microsoft.AspNetCore.Components.Inject] Services.Deals.DealsService Deals { get; set; } = default!;
-    bool IsIdeas => new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').EndsWith("/ideas");
-
-    string Title => IsIdeas ? L["studio.home.ideas_title"] : L["admin.nav.my_board"];
+    string Title => L["admin.nav.my_board"];
     string Greeting => L.Format("studio.home.greeting", Auth.UserName ?? L["studio.home.owner_fallback"]);
 
     protected override async Task OnInitializedAsync()
@@ -353,10 +375,12 @@
         Auth.Load();
         if (!Auth.IsAuthenticated) return;
         var uid = Auth.UserId!.Value;
-        sessions = await Incubator.ListForUserAsync(uid);
         myApps = (await Tenants.ListOwnedByAsync(uid)).ToList();
         var u = await TierSvc.GetUserAsync(uid);
         currentTier = u?.Tier ?? "spark";
+        renewsOn = u is not null && Services.Incubator.StudioLimitNextStep.RenewsAt(u.PeriodStart, DateTime.UtcNow) is { } at
+            ? Culture.FormatTime(at, "yyyy-MM-dd") : null;
+        isPlatformAdmin = Services.PlatformAdminGuard.Decide(u) == Services.PlatformAdminOutcome.Allowed;
 
         myPlans = await Billing.AllPlansAsync();
         myOrders = await Billing.PendingOrdersAsync();
@@ -389,24 +413,4 @@
         _ => "tag"
     };
 
-    static string StatusIcon(IncubatorStatus s) => s switch
-    {
-        IncubatorStatus.Completed => "check",
-        IncubatorStatus.Analyzing => "clock",
-        IncubatorStatus.Failed    => "alert-circle",
-        IncubatorStatus.PatternSuggested => "target",
-        _ => "edit"
-    };
-
-    string StatusLabel(IncubatorStatus s) => s switch
-    {
-        IncubatorStatus.Discovery => L["incubator.status.discovery"],
-        IncubatorStatus.PatternSuggested => L["incubator.status.pattern"],
-        IncubatorStatus.Analyzing => L["incubator.status.analyzing"],
-        IncubatorStatus.Completed => L["incubator.status.completed"],
-        IncubatorStatus.Failed => L["incubator.status.failed"],
-        _ => L["incubator.status.abandoned"]
-    };
-
-    static string Truncate(string s, int n) => s.Length <= n ? s : s[..n] + "…";
 }

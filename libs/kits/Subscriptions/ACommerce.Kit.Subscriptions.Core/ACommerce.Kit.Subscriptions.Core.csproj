@@ -11,5 +11,8 @@
     <!-- دَورَة الاعتِماد ومَعجَم حالاتِها — نَفس التَعريف الواحِد الَّذي
          تُحيل إلَيه عُدَّتا الأَدوار والمَظهَر. لا نُسخَة ثالِثَة. -->
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
+    <!-- يَومُ انتِهاءِ الباقَةِ آخِرُ ذلكَ اليَومِ بِساعَةِ المَنَصَّة (قَرارُ المالِك د51) — الدالَّةُ في العُدَّةِ الَّتي تَحمِلُ
+         المِنطَقَة (`CultureTime.EndOfDayUtc`)، لا نُسخَةَ ثانِيَةً لِـ«Asia/Riyadh» هُنا. -->
+    <ProjectReference Include="..\..\Culture\ACommerce.Kit.Culture.Core\ACommerce.Kit.Culture.Core.csproj" />
   </ItemGroup>
 </Project>

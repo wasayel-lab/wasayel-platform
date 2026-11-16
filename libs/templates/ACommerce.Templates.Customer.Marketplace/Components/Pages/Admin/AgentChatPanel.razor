@@ -2,6 +2,10 @@
 @using Microsoft.AspNetCore.Components.Web
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentService Agent
 @inject ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor Executor
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
+@inject Marten.IDocumentStore Store
+@inject IHttpContextAccessor HttpCtx
+@inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject L L
 
@@ -30,6 +34,10 @@
     الـ AgentService وَ AgentToolExecutor لا يَزالا كَما هُما — نَفس
     التَخزين في Marten، نَفس الـ tool execution. التَّفاعُل فَقَط هو
     الَّذي تَحَوَّل مِن forms إلى @onclick.
+
+    ‏2026-11-05 (الموجَة ١٢ G2 · ١ — A-SESS-W12-2؛ تَوصيفُه 0f5a3c4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «الحُكم يَقَع في المُضيف الثابِت» حُكمٌ مَرَّةً عِندَ
+    فَتحِ الدائِرَة — فَكانَت تُرسِلُ وتُطَبِّقُ (ExecuteAsPlatformAdminAsync: لا فَحصَ مِلكِيَّةٍ ولا حِصَّة) بَعدَ «اخرج من كل الأجهزة» وبَعدَ نَزعِ الإشراف.
+    صارَت تَلتَقِطُ رَمزَ الاستوديو عِندَ تَصييرِها الأَوَّل (ذاكِرَةُ الخادِمِ وَحدَها) وتَسأَلُ StillPlatformAdminAsync قَبلَ كُلِّ فِعل — نَظيرُ StudioAgent.razor.
 *@
 
 <div class="acs-page acm-admin">
@@ -147,6 +155,12 @@
 </div>
 
 @code {
+    /// <summary>مُشرِفُ المَنَصَّةِ الَّذي فَتَحَ الصَفحَة — يُمَرِّرُه المُضيفُ الثابِت (<c>AgentChat.razor</c>) بَعدَ <c>RequirePlatformAdmin</c>.</summary>
+    [Parameter] public Guid? AdminUserId { get; set; }
+
+    // ‏(‏2026-11-05، G2 · ١) رَمزُ الجَلسَةِ الَّتي فُتِحَت بِها الدائِرَة — يُسأَلُ بِه قَبلَ كُلِّ فِعل؛ في ذاكِرَةِ الخادِمِ وَحدَها.
+    string? _studioToken;
+
     ACommerce.Templates.Customer.Marketplace.Services.AgentSession session = new();
     string newMessage = "";
     bool isWorking;
@@ -154,6 +168,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _studioToken = HttpCtx.HttpContext?.Request.Cookies[Services.Incubator.StudioAuth.CookieNameOn(HttpCtx.HttpContext?.Request)];
         session = await Agent.LoadSessionAsync();
     }
 
@@ -166,13 +181,20 @@
         }
     }
 
+    // ‏(‏2026-11-05، G2R1-1) كُلُّ مُعالِجٍ يَحجِزُ isWorking قَبلَ أَوَّلِ await ثُمَّ يَسأَلُ الجَلسَة، ويَفُكُّ الحَجزَ عَلى الرَفض — السُؤالُ قِراءَةُ Postgres، ونَقرَةٌ
+    // ثانِيَةٌ تَصِلُ أَثناءَها كانَت تَرى العَلَمَ فارِغاً فَتَعبُر (نِداءا نَموذَجٍ وتَشغيلا أَداة). والتَخويلُ قَبلَ فَحصِ الرِسالَةِ الفارِغَة (القاعِدَة ٦).
+    // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والمِفتاحُ في رَأسِ المُعالِجاتِ الأَربَعَةِ قَبلَ
+    // الحَجزِ وأَيِّ نِداء، كَما في نَظيرِها `StudioAgent` (‏F3، `b5a0211`) — و`isWorking` أَوَّلُ الشُقوقِ كَما يَقرَؤُه ماسِحُ الدائِرَة (G2R1-1): `AgentChat.razor` يَحجُبُ التَصييرَ وَحدَه، وجَزيرَةٌ أُعيدَ تَشغيلُها مِن خادِمٍ مُضاءٍ عَلى خادِمٍ مُطفَأٍ
+    // (حَلقَةُ مَفاتيحٍ واحِدَة، واصِفٌ أَحدَثُ مِن خَمسِ دَقائِق) طَبَّقَت `create_tenant` فَكَتَبَ المُطفَأُ مَتجَراً (تَقريرُ العَدَسَة).
     async Task SendAsync()
     {
+        if (isWorking || !AgentSwitch.Enabled) return;
         var msg = newMessage?.Trim() ?? "";
-        if (string.IsNullOrEmpty(msg) || isWorking) return;
         newMessage = "";
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
+        if (string.IsNullOrEmpty(msg)) { isWorking = false; return; }
         // اِظهار رِسالَة المُستَخدِم فَوراً (قَبل انتِظار الرَدّ).
         session.Turns.Add(new ACommerce.Templates.Customer.Marketplace.Services.AgentTurn
         {
@@ -190,13 +212,15 @@
 
     async Task ApplyAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
         if (turn?.Tool is not null)
         {
-            var (ok, msg) = await Executor.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            // ‏(‏2026-10-25، W8-3 — lens-security-14) بِاسمِ المُشرِفِ الَّذي حَمَلَه المُضيف: ما يَلِدُه create_tenant مِلكُه.
+            var (ok, msg) = await Executor.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, AdminUserId ?? Guid.Empty);
             await Agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
             session = await Agent.ContinueAfterToolAsync();
         }
@@ -207,9 +231,10 @@
 
     async Task RejectAsync(string toolId)
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
         isWorking = true;
         StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         await Agent.UpdateToolStatusAsync(toolId, "rejected", null);
         session = await Agent.ContinueAfterToolAsync();
         isWorking = false;
@@ -219,11 +244,24 @@
 
     async Task ResetAsync()
     {
-        if (isWorking) return;
+        if (isWorking || !AgentSwitch.Enabled) return;
+        isWorking = true;
+        StateHasChanged();
+        if (!await StillPlatformAdminAsync()) { isWorking = false; return; }
         await Agent.ResetAsync();
         session = await Agent.LoadSessionAsync();
         newMessage = "";
+        isWorking = false;
         StateHasChanged();
+    }
+
+    /// <summary>‏(‏2026-11-05، G2 · ١) الجَلسَةُ الَّتي فُتِحَت بِها الدائِرَةُ ما زالَت مَفتوحَةً لِلمُشرِفِ الَّذي حَمَلَه المُضيفُ وما زالَ مُشرِفاً؟ — وَثيقَةٌ جَديدَة
+    /// (<c>SessionVersionGate.PlatformAdminStillOpenAsync</c>). وإلّا: لا نَموذَجَ ولا أَداة، والانتِقالُ إلى الدُخول.</summary>
+    async Task<bool> StillPlatformAdminAsync()
+    {
+        if (await Services.SessionVersionGate.PlatformAdminStillOpenAsync(Store, _studioToken, AdminUserId ?? Guid.Empty)) return true;
+        Nav.NavigateTo("/studio/auth", forceLoad: true);
+        return false;
     }
 
     async Task ScrollToBottom()

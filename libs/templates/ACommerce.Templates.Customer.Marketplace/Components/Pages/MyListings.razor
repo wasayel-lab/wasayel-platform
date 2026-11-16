@@ -1,6 +1,9 @@
 @page "/{slug}/me/listings"
 @page "/{slug}/r/{role}/me/listings"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService Vendors
+@using Vs = ACommerce.Templates.Customer.Marketplace.Services.Shipping
 @inject AuthSession Auth
 @inject L L
 
@@ -13,11 +16,23 @@
 <div class="acs-page">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
         <h1 class="acm-wizard-title" style="margin:0;">@L.Markup("listings.mine.title")</h1>
+        @* «إعلان جَديد» خَلفَ بابِ صَفحَةِ النَشرِ نَفسِه (‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ يُرسَمُ لِكُلِّ صاحِبِ جَلسَة، فَالمُشتَري
+           بِدَورِه الافتِراضِيِّ يَملَأُ النَموذَجَ ثُمَّ يُرَدُّ ‏403. ومَن لا يَنشُرُ دَورُه يُعرَضُ عَلَيه «اِختَر دَوراً يَنشُر» حينَ تَعرِضُ صَفحَةُ
+           الأَدوارِ دَوراً كَذلِك — وإلّا فَلا زِرّ. *@
         @if (Auth.IsAuthenticated)
         {
+            @if (canCreateListing)
+            {
             <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, $"create-listing")">
                 <AcIcon Name="plus" Size="14" /> @L.Markup("listings.mine.new")@((MarkupString)"\n            ")
             </a>
+            }
+            else if (canSwitchToCreate)
+            {
+            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "me/role")">
+                <AcIcon Name="settings" Size="14" /> @L.Markup("listings.mine.switch_role")
+            </a>
+            }
         }
     </div>
 
@@ -27,6 +42,24 @@
     @if (Err == ACommerce.Templates.Customer.Marketplace.Services.Listings.ListingEditCodes.NotOwner)
     {
         <AcAlert Variant="danger" Message="@L["listings.mine.err_not_owner"]" />
+    }
+
+    @* ورَدُّ نُقطَةِ حِسابِ الشَّحن (`/{slug}/me/shipping/oto`، تَيّارُ S8، ‏2026-10-12) يَهبِطُ هُنا لا في قِسمِه: «لا إعلانَ لَك» يَصِلُ
+       صَفحَةً بِلا قِسمِ شَحن — فَرَفضٌ يُرسَمُ داخِلَه لا يُقرَأ. ولِصاحِبِ جَلسَةٍ وَحدَه — النُقطَةُ تَرُدُّ مَن لا جَلسَةَ لَه إلى الدُخول، فَلا
+       يَبلُغُ هذا العُنوانَ إلّا مَن نَقَر. ورَمزٌ خارِجَ المَعجَمَينِ لا يُرسَمُ لَه شَيء (`ShippingErrKey`). *@
+    @if (Auth.IsAuthenticated && ShippingErrKey(ShippingErr) is { } shippingErrKey)
+    {
+        <AcAlert Variant="danger" Message="@L[shippingErrKey]" />
+    }
+    else if (Auth.IsAuthenticated && ShippingDone is "saved" or "registered")
+    {
+        @* «registered» رَدُّ مَسارِ التَسجيلِ (‏ADR-033 الخُطوَة 8، ‏2026-10-12) — ورابِطُ التَفعيلِ في قِسمِ الشَّحنِ أَدناه. *@
+        <AcAlert Variant="success" Message="@L[ShippingDone == "registered" ? "shipping.vendor.registered" : "shipping.vendor.saved"]" />
+    }
+    else if (Auth.IsAuthenticated && shippingReadFailed)
+    {
+        @* (‏2026-10-24، تَيّارُ S15 البَند J): تَعَذَّرَت قِراءَةُ مَدخَلِ البائِعِ — قِسمُ الشَّحنِ لا يُرسَمُ (لا لَصقَ ولا تَسجيلَ لِمَن لَه حِساب)، والسَطرُ يَقولُ لِماذا. *@
+        <AcAlert Variant="warning" Message="@L["shipping.vendor.read_failed"]" />
     }
 
     @if (!Auth.IsAuthenticated)
@@ -41,10 +74,20 @@
     }
     else if (myListings.Count == 0)
     {
+        @if (canCreateListing)
+        {
         <AcEmptyState IconName="package" Title="@L["listings.mine.empty_title"]"
                       Message="@L["listings.mine.empty_hint"]"
                       ActionLabel="@L["listings.mine.new"]"
                       ActionHref="@AuthSession.LinkFor(Slug, Role, $"create-listing")" />
+        }
+        else
+        {
+        <AcEmptyState IconName="package" Title="@L["listings.mine.empty_title"]"
+                      Message="@L["listings.mine.empty_hint_no_create"]"
+                      ActionLabel="@(canSwitchToCreate ? L["listings.mine.switch_role"] : null)"
+                      ActionHref="@(canSwitchToCreate ? AuthSession.LinkFor(Slug, Role, "me/role") : null)" />
+        }
     }
     else
     {
@@ -69,6 +112,142 @@
                 </a>
             }
         </div>
+        @* ─── حِسابُ الشَّحنِ عِندَ OTO — سَطحُ البائِعِ لا الاستوديو (‏ADR-033 الخُطوَة 7، تَيّارُ S8، ‏2026-10-12) ───
+           في فَرعِ «لَه إعلانات» وَحدَه — هُوِيَّةُ البائِعِ نَفسُها الَّتي تَسأَلُها النُقطَة (`ListingVendorGate`) — وبِالمَدخَلِ الَّذي تُعطيه
+           `VendorShippingSurface.InputFor` وَحدَه: لَصقٌ أَو تَسجيلٌ لا اثنان (فاحِصٌ نَصِّيٌّ يَحمَرُّ إن ظَهَرا مَعاً)، وبِلا بيئَةِ OTO أَو خِزانَةٍ
+           لا شَيءَ ولا «قَريباً» (القاعِدَة ١٢). *@
+        @if (shippingInput == ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Paste)
+        {
+            <section id="vendor-shipping" style="margin-top:16px;background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-lg);padding:14px;">
+                <strong style="display:block;font-size:15px;margin-bottom:8px;">@L.Markup("shipping.vendor.title")</strong>
+                @if (shippingView is { } view)
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:4px;">@L.Markup("shipping.vendor.saved_tail") <span dir="ltr">@ACommerce.Platform.Providers.ProviderSecrecy.CensorSealed(ACommerce.Platform.Providers.CredentialKinds.SecretKey, view.TokenTail)</span></span>
+                    <span style="display:block;font-size:12px;color:var(--ac-text-muted);margin-bottom:8px;">@L.Markup(view.WebhookId is not null && view.WebhookRefusal is null ? "shipping.vendor.webhook_ok" : "shipping.vendor.webhook_failed")</span>
+                }
+                <form method="post" action="@($"/{Slug}/me/shipping/oto")">
+                    <AcField Label="@L["shipping.vendor.field"]">
+                        <input name="refresh_token" type="password" autocomplete="new-password" class="ac-input" required />
+                    </AcField>
+                    <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.save"]" />
+                    <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">@L.Markup("shipping.vendor.hint")</span>
+                </form>
+            </section>
+        }
+        else if (shippingInput == ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Register)
+        {
+            @* ─── مَسارُ التَسجيلِ عِندَ OTO (‏ADR-033 الخُطوَة 8، تَيّارُ S8، ‏2026-10-12) — حينَ يُضبَطُ الرَمزُ السوقِيّ، واللَصقُ أَعلاه مُطفَأ.
+               بائِعٌ بِلا مَدخَلٍ يَرى استِمارَةً يَملَؤُها عَن نَفسِه (حُقولُ «Marketplace › Register»، وحُقولُ الضَريبَةِ تَحتَ «مُسَجَّلٌ في
+               الضَريبَة؟» لا تُرسَلُ إلّا بِه)؛ ومَن لَه مَدخَلٌ يَرى حالَه وزِرَّ إعادَةِ تَسجيلِ الإشعاراتِ حينَ لَم تُسَجَّل؛ ورابِطُ التَفعيلِ
+               يُرسَمُ مَرَّةً بَعدَ التَسجيل (وِعاءُ العَرضِ مَرَّةً).
+               **ومُنذُ مُراجَعَةِ تَيّارِ S8، الجولة 2 (‏2026-10-12؛ ‏ADR-033 §٧‑ف)**: الاستِمارَةُ وزِرُّ إعادَةِ التَسجيلِ لِمَن تُجيزُه بَوّابَةُ جِهَةِ التَواصُلِ
+               وَحدَه (`registrant` — البَوّابَةُ نَفسُها في النُقطَة)، فَلا يُرسَمُ بابٌ يُرَدّ؛ وبِلا رابِطٍ ولا مَدخَلٍ ولا سِجِلٍّ لا قِسمَ أَصلاً (لا «قَريباً»).
+               والبَريدُ أَو الجَوّالُ المُتَحَقَّقُ مِنه مَرسومٌ مَملوءاً مُقفَلاً — والنُقطَةُ لا تَقرَأُ خانَتَه أَصلاً (`VendorRegistrant.Bind`). *@
+            @if (activationLink is not null || shippingView is not null || registrant is not null)
+            {
+            <section id="vendor-shipping" style="margin-top:16px;background:var(--ac-surface);border:1px solid var(--ac-border);border-radius:var(--ac-radius-lg);padding:14px;">
+                <strong style="display:block;font-size:15px;margin-bottom:8px;">@L.Markup("shipping.vendor.title")</strong>
+                @if (activationLink is { } link)
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_activate")</span>
+                    <a class="ac-btn ac-btn-primary ac-btn-block" href="@link" target="_blank" rel="noopener noreferrer" style="margin-bottom:8px;">@L.Markup("shipping.vendor.reg_activate_link")</a>
+                }
+                @* بابُ الاستِردادِ (‏2026-10-29، قَرارُ المالِك د12 (٢) «أ»): مَدخَلٌ فَعّالٌ رَمزُه لا يُفتَحُ هُنا — لا يُفَكّ، أَو ضاعَ حِفظُه بَعدَ تَسجيلٍ نَجَح —
+                   يُرسَمُ لَه اللَصقُ في وَضعِ الرَمزِ السوقِيّ، بِالدالَّةِ الَّتي تَفتَحُ بِها النُقطَةُ البابَ (`VendorShippingService.TokenUnreadable`)؛ ولا
+                   «مُتَّصِل» ولا إعادَةَ تَسجيل. ولِما سِوى الحالَتَينِ اللَصقُ مُغلَقٌ هُنا كَما كان. *@
+                @if (shippingView is { TokenUnreadable: true })
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup("shipping.vendor.reg_token_unreadable")</span>
+                    <form method="post" action="@($"/{Slug}/me/shipping/oto")">
+                        <AcField Label="@L["shipping.vendor.field"]">
+                            <input name="refresh_token" type="password" autocomplete="new-password" class="ac-input" required />
+                        </AcField>
+                        <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.save"]" />
+                        <span style="display:block;margin-top:6px;font-size:12px;color:var(--ac-text-muted);line-height:1.7;">@L.Markup("shipping.vendor.hint")</span>
+                    </form>
+                }
+                else if (shippingView is { } registered)
+                {
+                    <span style="display:block;font-size:13px;margin-bottom:4px;">@L.Markup("shipping.vendor.reg_connected")</span>
+                    @if (registered.WebhookId is not null && registered.WebhookRefusal is null)
+                    {
+                        <span style="display:block;font-size:12px;color:var(--ac-text-muted);">@L.Markup("shipping.vendor.webhook_ok")</span>
+                    }
+                    else
+                    {
+                        <span style="display:block;font-size:12px;color:var(--ac-text-muted);margin-bottom:8px;">@L.Markup("shipping.vendor.reg_webhook_failed")</span>
+                        @if (registrant is not null)
+                        {
+                        <form method="post" action="@($"/{Slug}/me/shipping/oto/register")">
+                            <AcButton Type="submit" Variant="secondary" Block="true" Text="@L["shipping.vendor.reg_retry"]" />
+                        </form>
+                        }
+                    }
+                }
+                @* (‏2026-10-29، مُراجَعَةُ تَيّارِ S4 الأولى — إتمامُ قَرارِ المالِك د12 (١) «أ»): **و«أَعِدِ المُحاوَلَة» بابٌ لا كَلِمَة** — لِمَدخَلِ الضَياعِ
+                   (`TokenLost`: «Register» نَجَحَ والرَمزُ لَم يُحفَظ) تُرسَمُ استِمارَةُ التَسجيلِ بَعدَ بابِ اللَصقِ بِمُقَدِّمَتِها الخاصَّة، ويَقبَلُها `RegisterAsync` تَسجيلاً
+                   مِن جَديد (`IsTokenLostMarker`). كانَ الفَرعُ `else if` فَلا يُرسَمُ لَه إلّا اللَصقُ ونَصُّ الضَياعِ يَقولُ «أَعِدِ المُحاوَلَة». ومَدخَلٌ رَمزُه قائِمٌ لا يَنفَكُّ
+                   لا استِمارَةَ لَه — تَسجيلُه حِسابٌ ثانٍ. *@
+                @if (shippingView is null or { TokenLost: true } && registrant is { } verified)
+                {
+                    <form method="post" action="@($"/{Slug}/me/shipping/oto/register")">
+                        <span style="display:block;font-size:13px;margin-bottom:8px;line-height:1.7;">@L.Markup(shippingView is null ? "shipping.vendor.reg_intro" : "shipping.vendor.reg_retry_intro")</span>
+                        <AcField Label="@L["shipping.vendor.reg_first_name"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.FirstNameField" class="ac-input" required maxlength="30" autocomplete="given-name" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_last_name"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.LastNameField" class="ac-input" required maxlength="30" autocomplete="family-name" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_email"]" Hint="@(verified.VerifiedEmail is null ? null : L["shipping.vendor.reg_verified_hint"])" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.EmailField" type="email" class="ac-input" required autocomplete="email" dir="ltr" value="@verified.VerifiedEmail" readonly="@(verified.VerifiedEmail is not null)" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_mobile"]" Hint="@(verified.VerifiedMobile is null ? L["shipping.vendor.reg_mobile_hint"] : L["shipping.vendor.reg_verified_hint"])" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.MobileField" type="tel" inputmode="tel" class="ac-input" required autocomplete="tel" dir="ltr" value="@verified.VerifiedMobile" readonly="@(verified.VerifiedMobile is not null)" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_city"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.CityField" class="ac-input" required autocomplete="address-level2" />
+                        </AcField>
+                        <AcField Label="@L["shipping.vendor.reg_billing_address"]" Required="true">
+                            <input name="@Vs.VendorRegistrationForm.BillingAddressField" class="ac-input" required autocomplete="street-address" />
+                        </AcField>
+                        <details style="margin-bottom:12px;">
+                            <summary style="cursor:pointer;font-size:13px;margin-bottom:8px;">@L.Markup("shipping.vendor.reg_vat_summary")</summary>
+                            <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px;font-size:13px;">
+                                <input type="checkbox" name="@Vs.VendorRegistrationForm.IsVatField" value="@Vs.VendorRegistrationForm.Checked" />
+                                <span>@L.Markup("shipping.vendor.reg_is_vat")</span>
+                            </label>
+                            <AcField Label="@L["shipping.vendor.reg_company_name"]">
+                                <input name="@Vs.VendorRegistrationForm.CompanyNameField" class="ac-input" autocomplete="organization" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_cr_number"]">
+                                <input name="@Vs.VendorRegistrationForm.CrNumberField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{10}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_vat_number"]">
+                                <input name="@Vs.VendorRegistrationForm.VatNumberField" class="ac-input" inputmode="numeric" pattern="[3\u0663\u06F3][0-9\u0660-\u0669\u06F0-\u06F9]{14}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_district"]">
+                                <input name="@Vs.VendorRegistrationForm.DistrictField" class="ac-input" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_zip_code"]">
+                                <input name="@Vs.VendorRegistrationForm.ZipCodeField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{5}" autocomplete="postal-code" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_building_no"]">
+                                <input name="@Vs.VendorRegistrationForm.BuildingNoField" class="ac-input" inputmode="numeric" pattern="[0-9\u0660-\u0669\u06F0-\u06F9]{4}" dir="ltr" />
+                            </AcField>
+                            <AcField Label="@L["shipping.vendor.reg_street_name"]">
+                                <input name="@Vs.VendorRegistrationForm.StreetNameField" class="ac-input" />
+                            </AcField>
+                        </details>
+                        <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;font-size:13px;line-height:1.7;">
+                            <input type="checkbox" name="@Vs.VendorRegistrationForm.ConsentField" value="@Vs.VendorRegistrationForm.Checked" required />
+                            <span>@L.Markup("shipping.vendor.reg_consent")</span>
+                        </label>
+                        <AcButton Type="submit" Variant="primary" Block="true" Text="@L["shipping.vendor.reg_submit"]" />
+                    </form>
+                }
+            </section>
+            }
+        }
     }
 </div>
 
@@ -76,14 +255,77 @@
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
     [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+    /// <summary>رَمزُ رَفضِ نُقطَةِ حِسابِ الشَحن (`/{slug}/me/shipping/oto`) — يُحَلُّ نَصّاً بِـ<see cref="ShippingErrKey"/> ولا يُرسَمُ خارِجَ مَعجَمِه.</summary>
+    [SupplyParameterFromQuery(Name = "shipping_err")] public string? ShippingErr { get; set; }
+    [SupplyParameterFromQuery(Name = "shipping")] public string? ShippingDone { get; set; }
     List<Listing>? myListings;
+    /// <summary>بابُ صَفحَةِ النَشرِ بِحَرفِه (‏<c>PermissionDoor.Opens</c> بِما يَقرَؤُه <c>GatedPage</c> فيها: <c>Tenant.Roles</c> المُخَزَّنَة والدَورُ
+    /// المُخَزَّن) — ‏2026-10-25، W8-7. ومَتجَرٌ بِلا أَدوارٍ مَفتوحٌ كَما يَفتَحُه الحارِس. (‏2026-10-28، د42: و<c>Tenant.Roles</c> صارَت مُجَسَّدَةً بِالأَدوارِ
+    /// المُؤَلَّفَةِ المُعتَمَدَة في <c>GatedPage</c> والمُرَشِّح، فَتُقرَأُ هُنا كَذلِك.)</summary>
+    bool canCreateListing;
+    /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يَنشُر (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ «إعلان جَديد».</summary>
+    bool canSwitchToCreate;
+    /// <summary>أَيُّ مَدخَلٍ لِحِسابِ الشَحنِ يُرسَم (تَيّارُ S8، ‏2026-10-12) — <c>VendorShippingSurface.InputFor</c> بِتَهيئَةِ النُسخَةِ وخِزانَتِها،
+    /// و<c>None</c> لِغَيرِ البائِع: لا يُسأَلُ إلّا في فَرعِ «لَه إعلانات».</summary>
+    ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput shippingInput;
+    ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingView? shippingView;
+    /// <summary>تَعَذَّرَت قِراءَةُ مَدخَلِ البائِع (<c>VendorShippingView.ReadFailed</c>) — فَلا قِسمَ شَحنٍ ويُقالُ السَبَب (تَيّارُ S15 البَند J).</summary>
+    bool shippingReadFailed;
+    /// <summary>رابِطُ تَفعيلِ حِسابِ الشَحنِ الَّذي فُتِحَ لِلتَوّ — مَرَّةً واحِدَة (‏ADR-033 الخُطوَة 8، ‏2026-10-12).</summary>
+    string? activationLink;
+    /// <summary>بائِعٌ تُجيزُه بَوّابَةُ جِهَةِ التَواصُلِ — بَوّابَةُ نُقطَةِ التَسجيلِ نَفسُها بِوَثيقَةِ صاحِبِ الجَلسَة — أَو <c>null</c> فَلا استِمارَةَ ولا زِرّ
+    /// (مُراجَعَةُ تَيّارِ S8، الجولة 2، ‏2026-10-12؛ ‏ADR-033 §٧‑ف).</summary>
+    Vs.VendorRegistrant? registrant;
 
     protected override async Task OnParametersSetAsync()
     {
         if (!Auth.IsAuthenticated) return;
+        // البابُ أَوَّلاً وبِقِراءَتَي GatedPage نَفسَيهِما (المُستَأجِرُ المُخَزَّن والدَورُ المُخَزَّن) — فَلا يَختَلِفُ الرابِطُ والصَفحَة.
+        // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») والمُستَأجِرُ صارَ مُجَسَّداً بِأَدوارِه المُؤَلَّفَة كَما يَقرَؤُه GatedPage الآن — كانَ `Tenants.FindAsync(Slug)`.
+        var roles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+        var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId!.Value);
+        canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, "listing.create");
+        canSwitchToCreate = !canCreateListing
+            && ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.SwitchOpens(roles, Role, "listing.create");
         // الفَلتَرَة في الذاكِرَة (‏Marten لا يُفَلتِر Attributes في LINQ)
         // انتَقَلَت مَع الاستِعلام إلى AccountQueries.MyListingsAsync —
         // نَفس الخُطوَتَين ونَفس التَرتيب.
         myListings = (await Accounts.MyListingsAsync(Slug, Auth.UserId!.Value)).ToList();
+        // وحِسابُ الشَحنِ لِلبائِعِ وَحدَه: مَن لَه إعلانٌ هُنا (هُوِيَّةُ `ListingVendorGate` نَفسُها).
+        // (‏2026-10-13، G5 (iv) — ولا يُعادُ حَرفٌ فَوقَه: وصارَت تُسأَلُ بِاسمِها — كانَ الشَرطُ «العَدُّ > 0» مَكتوباً هُنا والبَوّابَةُ بِلا مُستَهلِك؛
+        // والعَدُّ عَدُّ النُقطَتَينِ نَفسُه. تَكافُؤُهُما عَلى نِطاقِ الصَفحَةِ `VendorSectionGateTests`.)
+        if (Vs.ListingVendorGate.IsAllowed(Auth.UserId, myListings.Count))
+        {
+            shippingInput = Vendors.Input;
+            // وحالُ المَدخَلِ في المَدخَلَينِ كِلَيهِما (‏2026-10-12، الخُطوَة 8) — ورابِطُ التَفعيلِ في مَسارِ التَسجيلِ وَحدَه.
+            if (shippingInput != Vs.VendorShippingInput.None)
+                shippingView = await Vendors.ViewAsync(Slug, Auth.UserId!.Value);
+            // (‏2026-10-24، تَيّارُ S15 البَند J): قِراءَةٌ رَمَت لا تُرسَمُ «لا مَدخَل» — لا استِمارَةَ لَصقٍ أَو تَسجيل، ولا يُستَهلَكُ رابِطُ التَفعيل.
+            if (shippingView is { ReadFailed: true })
+            {
+                shippingReadFailed = true;
+                shippingView = null;
+                shippingInput = Vs.VendorShippingInput.None;
+            }
+            if (shippingInput == Vs.VendorShippingInput.Register)
+            {
+                activationLink = Vendors.TakeActivationLink(Slug, Auth.UserId!.Value);
+                // وجِهَةُ التَواصُلِ المُتَحَقَّقُ مِنها (مُراجَعَةُ تَيّارِ S8، الجولة 2): البَوّابَةُ الَّتي تَسأَلُها النُقطَةُ بِالوَثيقَةِ نَفسِها — ما يُرسَمُ هُوَ ما يُقبَل.
+                registrant = Vs.VendorContactGate.Admit(Vs.ListingVendorGate.Admit(Auth.UserId, null, myListings.Count).Vendor!,
+                    await Accounts.ProfileAsync(Slug, Auth.UserId!.Value)).Registrant;
+            }
+        }
     }
+
+    /// <summary>مِفتاحُ نَصِّ رَفضِ حِسابِ الشَحن — لِرَمزٍ مِن مَعاجِمِ ما يَصِلُ الصَفحَةَ وَحدَها، و<c>null</c> لِما سِواه: البَوّابَةُ والخِدمَة،
+    /// ومُنذُ الخُطوَة 8 (‏2026-10-12) مُدَقِّقُ استِمارَةِ التَسجيلِ ومَعجَمُ فَشَلِ عَميلِ OTO (رَدُّ «Register»).</summary>
+    static string? ShippingErrKey(string? code)
+        => code is not null
+           && (ACommerce.Templates.Customer.Marketplace.Services.Shipping.ListingVendorGate.All.Contains(code)
+               || ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingService.Codes.Contains(code)
+               || Vs.VendorRegistrationValidator.All.Contains(code)
+               || Vs.VendorContactGate.All.Contains(code)
+               || ACommerce.Kit.Delivery.OtoFailures.All.Contains(code))
+            ? "shipping.vendor.err_" + code
+            : null;
 }

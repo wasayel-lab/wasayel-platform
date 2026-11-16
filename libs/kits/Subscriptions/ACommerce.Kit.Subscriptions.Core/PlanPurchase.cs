@@ -82,12 +82,6 @@ public static class PlanPurchasePolicy
     public static string? Refuse(Plan? plan, bool paymentProviderConfigured)
         => RefusePrice(plan?.Price, paymentProviderConfigured);
 
-    /// <summary>
-    /// <para>الباقاتُ المَعروضَة. <b>والتَكافُؤُ بِالمَرجِع مَقصود</b>:
-    /// قائِمَةٌ لا يُحذَف مِنها شَيءٌ تُرجَع <b>هي نَفسُها</b> لا نُسخَةً
-    /// مُتَساوِيَة — فَمَتجَرٌ كُلُّ باقاتِه مَجّانِيَّةٌ لا يَمُرّ
-    /// بِفَرزٍ ولا نَسخ، ولا تَتَغَيَّر صَفحَتُه بايتاً.</para>
-    /// </summary>
     // ─── المَسار — ثَلاثَةُ مَخارِجَ لا اثنان ─────────────────────────
     //
     // <b>ولِماذا مَخرَجٌ ثالِث</b>: `Refuse` تَقول «مَمنوع» أَو «مَسموح»،
@@ -130,6 +124,12 @@ public static class PlanPurchasePolicy
             : (PlanPurchaseRoute.Refuse, PaidUnavailable);
     }
 
+    /// <summary>
+    /// <para>الباقاتُ المَعروضَة. <b>والتَكافُؤُ بِالمَرجِع مَقصود</b>:
+    /// قائِمَةٌ لا يُحذَف مِنها شَيءٌ تُرجَع <b>هي نَفسُها</b> لا نُسخَةً
+    /// مُتَساوِيَة — فَمَتجَرٌ كُلُّ باقاتِه مَجّانِيَّةٌ لا يَمُرّ
+    /// بِفَرزٍ ولا نَسخ، ولا تَتَغَيَّر صَفحَتُه بايتاً.</para>
+    /// </summary>
     public static IReadOnlyList<Plan> Visible(
         IReadOnlyList<Plan> plans, bool paymentProviderConfigured)
     {

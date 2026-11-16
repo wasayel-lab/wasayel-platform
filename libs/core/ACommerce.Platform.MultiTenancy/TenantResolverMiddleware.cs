@@ -1,5 +1,6 @@
 using ACommerce.Kit.Tenants;
 using ACommerce.Platform.Shared;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -160,18 +161,341 @@ public sealed class TenantResolverMiddleware
 
         if (first.Length > 0)
         {
-            if (ReservedPaths.Contains(first)) return null;
+            if (ServedAtRoot(first)) return null;
             if (string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) return null;
         }
 
         return path == "/" ? "/" + slug : "/" + slug + path;
     }
 
+    /// <summary><b>ما يُخدَمُ مِن الجَذرِ نَفسِه</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): جُذورُ البِنيَةِ التَحتِيَّة
+    /// ومَناطِقُ المَنَصَّةِ وسَطحُ الـAPI. <b>وكانَ الامتِناعُ أَعلاه عَلى المَحجوزِ كُلِّه</b> — فَأَسماءُ مِحوَرِ المُضيفِ (<c>support</c>، <c>help</c>،
+    /// <c>app</c>…) لا تُحقَنُ وهي لَيسَت جُذوراً مَخدومَة: <c>ashare.R/support</c> كانَ <c>/support</c> ← 404، وصَفحَةُ <c>/{slug}/support</c> قائِمَة.
+    /// والمَحجوزُ يَبقى مَحجوزاً اسمَ مَتجَر؛ وما يُخدَمُ مِن الجَذرِ هُوَ ما لا يُحقَن.</summary>
+    /// <remarks>‏(‏2026-11-07، W13-4·C2b·1) الجِسمُ في <see cref="ReservedTenantSlugs.ServedAtRoot"/> بِحَرفِه — يَسأَلُه بانِي الرابِطِ النَظيفِ أَيضاً.</remarks>
+    internal static bool ServedAtRoot(string first) => ReservedTenantSlugs.ServedAtRoot(first);
+
+    /// <summary><b>مُعَرِّفُ المَتجَرِ مِن المُضيف</b> (‏2026-11-07، ADR-050 §٣): مِلصَقُ <see cref="SlugFromHost"/> إن صَلَحَ اسمَ مُضيفِ مَتجَرٍ
+    /// (<see cref="StoreHostName"/>) — فَمَتجَرٌ قائِمٌ لا يَجتازُه لا مُضيفَ لَه ويَبقى بِمَسارِه، ومِلصَقٌ يَنتَهي بِاسمِ مُضيفِ دَورٍ لا يُقرَأُ مَتجَراً.</summary>
+    public static string? StoreSlugFromHost(string? host, string? baseDomain)
+        => SlugFromHost(host, baseDomain) is { } label && StoreHostName.IsValid(label) ? label : null;
+
+    /// <summary>
+    /// <para><b>مُضيفُ الدَور — <c>{slug}-{rolehost}.R</c> ← (المَتجَر، دَورُ الكَتالوج)</b> (‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4). قَرارٌ
+    /// نَقِيّ: المِلصَقُ يَنتَهي بِـ<c>-{قيمَةٍ مِن RoleHostNames}</c> وما قَبلَها اسمُ مُضيفِ مَتجَرٍ صالِح (<see cref="StoreHostName"/>). <b>ولا لَبس</b>: اسمُ
+    /// مَتجَرٍ صالِحٌ لا يَنتَهي بِاسمِ دَور (رَمزُ <c>host_name_role_suffix</c>)، فَالمِلصَقُ إمّا مَتجَرٌ وإمّا دَورُ مَتجَر. ووُجودُ الدَورِ في المَتجَرِ حالَةٌ
+    /// مَخزونَة — يَسأَلُها <see cref="TenantResolverMiddleware"/> لا هذِه (القاعِدَة ٧).</para>
+    /// </summary>
+    public static (string Slug, string CatalogRole)? RoleFromHost(string? host, string? baseDomain)
+    {
+        if (SlugFromHost(host, baseDomain) is not { } label || StoreHostName.IsValid(label)) return null;
+        foreach (var value in ACommerce.Kit.Roles.RoleHostNames.Values)
+        {
+            if (label.Length <= value.Length + 1 || !label.EndsWith("-" + value, StringComparison.Ordinal)) continue;
+            var store = label[..^(value.Length + 1)];
+            if (StoreHostName.IsValid(store) && ACommerce.Kit.Roles.RoleHostNames.CatalogSlugOf(value) is { } catalog)
+                return (store, catalog);
+        }
+        return null;
+    }
+
+    /// <summary><b>أَيَحمِلُ المَتجَرُ دَورَ الكَتالوجِ هذا بِاسمِه؟</b> — نُسخَةُ دَورٍ <c>CatalogSlug</c> و<c>Slug</c> كِلاهُما اسمُه (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ
+    /// الثانِيَة · SEC-C2b-R2-2 — جِسمُ شَرطِ الـ404 لِمُضيفِ الدَورِ بِحَرفِه، W13-4·C2b·4). فَدَورٌ مُؤَلَّفٌ بِاسمٍ آخَرَ لا مُضيفَ لَه.</summary>
+    public static bool HoldsRoleHost(Tenant tenant, string catalogRole)
+        => tenant.Roles.Any(r => string.Equals(r.CatalogSlug, catalogRole, StringComparison.Ordinal)
+                                 && string.Equals(r.Slug, catalogRole, StringComparison.Ordinal));
+
+    /// <summary><b>أَدوارُ المَتجَرِ الَّتي لَها مُضيف</b> — مِن <see cref="ACommerce.Kit.Roles.RoleHostNames"/> ما يَحمِلُه المَتجَرُ (<see cref="HoldsRoleHost"/>)، مُرَتَّبَةً
+    /// تَرتيباً ثابِتاً (‏2026-11-07، SEC-C2b-R2-2). يَكتُبُها الوَسيطُ في <see cref="StoreHostItems.HostedRoles"/>.</summary>
+    public static IReadOnlyList<string> HostedRoles(Tenant tenant)
+        => ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.Keys.Where(c => HoldsRoleHost(tenant, c)).Order(StringComparer.Ordinal).ToArray();
+
+    /// <summary>
+    /// <para><b>أَيَخدِمُ الجَذرُ هذا المَتجَرَ بِمَسارٍ لَه جَرَّةٌ غَيرُ جِرارِ مُضيفاتِه؟</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-1): نَعَم حينَ يُهَيَّأُ النِطاقُ
+    /// ويَصلُحُ اسمُ المَتجَرِ مُضيفاً — فَلَه مُضيفٌ وجَرَّةُ <c>R/{slug}</c> مَعاً. وبِلا نِطاقٍ (وَضعُ المَسار) أَو لِمَتجَرٍ لا يَصلُحُ اسمُه مُضيفاً: جَرَّةٌ واحِدَةٌ لا سِلسِلَة.</para>
+    /// </summary>
+    public static bool ApexServes(string? apex, string slug)
+        => !string.IsNullOrEmpty(apex) && StoreHostName.IsValid(slug);
+
+    /// <summary>
+    /// <para><b>ما يُفعَلُ بِطَلَبٍ عَلى مُضيفِه — قَرارٌ نَقِيٌّ يَقرَؤُه الحاقِن</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). لا يَقرَأُ حالَةً مَخزونَة
+    /// (القاعِدَة ٧): وُجودُ المَتجَرِ يَسأَلُه <see cref="TenantResolverMiddleware"/> بَعدَ التَوجيه.</para>
+    /// <list type="bullet">
+    ///   <item>نِطاقٌ فارِغ، أَو الجَذرُ <c>R</c>، أَو مُضيفٌ خارِجَه، أَو مِلصَقٌ مَحجوزٌ (<c>www</c>، <c>mail</c>…) ← يَمُرُّ بِلا مَتجَرٍ كَما اليَوم.</item>
+    ///   <item>مِلصَقٌ تَحتَ <c>R</c> لَيسَ اسمَ مُضيفِ مَتجَر (عُمقٌ ثانٍ، مِلصَقٌ باطِل، مُضيفُ دَورٍ في المَرحَلَةِ الأُولى) ← 404.</item>
+    ///   <item>عَلى <c>{slug}.R</c>: جُذورُ البِنيَةِ التَحتِيَّةِ كَما هي؛ مَناطِقُ المَنَصَّةِ ← 301 إلى <c>R</c> لِـGET/HEAD و404 لِما سِواهُما؛ <c>/api/{slug}/…</c>
+    ///   و<c>/api/push/…</c> كَما هُما و<c>/api/{غَيرِه}/…</c> ← 404؛ مَسارٌ يَحمِلُ المَتجَرَ كَما هُوَ؛ وما سِواه يُحقَنُ فيه <c>/{slug}</c>.</item>
+    /// </list>
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«<c>/api/push/…</c> كَما هو» صارَ
+    /// <c>GET</c>/<c>HEAD</c> <c>/api/push/vapid-key</c> وَحدَه</b>، و<c>/api/{slug}/…</c> لِمَتجَرِ المُضيفِ ما لَم يَكُن اسمُه في
+    /// <see cref="ReservedTenantSlugs.PlatformApiSegments"/> — وما سِواهُما 404.</para>
+    /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والبَندانِ الأَوَّلُ والثالِثُ أَعلاه لا يَصدُقانِ
+    /// اليَوم</b>: المِلصَقُ المَحجوزُ تَحتَ <c>R</c> يُجابُ 404 إلّا <c>www</c> (<see cref="ApexAliases"/> — ‏<c>97ba402</c>، ثُمَّ <c>621fc1a</c> أَخرَجَ <c>mail</c>)،
+    /// ومَنطِقَةُ المَنَصَّةِ عَلى المُضيفِ <b>302</b> لا 301 (‏<c>023b686</c>) — والسُطورُ المُؤَرَّخَةُ في الجِسمِ تَقولُ كُلّاً بِسَبَبِه.</para>
+    /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و«مَسارٌ يَحمِلُ المَتجَرَ كَما هُوَ» صارَ لِما لَيسَ صَفحَة</b>:
+    /// GET لِقالِبِ صَفحَةِ مَتجَرٍ بِشَكلِ المَسارِ عَلى مُضيفِه ← 302 إلى عُنوانِه النَظيف حينَ تُمَرَّرُ القَوالِب (<c>CleanPageOnHost</c>)؛ وهذا المُحَمَّلُ بِلا قَوالِبَ
+    /// لا يَبلُغُه.</para>
+    /// </summary>
+    public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme)
+        => AnswerStoreHost(host, baseDomain, method, path, query, scheme, rolePages: null);
+
+    /// <summary>
+    /// <para>‏(‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>ومُضيفُ الدَور</b> (<see cref="RoleFromHost"/>)
+    /// يُجابُ كَمُضيفِ مَتجَرِه بِقَواعِدِه كُلِّها (مَناطِقُ المَنَصَّة، وسَطحُ الـAPI، وجُذورُ البِنيَةِ التَحتِيَّة)، ودَورُه في <see cref="StoreHostAnswer.Role"/> —
+    /// <b>ويوضَعُ <c>/r/{role}</c> في المَسارِ لِـGET/HEAD الَّذي يُطابِقُ قالِبَ صَفحَةِ دَورٍ وَحدَه</b> (<paramref name="rolePages"/>): <c>/me/listings</c> ←
+    /// <c>/{slug}/r/{role}/me/listings</c>، و<c>/{slug}/me</c> ← <c>/{slug}/r/{role}/me</c>. وما سِواه — كُلُّ كِتابَة، وAPI، و<c>/me/data/download</c>،
+    /// ومَسارٌ يَحمِلُ <c>/r/…</c> سَلَفاً — يُحقَنُ فيه <c>/{slug}</c> وَحدَه: فَالدَعوى لا تَبلُغُ تَخويلَ كِتابَةٍ أَبَداً (G7). وبِلا قَوالِبَ لا يُحقَنُ دَور.</para>
+    /// </summary>
+    public static StoreHostAnswer AnswerStoreHost(string? host, string? baseDomain, string? method, string? path, string? query, string? scheme,
+        RolePageTemplates? rolePages)
+    {
+        var apex = NormaliseHost(baseDomain);
+        var name = NormaliseHost(host);
+        if (apex is null || name is null || name.Length == apex.Length) return StoreHostAnswer.Through;
+        if (name.Length < apex.Length + 2 || !name.EndsWith(apex, StringComparison.Ordinal) || name[name.Length - apex.Length - 1] != '.')
+            return StoreHostAnswer.Through;
+
+        var label = name[..(name.Length - apex.Length - 1)];
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-4 وSEC-C2a-R2-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمِلصَقُ المَحجوزُ لا يَخدِمُ المَنَصَّة**: كانَ كُلُّ
+        // مَحجوزٍ تَحتَ `R` (admin، studio، api، cdn، blog …) يَمُرُّ فَيَخدِمُ المَنَصَّةَ كُلَّها عَلى أَصلٍ آخَر — جَرَّةٌ ثانِيَةٌ لِدُخولِ الاستوديو والإشراف، وأَصلٌ شَقيقٌ
+        // آخَر؛ والقَرارُ سَمّى `www` وَحدَه. الآن `www` و`mail` (`ApexAliases`) يَمُرّانِ كَما كانا، وما سِواهُما 404.
+        // ‏(‏2026-11-11، SEC-C2z-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) و`mail` خَرَجَ مِن `ApexAliases`: `www` وَحدَه يَمُرّ.
+        if (!label.Contains('.') && IsHostLabel(label) && ReservedPaths.Contains(label))
+            return ApexAliases.Contains(label) ? StoreHostAnswer.Through : StoreHostAnswer.NotFound;
+
+        var slug = StoreSlugFromHost(host, baseDomain);
+        string? role = null;
+        if (slug is null)
+        {
+            if (RoleFromHost(host, baseDomain) is not { } roleHost) return StoreHostAnswer.NotFound;
+            (slug, role) = roleHost;
+        }
+        var answer = WithRole(AnswerOnStoreHost(slug, role, host, apex, method, path, query, scheme, rolePages), role);
+        // ‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6 — C2z-PATHS-R1-04 وC2z-PATHS-R2-07 وC2z-PATHS-R1-07 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **صَفحَةٌ
+        // بِشَكلِ المَسارِ عَلى مُضيفِها تُحَوَّلُ إلى عُنوانِها النَظيف** (`CleanPageOnHost`): كانَت تُخدَمُ بِشَكلِها — `RelatedUrl` مُخَزَّن، رابِطٌ مَحفوظ، عَودَةُ
+        // استِمارَة — فَيُسَجِّلُ عامِلَ الخِدمَةِ ومِفتاحَ التَثبيتِ بِبادِئَةٍ لا يُعلِنُها بَيانُ المُضيف، ويَبقى الوُصولُ مِن إشعارٍ بِشَكلِ المَسار.
+        return CleanPageOnHost(slug, role, host, apex, method, path, query, scheme, rolePages, answer) is { } clean
+            ? new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null, clean) { Role = role }
+            : answer;
+    }
+
+    /// <summary>
+    /// <para><b>العُنوانُ النَظيفُ لِصَفحَةٍ وَصَلَت بِشَكلِ المَسارِ عَلى مُضيفِها — أَو <c>null</c></b> (‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · W13-4·C2f·6). شُروطُه
+    /// مُجتَمِعَة: <c>GET</c>، وقَوالِبُ القالِبِ مُسَجَّلَة؛ ومَقطَعُ المَسارِ الأَوَّلُ اسمُ مَتجَرِ المُضيف (شَكلُ المَسار)؛ وما يَخدِمُه الطَلَبُ (بَعدَ الحَقنِ إن كانَ)
+    /// <b>قالِبُ صَفحَةِ مَتجَر</b> (<see cref="RolePageTemplates.MatchesStorePage"/> — فَلا API ولا كِتابَة ولا <c>/_blazor</c> ولا <c>/realtime</c> ولا جُذورٌ ساكِنَة
+    /// ولا مَحَطَّةُ خُروج)؛ والذَيلُ لا يَبدَأُ بِما يُخدَمُ مِن الجَذر (<c>terms</c>… — يَكتُبُه <c>StoreUrl</c> بِشَكلِ المَسارِ عَمداً)؛ <b>والعُنوانُ النَظيفُ يَعودُ بِالحاقِنِ
+    /// إلى الصَفحَةِ نَفسِها</b> (يُسأَلُ <see cref="AnswerOnStoreHost"/> عَنه). والمُرَشَّحُ عَلى مُضيفِ الدَورِ بِلا <c>/r/{دَورِه}</c> أَوَّلاً ثُمَّ بِه. والاستِعلامُ يُنقَلُ
+    /// بِحَرفِه (ASCII)، والمَسارُ مُرَمَّزاً. تَحويلٌ <b>مُؤَقَّت</b> (302) كَتَحويلِ مَنطِقَةِ المَنَصَّة. وبِلا نِطاقٍ والجَذرُ <c>R</c> لا يَبلُغانِ هذا (<see cref="StoreHostAnswer.Through"/>).</para>
+    /// </summary>
+    private static string? CleanPageOnHost(string slug, string? role, string? host, string apex, string? method, string? path, string? query, string? scheme,
+        RolePageTemplates? rolePages, StoreHostAnswer answer)
+    {
+        if (rolePages is null || !HttpMethods.IsGet(method ?? "")) return null;
+        var p = string.IsNullOrEmpty(path) ? "/" : path[0] == '/' ? path : "/" + path;
+        var firstSlash = p.IndexOf('/', 1);
+        var first = p.Length < 2 ? "" : firstSlash > 0 ? p[1..firstSlash] : p[1..];
+        if (!string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) return null;
+        if (ServedPath(answer, p) is not { } served) return null;
+        var servedRest = served.Length > slug.Length + 1 ? served[(slug.Length + 1)..] : "/";
+        if (!rolePages.MatchesStorePage(servedRest)) return null;
+
+        var rest = firstSlash > 0 ? p[firstSlash..] : "/";
+        // ‏(‏2026-11-11، W13-4·C2f-R1·2 — SEC-C2f-R1-2 وC2f-PATHS-R1-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مَقطَعٌ فارِغٌ لَيسَ صَفحَةً بِشَكلِ المَسار**: القالِبُ
+        // يُقرَأُ بِلا المَقاطِعِ الفارِغَة (`MatchesStorePage`)، فَكانَ `/{slug}//me` يُطابِقُ `/{slug}/me` ويُكتَبُ ذَيلُه `//me` في `Location` — عُنوانٌ بِلا مُخَطَّطٍ
+        // يَقرَؤُه المُتَصَفِّحُ `https://me/` (مَقيسٌ عِندَ `7a9efc7` عَلى مُضيفِ المَتجَرِ ومُضيفِ الدَور)؛ وأَمانُه مُعَلَّقٌ بِأَلّا يَكونَ لِقالِبٍ مَقطَعٌ أَوَّلُ مُتَغَيِّر.
+        // الآن يَبقى كَما كانَ قَبلَ C2f·6 (يُجابُ كَما يُجابُ HEAD)، ووِجهَةٌ تَبدَأُ بِـ`//` أَو `/\` لا تُكتَبُ أَبَداً (أَدناه).
+        if (rest.Contains("//", StringComparison.Ordinal)) return null;
+        var candidates = new List<string>(2);
+        if (role is not null && WithoutRoleSegment(rest, role) is { } bare)
+        {
+            // عَلى مُضيفِ الدَورِ ذَيلٌ يُخدَمُ مِن الجَذرِ (`terms`) يَكتُبُه `StoreUrl` بِشَكلِ المَسارِ عَمداً (`/{slug}/r/{role}/terms`) — فَلا يُحَوَّل:
+            // `StoreUrlRoundTripTests` يَحمَرُّ عَلى رابِطٍ يَبنيه التَطبيقُ ويَأخُذُ قَفزَة (مَقيسٌ عَلى هذا التَبديلِ قَبلَ هذا السَطر: صَفٌّ واحِد).
+            var bareFirst = bare.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (bareFirst.Length > 0 && ServedAtRoot(bareFirst[0])) return null;
+            candidates.Add(bare);
+        }
+        candidates.Add(rest);
+        foreach (var candidate in candidates)
+        {
+            var segments = candidate.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0 && ServedAtRoot(segments[0])) continue;
+            var again = AnswerOnStoreHost(slug, role, host, apex, method, candidate, query, scheme, rolePages);
+            if (ServedPath(again, candidate) is { } same && string.Equals(same.TrimEnd('/'), served.TrimEnd('/'), StringComparison.OrdinalIgnoreCase))
+            {
+                var location = new PathString(candidate).ToUriComponent() + AsciiOnly(query);
+                return location.StartsWith("//", StringComparison.Ordinal) || location.StartsWith("/\\", StringComparison.Ordinal) ? null : location;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>ما يَخدِمُه الجَوابُ: مَسارُ الحَقنِ، أَو المَسارُ كَما هُوَ إن مَرَّ بِمَتجَرِه — و<c>null</c> لِتَحويلٍ أَو 404.</summary>
+    private static string? ServedPath(StoreHostAnswer answer, string path)
+        => answer.Verdict switch
+        {
+            StoreHostVerdict.Rewrite => answer.Path,
+            StoreHostVerdict.Pass when answer.Slug is not null => path,
+            _ => null,
+        };
+
+    /// <summary><c>/r/{role}/x</c> ← <c>/x</c> (و<c>/r/{role}</c> ← <c>/</c>) إن كانَ الدَورُ دَورَ المُضيف — وإلّا <c>null</c>.</summary>
+    private static string? WithoutRoleSegment(string rest, string role)
+    {
+        var marker = "/r/" + role;
+        if (!rest.StartsWith(marker, StringComparison.OrdinalIgnoreCase)) return null;
+        if (rest.Length == marker.Length) return "/";
+        return rest[marker.Length] == '/' ? rest[marker.Length..] : null;
+    }
+
+    /// <summary><b>مِلصَقاتٌ مَحجوزَةٌ تَمُرُّ إلى الجَذرِ كَما كانَت</b> (‏2026-11-11، SEC-C2a-R2-4): <c>www</c> (يُحَوِّلُه Cloudflare إلى <c>R</c> عِندَ الحافَّة — DEPLOY §٢·ي)
+    /// و<c>mail</c> (سِجِلُّه صَريحٌ إلى مُزَوِّدِ البَريدِ فَلا يَبلُغُ الأَصلَ عادَةً). وما سِواهُما مِن المَحجوزِ 404 عَلى مُضيفِه.</summary>
+    /// <remarks>‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · SEC-C2z-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b><c>www</c> وَحدَه</b>: «و<c>mail</c>» أَعلاه
+    /// سَقَط — القَرارُ (G4، A2 «www.R → R») سَمّى الجَذرَ و<c>www</c> وَحدَهُما، و«فَلا يَبلُغُ الأَصلَ عادَةً» يَصدُقُ بِسِجِلٍّ صَريحٍ ويَكذِبُ بِلاه: نِطاقٌ بَريدُه
+    /// بِسِجِلّاتِ MX وَحدَها يُرسِلُ <c>mail.R</c> عَبرَ <c>*</c> إلى الأَصل، فَكانَ أَصلاً ثانِياً لِلمَنَصَّةِ بِجَرَّتِه (مَقيسٌ عِندَ المُراجِع: <c>/studio</c> ← 200 بِـSet-Cookie،
+    /// و<c>/ashare</c> ← 200). والـ404 لا يُكَلِّفُ شَيئاً حينَ يوجَدُ السِجِلُّ الصَريح: الأَصلُ لا يَرى <c>mail.R</c> حينَها.</remarks>
+    public static readonly IReadOnlySet<string> ApexAliases = new HashSet<string>(StringComparer.Ordinal) { "www" };
+
+    private static StoreHostAnswer WithRole(StoreHostAnswer answer, string? role)
+        => role is null || answer.Slug is null ? answer : answer with { Role = role };
+
+    private static StoreHostAnswer AnswerOnStoreHost(string slug, string? role, string? host, string apex, string? method, string? path, string? query,
+        string? scheme, RolePageTemplates? rolePages)
+    {
+        path = string.IsNullOrEmpty(path) ? "/" : path[0] == '/' ? path : "/" + path;
+        var segments = path.Split('/', 4);
+        var first = segments.Length > 1 ? segments[1] : "";
+
+        if (ReservedTenantSlugs.PlatformAreas.Contains(first))
+        {
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدارَةُ مَتجَرِ المُضيفِ نَفسِه تُخدَمُ عَلى مُضيفِه كَما هي
+            // (GET وكِتابَة): بِطاقاتُ `/manage` السِتُّ تَقودُ إلَيها، و`TenantAdminGuard` يَقبَلُ كوكيَّ المَتجَرِ وهو مَقصورٌ عَلى مُضيفِه — فَالتَحويلُ إلى
+            // الجَذرِ كانَ يُسقِطُ الجَلسَةَ «غَير مُصَرَّح». ومَسارُ الإدارَةِ يَحمِلُ مَتجَرَ المُضيفِ نَفسَه، فَلا سِياقَ يَختَلِف؛ وما سِواه يَبقى 301/404.
+            if (IsHostStoreAdmin(path, slug)) return new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+            if (!HttpMethods.IsGet(method ?? "") && !HttpMethods.IsHead(method ?? "")) return StoreHostAnswer.NotFound;
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-2/C2a-P-03 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الوِجهَةُ مِن المَسارِ **مُرَمَّزاً** لا مَفكوكاً:
+            // `path` هُنا `req.Path.Value` المَفكوك، فَكانَ `/studio/%D9%85` يُكتَبُ «م» في `Location` ← 500 (Kestrel يَرفُضُ ما خارِجَ ASCII ومَحارِفَ
+            // التَحَكُّم)، و`%3F` يَصيرُ `?` فَيَنقَلِبُ المَسارُ استِعلاماً، و`%25` يَصيرُ `%` باطِلاً. وتَطابُقُ المَقاطِعِ أَعلاه يَبقى عَلى المَفكوك.
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-3 وSEC-C2a-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **والمُخَطَّطُ مِن {http, https} وَحدَهُما**: كانَ
+            // `Request.Scheme` بِحَرفِه — و`X-Forwarded-Proto` يُصَدَّقُ مِن أَيِّ نِدٍّ (`KnownProxies` فارِغ) فَكَتَبَ `javascript://R/studio` و`data://…`. كَما `PortOf`
+            // لِلمَنفَذ: قائِمَةُ سَماحٍ لا تَنظيف — `http` يَبقى، وما سِواه `https`.
+            return new StoreHostAnswer(StoreHostVerdict.Redirect, slug, null,
+                $"{SchemeOf(scheme)}://{apex}{PortOf(host)}{new PathString(path).ToUriComponent()}{AsciiOnly(query)}");
+        }
+
+        if (string.Equals(first, ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ كُلُّ `/api/push/…` يَمُرّ، فَسَطحُ مَتجَرٍ اسمُه
+            // `push` (‏`/api/{slug}/manifest.json`… والاشتِراك) يُخدَمُ عَلى مُضيفِ كُلِّ مَتجَرٍ آخَرَ بِسِياقِه؛ وكانَ `second == slug` وَحدَه، فَعَلى `v1.R` يَبلُغُ
+            // `/api/v1/*` API المَنَصَّة. الآن: مِن `/api/push/` طَرَفُ المَنَصَّةِ الواحِدُ بِعَينِه (`GET`/`HEAD`)، وسَطحُ المَتجَرِ لِمَتجَرِ المُضيفِ ما لَم يَكُن اسمُه
+            // مَقطَعاً حَرفِيّاً لِـAPI المَنَصَّة — وما سِواهُما 404 (`StoreApiServed`).
+            return StoreApiServed(method, path, slug)
+                ? new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null)
+                : StoreHostAnswer.NotFound;
+        }
+
+        if (role is not null && rolePages is not null && (HttpMethods.IsGet(method ?? "") || HttpMethods.IsHead(method ?? ""))
+            && RoleRest(path, slug) is { } rest && rolePages.Matches(rest))
+            return new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, $"/{slug}/r/{role}{(rest == "/" ? "" : rest)}", null);
+
+        return PathWithSlug(path, slug) is { } rewritten
+            ? new StoreHostAnswer(StoreHostVerdict.Rewrite, slug, rewritten, null)
+            : new StoreHostAnswer(StoreHostVerdict.Pass, slug, null, null);
+    }
+
+    /// <summary>المَسارُ بَعدَ <c>/{slug}</c> إن حَمَلَه (وإلّا كَما هُوَ) — و<c>null</c> لِما يَحمِلُ <c>/r/…</c> سَلَفاً أَو جَذراً مَخدوماً: لا يُحقَنُ فيه دَورُ المُضيف.</summary>
+    private static string? RoleRest(string path, string slug)
+    {
+        var rest = path;
+        var firstSlash = path.IndexOf('/', 1);
+        var first = firstSlash > 0 ? path[1..firstSlash] : path[1..];
+        if (string.Equals(first, slug, StringComparison.OrdinalIgnoreCase)) rest = firstSlash > 0 ? path[firstSlash..] : "/";
+        var segments = rest.Split('/', 3, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length > 0 && (string.Equals(segments[0], "r", StringComparison.OrdinalIgnoreCase) || ServedAtRoot(segments[0]))) return null;
+        return rest;
+    }
+
+    /// <summary>
+    /// <para><b>أَيُخدَمُ طَلَبُ <c>/api/…</c> هذا عَلى مُضيفِ المَتجَرِ <paramref name="slug"/>؟ — قَرارٌ نَقِيٌّ يَسأَلُه <see cref="AnswerStoreHost"/></b> (‏2026-11-07،
+    /// مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1). نَعَم لِاثنَينِ وَحدَهُما: <c>GET</c>/<c>HEAD</c> <c>/api/push/vapid-key</c> بِلا مَقطَعٍ بَعدَه (مِفتاحُ الإشعارِ
+    /// العامّ)، و<c>/api/{slug}</c> وما تَحتَه لِمَتجَرِ المُضيفِ <b>ما لَم يَكُن اسمُه مَقطَعاً حَرفِيّاً لِـAPI المَنَصَّة</b>
+    /// (<see cref="ReservedTenantSlugs.PlatformApiSegments"/>). والمُقارَنَةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه.</para>
+    /// <para><b>والشَرطُ الأَخيرُ حاجِزٌ ثانٍ مَقيسٌ وَحدَه</b>: <see cref="StoreHostName"/> يَرُدُّ تِلكَ الأَسماءَ فَلا تَصيرُ مُضيفاً أَصلاً — وهذِه الدالَّةُ لا تَعتَمِدُ
+    /// عَلَيه، فَمَتجَرٌ قائِمٌ بِها يَبقى بِلا API المَنَصَّةِ عَلى أَيِّ مُضيفٍ ولَو اتَّسَعَ المُصادِقُ يَوماً.</para>
+    /// </summary>
+    public static bool StoreApiServed(string? method, string? path, string slug)
+    {
+        var segments = (string.IsNullOrEmpty(path) ? "/" : path).Split('/', 4);
+        if (segments.Length < 3 || !string.Equals(segments[1], ReservedTenantSlugs.ApiRoot, StringComparison.OrdinalIgnoreCase)) return false;
+
+        if ((HttpMethods.IsGet(method ?? "") || HttpMethods.IsHead(method ?? ""))
+            && segments.Length == 4
+            && string.Equals(segments[2], ReservedTenantSlugs.ApiPushSegment, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(segments[3], ReservedTenantSlugs.ApiPushVapidKey, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(segments[2], slug, StringComparison.OrdinalIgnoreCase) && !ReservedTenantSlugs.IsPlatformApiSegment(segments[2]);
+    }
+
+    /// <summary><b>صَفَحاتُ إدارَةِ مَتجَرِ المُضيف</b> — <c>/admin/tenants/{slug}</c> أَو <c>/admin/tenants/{slug}/…</c> ومُعَرِّفُها مَتجَرُ المُضيفِ بِعَينِه
+    /// (‏2026-11-07، C2a-P-01). والمُقارَنَةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه، ولا بادِئَةَ تَكفي (<c>ashare-x</c> لَيسَ <c>ashare</c>).</summary>
+    private static bool IsHostStoreAdmin(string path, string slug)
+    {
+        var s = path.Split('/', 5);
+        // ‏(‏2026-11-11، SEC-C2a-R2-3 — يُلحَقُ) ولا أَخٌ حَرفِيٌّ (`/admin/tenants/new`، `/admin/tenants/create`) ولَو كانَ اسمَ مَتجَرِ المُضيف.
+        return s.Length >= 4
+               && string.Equals(s[1], "admin", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(s[2], "tenants", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(s[3], slug, StringComparison.OrdinalIgnoreCase)
+               && !StoreHostName.PlatformLiteralSiblings.Contains(s[3]);
+    }
+
+    /// <summary><b>أَيَحمِلُ هذا المَسارُ سِياقَ مَتجَرٍ عَلى مُضيفِه؟</b> لا لِمَنطِقَةِ المَنَصَّة: مَسارُها عَلى الجَذرِ بِلا سِياقِ مَتجَر (<see cref="SlugFromPath"/>
+    /// يَرُدُّ <c>admin</c> مَحجوزاً)، والمُضيفُ اسمٌ آخَرُ لِلمَسارِ نَفسِه — فَصَفحَةُ إدارَةِ المَتجَرِ عَلى مُضيفِه تُرسَمُ بِقِشرَةِ المَنَصَّةِ كَما عَلى الجَذر، ولا
+    /// يُصيبُها قُفلُ المَتجَرِ المُعَلَّقِ في <c>MainLayout</c> (‏2026-11-07، C2a-P-01).</summary>
+    public static bool CarriesStoreContext(string? path)
+    {
+        var p = string.IsNullOrEmpty(path) ? "/" : path;
+        var firstSlash = p.IndexOf('/', 1);
+        var first = p.Length < 2 ? "" : firstSlash > 0 ? p[1..firstSlash] : p[1..];
+        return !ReservedTenantSlugs.PlatformAreas.Contains(first);
+    }
+
+    /// <summary>مُخَطَّطُ وِجهَةِ التَحويل — <c>http</c> إن كانَه (بِلا حالَةِ أَحرُف)، وإلّا <c>https</c> (‏2026-11-11، SEC-C2a-R3-1).</summary>
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ) القاعِدَةُ في <see cref="AbsoluteScheme.Of"/> مَرَّةً — ظَهَرَ لَها مُستَهلِكٌ ثالِثٌ في مَشروعٍ ثالِث.</remarks>
+    private static string SchemeOf(string? scheme) => AbsoluteScheme.Of(scheme);
+
+    /// <summary><b>مَنفَذُ المُضيفِ لِلوِجهَة</b> — <c>:</c> وأَرقامٌ وَحدَها (١–٥)، وما سِواه لا يُنقَلُ إلى <c>Location</c> (‏2026-11-07، SEC-C2a-2).</summary>
+    private static string PortOf(string? host)
+    {
+        var raw = host?.Trim() ?? "";
+        var colon = raw.LastIndexOf(':');
+        if (colon < 0 || raw.StartsWith('[')) return "";
+        var digits = raw[(colon + 1)..];
+        return digits.Length is >= 1 and <= 5 && digits.All(char.IsAsciiDigit) ? ":" + digits : "";
+    }
+
+    /// <summary><b>الاستِعلامُ كَما أُرسِل، بِلا مَحرَفٍ لا يَحمِلُه رَأس</b>: ما خارِجَ ASCII المَطبوعِ (ومَعَه المَسافَةُ ومَحارِفُ التَحَكُّم) يُرَمَّزُ بِبايتاتِه
+    /// UTF-8 بِنِسبَةٍ مِئَوِيَّة، وما سِواه لا يُمَسّ — فَالاستِعلامُ المُرَمَّزُ سَلَفاً يَبقى بِحَرفِه (‏2026-11-07، SEC-C2a-2).</summary>
+    private static string AsciiOnly(string? query)
+    {
+        if (string.IsNullOrEmpty(query)) return "";
+        if (query.All(c => c is > ' ' and < (char)0x7F)) return query;
+        var sb = new System.Text.StringBuilder(query.Length * 3);
+        Span<byte> utf8 = stackalloc byte[4];
+        foreach (var rune in query.EnumerateRunes())
+        {
+            if (rune.Value is > ' ' and < 0x7F) { sb.Append((char)rune.Value); continue; }
+            var n = rune.EncodeToUtf8(utf8);
+            for (var i = 0; i < n; i++) sb.Append('%').Append(utf8[i].ToString("X2"));
+        }
+        return sb.ToString();
+    }
+
     /// <summary>يُطَبِّعُ مُضيفاً: حُروفٌ صَغيرَة، بِلا مَنفَذٍ ولا
     /// نُقطَةٍ أَخيرَة. و<c>null</c> لِلفارِغِ ولِعَنوانِ ‏IPv6
     /// الحَرفِيّ — <b>ولا تَعَدُّدَ مُستَأجِرينَ على عَنوانٍ
     /// رَقَمِيّ</b>.</summary>
-    private static string? NormaliseHost(string? value)
+    internal static string? NormaliseHost(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
 
@@ -202,6 +526,21 @@ public sealed class TenantResolverMiddleware
         return true;
     }
 
+    /// <summary>
+    /// <para><b>بابُ الخُروجِ أَو مَحَطَّتُه لِهذا المَتجَر</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · C2z-PATHS-R1-02): المَسارُ بَعدَ الحَقنِ
+    /// <c>/{slug}/auth/logout</c> أَو <c>/{slug}/auth/logout/continue</c> — المَقاطِعُ الحَرفِيَّةُ بِلا حالَةِ أَحرُفٍ كَما يُطابِقُ التَوجيه. ويُقابَلُ بِمَسارَي القالِبِ
+    /// (<c>LogoutHops.ContinueTail</c> وبابِ الخُروج) في <c>LogoutTourFreshTests</c> فَلا يَنجَرِفُ عَنهُما.</para>
+    /// </summary>
+    public static bool IsLogoutTour(string? path, string slug)
+    {
+        var segments = (path ?? "").Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length is 3 or 4
+               && string.Equals(segments[0], slug, StringComparison.OrdinalIgnoreCase)
+               && string.Equals(segments[1], "auth", StringComparison.OrdinalIgnoreCase)
+               && string.Equals(segments[2], "logout", StringComparison.OrdinalIgnoreCase)
+               && (segments.Length == 3 || string.Equals(segments[3], "continue", StringComparison.OrdinalIgnoreCase));
+    }
+
     private readonly SubdomainTenancyOptions _subdomains;
 
     public TenantResolverMiddleware(RequestDelegate next, IDocumentStore store,
@@ -212,17 +551,40 @@ public sealed class TenantResolverMiddleware
 
     public async Task InvokeAsync(HttpContext ctx)
     {
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **حامِلُ نِطاقِ العَدِّ يُفتَحُ في أَوَّلِ سَطرٍ لِكُلِّ طَلَب** —
+        // قَبلَ كُلِّ رُجوعٍ مُبكِر، فَلِلطَلَبِ الَّذي لا مَتجَرَ فيه (`/studio`، `/admin`) حامِلٌ فارِغٌ يَملَؤُه مَن يَعرِفُ القيمَة (حُرّاسُ البَند ٨)، ولا يَرِثُ
+        // طَلَبٌ حامِلَ غَيرِه. ويُملأُ أَدناه مِن وَثيقَةِ المَتجَرِ الَّتي يُحَمِّلُها هذا الوَسيطُ أَصلاً — بِصِفرِ استِعلامٍ إضافِيّ.
+        var meter = MeterScope.Open();
+
         // **المُضيفُ أَوَّلاً ثُمَّ المَسار — والمَسارُ لا يُحذَف.**
         // وتَحتَ نِطاقٍ فَرعِيٍّ يَكونُ الجَوابانِ واحِداً أَصلاً،
         // لِأَنَّ `SubdomainTenantPathMiddleware` حَقَنَ المَقطَعَ
         // قَبلَ التَوجيه. فَالسُقوطُ هُنا يَحرُسُ التَركيبَ الَّذي
         // لا يُرَكِّبُ ذاكَ الوَسيط.
-        var slug = SlugFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain)
-                   ?? SlugFromPath(ctx.Request.Path.Value);
+        //
+        // ‏(‏2026-11-07، ADR-050 · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والمُضيفُ مُضيفُ مَتجَرٍ إن صَلَحَ اسمُه (`StoreSlugFromHost`)، و**مَتجَرٌ
+        // لا وُجودَ لَه عَلى مُضيفِه 404** — كانَ يُرسَمُ بِـ200 (القاعِدَة ١٢: مَدخَلٌ لا يَفتَحُ لا يُعرَض). وهُنا لا في الحاقِن: الحاقِنُ لا يَقرَأُ
+        // حالَةً مَخزونَة (القاعِدَة ٧)، وهذا الوَسيطُ يُحَمِّلُ وَثيقَةَ المَتجَرِ أَصلاً.
+        var hostSlug = StoreSlugFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain);
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُضيفُ الدَورِ مُضيفُ مَتجَرِه، و**مَتجَرٌ لا يَملِكُ ذلكَ الدَورَ 404 عَلى مُضيفِه**
+        // (القاعِدَة ١٢): الدَورُ بِاسمِه في الكَتالوجِ وفي المَتجَرِ مَعاً، فَالحاقِنُ وَضَعَ `/r/{catalog}` في المَسارِ ولا يُدَّعى دَورٌ لَيسَ في المَتجَر.
+        var roleHost = hostSlug is null ? RoleFromHost(ctx.Request.Host.Value, _subdomains.BaseDomain) : null;
+        hostSlug ??= roleHost?.Slug;
+        var slug = hostSlug ?? SlugFromPath(ctx.Request.Path.Value);
         if (slug is null) { await _next(ctx); return; }
 
         var cacheKey = $"tenant:{slug.ToLowerInvariant()}";
-        if (!_cache.TryGetValue(cacheKey, out Tenant? entity))
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-4 وC2b-P-03 وC2b-P2-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وحُضورُ الدَورِ عَلى مُضيفِه طازَج**: الـ404
+        // أَدناه كانَ يَقرَأُ ذاكِرَةَ الخَمسِ دَقائِقِ الَّتي لا يُخليها حِفظُ الأَدوار — فَدَورٌ أُضيفَ للتَوِّ تَظهَرُ بِطاقَتُه (مِن بَياناتٍ طازَجَة) ومُضيفُه 404 حَتّى
+        // ‏201 ثانِيَة، ودَورٌ أُزيلَ يَبقى مُضيفُه يَخدِم (مَقيسٌ عِندَ المُراجِعين). أَربَعَةُ كُتّابٍ لِـ`Tenant.Roles` في ثَلاثَةِ مِلَفّات، فَالإخلاءُ عِندَ كُلٍّ
+        // يَنجَرِفُ بِكاتِبٍ خامِس؛ والقِراءَةُ الطازَجَةُ عَلى مُضيفِ الدَورِ وَحدَه (‏LoadAsync بِالمُعَرِّف) تُغني عَنها، وتُجَدِّدُ الذاكِرَةَ لِمُضيفِ المَتجَرِ ولِلمَسارِ مَعَها.
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · C2z-PATHS-R1-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجَولَةُ الخُروجِ تَقرَأُ ما يَقرَؤُه بابُ مُضيفِ الدَور**:
+        // مُضيفاتُ المَتجَرِ الَّتي يَمُرُّ بِها الخُروجُ (`HostedRoles` أَدناه) كانَت مِن الذاكِرَةِ والـ404 عَلى مُضيفِ الدَورِ طازَج — فَدَورٌ أُزيلَ تَحتَ الذاكِرَةِ بَقِيَ مَحَطَّةً
+        // تُجيبُ 404، فَانقَطَعَت السِلسِلَةُ وبَقِيَت جَرّاتُ ما بَعدَه داخِلَة (مَقيسٌ عِندَ المُراجِعِ وعِندي). فَبابُ الخُروجِ ومَحَطَّتُه (`IsLogoutTour`) يَقرَآنِ طازَجاً مَتى
+        // هُيِّئَ النِطاق؛ وبِلا نِطاقٍ لا جَولَةَ فَلا قِراءَة.
+        Tenant? entity = null;
+        if (roleHost is not null || (!string.IsNullOrEmpty(_subdomains.BaseDomain) && IsLogoutTour(ctx.Request.Path.Value, slug))
+            || !_cache.TryGetValue(cacheKey, out entity))
         {
             await using var session = _store.QuerySession();
             entity = await session.LoadAsync<Tenant>(slug.ToLowerInvariant());
@@ -230,10 +592,52 @@ public sealed class TenantResolverMiddleware
                 _cache.Set(cacheKey, entity, TimeSpan.FromMinutes(5));
         }
 
+        // ‏(‏2026-11-07، C2a-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مَنطِقَةُ المَنَصَّةِ عَلى مُضيفِ المَتجَرِ (إدارَتُه وَحدَها تَبلُغُ هُنا) بِلا سِياقِ مَتجَرٍ كَالجَذر؛
+        // والمَتجَرُ المَجهولُ عَلى مُضيفِه يَبقى 404.
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الشَرطُ في `HoldsRoleHost` بِحَرفِه — تَسأَلُه أَيضاً قائِمَةُ
+        // مُضيفاتِ المَتجَرِ الَّتي يَمُرُّ بِها الخُروج، فَلا تَنجَرِفُ عَن هذا الـ404.
+        if (entity is not null && roleHost is { } rh && !HoldsRoleHost(entity, rh.CatalogRole))
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        // ‏(‏2026-11-07، SEC-C2b-R2-2) ومُضيفاتُ المَتجَرِ عَلى طَلَبٍ يَخدِمُه مُضيفٌ لَه — يَقرَؤُها الخُروجُ لِيَمُرَّ بِها كُلِّها (الكَعكاتُ مَقصورَةٌ عَلى مُضيفِها).
+        if (entity is not null && hostSlug is not null) ctx.Items[StoreHostItems.HostedRoles] = HostedRoles(entity);
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وجَرَّةُ الجَذرِ مَحَطَّةٌ أَيضاً**: مَعَ نِطاقٍ مُهَيَّأٍ يَخدِمُ `R/{slug}`
+        // المَتجَرَ بِجَرَّةٍ مُستَقِلَّة — كانَ الخُروجُ عَلى المُضيفِ يَترُكُها داخِلَة، والخُروجُ عَلَيها يَترُكُ المُضيفاتِ داخِلَة (مَقيسٌ عِندَ 818ef7b). فَالعَلامَةُ
+        // عَلى المُضيفاتِ وعَلى الجَذر، ومُضيفاتُ المَتجَرِ عَلى الجَذرِ أَيضاً. وبِلا نِطاقٍ لا يُكتَبُ شَيء.
+        if (entity is not null && ApexServes(_subdomains.Apex, entity.Slug))
+        {
+            ctx.Items[StoreHostItems.ApexServesStore] = true;
+            if (hostSlug is null) ctx.Items[StoreHostItems.HostedRoles] = HostedRoles(entity);
+        }
+
         if (entity is not null)
-            ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
-                          entity.TagLine, entity.City,
-                          hasRoles: entity.Roles.Count > 0);
+        {
+            if (hostSlug is null || CarriesStoreContext(ctx.Request.Path.Value))
+            {
+                ctx.SetTenant(entity.Slug, entity.Name, entity.BrandColor, entity.AuthChannel,
+                              entity.TagLine, entity.City,
+                              hasRoles: entity.Roles.Count > 0);
+                // ‏(‏2026-11-12، W13-6·٣ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والحامِلُ مِن الوَثيقَةِ نَفسِها حَيثُ يُحَلُّ المَتجَر: رائِدُ الأَعمالِ مالِكُه لَحظَةَ
+                // الكِتابَة (`_unowned` لِمَتجَرٍ بِلا مالِك)، والدَورُ `_none` لِمَتجَرٍ بِلا أَدوارٍ وإلّا يَبقى لِمَن يَحسِبُه (البَند ١٠). **ولا يُؤخَذُ دَورُ
+                // المُضيف** (`RoleFromHost`): ادِّعاءٌ يُفحَصُ عَلى المَتجَرِ (`HoldsRoleHost`) لا عَلى المُستَخدِم (COR-11).
+                // ‏(‏2026-11-12، W13-6·B-R1·1 — مُراجَعَةُ المَرحَلَةِ ب · M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `role: entity.Roles.Count == 0 ?
+                // MeterSentinels.None : null` في هذا النِداء — `_none` بِـ«الكاتِبُ الأَوَّلُ يَفوز» مِن `Tenant.Roles` **المُخَزَّنَةِ المُخَبَّأَة**، وحارِسا الصَلاحِيَّةِ
+                // يُقَرِّرانِ عَلى المُجَسَّدَة (وفَوقَها المُؤَلَّفَةُ المُعتَمَدَة): مَقيس — مَتجَرٌ بِلا أَدوارٍ مُخَزَّنَةٍ يَنشُرُ فيه عُضوٌ بِدَورِه المُؤَلَّفِ «mandoob»
+                // ⇐ `200` وسَطرُه `_none`. فَصارَ `_none` هُنا **مُؤَقَّتاً** يَحِلُّ مَحَلَّه الدَورُ الَّذي يَقبَلُ بِه الحارِس (`MeterScopeHolder.FillAcceptedRole`)،
+                // ويَبقى لِكِتابَةٍ لا حارِسَ لَها كَما كان — بِصِفرِ استِعلامٍ إضافِيّ.
+                meter.Fill(entity.Slug,
+                           entrepreneur: entity.OwnerUserId == Guid.Empty ? MeterSentinels.Unowned : entity.OwnerUserId.ToString("D"));
+                if (entity.Roles.Count == 0) meter.FillProvisionalRole(entity.Slug, MeterSentinels.None);
+            }
+        }
+        else if (hostSlug is not null)
+        {
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
 
         await _next(ctx);
     }
@@ -267,6 +671,9 @@ public sealed class SubdomainTenancyOptions
     /// <summary><c>null</c> = لا نِطاقَ مُهَيَّأً = لا حَلَّ
     /// بِالمُضيف.</summary>
     public string? BaseDomain { get; init; }
+
+    /// <summary>النِطاقُ مُطَبَّعاً (حُروفٌ صَغيرَة، بِلا مَنفَذٍ ولا نُقطَةٍ أَخيرَة) — أَو <c>null</c> بِلا نِطاق (‏2026-11-07، W13-4·C2b·1).</summary>
+    public string? Apex => TenantResolverMiddleware.NormaliseHost(BaseDomain);
 
     public static SubdomainTenancyOptions FromConfiguration(IConfiguration? config)
     {
@@ -305,33 +712,75 @@ public sealed class SubdomainTenancyOptions
 /// </summary>
 public sealed class SubdomainTenantPathMiddleware
 {
-    public const string HostSlugItem = "acommerce.tenant.host-slug";
-    public const string OriginalPathItem = "acommerce.tenant.original-path";
+    public const string HostSlugItem = StoreHostItems.Slug;             // ‏(‏2026-11-07، W13-4·C2a·6) قُرّاؤُهُما في القالِبِ والعُدَّة
+    public const string OriginalPathItem = StoreHostItems.OriginalPath;
 
     private readonly RequestDelegate _next;
     private readonly SubdomainTenancyOptions _options;
+    private readonly RolePageTemplates? _rolePages;
 
-    public SubdomainTenantPathMiddleware(RequestDelegate next, SubdomainTenancyOptions options)
+    // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) قَوالِبُ صَفَحاتِ الدَورِ مِن الحاوِيَةِ إن سَجَّلَها القالِب — وبِدونِها لا يُحقَنُ دَور.
+    public SubdomainTenantPathMiddleware(RequestDelegate next, SubdomainTenancyOptions options, IServiceProvider services)
     {
-        _next = next; _options = options;
+        _next = next; _options = options; _rolePages = services.GetService<RolePageTemplates>();
     }
 
     public async Task InvokeAsync(HttpContext ctx)
     {
-        var slug = TenantResolverMiddleware.SlugFromHost(
-            ctx.Request.Host.Value, _options.BaseDomain);
+        // ‏(‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) القَرارُ كُلُّه في `AnswerStoreHost` النَقِيَّة: كانَ هُنا حَقنٌ
+        // وَحدَه، فَمَناطِقُ المَنَصَّةِ و`/api/{مَتجَرٍ آخَر}` تُخدَمُ بِسِياقِ مَتجَرِ المُضيف، ومِلصَقٌ لَيسَ اسمَ مَتجَرٍ يُرسَمُ صَفحَةَ المَنَصَّة.
+        var req = ctx.Request;
+        // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) النِطاقُ نَفسُه لِمَن بَعدَه عَلى كُلِّ طَلَبٍ مَتى هُيِّئ:
+        // «افتَح المَتجَر» مِن الجَذرِ يَبني عُنوانَ مُضيفِه المُطلَق. وبِلا نِطاقٍ لا يُكتَبُ شَيء.
+        if (_options.Apex is { } apex) ctx.Items[StoreHostItems.Apex] = apex;
+        var answer = TenantResolverMiddleware.AnswerStoreHost(
+            req.Host.Value, _options.BaseDomain, req.Method, req.Path.Value, req.QueryString.Value, req.Scheme, _rolePages);
 
-        if (slug is not null)
+        switch (answer.Verdict)
         {
-            ctx.Items[HostSlugItem] = slug;
-            ctx.Items[OriginalPathItem] = ctx.Request.Path.Value;
+            case StoreHostVerdict.NotFound:
+                ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+                return;
+            case StoreHostVerdict.Redirect:
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2a-5 وC2a-P-04 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُؤَقَّتٌ لا دائِم**: كانَ 301 — والمُتَصَفِّحُ يَحفَظُه
+                // بِلا انقِضاء، و`/terms` عَلى المُضيفِ سُؤالٌ مَفتوحٌ لِلمالِك (ADR-050 §١٣) والتَراجُعُ نِطاقٌ فارِغ (§١١)؛ فَزائِرٌ فَتَحَ `{slug}.R/terms` مَرَّةً كانَ
+                // يُحَوِّلُه مُتَصَفِّحُه إلى `R/terms` بَعدَ أَيِّ قَرارٍ أَو تَراجُع. والـ301 لِلمَرحَلَةِ الخامِسَةِ حينَ تُحسَمُ القَرارات.
+                ctx.Response.StatusCode = StatusCodes.Status302Found;
+                ctx.Response.Headers.Location = answer.Location;
+                return;
+        }
 
-            var rewritten = TenantResolverMiddleware.PathWithSlug(ctx.Request.Path.Value, slug);
-            if (rewritten is not null) ctx.Request.Path = rewritten;
+        if (answer.Slug is not null)
+        {
+            ctx.Items[HostSlugItem] = answer.Slug;
+            ctx.Items[OriginalPathItem] = req.Path.Value;
+            if (answer.Role is { } hostRole)
+            {
+                ctx.Items[StoreHostItems.Role] = hostRole;
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-3 وC2b-P-05 وSEC-C2b-R2-4 وC2b-P2-05 وC2b-P3-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُضيفُ الدَورِ
+                // لا يُفَهرَس**: كانَ نُسخَةً ذاتِيَّةَ الـcanonical لِواجِهَةِ المَتجَرِ بِخَريطَتِها (حَتّى عَشرُ نُسَخٍ لِلمَتجَر، ومِنها `{slug}-admin.R` الَّذي لا تُعلِنُه بِطاقَة).
+                // فَكُلُّ جَوابٍ عَلَيه بِـ`X-Robots-Tag: noindex` — بِلا بايتٍ في HTML — ومُضيفُ المَتجَرِ النُسخَةُ الوَحيدَةُ المُفَهرَسَة.
+                ctx.Response.Headers["X-Robots-Tag"] = "noindex";
+            }
+            if (answer.Verdict == StoreHostVerdict.Rewrite) req.Path = answer.Path;
         }
 
         await _next(ctx);
     }
+}
+
+/// <summary>ما يُفعَلُ بِالطَلَبِ عَلى مُضيفِه (<see cref="TenantResolverMiddleware.AnswerStoreHost"/>).</summary>
+public enum StoreHostVerdict { Pass, Rewrite, Redirect, NotFound }
+
+/// <summary>الجَوابُ: الحُكم، ومَتجَرُ المُضيفِ إن كانَ مُضيفَ مَتجَر، والمَسارُ بَعدَ الحَقن، والوِجهَةُ لِلتَحويل.</summary>
+public sealed record StoreHostAnswer(StoreHostVerdict Verdict, string? Slug, string? Path, string? Location)
+{
+    /// <summary>دَورُ الكَتالوجِ عَلى مُضيفِ الدَور (<c>{slug}-{rolehost}.R</c>) — <c>null</c> عَلى مُضيفِ المَتجَرِ وما سِواه (‏2026-11-07، W13-4·C2b·4).</summary>
+    public string? Role { get; init; }
+
+    /// <summary>بِلا مَتجَرٍ ولا مَساسٍ — الجَذرُ أَو مُضيفٌ خارِجَه أَو مِلصَقٌ مَحجوز أَو نِطاقٌ فارِغ.</summary>
+    public static readonly StoreHostAnswer Through = new(StoreHostVerdict.Pass, null, null, null);
+    public static readonly StoreHostAnswer NotFound = new(StoreHostVerdict.NotFound, null, null, null);
 }
 
 public static class MultiTenancyExtensions

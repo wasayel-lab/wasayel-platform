@@ -50,8 +50,9 @@ public sealed class LocalFileStorage : IFileStorage, IDevelopmentStubFileStorage
 
     public string ProviderName => "Local";
 
+    /// <remarks>‏(‏2026-11-12، W13-6·١٣) تَبِعَ التَوقيعَ ولا يَعُدّ — القُرصُ المَحَلِّيُّ لا يُغادِرُ العَمَلِيَّة.</remarks>
     public async Task<StoredFile> UploadAsync(
-        string key, Stream content, string contentType, CancellationToken ct = default)
+        ACommerce.Platform.Shared.Metering.ProviderCall call, string key, Stream content, string contentType, CancellationToken ct = default)
     {
         var path = ResolvePath(key);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

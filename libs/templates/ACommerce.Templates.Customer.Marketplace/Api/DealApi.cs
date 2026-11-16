@@ -40,11 +40,18 @@ public static class DealApi
 {
     public static DealDto ToDto(Deal d)
     {
-        var next = DealsPolicy.Next(d.Pattern, d.Stage);
+        // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦) — نَفسُ الدالَّةِ الَّتي تَقرَؤُها
+        // الخِدمَةُ والشاشَة، فَلا يَعِدُ العَقدُ بِمَرحَلَةٍ سَيَرفُضُها المُحَرِّك.
+        var next = DealsPolicy.Next(d);
+        // و`actor_for_current_stage` = مَن تَنتَظِرُه المَرحَلَةُ الحالِيَّةُ لِيُخرِجَها — فاعِلُ التالي،
+        // الدالَّةُ الَّتي يَفرِضُها المُحَرِّك (‏ADR-033 §٦‑ط، ‏2026-10-11). كانَ `Actor(d.Stage)` فَيَقولُ
+        // «initiator» عِندَ `Paid` والمُحَرِّكُ يَطلُبُ البائِع؛ والاسمُ باقٍ بِحَرفِه حِفظاً لِلعَقد. وعِندَ
+        // آخِرِ مَرحَلَةٍ لا يُخرِجُها أَحَد، فَيَبقى فاعِلَها كَما كانَ — المِفتاحُ نَفسُه الَّذي تَرسُمُه الشاشَة
+        // (`DealTurnView`)، فَلا يَتَغَيَّرُ جَوابُ صَفقَةٍ مُكتَمِلَة.
         return new DealDto(
             d.Id, d.Pattern, d.Stage.ToString(), DealsPolicy.LabelAr(d.Stage), d.Status.ToString(),
             d.InitiatorId, d.CounterpartyId, d.ListingId, d.ListingTitle, d.AmountSar,
-            next?.ToString(), DealsPolicy.Actor(d.Stage),
+            next?.ToString(), DealsPolicy.RequiredActorToLeave(d) ?? DealsPolicy.Actor(d.Stage),
             d.CreatedAt, d.UpdatedAt);
     }
 
@@ -65,6 +72,9 @@ public static class DealApi
     /// (‏<c>GET …/deals/{id}</c> يَرُدّ ‏404 لِغَيرِ الطَرَف — لا
     /// نُفشي وُجودَ مَورِد)، والخِدمَةُ تَحكُم <b>ما يَفعَلُه</b>.
     /// حارِسانِ لِسُؤالَين، لا سَطرانِ لِسُؤالٍ واحِد.</para>
+    ///
+    /// <para>(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ١؛ ‏ADR-036 §١٣‑٨ — ولا يُعادُ حَرفٌ فَوقَه: ومُستَهلِكوها في النِقاطِ ثَلاثَة — القِراءَة،
+    /// والإلغاء، و<c>/advance</c> مُنذُ اليَوم: كانَ غَيرُ الطَرَفِ يَبلُغُ رَفضَ الفاعِلِ في الخِدمَةِ فَيَسمَعُ مِن <see cref="FromAdvance"/> مَرحَلَةَ صَفقَةِ غَيرِه.)</para>
     /// </summary>
     public static bool IsParty(Deal d, Guid actorId) =>
         d.InitiatorId == actorId || d.CounterpartyId == actorId;
@@ -77,7 +87,7 @@ public static class DealApi
     public static string AdvanceRejectionCode(Deal deal)
     {
         if (deal.Status != DealStatus.Active) return ApiErrorCatalog.DealNotActive;
-        if (DealsPolicy.Next(deal.Pattern, deal.Stage) is null) return ApiErrorCatalog.DealFinalStage;
+        if (DealsPolicy.Next(deal) is null) return ApiErrorCatalog.DealFinalStage;
         return ApiErrorCatalog.ActorNotAllowed;
     }
 
@@ -87,13 +97,28 @@ public static class DealApi
     {
         if (result.Deal is null) return ApiOutcome.Error(ApiErrorCatalog.NotFound);
         if (result.Ok) return ApiOutcome.Ok(ToDto(result.Deal));
+        // رَمزُ الخِدمَةِ قَبلَ تَصنيفِ الحالَة (‏ADR-036): الصَفقَةُ المُرفَقَةُ هُنا ما في المَخزَنِ بَعدَ التَعارُض،
+        // فَتَصنيفُها كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» عَن فاعِلٍ مُخَوَّلٍ سَبَقَه غَيرُه.
+        if (result.Code == DealsService.ChangedMeanwhile)
+            return ApiOutcome.Error(ApiErrorCatalog.DealChangedMeanwhile, new { stage = result.Deal.Stage.ToString() });
+        // وطَلَبُها عِندَ الناقِل (مُراجَعَةُ تَيّارِ S7 الثانِيَة، ‏2026-10-12؛ ‏ADR-033 §٧‑ح): رَمزُ الخِدمَةِ بِحَرفِه ‏409 — وتَصنيفُ الحالَةِ
+        // كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن الطَرَفِ الَّذي يُخرِجُها، و`required_actor` فيه هُوَ نَفسُه.
+        if (result.Code == DealShipping.DealAwaitsCarrier)
+            return ApiOutcome.Error(ApiErrorCatalog.DealAwaitsCarrier, new { stage = result.Deal.Stage.ToString() });
+        // وفاتورَتُها عِندَ بَوّابَةِ المَتجَرِ لَم تُدفَع (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12): رَمزُ الخِدمَةِ بِحَرفِه ‏409 — نَسَقُ السَطرِ
+        // أَعلاه؛ وتَصنيفُ الحالَةِ كانَ سَيَقولُ «فاعِلٌ غَيرُ مُخَوَّل» (‏403) عَن المُشتَري الَّذي يُدخِلُها «دَفع».
+        if (result.Code == GatewayPayments.DealAwaitsPayment)
+            return ApiOutcome.Error(ApiErrorCatalog.DealAwaitsPayment, new { stage = result.Deal.Stage.ToString() });
+        // وصَفقَةُ بِطاقَةٍ بِلا مَرجِعِ دَفع (‏2026-10-13، G5 (xv-g)): رَمزُ الخِدمَةِ بِحَرفِه ‏409 — نَسَقُ السَطرِ أَعلاه.
+        if (result.Code == DealsService.PaymentMissing)
+            return ApiOutcome.Error(ApiErrorCatalog.DealPaymentMissing, new { stage = result.Deal.Stage.ToString() });
 
         var code = AdvanceRejectionCode(result.Deal);
         return ApiOutcome.Error(code, new
         {
             stage = result.Deal.Stage.ToString(),
             status = result.Deal.Status.ToString(),
-            required_actor = DealsPolicy.Actor(result.Deal.Stage),
+            required_actor = DealsPolicy.RequiredActorToLeave(result.Deal) ?? DealsPolicy.Actor(result.Deal.Stage),
         });
     }
 
@@ -121,6 +146,18 @@ public static class DealApi
             DealCancelAuthorization.DealNotActive => ApiOutcome.Error(
                 ApiErrorCatalog.DealNotActive,
                 new { status = result.Deal?.Status.ToString() }),
+            DealsService.ChangedMeanwhile => ApiOutcome.Error(
+                ApiErrorCatalog.DealChangedMeanwhile,
+                new { status = result.Deal?.Status.ToString() }),
+            GatewayInvoiceShare.Shared => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
+            // (‏2026-11-05، الموجَة ١٢ G3 · ٢ — C-PAY-EXP-2): وأُختٌ في «نِزاع» عَلى الفاتورَةِ نَفسِها — صَفقَةٌ عَلى فاتورَةٍ مُشتَرَكَةٍ مَفتوحَةٍ لا تُلغى وَحدَها، بِالرَمزِ العامِّ نَفسِه
+            // (‏409)؛ لا رَمزَ سادِسَ عَشَرَ في المَعجَم، وكانَ المَجهولُ سَيَخرُجُ ‏422 عَن طَلَبٍ صالِح.
+            GatewayInvoiceShare.Disputed => ApiOutcome.Error(ApiErrorCatalog.DealInvoiceShared),
+            // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4): مَرحَلَةٌ لا يُلغيها طَرَف — ‏409 بِرَمزِ الحالَةِ القائِم («لَيسَت في حالَةٍ تَقبَل
+            // هذا الإجراء»)، ومَعَه المَرحَلَة؛ لا رَمزَ سابِعَ عَشَرَ في المَعجَم، وكانَ الرَمزُ المَجهولُ سَيَخرُجُ ‏422 عَن طَلَبٍ صالِح.
+            DealCancelAuthorization.DealPastCancelStage => ApiOutcome.Error(
+                ApiErrorCatalog.DealNotActive,
+                new { status = result.Deal?.Status.ToString(), stage = result.Deal?.Stage.ToString() }),
             _ => ApiOutcome.Error(ApiErrorCatalog.ValidationFailed),
         };
     }
@@ -142,8 +179,10 @@ public static class DealApi
 /// <c>req.Form[</c>.</summary>
 public sealed record CancelDealRequest(string? reason);
 
-/// <summary>جِسمُ طَلَبِ التَقَدُّم — المُلاحَظَة اختِيارِيَّة.</summary>
-public sealed record AdvanceDealRequest(string? note);
+/// <summary>جِسمُ طَلَبِ التَقَدُّم — المُلاحَظَة اختِيارِيَّة.
+/// (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣ — ولا يُعادُ حَرفٌ فَوقَه: و<c>expected_stage</c> اختِيارِيٌّ — اسمُ المَرحَلَةِ الَّتي قَرَأَها العَميلُ
+/// بِحَرفِ <c>stage</c> في <see cref="DealDto"/>؛ غَيرُها ‏409 <c>deal_changed_meanwhile</c>، وغِيابُه لا يُسأَلُ عَنه كَما كان.)</summary>
+public sealed record AdvanceDealRequest(string? note, string? expected_stage = null);
 
 /// <summary>قائِمَةٌ مُغَلَّفَة — <c>{ "deals": [...], "count": n }</c>.
 /// والتَغليفُ لِيَبقى مُمكِناً إضافَةُ تَصفُّحٍ لاحِقاً بِلا كَسرِ

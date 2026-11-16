@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
 using Marten;
 
@@ -42,17 +43,24 @@ public sealed class AgentService
     private readonly IAgentBackend _backend;
     private readonly string _model;
     private readonly IDocumentStore _store;
-    private const string AdminTenant = "_admin";
+    public const string AdminTenant = "_admin";
 
     // مِلَفّ «Studio» — مُزَوِّدُه ومِفتاحُه ونَموذَجُه مُستَقِلَّة عَن وَكيل
     // التَحليل. بِلا تَهيئَة مُسَمّاة يَسقُط إلى Agent:* القَديم فَيَبقى
     // السُلوك كَما كان.
-    public AgentService(IDocumentStore store, IAgentBackendProvider agents)
+    public AgentService(IDocumentStore store, IAgentBackendProvider agents,
+        Services.Incubator.StudioAgentSwitch? agentSwitch = null)
     {
         _backend = agents.For(AgentNames.Studio);
         _model   = agents.ModelFor(AgentNames.Studio);
         _store   = store;
+        _switch  = agentSwitch;
     }
+
+    // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) مِفتاحُ الوَكيل — والغائِبُ مُطفَأ (البِناءُ بِلا حاقِنٍ لا يُضيئُه).
+    // `IsConfigured` باقٍ بِمَعناه (خَلفِيَّةٌ مَضبوطَة) يَقرَؤُه البابُ؛ وهذا يُسأَلُ قَبلَ أَيِّ نِداءٍ أَو كِتابَة.
+    private readonly Services.Incubator.StudioAgentSwitch? _switch;
+    public bool Enabled => _switch?.Enabled ?? false;
 
     public string ProviderName => _backend.ProviderName;
     public string ModelName    => _model;
@@ -100,6 +108,8 @@ public sealed class AgentService
 
     public async Task<AgentSession> AskAsync(string userMessage, string? scopeId = null, CancellationToken ct = default)
     {
+        // المِفتاحُ مُطفَأ ⇐ لا كِتابَةَ ولا نِداء: الجَلسَةُ كَما هي (W13-1·٦).
+        if (!Enabled) return await LoadSessionAsync(scopeId, ct);
         await using var sess = _store.LightweightSession(AdminTenant);
         var id = SessionIdFor(scopeId);
         var session = await sess.LoadAsync<AgentSession>(id, ct)
@@ -114,6 +124,7 @@ public sealed class AgentService
 
     public async Task<AgentSession> ContinueAfterToolAsync(string? scopeId = null, CancellationToken ct = default)
     {
+        if (!Enabled) return await LoadSessionAsync(scopeId, ct);
         await using var sess = _store.LightweightSession(AdminTenant);
         var session = await sess.LoadAsync<AgentSession>(SessionIdFor(scopeId), ct);
         if (session is null) return new AgentSession { Id = SessionIdFor(scopeId) };
@@ -142,6 +153,7 @@ public sealed class AgentService
     // ───────────────────────── نِداء الـ Backend ─────────────────────
     private async Task CallBackendAsync(AgentSession session, CancellationToken ct)
     {
+        if (!Enabled) return;   // ‏W13-1·٦ — لا نِداءَ نَموذَجٍ والمِفتاحُ مُطفَأ، أَيّاً كانَ المُنادي.
         if (!_backend.IsConfigured)
         {
             session.Turns.Add(new AgentTurn
@@ -159,7 +171,8 @@ public sealed class AgentService
         var messages = BuildAbstractMessages(session);
         var tools    = BuildAbstractTools();
 
-        var resp = await _backend.CallAsync(
+        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): النِداءُ مَعدودٌ عَلى المَنَصَّة — وَكيلُ التَصميمِ يَعمَلُ عَلى مُستَوى المَنَصَّةِ لا لِمَتجَر.
+        var resp = await _backend.CallAsync(ModelCalls.Platform(),
             new AgentRequest(system, messages, tools, _model, MaxTokens: 2048), ct);
 
         // ─── سَطرُ القياس — قَبلَ فَرعِ الخَطَأ ────────────────────
@@ -174,6 +187,9 @@ public sealed class AgentService
         //
         // ونَفسُ إيجارِ الجَلسَة (`_admin`) ومُستَخدِمُها المُشتَقُّ
         // مِن مُعَرِّفِها — لا مَصدَرَ ثانٍ.
+        //
+        // ‏2026-10-25 (تَدقيقُ الإطلاق، W8-3؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): أُغلِقَ البابُ بِلا رَقَم — `/studio/agent` لِمُشرِفِ
+        // المَنَصَّةِ وَحدَه (`StudioAgentDoor.Opens`)، و`PinnedUngated` فارِغَة. والسَطرُ يَقيسُ كَما كان.
         await new Services.Incubator.StudioTierService(_store).RecordModelCallAsync(
             Services.Metering.ModelCallRecord.For(
                 AdminTenant, UserIdFromSessionId(session.Id),
@@ -284,8 +300,8 @@ public sealed class AgentService
    أَدناه (تَحت كُلّ فِئَة + sentinel البروفايل لِكُلّ مَتجَر). استَخدِمه
    مُباشَرَة بِدون سُؤال المُشرِف. الـ sentinel الثابِت لِلبروفايل دائِماً:
    00000000-0000-0000-0000-000000000F01.
-6. الفِئات تُجَمَّع بِـ "kind": residential, commercial, events, vehicles,
-   roommate، أَو فارِغ.
+6. الفِئات تُجَمَّع بِـ "kind" مِن هذِه القيَمِ حَصراً (وما سِواها يُرَدّ):
+{{CategoryKindLines}}
 7. الأَدوار تُختار مِن كاتالوج الأَدوار — set_roles يَقبَل هذه الـ slugs
    حَصراً (مَقروءَة مِن مِلَفّات تَعريف الأَدوار، فَما يُؤَلَّف مِنها
    يَظهَر هُنا بِلا تَعديل نَصّ):
@@ -489,6 +505,18 @@ public sealed class AgentService
     //  نُقِلَ إلى SetRolesSchemaFor لِأَنّ التَعداد صارَ يُشتَقّ مِن
     //  لَقطَة أَدوار قَد تَكون مُستَأجِراً لا مِن الكاتالوج وَحدَه —
     //  والقيمَة السّاكِنَة لَم تَتَغَيَّر: لَقطَة المَنصَّة هي الكاتالوج.)
+
+    /// <summary><b>قيَمُ تَجميعِ الفِئات مِن المَعجَمِ المُغلَقِ لا مَكتوبَة</b> (‏2026-10-29، قَرارُ المالِك د25 (٤)): كانَ السَطرُ السادِسُ
+    /// يَكتُبُ «residential, commercial, events, vehicles, roommate، أَو فارِغ» بِيَدِه — لا <c>menu</c> ولا قيَمُ المَصنَع — فَتَنجَرِفُ قائِمَتُه
+    /// عَمّا يَقبَلُه المُصادِق. صارَت تُقرَأُ مِن <see cref="Patterns.CategoryKinds.All"/> مَعَ أَثَرِ كُلِّ قيمَةٍ عَلى نَمَطِ المَتجَر.</summary>
+    private static readonly string CategoryKindLines =
+        string.Join("\n", Patterns.CategoryKinds.All.Select(k =>
+            $"   - {(k.Length == 0 ? "\"\" (فارِغ)" : k)}: " + Patterns.CategoryKinds.EffectOf(k) switch
+            {
+                Patterns.AppPattern.Rental   => "يَجعَلُ المَتجَرَ إيجاراً بِلا سَلَّة",
+                Patterns.AppPattern.Roommate => "يَجعَلُ المَتجَرَ سَكَناً مُشتَرَكاً بِلا سَلَّة",
+                _                            => "لا يُغَيِّرُ نَمَطَ المَتجَر",
+            }));
 
     /// <summary>سُطور «slug — تَسمِيَة: وَصف» لِقاعِدَة الأَدوار في
     /// رِسالَة النِّظام.</summary>
@@ -769,8 +797,25 @@ public sealed class AgentToolExecutor
     /// <c>tenant.OwnerUserId == ownerUserId</c>؛ وَ <c>create_tenant</c>
     /// يَكتُب OwnerUserId مُباشَرَةً عَلى الـ tenant الجَديد. هذا يَمنَع
     /// رائِد أَعمال مِن تَعديل تَطبيق رائِد أَعمال آخَر عَبر الوَكيل.</summary>
-    public async Task<(bool Ok, string Message)> ExecuteAsync(
+    public Task<(bool Ok, string Message)> ExecuteAsync(
         string toolName, string inputJson, Guid? ownerUserId, CancellationToken ct = default)
+        => ExecuteCoreAsync(toolName, inputJson, ownerUserId, createdBy: null, ct);
+
+    /// <summary>
+    /// <para><b>بابُ وَكيلِ الإدارَة — سُلطَةُ مُشرِفِ المَنَصَّةِ ومَعَها اسمُه</b> (‏2026-10-25، تَدقيقُ الإطلاق — تَيّارُ W8-3،
+    /// <c>lens-security-14</c>). كَـ<c>ownerUserId = null</c> حَرفاً: لا فَحصَ مِلكِيَّةٍ ولا حِصَّة؛ <b>إلّا</b> أَنّ <c>create_tenant</c> يَكتُبُ
+    /// المُشرِفَ مالِكاً لِلمَتجَرِ الَّذي يَلِدُه — قَرارُ <c>/admin/tenants/create</c> بِحَرفِه («المُنشِئ هُوَ المالِك»).</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b> (‏<c>OrphanStoreOwnershipTests</c>، تَوصيفُه <c>44b77d3</c>): بابا الوَكيلِ (<c>AgentChatPanel</c>
+    /// و<c>/admin/agent/tool/{id}/apply</c>) كانا يُنادِيانِ المُنَفِّذَ بِلا أَحَد، فَيولَدُ المَتجَرُ <c>Guid.Empty</c> ويَتَبَنّاه
+    /// <c>StudioOwnershipSeeder</c> لِأَقدَمِ مُستَخدِمِ استوديو — أَيّاً كانَ.</para>
+    /// </summary>
+    public Task<(bool Ok, string Message)> ExecuteAsPlatformAdminAsync(
+        string toolName, string inputJson, Guid adminUserId, CancellationToken ct = default)
+        => ExecuteCoreAsync(toolName, inputJson, ownerUserId: null, createdBy: adminUserId, ct);
+
+    private async Task<(bool Ok, string Message)> ExecuteCoreAsync(
+        string toolName, string inputJson, Guid? ownerUserId, Guid? createdBy, CancellationToken ct)
     {
         // لَقطَة أَدوار المَتجَر المَقصود قَبل المُصادَقَة — لِأَنّ
         // مُخَطَّط set_roles نَفسُه يَتَّسِع بِأَدوار المُستَأجِر
@@ -809,7 +854,7 @@ public sealed class AgentToolExecutor
 
             return toolName switch
             {
-                "create_tenant"  => await CreateTenantAsync(root, ownerUserId, ct),
+                "create_tenant"  => await CreateTenantAsync(root, ownerUserId, createdBy, ct),
                 "set_categories" => await SetCategoriesAsync(root, ct),
                 "set_branding"   => await SetBrandingAsync(root, ct),
                 "set_regions"    => await SetRegionsAsync(root, ct),
@@ -826,7 +871,10 @@ public sealed class AgentToolExecutor
         }
     }
 
-    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, CancellationToken ct)
+    /// <summary>مِفتاحُ رَدِّ <c>create_tenant</c> عِندَ حَدِّ المَتاجِر — «{0} مِن {1}» = <c>Used</c> و<c>Limit</c> مِن <c>CheckBuildAsync</c>.</summary>
+    public const string StoreLimitRefusalKey = "studio.agent.err_store_limit";
+
+    private async Task<(bool, string)> CreateTenantAsync(JsonElement root, Guid? ownerUserId, Guid? createdBy, CancellationToken ct)
     {
         var slug    = Str(root, "slug").ToLowerInvariant();
         var name    = Str(root, "name");
@@ -834,14 +882,19 @@ public sealed class AgentToolExecutor
         var tagline = Str(root, "tagline");
         var city    = Str(root, "city");
         var channel = ACommerce.Kit.Auth.AuthChannels.NormalizeOrDefault(Str(root, "channel"));
-        if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) شَكلُ المُعَرِّفِ الواحِدُ ومَحجوزُه: كانَ هُنا `^[a-z0-9_-]+$`
+        // بِلا قائِمَةِ مَحجوز، فَالأَداةُ تُنشِئُ `_studio` و`pricing`. والرَدُّ نَصُّه القائِم.
+        if (Services.Incubator.TenantFromAnalysisFactory.SlugRefusal(slug) is not null)
             return (false, "slug غَير صالِح.");
         if (string.IsNullOrEmpty(name)) return (false, "الاسم مَطلوب.");
         if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
             return (false, "لَون غَير صالِح.");
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) حُدودُ بابِ الإنشاءِ نَفسُها، بِنَصِّها مِن القامُوس.
+        if (LengthRefused(name, tagline, city) is { } tooLong) return (false, tooLong);
 
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
+        if (KindRefusal(cats) is { } kindRefused) return (false, kindRefused);
 
         // ─── بَوّابَةُ حِصَّةِ المَتاجِر — والتَخويلُ يَسبِقُ الكِتابَة ──
         //
@@ -865,35 +918,68 @@ public sealed class AgentToolExecutor
         if (ownerUserId is Guid quotaOwner)
         {
             var gate = await tierService.CheckBuildAsync(quotaOwner, ct);
+            // ‏نَصُّ الرَدِّ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً (‏2026-10-24، القاعِدَة ١١ — رُحِّلَ بِحَرفِه، وصِياغَتُه قَرارُ المالِكِ
+            // في «ب» S11·١٨ و·٢١): يَبلُغُ الوَكيلَ والمُستَخدِمَ نَتيجَةَ أَداة، ولا طَلَبَ هُنا تُقرَأُ لُغَتُه.
+            // ‏(2026-10-29، قَرارُ المالِك د15 «ب»): وتُتبَعُ بِجُملَةِ التَواصُلِ مِن القامُوسِ ما دامَ بَريدُ التَواصُلِ مَملوءاً — الشَرطُ نَفسُه
+            // الَّذي تَسأَلُه لافِتَةُ الحَدّ (`StudioLimitNextStep.Contact`)؛ والقالَبُ نَفسُه لَم يُمَسّ.
             if (!gate.Allowed)
-                return (false,
-                    $"بَلَغتَ حَدَّ التَطبيقاتِ في باقَتِك ({gate.Used} مِن {gate.Limit}). "
-                  + "اِحذِف تَطبيقاً أَو اِرفَع باقَتَك مِن /studio/billing.");
+                return (false, string.Join(" ", new[] { string.Format(
+                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit),
+                    Services.Incubator.StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)) }
+                    .Where(x => !string.IsNullOrEmpty(x))));
         }
 
         await using var s = _store.LightweightSession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
-        if (existing is not null) return (false, $"الـ slug «{slug}» مَوجود بِالفِعل.");
+        var taken = $"الـ slug «{slug}» مَوجود بِالفِعل.";
+        if (existing is not null) return (false, taken);
+        // ‏(‏2026-11-07، W13-4·C2b·4) ومُضيفُ دَورٍ مُمكِنٍ لَه اسمُ مَتجَرٍ قائِم — الرِسالَةُ نَفسُها.
+        if (await Services.TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug, ct) is not null) return (false, taken);
 
-        s.Store(new Tenant
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إدراجٌ لا upsert: السُؤالُ أَعلاه ظَنٌّ، ومَن كَتَبَ المُعَرِّفَ بَعدَه كانَ يُدهَسُ
+        // ويُعَدُّ لِهذا المُنادي مَتجَرُه — والآنَ يُرَدُّ بِرِسالَةِ «مَوجود» نَفسِها ولا يُعَدّ.
+        void Insert(IDocumentSession s) => s.Insert(new Tenant
         {
             Id = slug, Name = name, BrandColor = color, TagLine = tagline,
             City = city, AuthChannel = channel, Categories = cats,
             // عِندَ إنشاء عَبر وَكيل ستوديو، اِكتُب المالِك مُباشَرَةً —
             // وإلّا أَيّ رائِد أَعمال يَستَطيع لاحِقاً «تَبَنّي» مَتجَر بِلا مالِك.
             // Guid.Empty = بِلا مالِك (سُلوك ادمن المَنصَّة الافتراضيّ).
-            OwnerUserId = ownerUserId ?? Guid.Empty,
+            // ‏(‏2026-10-25، W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُشرِفُ المَنَصَّةِ بِاسمِه (`ExecuteAsPlatformAdminAsync`)
+            // مالِكُ ما يَلِدُه — كَـ`/admin/tenants/create`؛ و`Guid.Empty` لِمُنادٍ لا يُسَمّي أَحَداً وَحدَه.
+            OwnerUserId = ownerUserId ?? createdBy ?? Guid.Empty,
             CreatedAt = DateTime.UtcNow
         });
-        await s.SaveChangesAsync(ct);
 
         // والعَدُّ **بَعدَ** الكِتابَةِ الناجِحَة — نَفسُ تَرتيبِ
         // `POST /studio/s/{id}/build` حَرفاً: لا يُحاسَبُ على مَتجَرٍ
         // لَم يوجَد.
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والكِتابَةُ والعَدُّ وسُؤالُ السَقفِ حِفظٌ واحِدٌ لِمَن يُعَدُّ
+        // عَلَيه — وَحدَةُ بابِ الاستوديو نَفسُها (`RecordStoreBuiltAsync`): كانَت البَوّابَةُ أَعلاه ثُمَّ إدراجٌ ثُمَّ عَدٌّ بِلا قُفل، فَاثنا عَشَرَ نِداءً مُتَزامِناً
+        // مِن صاحِبٍ عَدّادُه 39 (السَقفُ 40) كَتَبَت 12 مَتجَراً والعَدّادُ 43، وثَمانِيَةٌ مِنها رُدَّت «خَطَأ في تَنفيذ الأَداة» بَعدَ أَن كُتِبَ مَتجَرُها.
+        // وسُلطَةُ المُشرِفِ (`ownerUserId == null`) لا تُعَدُّ فَتَكتُبُ وَحدَها كَما كانَت.
         if (ownerUserId is Guid counted)
-            await tierService.RecordStoreBuiltAsync(counted, ct);
+        {
+            var birth = await tierService.RecordStoreBuiltAsync(counted, Insert, ct);
+            if (birth.Outcome == Services.Incubator.StudioTierService.StoreBirthOutcome.SlugTaken) return (false, taken);
+            if (birth.Outcome == Services.Incubator.StudioTierService.StoreBirthOutcome.QuotaReached) return LimitRefusal(birth.Gate);
+        }
+        else
+        {
+            Insert(s);
+            try { await s.SaveChangesAsync(ct); }
+            catch (JasperFx.DocumentAlreadyExistsException) { return (false, taken); }
+        }
 
         return (true, $"تَمّ إنشاء «{slug}» بِـ {cats.Count} فِئَات.");
+
+        // نَصُّ الحَدِّ لِسُؤالِ الحِفظِ بِالوَسيطَينِ اللَذَينِ رَآهُما — وهُوَ نَصُّ البَوّابَةِ أَعلاه بِحَرفِه: تِلكَ يَقرَؤُها في سَطرِها
+        // `UpgradePromptNextStepTests` و`AgentStoreLimitRefusalTests`، وهذِه يَقيسُها بايتاً `LiveStoreQuotaRaceProofTests` — فَلا تَنجَرِفُ واحِدَةٌ صامِتَة.
+        static (bool, string) LimitRefusal(Services.Incubator.StudioTierService.GateCheck gate)
+            => (false, string.Join(" ", new[] { string.Format(
+                    LocaleCatalog.Text(LocaleCatalog.Arabic, StoreLimitRefusalKey), gate.Used, gate.Limit),
+                    Services.Incubator.StudioLimitNextStep.Contact(k => LocaleCatalog.Text(LocaleCatalog.Arabic, k)) }
+                    .Where(x => !string.IsNullOrEmpty(x))));
     }
 
     private async Task<(bool, string)> SetCategoriesAsync(JsonElement root, CancellationToken ct)
@@ -901,6 +987,7 @@ public sealed class AgentToolExecutor
         var slug = Str(root, "slug").ToLowerInvariant();
         var cats = ParseCategories(root);
         if (cats.Count == 0) return (false, "يَجِب فِئَة واحِدَة عَلى الأَقَلّ.");
+        if (KindRefusal(cats) is { } kindRefused) return (false, kindRefused);
 
         await using var s = _store.LightweightSession();
         var t = await s.LoadAsync<Tenant>(slug, ct);
@@ -921,6 +1008,10 @@ public sealed class AgentToolExecutor
         if (TryStr(root, "name", out var name))       t.Name = name;
         if (TryStr(root, "tagline", out var tagline)) t.TagLine = tagline;
         if (TryStr(root, "city", out var city))       t.City = city;
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) حُدودُ «الهُوِيَّة» نَفسُها قَبلَ الحِفظ:
+        // كانَت الأَداةُ تَكتُبُ اسماً بِلا حَدٍّ — البابُ الثالِثُ إلى صَفحَةٍ عامَّةٍ بِعَشَراتِ المَلايين. ويُسأَلُ المُرسَلُ وَحدَه (الغائِبُ فارِغ):
+        // مَتجَرٌ قَديمٌ فَوقَ الحَدِّ لا تُرَدُّ عَنه أَداةٌ تُغَيِّرُ لَونَه — وما فيه قَرارُ المالِك («ب»).
+        if (LengthRefused(name, tagline, city) is { } tooLong) return (false, tooLong);
         if (TryStr(root, "color", out var color))
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
@@ -937,6 +1028,9 @@ public sealed class AgentToolExecutor
         await s.SaveChangesAsync(ct);
         return (true, $"تَمّ تَحديث هُويَّة «{slug}».");
     }
+
+    /// <summary>مِفتاحُ نَصِّ تَصادُمِ مُضيفِ الدَور — نَفسُه في سَطحَي الحِفظ (‏2026-11-11، C2b-P3-03).</summary>
+    public const string RoleHostTakenKey = "roles.save.err_role_host_taken";
 
     /// <summary>
     /// <para><b>مَوضِع التِقاط</b>: البَحث صارَ في لَقطَة أَدوار
@@ -973,6 +1067,11 @@ public sealed class AgentToolExecutor
         await using var s = _store.LightweightSession();
         var t = await s.LoadAsync<Tenant>(slug, ct);
         if (t is null) return (false, "المَتجَر غَير مَوجود.");
+        // ‏(‏2026-11-07، W13-4·C2b·4) دَورٌ يَدخُلُ ومُضيفُه اسمُ مَتجَرٍ قائِم — يُرَدُّ بِرَمزِه كَحِفظِ الأَدوارِ في السَطحَين.
+        var held = t.Roles.Select(x => x.CatalogSlug).ToHashSet(StringComparer.Ordinal);
+        if (await Services.TenantConfig.RoleHostCollision.FirstTakenAsync(s, slug, roles.Select(x => x.CatalogSlug).Where(c => !held.Contains(c)), ct) is { } takenHost)
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-03 — يُلحَقُ) النَصُّ مِن مِفتاحِ السَطحَينِ القائِم (القاعِدَة ١١) — كانَ جُملَةً حَرفِيَّةً جَديدَة.
+            return (false, $"{Services.TenantConfig.TenantConfigCodes.RoleHostTaken}: {LocaleCatalog.Text(LocaleCatalog.Arabic, RoleHostTakenKey)}");
         t.Roles = roles;
         s.Store(t);
         await s.SaveChangesAsync(ct);
@@ -1075,7 +1174,11 @@ public sealed class AgentToolExecutor
                 // سَقف ٢٥٦ كيلوبايت بَعد فَكّ base64 (نَحسِبُه تَقريباً بِـ length * 3/4).
                 if (iconUrl.Length > 350_000)
                     return (false, "الأَيقونَة أَكبَر مِن ٢٥٦ كيلوبايت.");
-                role.PwaIconDataUrl = iconUrl;
+                // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1) PNG أَو WebP بِبايتاتِهِما وَحدَهُما — كانَ أَيُّ data:image/… يُخزَن، ومِنه SVG بِسكربت.
+                // والنَصُّ نَصُّ رَمزِ النَوعِ في القاموسِ الَّذي تَقولُه صَفحَتا الحِفظ.
+                if (TenantConfig.PwaSaveService.RasterDataUrl(iconUrl) is not { } raster)
+                    return (false, LocaleCatalog.Text(LocaleCatalog.Arabic, "studio.app_pwa.err_icon_type"));
+                role.PwaIconDataUrl = raster;
                 changed.Add("الأَيقونَة");
             }
         }
@@ -1236,8 +1339,13 @@ public sealed class AgentToolExecutor
             return (false, "تَعَذَّرَت قِراءَة التَعريف: " + ex.Message);
         }
 
+        // ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١) **ومِفتاحُ المِترِ يُرَدُّ هُنا** (`meter_authored_by_tenant`): مِترُ الدَورِ المُؤَلَّفِ تُسنِدُه المَنَصَّة
+        // (`TenantRoleSet.MeterOf`)، ووَثيقَةٌ تَحمِلُ المِفتاحَ يُسقِطُها ثُنائِيٌّ أَقدَم. دالَّةٌ مُنفَصِلَةٌ عَلى النَصِّ كَما كُتِب، وخُروقُ الاثنَينِ في رِسالَةٍ واحِدَة.
         var violations = ACommerce.Kit.Roles.RoleDefinitionValidator
-            .ValidateTenantDefinition(parsed);
+            .ValidateTenantDefinition(parsed)
+            .Concat(ACommerce.Kit.Roles.RoleMeterValidator.ValidateTenantMeter(definitionJson)
+                .Select(m => new ACommerce.Kit.Roles.RoleDefinitionViolation(m.Code, m.MessageAr)))
+            .ToList();
         if (violations.Count > 0)
             return (false, $"رُفِضَ تَعريف الدَور «{parsed.Slug}»: " +
                            string.Join(" | ", violations.Select(v => $"{v.Code}: {v.MessageAr}")));
@@ -1274,6 +1382,14 @@ public sealed class AgentToolExecutor
         catch { return null; }
     }
 
+    /// <summary><b>تَجميعٌ خارِجَ المَعجَمِ يُرَدُّ قَبلَ أَيِّ قِراءَةٍ أَو كِتابَة</b> (‏2026-10-29، قَرارُ المالِك د25): المُصادِقُ نَفسُه الَّذي يَمُرُّ بِه
+    /// المُحَرِّرانِ وصَفحَةُ الإنشاءِ (<see cref="Patterns.CategoryKinds.Validate"/>)، والرَدُّ رَمزُه الثابِتُ ونَصُّه — يَقرَؤُه النَموذَجُ فَيُصَحِّحُ عَلَيه.</summary>
+    internal static string? KindRefusal(IReadOnlyList<Category> cats)
+    {
+        var v = Patterns.CategoryKinds.Validate(cats);
+        return v.Count == 0 ? null : string.Join(" | ", v.Select(x => $"{x.Code}: {x.MessageAr}"));
+    }
+
     private static List<Category> ParseCategories(JsonElement root)
     {
         var cats = new List<Category>();
@@ -1296,6 +1412,12 @@ public sealed class AgentToolExecutor
         }
         return cats;
     }
+
+    /// <summary>‏(‏2026-11-07، W13-1·SEC2-C1-2) نَصُّ أَوَّلِ حَقلِ هُوِيَّةٍ فاتَ حَدَّه، مِن القامُوسِ بِالعَرَبِيَّة — أَو <c>null</c>.</summary>
+    private static string? LengthRefused(string name, string tagline, string city)
+        => Services.Incubator.StudioStoreCreate.LengthRefusal(name, tagline, city) is { } code
+            ? LocaleCatalog.Text(LocaleCatalog.Arabic, Services.Incubator.StudioStoreCreate.LengthMessageKey(code))
+            : null;
 
     private static string Str(JsonElement e, string key) =>
         e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String

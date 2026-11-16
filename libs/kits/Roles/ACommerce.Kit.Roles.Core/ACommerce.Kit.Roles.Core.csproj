@@ -15,4 +15,11 @@
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.Flows\ACommerce.Platform.Flows.csproj" />
   </ItemGroup>
 
+  <!-- (‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١) مُعجَمُ وَحَداتِ العَدّ: مِترُ الدَورِ قيمَةٌ مِنه أَو «none»، ومُصادِقُه
+       (RoleMeterValidator) يَسأَلُه عِندَ الإقلاعِ لِيُمَيِّزَ «لَيسَت وَحدَةً» مِن «وَحدَةٌ لَيسَت حُضورَ دَور». والمَكتَبَةُ المُشارُ
+       إلَيها بِلا إحالَةِ مَشروعٍ واحِدَة، فَلا حَلقَة. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+  </ItemGroup>
+
 </Project>

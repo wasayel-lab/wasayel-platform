@@ -21,7 +21,7 @@
 *@
 
 @{
-    var stages = DealsPolicy.StagesFor(Pattern).ToList();
+    var stages = DealsPolicy.StagesFor(Pattern, PayMethod).ToList();
     var currentIndex = CurrentStage is { } cs ? stages.IndexOf(cs) : -1;
 }
 
@@ -60,6 +60,12 @@
 
     /// <summary>المَرحَلَة الَّتي بَلَغَتها صَفقَة قائِمَة (إن وُجِدَت).</summary>
     [Parameter] public DealStage? CurrentStage { get; set; }
+
+    /// <summary>طَريقَةُ الدَفعِ المَكتوبَةُ عَلى صَفقَةٍ قائِمَة (‏ADR-033 §٦) —
+    /// تُسقِطُ «دَفع» عَن النَقد، فَيَشرَحُ المُكَوِّنُ الطَريقَ الَّذي سَتَمشيه
+    /// الصَفقَةُ فِعلاً لا الطَريقَ الكامِل. <c>null</c> قَبلَ أَن تُولَد (صَفحَةُ
+    /// الإعلان) = الطَريقُ كامِلاً كَما كان.</summary>
+    [Parameter] public string? PayMethod { get; set; }
 
     /// <summary>عَرضُه مَطوِيّاً داخِل <c>&lt;details&gt;</c>.</summary>
     [Parameter] public bool Collapsible { get; set; }

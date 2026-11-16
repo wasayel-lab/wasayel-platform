@@ -93,12 +93,24 @@ use open ':std', ':encoding(UTF-8)';
 #
 # `i18n-migrate.pl` carries the same routine, deliberately duplicated: the two
 # tools MUST agree on run indices or a spec file addresses the wrong string.
+#
+# (2026-10-25 — launch audit lens-checkers-ci-7; appended, nothing above is
+# rewritten.)  The quote rule above has a blind spot that WAS measured: a URL
+# in razor MARKUP is outside any quote — `<p>زُر https://example.com لِلمَزيد</p>`
+# — so its `//` was read as a comment and the Arabic after it vanished from the
+# count (mutation M3c: EXIT=0; the same text without `https:` EXIT=1).  A `//`
+# preceded by `:` is a URL scheme, not a comment opener, so it is skipped too.
+# The cost is one shape no longer read as a comment — `a ? b ://x` — which
+# occurs zero times in the repo's .razor files (measured with this rule:
+# TOTAL/DISTINCT/per-file ledger byte-identical before and after).
+# And the counter is now measured on every run before it is trusted (below).
 sub strip_line_comments {
     my ($text) = @_;
     my @out;
     for my $line (split /\n/, $text, -1) {
         my $off = 0;
         while ((my $j = index($line, '//', $off)) >= 0) {
+            if ($j > 0 && substr($line, $j - 1, 1) eq ':') { $off = $j + 2; next; }
             my $pre = substr($line, 0, $j);
             my $dq = ($pre =~ tr/"//);
             my $sq = ($pre =~ tr/'//);
@@ -136,6 +148,24 @@ print "DEBT_FILES " . scalar(keys %files) . "\n";
 print "FILE $files{$_} $_\n" for sort keys %files;
 PERL
 
+# ── The counter is measured before it is trusted (rule 10) ───────────────
+# Injected samples with known answers run through the SAME count.pl on every
+# invocation; a wrong answer fails the layer before a single real file is
+# counted.  Row 1 is the M3c shape (Arabic after a URL in markup); rows 2–3
+# keep the two comment rules it must not break.
+mkdir -p "$TMP/selftest"
+printf '%s\n' '<p>زُر https://example.com لِلمَزيد</p>'           > "$TMP/selftest/url-in-markup.razor"
+printf '%s\n' '@code { var n = 1; // تَعليقٌ ذَيليّ }'              > "$TMP/selftest/trailing-comment.razor"
+printf '%s\n' '<a href="https://example.com">رابِط</a> @* // *@'  > "$TMP/selftest/url-in-quotes.razor"
+SELF_EXPECT="url-in-markup.razor|2 url-in-quotes.razor|1"
+SELF_GOT="$(perl "$TMP/count.pl" "$TMP"/selftest/*.razor | awk '$1=="FILE"{n=split($3,a,"/"); printf "%s%s|%s", (c++?" ":""), a[n], $2}')"
+if [ "$SELF_GOT" != "$SELF_EXPECT" ]; then
+    echo "  ✗ SELF-TEST: the counter read its injected samples wrong — expected «$SELF_EXPECT», got «$SELF_GOT»." >&2
+    echo "    A counter that miscounts a known sample is not trusted with the repo." >&2
+    exit 1
+fi
+[ "$EMIT" -eq 0 ] && echo "  counter self-test: 3 injected samples, all read as expected"
+
 # ── The SINK counter — user-facing text OUTSIDE .razor ──────────────────
 # Layer 7 counts .razor and nothing else, and §8-د says so plainly: "100 %
 # coverage does not mean zero literal text in the product."  This closes the
@@ -162,6 +192,19 @@ PERL
 # about.  A new sink added tomorrow is invisible until it is declared here.
 # That is stated in the output so no reader mistakes "0" for "none left".
 #
+# ── A third sink: a DECLARED FILE (2026-10-25 — launch audit brief-P3-6;
+#    appended, nothing above is rewritten) ──────────────────────────────
+# `Services/Incubator/PatternMatcher.cs` builds `PatternSuggestion` records
+# whose `LabelAr`/`ReasoningAr` are shown on IncubatorWizard.razor and
+# IncubatorFixturesPage.razor and injected into the analysis prompt — user
+# text with no .razor in between, and no `Title=`/`SendAsync(` shape to catch
+# it.  Measured before: 12 literals (10 distinct) in the file, 0 counted.
+# So the file itself is declared: EVERY Arabic string literal in it counts
+# (comments blanked first), and the two shapes above are not also counted
+# there.  Its entries are pinned in the ledger header by name (§6), and the
+# sink per-file count is pinned exactly like the others — a new literal
+# there reddens the layer until it is migrated or the ledger says why.
+#
 # ── Declared exclusions, each with its reason ───────────────────────────
 #   · `*/Seed/*`         — seeders write CONTENT (what a user would type),
 #                          not INTERFACE.  A sample listing title is data.
@@ -171,6 +214,8 @@ cat > "$TMP/sinks.pl" <<'PERL'
 use strict; use warnings;
 use open ':std', ':encoding(UTF-8)';
 my $SINK_ASSIGN = qr/\b(?:Title|Body|Subject)\s*=\s*[\$\@]{0,2}"/;
+# The declared sink FILES — every Arabic literal in them is user text (see above).
+my @SINK_FILES = (qr{/Services/Incubator/PatternMatcher\.cs$});
 my (%files, $total, $scanned);
 for my $f (@ARGV) {
     next if $f =~ m{/Seed/};
@@ -180,6 +225,13 @@ for my $f (@ARGV) {
     my $blank = sub { my $t = shift; $t =~ s/[^\n]/ /g; $t };
     $s =~ s{(/\*.*?\*/)}{$blank->($1)}ges;
     $s =~ s{(//[^\n]*)}{$blank->($1)}ge;
+
+    if (grep { $f =~ $_ } @SINK_FILES) {
+        my $k = () = ($s =~ /"[^"\n]*[\x{0600}-\x{06FF}][^"\n]*"/g);
+        $files{$f} = $k if $k > 0;
+        $total = ($total // 0) + $k;
+        next;
+    }
 
     my $n = 0;
     my @lines = split /\n/, $s, -1;
@@ -209,6 +261,24 @@ print "SINK_SCANNED " . ($scanned // 0) . "\n";
 print "SINK_TOTAL "   . ($total   // 0) . "\n";
 print "SINK $files{$_} $_\n" for sort keys %files;
 PERL
+
+# ── The sink counter is measured before it is trusted too (rule 10) ─────
+# (2026-10-25, brief-P3-6.)  Two injected files through the SAME sinks.pl:
+# the declared file counts every literal and not the comment; an undeclared
+# file with the very same line counts only its `Title =` shape.
+mkdir -p "$TMP/sinkself/Services/Incubator"
+printf '%s\n' '// تَعليقٌ "مُقتَبَس" لا يُعَدّ' 'return new("x", "تَسمِيَة", "high", "تَعليل");' \
+    > "$TMP/sinkself/Services/Incubator/PatternMatcher.cs"
+printf '%s\n' 'return new("x", "تَسمِيَة", "high", "تَعليل");' 'n.Title = "عُنوان";' \
+    > "$TMP/sinkself/Other.cs"
+SINK_SELF_EXPECT="Other.cs|1 PatternMatcher.cs|2"
+SINK_SELF_GOT="$(perl "$TMP/sinks.pl" "$TMP/sinkself/Other.cs" "$TMP/sinkself/Services/Incubator/PatternMatcher.cs" \
+    | awk '$1=="SINK"{n=split($3,a,"/"); printf "%s%s|%s", (c++?" ":""), a[n], $2}')"
+if [ "$SINK_SELF_GOT" != "$SINK_SELF_EXPECT" ]; then
+    echo "  ✗ SELF-TEST: the sink counter read its injected samples wrong — expected «$SINK_SELF_EXPECT», got «$SINK_SELF_GOT»." >&2
+    exit 1
+fi
+[ "$EMIT" -eq 0 ] && echo "  sink counter self-test: 2 injected files, both read as expected"
 
 wsl_find cs "$WSL_ALL_ROOTS" > "$TMP/csfiles.txt"
 CS_CNT=$(wc -l < "$TMP/csfiles.txt" | tr -d ' ')
@@ -344,7 +414,23 @@ if [ "$EMIT" -eq 1 ]; then
     echo "# StatusHelpers.cs — ‏11 تَسمِيَة، و**صِفرُ مُستَهلِك** (مَقيس)."
     echo "#   لَيسَت دَيناً بَل كودٌ مَيِّت — القاعِدَة ١: يُحذَف لا يُرَحَّل."
     echo "#"
-    echo "# ═══ المَجموع: ‏17 في razor (‏13+4)، وصِفرُ مَصرِف ═══════════"
+    echo "# ── ٦. مَصرِفٌ مُعلَنٌ مِلَفّاً: PatternMatcher.cs (‏12 · ‏10 مُتَمايِزَة) ──"
+    echo "#"
+    echo "# (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-6.) تَسمِياتُ الأَنماطِ وتَعليلاتُها"
+    echo "#   في \`PatternSuggestion\` — تُرسَمُ في IncubatorWizard وIncubatorFixturesPage"
+    echo "#   وتُحقَنُ في رِسالَةِ التَحليل، ولا razor بَينَها وبَينَ المُستَخدِم."
+    echo "#   التَسمِياتُ الخَمس: «الطلبات حسب الموقع» «التأجير» «المتجر متعدد البائعين»×2"
+    echo "#     «الإعلانات المبوّبة»×2 «تكوين مخصّص»"
+    echo "#   والتَعليلاتُ الخَمسَة (بِأَوَّلِ كَلِماتِها): «اخترت خدمة فورية…» «فكرتك تأجير أصول…»"
+    echo "#     «تربط طرفين دون تحصيل…» «تقدّم خدمة غير فورية…» «فكرتك لا تطابق نمطاً…»"
+    echo "#   السَبَب: دَينُ القاعِدَة ١١ لا استِثناء — ورُحِّلَ مِنه اثنانِ قَبلُ"
+    echo "#   (\`incubator.pattern.reason_products\` و\`reason_twosided_commission\`)؛"
+    echo "#   والباقي يُرَحَّلُ بِحَرفِه بِالعَرَبِيَّةِ صَراحَةً (\`LocaleCatalog.Text\`)."
+    echo "#   (‏2026-10-25، مُراجَعَةُ W8-9 الجَولَة ١:) وما يُثَبِّتُه هذا السِجِلّ: العَدَدُ والمِلَفّ"
+    echo "#   (سَطرُ \`sink:\` أَدناه) — والأَسماءُ أَعلاه تَعليقٌ يَنزِعُه السكربت؛ والنُصوصُ"
+    echo "#   نَفسُها يُثَبِّتُها \`StudioPatternTextsCharacterizationTests\` بايتاً بايتاً."
+    echo "#"
+    echo "# ═══ المَجموع: ‏17 في razor (‏13+4)، و‏12 في مَصرِفٍ مُعلَن (§٦) ═══"
     echo "# ــــــــــــــــــــــــــــــــــــــــــــــــــ"
     echo "TOTAL|$TOTAL_RUNS"
     echo "DISTINCT|$DISTINCT"
@@ -369,7 +455,8 @@ echo ""
 echo "--- UI text OUTSIDE .razor (declared sinks) ---"
 echo "  .cs files scanned:             $CS_CNT"
 echo "  literals reaching a sink:      $SINK_TOTAL"
-echo "  · sinks declared: Title=/Body=/Subject= assignments, and SendAsync(…) args."
+echo "  · sinks declared: Title=/Body=/Subject= assignments, and SendAsync(…) args;"
+echo "                    and every Arabic literal in a declared file: PatternMatcher.cs."
 echo "  · exclusions:     */Seed/* (content, not chrome), Properties.Title (doc metadata)."
 echo "  · THIS IS A FLOOR: it sees the sinks it is told about, not every sink."
 echo ""

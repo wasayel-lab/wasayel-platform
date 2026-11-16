@@ -33,6 +33,7 @@ namespace ACommerce.Platform.Tests;
 // يَمُرَّ صَفٌّ واحِدٌ إلى القاعِدَةِ ويَرجِعَ مِنها** (القاعِدَة ١٠:
 // الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها).
 
+[Collection(LiveProofCollection.Name)]
 public class LiveModelUsageMeteringProofTests(ITestOutputHelper output)
 {
     private static bool Enabled =>

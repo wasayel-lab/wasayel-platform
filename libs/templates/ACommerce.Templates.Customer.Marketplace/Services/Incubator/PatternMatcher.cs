@@ -1,3 +1,5 @@
+using ACommerce.Platform.I18n;
+
 namespace ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 
 public sealed record PatternSuggestion(
@@ -12,6 +14,23 @@ public sealed record PatternSuggestion(
 /// </summary>
 public static class PatternMatcher
 {
+    /// <summary>مِفتاحُ تَعليلِ فَرعِ «تَبيعُ مُنتَجات» في <c>ar.json</c> — النَصُّ الوَحيدُ المُرَحَّلُ مِن هذا المِلَفّ
+    /// (‏ADR-032 §٦‑ج‑3(ب)). وما بَقِيَ فيه مِن تَسمِياتٍ وتَعليلاتٍ حَرفِيَّةٍ دَينٌ مُسَمّىً في سِجِلِّ المالِك
+    /// («أ» S11) لا يَبلُغُه عَدّادُ الطَبَقَة ٧ (‏`.razor` والمَصارِفُ المُعلَنَة وَحدَها).
+    /// (‏2026-10-24: «الوَحيدُ» صارَ أَوَّلَ اثنَين — <see cref="CommissionReasoningKey"/>.)
+    /// (‏2026-10-25، تَدقيقُ الإطلاق brief-P3-6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «لا يَبلُغُه عَدّادُ الطَبَقَة ٧» لَم يَعُد صادِقاً — صارَ هذا المِلَفُّ
+    /// مَصرِفاً مُعلَناً فيها، كُلُّ حَرفِيَّةٍ عَرَبِيَّةٍ فيه تُعَدّ: ‏12 (‏10 مُتَمايِزَة) مُثَبَّتَةً في <c>scripts/verify-i18n-debt-ledger.txt</c> بِأَسمائِها
+    /// (§٦ في رَأسِه)، فَحَرفِيَّةٌ جَديدَةٌ هُنا تُحمِرُّ الطَبَقَةَ حَتّى تُرَحَّلَ أَو يَقولَ السِجِلُّ لِماذا.)
+    /// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-9 الجَولَة ١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه: «مُثَبَّتَةً بِأَسمائِها» أَدَقُّه — الطَبَقَةُ ٧ تُثَبِّتُ
+    /// <b>العَدَدَ والمِلَفّ</b> (`sink:…/PatternMatcher.cs|12`)، والأَسماءُ في أَسطُرِ `#` مِن رَأسِ السِجِلِّ يَنزِعُها السكربتُ قَبلَ المُقارَنَة؛
+    /// <b>والنُصوصُ نَفسُها</b> يُثَبِّتُها <c>StudioPatternTextsCharacterizationTests.PatternMatcher_outcomes_are_pinned_byte_for_byte</c> — فُروعُ المُطابِقِ
+    /// بايتاً بايتاً.)</summary>
+    public const string ProductsReasoningKey = "incubator.pattern.reason_products";
+
+    /// <summary>مِفتاحُ تَعليلِ فَرعِ «منصة تربط طرفين + عمولة» — رُحِّلَ بِحَرفِه (‏2026-10-24، «ب» S11·٥ البَند 5) قَبلَ
+    /// صِياغَتِه، فَالنَصُّ الثاني المُرَحَّلُ مِن هذا المِلَفّ؛ وما سِواهُما حَرفِيٌّ كَما في الوَثيقَةِ أَعلاه.</summary>
+    public const string CommissionReasoningKey = "incubator.pattern.reason_twosided_commission";
+
     public static PatternSuggestion Match(IReadOnlyDictionary<string, string> a)
     {
         string Get(string k) => a.TryGetValue(k, out var v) ? v : "";
@@ -33,10 +52,13 @@ public static class PatternMatcher
                 "فكرتك تأجير أصول لفترة محددة — نمط التأجير يدير حالة الأصل (متاح/محجوز/مُرجَع) والتحقق.");
 
         // 3) منصة طرفين بعمولة → marketplace
+        //    (‏التَعليلُ مِن القامُوسِ بِالعَرَبِيَّةِ صَراحَةً — عِلَّةُ الفَرعِ 5 نَفسُها أَدناه.)
+        //    (‏2026-10-29، قَرارُ المالِك د21 (٣) «ب»: الثِقَةُ «medium» لا «high» — لا آلِيَّةَ عُمولَةٍ في المَنَصَّة، فَصاحِبُ المَتجَرِ يُحَصِّلُها
+        //    بِتَرتيبِه الخاصّ، و«العالِيَةُ» توحي بِغَيرِ ذلك.)
         if (offer == "twosided" && payment == "commission")
             return new("marketplace", "المتجر متعدد البائعين",
-                "high",
-                "تربط بائعين ومشترين وتأخذ عمولة على المعاملة — نمط المتجر متعدد البائعين يحصّل الدفع ويوزّعه.");
+                "medium",
+                LocaleCatalog.Text(LocaleCatalog.Arabic, CommissionReasoningKey));
 
         // 4) منصة طرفين باشتراك/بلا تحصيل → classifieds
         if (offer == "twosided")
@@ -45,10 +67,14 @@ public static class PatternMatcher
                 "تربط طرفين دون تحصيل دفع مركزي — نمط الإعلانات المبوّبة، الإيراد من اشتراك المعلنين أو ترقية الإعلان.");
 
         // 5) منتج مادي/رقمي يُباع → marketplace أو متجر
+        //    (‏التَعليلُ مِن القامُوس — ADR-032 §٦‑ج‑3(ب)، القاعِدَة ١١ — ويُقرَأُ بِالعَرَبِيَّةِ صَراحَةً لا بِـ`L`:
+        //    يُخَزَّنُ في `IncubatorSession.PatternReasoning` ويُحقَنُ في رِسالَةِ التَحليلِ العَرَبِيَّة، ولا طَلَبَ هُنا
+        //    تُقرَأُ لُغَتُه — عِلَّةُ `SmtpEmailChannel` نَفسُها في سِجِلِّ دَينِ النُصوص §٤.)
+        //    (‏2026-10-29، د21 (٣): «متوسّطة حين يكون نموذج الإيراد عمولة» — والعُمولَةُ كانَت تَرفَعُها هُنا إلى «high»، فَصارَت «medium» كَغَيرِها.)
         if (offer is "physical" or "digital")
             return new("marketplace", "المتجر متعدد البائعين",
-                payment == "commission" ? "high" : "medium",
-                "تبيع منتجات — نمط المتجر يناسب البيع المباشر أو من بائعين متعددين.");
+                "medium",
+                LocaleCatalog.Text(LocaleCatalog.Arabic, ProductsReasoningKey));
 
         // 6) خدمة غير فورية → classifieds (تجميع مزوّدين)
         if (offer == "service")

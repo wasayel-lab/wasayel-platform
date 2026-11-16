@@ -40,6 +40,12 @@
          بِـ`HttpMessageHandler` وَهمِيّ، فَلا مِفتاحَ حَقيقيّاً ولا
          نِداءَ شَبَكَة. مَرجِعُ اختِبارٍ فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Brevo\ACommerce.Kit.Auth.Providers.Brevo.csproj" />
+    <!-- قَناةُ الرَسائِلِ القَصيرَة (‏2026-11-12، W13-6·١١ — ADR-051): شَكلُ طَلَبِها يُثَبَّتُ عِندَ المُعالِجِ الأَوَّلِ قَبلَ أَن يَصيرَ عَميلُها
+         المُستَدعي المَعدود، ثُمَّ يُعَدُّ إرسالُها حَيّاً — بِمُعالِجٍ يُجيبُ بِلا شَبَكَةٍ ولا اعتِمادٍ حَقيقِيّ. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Twilio\ACommerce.Kit.Auth.Providers.Twilio.csproj" />
+    <!-- قَناةُ نَفاذ (‏2026-11-12، W13-6·١٣ — ADR-051): ما يَبلُغُ نَفاذاً (الرَمزُ وطَلَبُ التَحَقُّقِ والاستِطلاع) يُثَبَّتُ عِندَ المُعالِجِ الأَوَّلِ قَبلَ أَن يَصيرَ
+         عَميلُها المُستَدعي المَعدود — بِمُعالِجٍ يُجيبُ بِلا شَبَكَةٍ ولا اعتِمادٍ حَقيقِيّ. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Auth\ACommerce.Kit.Auth.Providers.Nafath\ACommerce.Kit.Auth.Providers.Nafath.csproj" />
     <!-- مَخزَنُ الكائِنات: البُرهانُ يُقلِع مُستَمِعَ HTTP مَحَلِّيّاً
          ويُوَجِّه العَميلَ إلَيه، فَيُقاس أَنّ التَوقيعَ ‏SigV4 يُكتَب
          **مِن الحُزمَة** وأَنّ الدَلوَ والمِفتاحَ يَبلُغانِ الطَلَب —
@@ -51,6 +57,13 @@
          الوَسيطِ نَفسِه لا مُحاكاتَه — يُقاسُ المَسارُ لا المُعالِجُ
          وَحدَه. مَرجِعُ اختِبارٍ فَقَط. -->
     <ProjectReference Include="..\..\libs\kits\Versions\ACommerce.Kit.Versions.Core\ACommerce.Kit.Versions.Core.csproj" />
+    <!-- عَميلُ OTO (‏ADR-033 الخُطوَة 3): يُقاسُ بِمُعالِجٍ وَهمِيٍّ يُعيدُ رُدودَ الوَثيقَةِ
+         بِأَشكالِها — فَلا رَمزَ حَقيقيّاً ولا نِداءَ شَبَكَة. مَرجِعٌ صَريحٌ لا مُتَوارَث،
+         بِحُجَّةِ مَرجِعِ Compliance أَعلاه. -->
+    <ProjectReference Include="..\..\libs\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
+    <!-- خَريطَةُ مَوقِعِ مُضيفِ المَتجَر (‏ADR-050، W13-4·C2a·6 — G13): المُعالِجُ نَفسُه (`SeoHandlers.Sitemap`) يُشَغَّلُ بِسِياقِ طَلَبٍ ومَخزَنٍ
+         في الذاكِرَة، لا دالَّتُه النَقِيَّةُ وَحدَها — فَفَرعُ المُضيفِ مَقيسٌ حَيثُ يُتَّخَذ. مَرجِعُ اختِبارٍ فَقَط. -->
+    <ProjectReference Include="..\..\libs\kits\Tenants\ACommerce.Kit.Tenants.Server\ACommerce.Kit.Tenants.Server.csproj" />
   </ItemGroup>
 
 </Project>

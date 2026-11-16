@@ -12,7 +12,7 @@
 *@
 
 <div class="acs-page">
-    <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@($"/{Slug}")">
+    <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, null, "")">
         <AcIcon Name="arrow-right" Size="16" /> @L.Markup("me.area.back")@((MarkupString)"\n    ")
     </a>
 

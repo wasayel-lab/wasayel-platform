@@ -2,9 +2,11 @@ using System.Text.RegularExpressions;
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -32,7 +34,7 @@ namespace ACommerce.Platform.Tests;
 /// اعتِراضَ عِندَ الكِتابَة، والشاشَةُ تَقولُ <c>?built=1</c>. لِذلك
 /// الحارِسُ هُنا <b>فَحصٌ يَحمَرّ</b> لا تَعليقٌ يُطَمئِن (القاعِدَة ٢).</para>
 /// </summary>
-public class StudioBuildRoleFloorTests
+public class StudioBuildRoleFloorTests(ITestOutputHelper output)
 {
     private const string Slug = "probe-store";
 
@@ -239,11 +241,16 @@ public class StudioBuildRoleFloorTests
     /// <para>فَالعِلاجُ <b>مَنعُ بُلوغِه مِن مَسارِ البِناء</b> لا
     /// حَذفُه — وحَذفُه قَرارٌ مُنتَجِيٌّ يَملِكُه صاحِبُ المَشروعِ
     /// وَحدَه.</para>
+    /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — قُلِبَ بِاسمِه)</b>: كانَ <c>LegacyMode_IsUntouched_AndItsConsumerIsNamed</c>
+    /// بِـ<c>Assert.True(…, "tenant.manage")</c>. و«حَذفُه قَرارٌ مُنتَجِيٌّ يَملِكُه صاحِبُ المَشروع» أَعلاه — اتَّخَذَه: صِفرُ الأَدوارِ لا يُعطي
+    /// الإدارَة. ومُستَهلِكُه المُسَمّى (<c>theme-demo</c> بِلا أَدوار) باقٍ لِفَرعِ الرَئيسِيَّةِ الافتِراضِيّ، وفَرعُ «لَوحَة الإداريّ» في
+    /// <c>user-manage.html</c> صارَ «لا صَلاحِيَّة» (سِجِلُّ المالِك «أ» د62).</para>
     /// </summary>
     [Fact]
-    public void LegacyMode_IsUntouched_AndItsConsumerIsNamed()
+    public void LegacyMode_GrantsMemberPermissionsAndNoAdministration_AndItsConsumerIsNamed()
     {
-        Assert.True(RolePermissions.Has(Array.Empty<Role>(), "", "tenant.manage"));
+        Assert.False(RolePermissions.Has(Array.Empty<Role>(), "", "tenant.manage"));
+        Assert.True(RolePermissions.Has(Array.Empty<Role>(), "", "listing.create"));
 
         var seeder = File.ReadAllText(Path.Combine(
             ThemeZeroEquivalenceTests.RepoRoot,
@@ -304,6 +311,182 @@ public class StudioBuildRoleFloorTests
         Assert.True(offenders.Count == 0,
             $"فُحِصَت {scanned} نُقطَةَ إنشاءٍ في {files.Length} مِلَفّاً، ومِنها "
           + $"{offenders.Count} تَكتُبُ مَتجَراً بِلا أَدوار: {string.Join(", ", offenders)}");
+    }
+
+    // ─── (٧) أَرضِيَّةُ البائِع: في كُلِّ نَمَطٍ وكُلِّ صَفِّ بَذرٍ دَورٌ ذاتِيُّ المَنحِ يَحمِلُ listing.create ──
+
+    /// <summary>
+    /// <para><b>المُستَثنى بِاسمِه — <c>theme-demo</c></b>، ولِسَبَبِه لا بِالإحالَة: يَبذُرُه
+    /// <c>AppearanceBaselineSeeder</c> بِـ<c>Roles = new()</c> <b>عَمداً</b> لِلَقطَةِ المَظهَر، فَهُوَ في
+    /// «الوَضعِ المَوروث» الَّذي تَمنَحُ فيه <see cref="RolePermissions.Has"/> كُلَّ صَلاحِيَّةٍ لِكُلِّ مُسَجَّل —
+    /// فَلا دَورَ فيه يُسأَلُ عَن <c>listing.create</c>، ولا يُقاسُ عَلَيه «أَرضِيَّةُ بائِع». وهُوَ لَيسَ صَفّاً في
+    /// <c>TestDataSeeder.Plan</c> ولا نَمَطاً في <c>KnownPatterns</c>؛ يُسَمّى هُنا لِيَكونَ غِيابُه عَن العَدِّ قَراراً
+    /// مَقروءاً لا سَهواً (‏ADR-032 §٦‑ج الصَفّ 4).</para>
+    /// </summary>
+    private const string ExcludedByName = "theme-demo";
+
+    private const string SellerPermission = "listing.create";
+
+    /// <summary>صُفوفُ <c>TestDataSeeder.Plan</c> كَما في المَصدَر — المَشروعُ لا يُرَجِّعُ <c>apps/V1.App</c>،
+    /// فَتُقرَأُ الصُفوفُ مِن مِلَفِّها بِحَرفِها، والبَذرَةُ تُسَكِّنُ أَدوارَ كُلِّ صَفٍّ مِن <see cref="RoleCatalog"/>
+    /// بِـ<see cref="RoleCatalog.InstantiateRole"/> — فَهِيَ هُنا بِعَينِها.</summary>
+    /// <remarks><b>وكُلُّ صَفٍّ في الكُتلَةِ يُقرَأُ أَو يَحمَرّ</b> (‏2026-10-24 — مُراجَعَةُ الموجَة ٤، بَندُ E): المُحَلِّلُ لا يَعرِفُ إلّا
+    /// <c>("slug", new[] { … })</c>، فَصَفٌّ يُكتَبُ تَعبيرَ مَجموعَةٍ (<c>("x", ["vendor"])</c>) أَو <c>new string[]</c> أَو بِأَسماءِ عَناصِر كانَ
+    /// يُتَخَطّى بِصَمتٍ ويَخضَرُّ العَدُّ بِدونِه؛ وصَفٌّ مُعَلَّقٌ بِـ<c>//</c> كانَ يُعَدّ. فَتُنزَعُ التَعليقاتُ أَوَّلاً، وتُعَدُّ مَداخِلُ
+    /// الكُتلَةِ عَدّاً مُستَقِلّاً (فَواصِلُ المُستَوى الأَعلى خارِجَ <c>( ) { } [ ]</c>)، ويُشتَرَطُ أَن يُساوِيَ المَقروءُ المَعدود.</remarks>
+    private static IReadOnlyList<(string Slug, string[] Roles)> SeederPlanRows()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.App", "Seed", "TestDataSeeder.cs"));
+        var (rows, entries) = ParsePlan(source);
+        Assert.True(entries == rows.Count,
+            $"كُتلَةُ `Plan` فيها {entries} مَدخَلاً ويُقرَأُ مِنها {rows.Count} صَفّاً — صَفٌّ بِشَكلٍ لا يَعرِفُه المُحَلِّلُ لا يُتَخَطّى.");
+        return rows;
+    }
+
+    /// <summary>صُفوفُ كُتلَةِ <c>Plan</c> المَقروءَةُ بِشَكلِ <c>("slug", new[] { … })</c>، وعَدَدُ مَداخِلِها مَعدوداً بِمَعزِلٍ عَن الشَكل —
+    /// بَعدَ نَزعِ التَعليقات.</summary>
+    internal static (IReadOnlyList<(string Slug, string[] Roles)> Rows, int Entries) ParsePlan(string source)
+    {
+        var code = WriteEndpointGuardTests.StripComments(source);
+        var plan = Regex.Match(code, @"\bPlan\s*=\s*\{(?<rows>.*?)\};", RegexOptions.Singleline);
+        Assert.True(plan.Success, "لا كُتلَةَ `Plan` في TestDataSeeder.cs — الأَداةُ عَمياء.");
+        var block = plan.Groups["rows"].Value;
+        var rows = Regex.Matches(block,
+                @"\(""(?<slug>[^""]+)"",\s*new\[\]\s*\{(?<roles>[^}]*)\}\)")
+            .Select(m => (m.Groups["slug"].Value,
+                Regex.Matches(m.Groups["roles"].Value, @"""(?<r>[^""]+)""").Select(r => r.Groups["r"].Value).ToArray()))
+            .ToList();
+
+        var entries = 0;
+        var depth = 0;
+        var current = new System.Text.StringBuilder();
+        foreach (var c in block + ",")
+        {
+            if (c is '(' or '{' or '[') depth++;
+            else if (c is ')' or '}' or ']') depth--;
+            if (depth == 0 && c == ',')
+            {
+                if (current.ToString().Trim().Length > 0) entries++;
+                current.Clear();
+            }
+            else current.Append(c);
+        }
+        return (rows, entries);
+    }
+
+    /// <summary><b>حَقنُ عَيب — عَدُّ صُفوفِ البَذرَةِ يُحمِرُّ فِعلاً</b> (‏2026-10-24): كُتلَةٌ بِشَكلِ <c>TestDataSeeder.Plan</c> تُحقَنُ فيها
+    /// صُفوفٌ بِأَشكالٍ لا يَقرَؤُها المُحَلِّل — تَعبيرُ مَجموعَة، و<c>new string[]</c>، وأَسماءُ عَناصِر — فَيَختَلِفُ المَعدودُ عَن المَقروء؛
+    /// وصَفٌّ مُعَلَّقٌ لا يُعَدُّ ولا يُقرَأ، والفاصِلَةُ الأَخيرَةُ لا تَصنَعُ مَدخَلاً.</summary>
+    [Fact]
+    public void The_seeder_row_count_can_actually_go_red()
+    {
+        const string Live = """
+            public static readonly (string slug, string[] roles)[] Plan =
+            {
+                ("ashare", new[] { "customer", "host", "vendor" }),
+                ("ejar",   new[] { "customer", "host", "vendor" }),
+                ("order",  new[] { "customer", "vendor", "driver" }),
+                ("injez",  new[] { "rider", "driver" }),
+            };
+            """;
+        string With(string extra)
+        {
+            Assert.EndsWith("\n};", Live, StringComparison.Ordinal);
+            return Live[..^2] + "    " + extra + "\n};";
+        }
+
+        var accepted = new (string Name, string Source, int Rows)[]
+        {
+            ("الحَيّ", Live, 4),
+            ("صَفٌّ مُعَلَّق", With("// (\"ghost\", new[] { \"customer\" }),"), 4),
+            ("صَفٌّ خامِسٌ بِالشَكلِ نَفسِه", With("(\"fifth\", new[] { \"customer\", \"vendor\" }),"), 5),
+        };
+        var rejected = new (string Name, string Source)[]
+        {
+            ("تَعبيرُ مَجموعَة", With("(\"fifth\", [\"customer\", \"vendor\"]),")),
+            ("new string[]", With("(\"fifth\", new string[] { \"customer\", \"vendor\" }),")),
+            ("أَسماءُ عَناصِر", With("(slug: \"fifth\", roles: new[] { \"customer\" }),")),
+            ("ثابِتٌ بِاسمِه", With("(FifthSlug, new[] { \"customer\" }),")),
+        };
+
+        var wrong = new List<string>();
+        foreach (var (name, source, expected) in accepted)
+        {
+            var (rows, entries) = ParsePlan(source);
+            if (rows.Count != expected || entries != rows.Count) wrong.Add($"رُفِضَ حَيٌّ «{name}»: {entries} مَدخَلاً، {rows.Count} صَفّاً");
+        }
+        foreach (var (name, source) in rejected)
+        {
+            var (rows, entries) = ParsePlan(source);
+            output.WriteLine($"«{name}»: {entries} مَدخَلاً، {rows.Count} صَفّاً");
+            if (entries == rows.Count) wrong.Add($"قُبِلَ «{name}»: {entries} = {rows.Count}");
+        }
+        Assert.True(wrong.Count == 0,
+            $"حُقِنَ {rejected.Length} شَكلاً و{accepted.Length} حَيّاً، وأَخطَأَ العَدُّ في {wrong.Count}:\n  " + string.Join("\n  ", wrong));
+    }
+
+    /// <summary>
+    /// <para><b>تَوصيفٌ لا حارِس</b> (‏ADR-032 §٦‑ج الصَفّ 4): أَرضِيَّةُ <c>ق‑٦</c> — «أَيُّ عُضوٍ يُسَكِّنُ نَفسَه
+    /// بائِعاً» — قائِمَةٌ اليَومَ بِالبِنيَةِ وَحدَها: <c>RolesFor</c> لِكُلِّ نَمَطٍ في <c>KnownPatterns</c>، وكُلُّ صَفٍّ في
+    /// <c>TestDataSeeder.Plan</c>، فيه دَورٌ تُعرِضُه <see cref="SelfGrantPolicy.SelfGrantable"/> ويَحمِلُ
+    /// <c>listing.create</c>. فَإن خَرَجَ نَمَطٌ أَو صَفٌّ بِلا بائِعٍ ذاتِيٍّ حَمِرَ هُنا بِاسمِه.</para>
+    /// <para><b>ولا يَمنَعُ المالِكَ مِن إلغاءِ تَحديدِ <c>vendor</c></b> في <c>roles/save</c> — يَصِفُ ما يَبنيه
+    /// الكودُ ويَبذُرُه، لا ما يَختارُه صاحِبُ المَتجَرِ بَعدَه. ويَطبَعُ عَدَدَ ما فَحَصَه ويَفشَلُ عَلى الصِفر
+    /// (القاعِدَة ١٠).</para>
+    /// </summary>
+    [Fact]
+    public void EveryKnownPatternAndEverySeederRow_HasASelfGrantableRoleCarryingListingCreate()
+    {
+        var subjects = new List<(string Name, IReadOnlyList<Role> Roles)>();
+        foreach (var pattern in TenantFromAnalysisFactory.KnownPatterns)
+            subjects.Add(($"نَمَط:{pattern}", TenantFromAnalysisFactory.RolesFor(pattern)));
+
+        var rows = SeederPlanRows();
+        foreach (var (slug, roleSlugs) in rows)
+        {
+            var roles = roleSlugs
+                .Select((r, i) => RoleCatalog.Find(r) is { } t ? RoleCatalog.InstantiateRole(t, i) : null)
+                .OfType<Role>()
+                .ToList();
+            Assert.Equal(roleSlugs.Length, roles.Count);   // ‏كُلُّ سلاجٍ في البَذرَةِ قالِبٌ في الكاتالوج
+            subjects.Add(($"بَذرَة:{slug}", roles));
+        }
+
+        Assert.True(TenantFromAnalysisFactory.KnownPatterns.Count > 0, "صِفرُ نَمَطٍ مَفحوص — الأَداةُ عَمياء.");
+        Assert.True(rows.Count > 0, "صِفرُ صَفِّ بَذرٍ مَقروء — الأَداةُ عَمياء.");
+        Assert.DoesNotContain(rows, r => r.Slug == ExcludedByName);   // ‏الاستِثناءُ لا يُخفي صَفّاً مَعدوداً
+
+        var bare = subjects
+            .Where(s => !SelfGrantPolicy.SelfGrantable(s.Roles).Any(r => r.Permissions.Contains(SellerPermission)))
+            .Select(s => s.Name)
+            .ToList();
+
+        foreach (var (name, roles) in subjects)
+            output.WriteLine($"{name}: " + string.Join(", ", SelfGrantPolicy.SelfGrantable(roles)
+                .Where(r => r.Permissions.Contains(SellerPermission)).Select(r => r.Slug)));
+        output.WriteLine($"فُحِصَ {subjects.Count} — مُستَثنًى بِاسمِه: {ExcludedByName} — صُفوفُ البَذرَة: {rows.Count} (= مَداخِلِ كُتلَةِ Plan)");
+
+        Assert.True(bare.Count == 0,
+            $"فُحِصَ {subjects.Count} (‏{TenantFromAnalysisFactory.KnownPatterns.Count} نَمَطاً و{rows.Count} صَفَّ بَذر؛ "
+          + $"«{ExcludedByName}» مُستَثنًى بِاسمِه)، ومِنها {bare.Count} بِلا دَورٍ ذاتِيِّ المَنحِ يَحمِلُ "
+          + $"{SellerPermission}: {string.Join(", ", bare)}");
+    }
+
+    /// <summary><b>وسَبَبُ الاستِثناءِ قائِمٌ ما دامَ مَكتوباً</b>: <c>theme-demo</c> يُبذَرُ بِصِفرِ أَدوار — فَإن
+    /// كَسَبَ أَدواراً يَوماً سَقَطَ السَبَبُ وحَمِرَ هذا الصَفّ، فَيُرفَعُ الاستِثناءُ ويُعَدُّ كَغَيرِه.</summary>
+    [Fact]
+    public void TheNamedExclusion_ThemeDemo_IsStillSeededWithoutRoles()
+    {
+        var seeder = File.ReadAllText(Path.Combine(
+            ThemeZeroEquivalenceTests.RepoRoot, "apps", "V1.App", "Seed", "AppearanceBaselineSeeder.cs"));
+        Assert.Contains($"public const string ThemeDemo = \"{ExcludedByName}\";", seeder, StringComparison.Ordinal);
+
+        var at = seeder.IndexOf("Id         = ThemeDemo,", StringComparison.Ordinal);
+        Assert.True(at > 0, "لا تَهيئَةَ لِـtheme-demo في AppearanceBaselineSeeder.cs — الأَداةُ عَمياء.");
+        var block = InitializerBlock(seeder, seeder.LastIndexOf('{', at));
+        Assert.NotNull(block);
+        Assert.Contains("Roles      = new(),", block, StringComparison.Ordinal);
     }
 
     /// <summary>يُعيدُ نَصَّ كُتلَةِ التَهيئَةِ <c>{ … }</c> بِمُوازَنَةِ

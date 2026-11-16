@@ -78,5 +78,6 @@
       "driversList"
     ]
   },
-  "dealPatternAffinity": null
+  "dealPatternAffinity": null,
+  "meter": "presence.role"
 }

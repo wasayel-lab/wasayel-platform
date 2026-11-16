@@ -151,6 +151,12 @@ public sealed class AccountQueries
         return await s.LoadAsync<User>(userId, ct);
     }
 
+    /// <summary>اسمُ الفاعِلِ مِن وَثيقَتِه وَقتَ الكِتابَة (‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) — لا مِن كوكي <c>.name</c>.
+    /// القاعِدَةُ في <see cref="ActorName.Of"/>.</summary>
+    public async Task<string?> ActorNameAsync(
+        string tenantSlug, Guid userId, CancellationToken ct = default)
+        => ActorName.Of(await ProfileAsync(tenantSlug, userId, ct));   // ‏(2026-10-29، د40) اسمُ النَشاطِ حَيثُ وُجِد
+
     /// <summary>سَلَّةُ المُستَخدِم — مُعَرِّفُها هُوَ مُعَرِّفُه.</summary>
     public async Task<Cart?> CartAsync(
         string tenantSlug, Guid userId, CancellationToken ct = default)
@@ -318,6 +324,14 @@ public sealed class AccountQueries
         return (await s.Query<Ticket>()
             .Where(t => t.AuthorId == userId)
             .OrderByDescending(t => t.UpdatedAt).Take(50).ToListAsync(ct)).ToList();
+    }
+
+    /// <summary>‏(‏2026-10-29، قَرارُ المالِك د52 (١) «أ») عَدَدُ صَفَقاتِه الجارِيَة — سُؤالُ نُقطَةِ الحَذفِ بِعَينِه
+    /// (<see cref="Identity.AccountErasure.OpenDealsAsync"/>)، فَلا تَرسُمُ صَفحَةُ الحَذفِ استِمارَةً تَرُدُّها النُقطَة.</summary>
+    public async Task<int> OpenDealsAsync(string tenantSlug, Guid userId, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(tenantSlug);
+        return await Identity.AccountErasure.OpenDealsAsync(s, userId, ct);
     }
 
     /// <summary>لَقطَةُ صَفحَة «حِسابي»: الوَثيقَةُ وثَلاثَةُ عَدّادات،

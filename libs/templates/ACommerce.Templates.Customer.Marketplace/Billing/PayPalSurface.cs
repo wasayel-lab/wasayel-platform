@@ -1,4 +1,6 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
+using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +24,34 @@ public static class PayPalSurface
     public const string LinkUnavailable = "paypal_unavailable";
     public const string LinkRefused     = "paypal_link_failed";
 
+    /// <summary>
+    /// <para><b>لِماذا لا يُنشَأُ رابِطُ اشتِراك — بِتَرتيبِ الغِيابِ ثُمَّ الحالَة، و<c>null</c> يَعني «يُنشَأ»</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1).
+    /// لا باقَة، أَو PayPal غَيرُ مُهَيَّأ، أَو لا خُطَّةَ لِلباقَة ⇐ <see cref="LinkUnavailable"/> كَما كان؛ واشتِراكٌ قائِمٌ
+    /// (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) ⇐ <see cref="TenantPlanPolicy.PayPalSubscriptionLive"/> — رابِطٌ ثانٍ يُوافَقُ
+    /// عَلَيه فَيَخصِمُ الاثنانِ مَتجَراً واحِداً، والقائِمُ يُلغى مِن لَوحَةِ PayPal ورِسالَةُ إلغائِه تَفُكُّ الإمساك.</para>
+    /// </summary>
+    public static string? LinkRefusal(TenantPlan? plan, bool configured, string? payPalPlanId)
+        => plan is null || !configured || string.IsNullOrWhiteSpace(payPalPlanId) ? LinkUnavailable
+         : TenantPlanPolicy.HoldsLiveSubscription(plan) ? TenantPlanPolicy.PayPalSubscriptionLive
+         : null;
+
+    /// <summary>
+    /// <para><b>سُطورُ تَدقيقِ إنشاءِ خُطَّةِ PayPal</b>: سَطرُ الخُطَّةِ كَما كانَ، ثُمَّ سَطرٌ لِكُلِّ مَتجَرٍ أُسقِطَ رابِطُه (‏2026-11-05، الموجَة ١٢ G4 · E-6) —
+    /// بِسلاجِه نِطاقاً وبِالخُطَّةِ الجَديدَةِ مُلاحَظَةً، فَيُقرَأُ في سِجِلِّ كُلِّ مَتجَرٍ لِماذا اختَفى زِرُّ الدَفعِ مِن استوديو صاحِبِه.</para>
+    /// </summary>
+    public static async Task AuditCatalogPlanAsync(
+        Services.Audit.AuditWriter audit, string slug, Guid? adminId, string by,
+        string platformPlanSlug, string payPalPlanId, IReadOnlyList<string> droppedLinks)
+    {
+        await audit.WriteAsync(slug, adminId, by,
+            Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
+            "PlatformPlan", platformPlanSlug, note: payPalPlanId);
+        foreach (var store in droppedLinks)
+            await audit.WriteAsync(store, adminId, by,
+                Services.Subscriptions.PayPalBillingService.LinkDroppedAuditAction,
+                "Tenant", store, note: payPalPlanId);
+    }
+
     /// <summary>الرُؤوسُ الخَمسَة مِن الطَلَب — الغائِبُ سِلسِلَةٌ
     /// فارِغَة، و<see cref="PayPalWebhookHeaders.IsComplete"/> هي
     /// الَّتي تَحكُم. فَلا <c>null</c> يَتَسَلَّل إلى دالَّةِ
@@ -32,6 +62,17 @@ public static class PayPalSurface
         req.Headers[PayPalWebhookHeaders.CertUrlHeader].ToString(),
         req.Headers[PayPalWebhookHeaders.AuthAlgoHeader].ToString(),
         req.Headers[PayPalWebhookHeaders.TransmissionSigHeader].ToString());
+
+    /// <summary>
+    /// <para><b>نِداءُ التَحَقُّقِ مِن التَوقيعِ المَعدود — مِفتاحُه اسمٌ مُستَعارٌ لِرَأسِ الإرسالِ لا الرَأسُ نَفسُه</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج
+    /// الثانِيَة · M6C-SEC-R2-1 — ADR-051 §١٩). البابُ مُعفًى مِن بَوّابَةِ المَصدَر، والرَأسُ <c>paypal-transmission-id</c> نَصٌّ يَكتُبُه أَيُّ مَجهولٍ
+    /// <b>قَبلَ</b> أَن يُتَحَقَّقَ مِن شَيء، ونِداءُ التَحَقُّقِ يُقبَلُ ولو أَجابَ PayPal بِـ‏200 و«FAILURE». فَكانَ الرَأسُ كَما هُوَ مُعَرِّفَ سَطرٍ ونِيَّةٍ
+    /// لا يُمحَيان: مُعَرِّفُ مُستَخدِمٍ مَخزونٍ أَو هاتِفٌ يَزرَعُه طَلَبٌ مَجهول، ورَأسٌ طَويلٌ يُسقِطُ الكِتابَتَينِ بِحَدِّ فِهرِسِ btree فَيَمُرُّ النِداءُ بِلا عَدّ.</para>
+    /// <para>والاسمُ المُستَعار (<see cref="UsageEntryId.Pseudonym"/>) ‏32 مِحرَفاً لا يُعكَس، وإعادَةُ PayPal لِلإرسالِ نَفسِه سَطرٌ واحِدٌ كَما كانَت.</para>
+    /// </summary>
+    public static ProviderCall VerifyCall(PayPalWebhookHeaders headers)
+        => ProviderCall.ForChannel(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform,
+            UsageEntryId.Pseudonym(OutboundUnits.BillingPayPalWebhookVerify, MeterSentinels.Platform, headers.TransmissionId));
 
     /// <summary>
     /// <para>رَفضُ البَوّابَة — <b>‏400 لا ‏500، وبِلا تَحويلٍ ولا
@@ -73,7 +114,8 @@ public static class PayPalSurface
     /// </summary>
     public static IResult NoWrite(ILogger log, PayPalWebhookEvent e, PayPalBillingDecision d)
     {
-        if (d.Action == PayPalBillingAction.UnknownTenant)
+        // ‏(‏2026-11-05، E-1) واشتِراكٌ ثانٍ يَخصِمُ المَتجَرَ مالٌ يَصِلُ ولا يُمَدِّد — يُقالُ بِصَوتٍ كَالمُستَأجِرِ المَجهول.
+        if (d.Action is PayPalBillingAction.UnknownTenant or PayPalBillingAction.ForeignSubscription)
             log.LogError("[PayPal] {Action} — الحَدَث {EventId} ({Type}): {Reason}",
                 d.Action, e.EventId, e.EventType, d.ReasonAr);
         else

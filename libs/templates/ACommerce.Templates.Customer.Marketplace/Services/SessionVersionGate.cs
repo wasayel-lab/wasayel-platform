@@ -1,0 +1,341 @@
+using ACommerce.Kit.Auth;
+using ACommerce.Kit.Auth.Server;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using Marten;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace ACommerce.Templates.Customer.Marketplace.Services;
+
+/// <summary>
+/// <para><b>بَوّابَةُ إصدارِ الجَلسَة — «اخرج من كل الأجهزة»</b> (‏2026-10-28، قَرارُ المالِك د28 «ب»، مَرجِعُه OWASP Session Management و
+/// NIST 800-63B: أَن يُنهي المُستَخدِمُ جَلَساتِه كُلَّها مِن جِهَةِ الخادِم، فَلا يَحتاجُ هاتِفٌ مَسروقٌ إلى تَبديلِ السِرِّ العامِّ وإخراجِ الجَميع).
+/// كانَ الرَمزُ HMAC بِثَلاثينَ يَوماً و<c>ParseToken</c> يَفحَصُ التَوقيعَ وَحدَه، فَلا شَيءَ يُسقِطُ رَمزاً صَدَر — ولا حَذفُ الحِساب
+/// (تَوصيفُه <c>f22108d</c>).</para>
+///
+/// <para><b>ما يَفعَلُه</b>: لِكُلِّ طَلَبٍ يَحمِلُ كوكيَّ جَلسَة (المَتجَرُ <c>.acommerce.auth.*</c> والاستوديو <c>.acommerce.studio</c>) يُقارِنُ
+/// إصدارَ الرَمزِ (<see cref="AuthHandlers.SessionVersionOf"/>) بِإصدارِ الحِسابِ المُخَزَّن (<c>User.SessionVersion</c> /
+/// <c>StudioUser.SessionVersion</c>)؛ فَإن كانَ أَصغَرَ نُزِعَ الكوكيُّ مِن الطَلَبِ قَبلَ أَن يَقرَأَه أَحَد — صَفحَةً أَو نُقطَةً أَو مُرَشِّحاً —
+/// ومُحِيَ مِن المُتَصَفِّح. فَمَوضِعُ القَرارِ واحِدٌ لِكُلِّ قارِئٍ لِلجَلسَة (القاعِدَة ٨)، لا سَطرٌ في كُلِّ جِسم.</para>
+///
+/// <para><b>وكَلفَتُه عَلى القاعِدَةِ مَحدودَة</b>: الجَلسَةُ لَم تَكُن تَقرَأُ القاعِدَةَ أَصلاً، فَالإصدارُ يُحفَظُ في ذاكِرَةِ الخادِمِ
+/// <see cref="CacheFor"/> (دَقيقَةٌ واحِدَة — رَقمُ القَرار) لِكُلِّ حِساب، ويُمحى مِنها فَورَ الرَفعِ (<see cref="Forget"/>). وحِسابٌ لا وَثيقَةَ
+/// لَه لا يُسقِطُ رَمزَه هُنا — ذاكَ سُلوكُ اليَومِ لِكُلِّ قارِئ، ولا يَتَغَيَّر. <b>وحَدُّه</b>: دائِرَةُ Blazor التَفاعُلِيَّةُ المَفتوحَةُ تَبقى حَتّى
+/// تُعادَ الصَفحَة (الصَفَحاتُ المَحروسَةُ كُلُّها SSR ثابِت).</para>
+///
+/// <para><b>(‏2026-11-05، الموجَة ١٢ G2 · ١ — A-SESS-W12-2؛ تَوصيفُه <c>0f5a3c4</c> — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «كُلُّها SSR ثابِت» لَم يَصدُق</b>:
+/// <c>/studio/agent</c> (<c>StudioAgent.razor</c>) وجَزيرَةُ <c>/admin/agent</c> (<c>AgentChatPanel.razor</c>) صَفحَتا <c>InteractiveServer</c>، تَلتَقِطانِ صاحِبَهُما
+/// مَرَّةً ثُمَّ تُنادي مُعالِجاتُ نَقرِهِما النَموذَجَ والأَدَواتِ بِسُلطَةِ مُشرِفِ المَنَصَّةِ عَبرَ الدائِرَة — فَبَعدَ «اخرج من كل الأجهزة» أَو نَزعِ الإشرافِ كانَتا تُرسِلانِ
+/// وتُطَبِّقانِ وتَرفُضانِ وتَمحُوانِ (مَقيس: «نِداءاتُ النَموذَج 3 · الأَداةُ المُطَبَّقَة error» في الحالَينِ والصَفحَتَين). <b>وصارَ</b>: كُلٌّ مِنهُما تَحفَظُ رَمزَ الاستوديو
+/// عِندَ تَصييرِها الأَوَّلِ (في ذاكِرَةِ الخادِمِ وَحدَها) وتَسأَلُ <see cref="PlatformAdminStillOpenAsync"/> قَبلَ كُلِّ إرسالٍ وتَطبيقٍ ورَفضٍ ومَسح، والمُغلَقُ
+/// لا يُنادي نَموذَجاً ولا يُشَغِّلُ أَداةً ويَنتَقِلُ إلى <c>/studio/auth</c>. فَالحَدُّ أَعلاه صادِقٌ لِلصَفَحاتِ الثابِتَة، والدائِرَتانِ تَسأَلانِ عِندَ كُلِّ فِعل.</para>
+/// </summary>
+public static class SessionVersionGate
+{
+    /// <summary>مُدَّةُ حِفظِ الإصدارِ في الذاكِرَة — دَقيقَةٌ واحِدَة (قَرارُ المالِك د28).</summary>
+    public static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(1);
+
+    private const string AuthCookiePrefix = ".acommerce.auth.";
+
+    /// <summary>أَسقَطَ رَفعُ الإصدارِ هذا الرَمز؟ — نَقِيَّة: إصدارُ الرَمزِ أَصغَرُ مِن إصدارِ الحِسابِ المُخَزَّن. وحِسابٌ لا يُقرَأ
+    /// (<c>null</c>) لا يُسقِطُ شَيئاً.</summary>
+    public static bool IsRevoked(int tokenVersion, int? accountVersion)
+        => accountVersion is int stored && tokenVersion < stored;
+
+    /// <summary>أَسماءُ كوكيّاتِ الجَلسَةِ في الطَلَب — المَتجَرُ بِكُلِّ أَدوارِه والاستوديو، بِلا كوكيّاتِ الاسمِ (<c>.name</c>).</summary>
+    /// <remarks>‏(‏2026-10-29، I-SEC-1) «كوكيُّ الاسمِ» قَرارُ <see cref="AuthSession.IsNameCookie"/> نَفسُه الَّذي يَسأَلُه الحَلّ — كانَ هُنا نَصّاً مُكَرَّراً.</remarks>
+    public static IReadOnlyList<string> SessionCookieNames(IEnumerable<string> cookieNames)
+        => cookieNames.Where(n => InFamily(n) && !AuthSession.IsNameCookie(n)).ToList();
+
+    /// <summary>
+    /// <para><b>ما تَفحَصُه البَوّابَة</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1؛ تَوصيفُه <c>cf0f9bc</c>): كوكيّاتُ الجَلسَةِ
+    /// (<see cref="SessionCookieNames"/>) <b>وكُلُّ كوكيٍّ مِن العائِلَةِ يَحمِلُ رَمزاً يَقبَلُه <c>ParseToken</c> أَيّاً كانَ اسمُه</b> — فَكوكيُّ «الاسم»
+    /// الَّذي زُرِعَ فيه رَمزٌ ساقِطٌ يُفحَصُ ويُنزَع، وكوكيُّ اسمِ العَرضِ الحَقيقيُّ (قيمَتُه اسمٌ لا رَمز) لا يُمَسّ. كانَ الفَحصُ بِالاسمِ وَحدَه، والحَلُّ
+    /// يَقرَأُ ذلِكَ الاسمَ لِدَورٍ اسمُه <c>name</c>.</para>
+    /// <para><b>(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَوصيفُه <c>4ef835a</c>) والعائِلَةُ لَم تَكُن تَكفي</b>: <c>Request.Cookies</c>
+    /// يَبحَثُ بِالاسمِ بِلا حالَةِ أَحرُف، والعائِلَةُ تُقارِنُ بِحالَتِها — فَرَمزٌ ساقِطٌ تَحتَ <c>.ACOMMERCE.AUTH.{slug}</c> أَو <c>.ACOMMERCE.STUDIO</c> لا يُفحَصُ
+    /// ويَقرَؤُه كُلُّ قارِئ. فَصارَ الشِقُّ الثاني <b>كُلَّ كوكيٍّ يَحمِلُ رَمزاً، مِن العائِلَةِ أَو مِن غَيرِها وبِأَيِّ حالَة</b>: الرَمزُ لا الاسمُ هُوَ ما يَفتَحُ
+    /// الجَلسَة، والقيمَةُ الَّتي لَيسَت رَمزاً يَرُدُّها فَكُّ الترميزِ أَو عَدَدُ الحُقولِ أَو التَوقيعُ بِلا قِراءَةِ قاعِدَة. والعائِلَةُ وكوكيُّ الاسمِ بِمُقارَنَةِ القارِئِ نَفسِها (<c>OrdinalIgnoreCase</c>).</para>
+    /// </summary>
+    public static IReadOnlyList<string> CheckedCookieNames(IEnumerable<KeyValuePair<string, string>> cookies)
+    {
+        var all = cookies.ToList();
+        var sessions = SessionCookieNames(all.Select(c => c.Key));
+        return sessions
+            .Concat(all.Where(c => !sessions.Contains(c.Key) && AuthHandlers.ParseToken(c.Value) is not null).Select(c => c.Key))
+            .ToList();
+    }
+
+    /// <summary>
+    /// <para><b>كُلُّ زَوجٍ يَقرَؤُه قارِئٌ لِلجَلسَة — وهُوَ ما تَحكُمُ عَلَيه البَوّابَة</b> (‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01): القامُوسُ
+    /// <c>Request.Cookies</c> (قُرّاءُ الاسمِ بِلا بادِئَة، وجَزيرَتا الوَكيل) <b>وأَزواجُ الرَأسِ بِمُحَلِّلِ القارِئِ نَفسِه</b> (<c>AuthSession.HeaderCookies</c> — كُلُّ مُكَرَّرٍ وكُلُّ
+    /// حالَةٍ وكُلُّ سَطر؛ ومِنها يَقرَأُ <c>AuthSession.CookieValue</c> الاسمَ بِالبادِئَةِ <c>__Host-</c>).</para>
+    /// <para>كانَت البَوّابَةُ تَحكُمُ بِالقامُوسِ وَحدَه، و<c>c297172</c> جَعَلَ القارِئَ بِالبادِئَةِ يَقرَأُ أَوَّلَ زَوجٍ بِحُروفِه — فَعَلى HTTPS
+    /// <c>__Host-.acommerce.auth.X=&lt;ساقِط&gt;; __Host-.acommerce.auth.X=x</c> (أَو <c>__HOST-…=x</c>، أَو سَطرانِ، أَو الساقِطُ بَينَ عَلامَتَي تَنصيص) يُفحَصُ فيه «x» ويُفتَحُ
+    /// الساقِط (مَقيسٌ حَيّاً: <c>/me</c> داخِلٌ بَعدَ «اخرج من كل الأجهزة»، ومُشرِفُ المَنَصَّةِ يَعودُ إلى <c>/admin</c>). <b>فَالشَرطُ صارَ بِالبِناء</b>: ما يُعيدُه قارِئٌ قيمَةُ
+    /// زَوجٍ في هذِه القائِمَة — والاختِبارُ يُعيدُه عَلى كُلِّ صورَةٍ مِن صُوَرِ الرَأس.</para>
+    /// </summary>
+    public static IReadOnlyList<KeyValuePair<string, string>> ReadablePairs(HttpRequest request)
+        => request.Cookies.Concat(AuthSession.HeaderCookies(request).Select(p => KeyValuePair.Create(p.Name, p.Value))).ToList();
+
+    /// <summary>عائِلَةُ كوكيّاتِ الدُخول: كوكيُّ الاستوديو بِعَينِه، وكُلُّ ما يَبدَأُ بِـ<c>.acommerce.auth.</c> — كَما كانَت، و(‏2026-10-30) بِلا حالَةِ أَحرُف
+    /// كَما يَبحَثُ <c>Request.Cookies</c>.</summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والاسمُ بِالبادِئَةِ <c>AuthSession.HostPrefix</c> مِنها — كوكيُّ الجَلسَةِ عَلى HTTPS.</remarks>
+    private static bool InFamily(string name)
+    {
+        var bare = name.StartsWith(AuthSession.HostPrefix, StringComparison.OrdinalIgnoreCase) ? name[AuthSession.HostPrefix.Length..] : name;
+        return bare.Equals(StudioAuth.CookieName, StringComparison.OrdinalIgnoreCase)
+               || bare.StartsWith(AuthCookiePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>رَأسُ <c>Cookie</c> بِلا الأَسماءِ المُسقَطَة (وكوكيّاتِ أَسمائِها) — نَقِيَّة، فَتُقاسُ بِلا خادِم.</summary>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١) <b>بِلا حالَةِ أَحرُف</b>: المُحَلِّلُ يُبقي آخِرَ المُكَرَّرِ بِحالَتَين، فَنَزعُ الاسمِ بِحالَتِه وَحدَها
+    /// كانَ يُظهِرُ النُسخَةَ المَحجوبَةَ بِرَمزِها الساقِط.</remarks>
+    public static string WithoutCookies(string header, IReadOnlyCollection<string> names)
+    {
+        var drop = DropSet(names);
+        return string.Join("; ", Pairs(header).Where(pair => !drop.Contains(NameOf(pair))));
+    }
+
+    /// <summary>الأَسماءُ كَما كُتِبَت في الرَأسِ الَّتي يَنزِعُها <see cref="WithoutCookies"/> — لِيُمحى كُلٌّ مِنها مِن المُتَصَفِّحِ بِحالَتِه (والمُتَصَفِّحُ
+    /// يُفَرِّقُ بَينَ الحالات). نَقِيَّة.</summary>
+    public static IReadOnlyList<string> DroppedNames(string header, IReadOnlyCollection<string> names)
+    {
+        var drop = DropSet(names);
+        return Pairs(header).Select(NameOf).Where(drop.Contains).Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private static HashSet<string> DropSet(IReadOnlyCollection<string> names)
+        => names.SelectMany(n => new[] { n, n + ".name" }).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    private static string[] Pairs(string header)
+        => header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private static string NameOf(string pair) => pair.Split('=', 2)[0].Trim();
+
+    private static string Key(string tenant, Guid userId) => $"session-version|{tenant}|{userId:N}";
+
+    /// <summary>
+    /// <para><b>الإصدارُ الَّذي تُقارِنُ بِه البَوّابَةُ حِساباً في مَتجَر</b> — نَقِيَّة. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه (لا يُسقِطُ شَيئاً، كَما كان)؛
+    /// <b>و<see cref="int.MaxValue"/> لِحِسابٍ مَحذوف</b> فَيَسقُطُ كُلُّ رَمزٍ لَه؛ وإلّا <c>SessionVersion</c>.</para>
+    /// <para>(‏2026-10-29، تَدقيقُ الموجَة ١١ A4؛ تَوصيفُه <c>ca9e8b3</c>) كانَ الحَذفُ يُسقِطُ الرُموزَ بِرَفعِ الإصدارِ وَحدَه — وذاكَ مُنذُ <c>2e65882</c>
+    /// (د28)؛ فَحِسابٌ حُذِفَ قَبلَه إصدارُه ‏0 ورَمزُه القَديمُ ‏0 لَيسَ أَصغَرَ مِنه، فَيَعبُرُ ثَلاثينَ يَوماً مِن إصدارِه. والحَذفُ حالَةٌ لا عَدَد:
+    /// <c>DeletedAt</c> يَكفي، فَلا يَتَوَقَّفُ إسقاطُ رُموزِ المَحذوفِ عَلى رَفعٍ قَد يَكونُ فاتَه. <c>StudioUser</c> لا حَذفَ لَه اليَومَ (لا
+    /// <c>DeletedAt</c> فيه)، فَإصدارُه كَما هُوَ.</para>
+    /// </summary>
+    public static int? GateVersion(User? account)
+        => account is null ? null : account.DeletedAt is not null ? int.MaxValue : account.SessionVersion;
+
+    /// <summary>
+    /// <para><b>أَما زالَت جَلسَةُ هذا الرَمزِ مَفتوحَةً عَلى هذا الحِساب؟</b> — نَقِيَّة (‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1، I-SEC-2 مَعَ G-1؛
+    /// تَوصيفُه <c>6e17ba9</c>): الرَمزُ يُقبَلُ ولِهذا الحِساب، وإصدارُه لَيسَ أَصغَرَ مِن <see cref="GateVersion"/> الوَثيقَة — فَالرَفعُ والحَذفُ كِلاهُما يُغلِقانِها.</para>
+    /// <para>يُعطى <c>admit</c> لِكُلِّ كاتِبٍ بِاسمِ جَلسَةٍ في <see cref="AccountWrites.UpdateAsync{T}"/>، فَيُسأَلُ عَلى كُلِّ قِراءَةٍ جَديدَة — البَوّابَةُ أَوَّلَ
+    /// الطَلَبِ لا تَرى رَفعاً وَقَعَ بَعدَها. مُستَهلِكوه سَبعَة: <c>push/subscribe</c> و<c>/me/save</c> و<c>/me/role/save</c> و<c>/me/role/onboarding/save</c>
+    /// و<c>/me/area/save</c> ورَبطُ الوَسيلَةِ وحَذفُها (<c>AccountContacts</c>).</para>
+    /// </summary>
+    public static bool StillOpen(User account, string? token)
+        => AuthHandlers.ParseToken(token) is { } parsed && parsed.UserId == account.Id
+           && AuthHandlers.SessionVersionOf(token) is int version && !IsRevoked(version, GateVersion(account));
+
+    /// <summary>
+    /// <para><b>أَما زالَت جَلسَةُ هذا الرَمزِ مَفتوحَةً، وصاحِبُها مُشرِفَ مَنَصَّة؟</b> — نَقِيَّة (‏2026-11-05، الموجَة ١٢ G2 · ١، A-SESS-W12-2): الرَمزُ رَمزُ
+    /// استوديو يُقبَلُ ولِهذا الحِساب، وإصدارُه لَيسَ أَصغَرَ مِن إصدارِ الوَثيقَة (<see cref="IsRevoked"/>)، وقَرارُ <see cref="PlatformAdminGuard.Decide"/>
+    /// عَلَيها «مُشرِف». نَظيرُ <see cref="StillOpen"/> لِحِسابِ المَتجَر: يُسأَلُ عَلى قِراءَةٍ جَديدَةٍ لا عَلى ما التُقِطَ عِندَ التَصييرِ الأَوَّل.</para>
+    /// <para>والحِسابُ الغائِب (<c>null</c>) مُغلَق — لا مُشرِفَ بِلا وَثيقَة.</para>
+    /// </summary>
+    public static bool PlatformAdminStillOpen(StudioUser? account, string? token)
+        => account is not null && AuthHandlers.ParseToken(token) is { } parsed && parsed.TenantSlug == StudioAuth.Tenant && parsed.UserId == account.Id
+           && AuthHandlers.SessionVersionOf(token) is int version && !IsRevoked(version, account.SessionVersion)
+           && PlatformAdminGuard.Decide(account) == PlatformAdminOutcome.Allowed;
+
+    /// <summary>
+    /// <para><b>سُؤالُ الدائِرَتَينِ قَبلَ كُلِّ فِعل</b> (‏2026-11-05، G2 · ١): <c>StudioAgent.razor</c> و<c>AgentChatPanel.razor</c> تَلتَقِطانِ رَمزَ الاستوديو عِندَ
+    /// تَصييرِهِما الأَوَّل، وتَسأَلانِ هُنا قَبلَ كُلِّ إرسالٍ وتَطبيقٍ ورَفضٍ ومَسح — فَتُقرَأُ وَثيقَةُ <paramref name="userId"/> مِن جَديدٍ (لا مِن الذاكِرَة) ويُجيبُ
+    /// <see cref="PlatformAdminStillOpen"/>. والبَوّابَةُ أَوَّلَ كُلِّ طَلَبٍ لا تَبلُغُ نَقرَةً عَبرَ SignalR.</para>
+    /// </summary>
+    public static async Task<bool> PlatformAdminStillOpenAsync(IDocumentStore store, string? token, Guid userId, CancellationToken ct = default)
+    {
+        if (AuthHandlers.ParseToken(token) is not { } parsed || parsed.UserId != userId) return false;
+        await using var q = store.QuerySession(StudioAuth.Tenant);
+        return PlatformAdminStillOpen(await q.LoadAsync<StudioUser>(userId, ct), token);
+    }
+
+    /// <summary>إصدارُ الحِسابِ المُخَزَّن — مِن الذاكِرَةِ إن حُفِظَ خِلالَ <see cref="CacheFor"/>، وإلّا مِن وَثيقَتِه: <c>StudioUser</c> لِلاستوديو
+    /// و<c>User</c> في جَلسَةِ مُستَأجِرِه بِـ<see cref="GateVersion"/>. <c>null</c> لِحِسابٍ لا وَثيقَةَ لَه.</summary>
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٧؛ تَوصيفُه <c>708dbbc</c>) القِراءَةُ والحِفظُ في <see cref="CachedVersionAsync"/> — فَـ<see cref="Forget"/>
+    /// يَقَعُ بَينَهُما لا يُعيدُ الإصدارَ القَديم.</remarks>
+    public static Task<int?> AccountVersionAsync(IDocumentStore store, IMemoryCache cache, string tenant, Guid userId)
+        => CachedVersionAsync(cache, Key(tenant, userId), async () =>
+        {
+            await using var q = store.QuerySession(tenant);
+            return tenant == StudioAuth.Tenant
+                ? (await q.LoadAsync<StudioUser>(userId))?.SessionVersion
+                : GateVersion(await q.LoadAsync<User>(userId));
+        });
+
+    /// <summary>عَدّادُ المَحوِ لِكُلِّ حِساب — يَزيدُه <see cref="Forget"/>، وتَقرَؤُه القِراءَةُ قَبلَها وبَعدَها. مُدخَلَةٌ لِكُلِّ حِسابٍ رُفِعَ أَو حُذِفَ في عُمرِ
+    /// العَمَلِيَّة (رَقمٌ واحِد)، وتَبدَأُ مِن الصِفرِ مَعَ كُلِّ إقلاع — كَالذاكِرَةِ نَفسِها.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> Forgotten = new(StringComparer.Ordinal);
+
+    private static readonly object CacheSync = new();
+
+    /// <summary>
+    /// <para><b>الذاكِرَةُ لا تَحفَظُ قِراءَةً بَدَأَت قَبلَ مَحو</b> (‏2026-10-30، مُراجَعَةُ F1 الأَخيرَة عَلى <c>5d858d0</c>، الموجَة ١٢ البَند ٧؛ تَوصيفُه
+    /// <c>708dbbc</c>). كانَت تَقرَأُ ثُمَّ تَحفَظ، و<see cref="Forget"/> يَمحو — فَقِراءَةٌ فاتَتها الذاكِرَةُ فَأَعادَت إصدارَ ما قَبلَ الرَفع، ووَقَعَ الرَفعُ و<c>Forget</c>
+    /// قَبلَ حِفظِها، تَحفَظُه بَعدَ المَحوِ دَقيقَةً كامِلَة (مَقيس: «الطَلَبُ التالي ⇒ 0 · رَمزُ ما قَبلَ الرَفعِ يُرَدّ False»). <b>والآن</b>: تُقرَأُ قيمَةُ عَدّادِ المَحوِ
+    /// قَبلَ القِراءَة، ويُحفَظُ الإصدارُ تَحتَ القُفلِ الَّذي يَمحو بِه <c>Forget</c> <b>إن لَم يَتَغَيَّر العَدّاد</b>؛ وإلّا تُعادُ القِراءَةُ مَرَّةً — فَالطَلَبُ نَفسُه يَرى
+    /// ما بَعدَ الرَفعِ، ولا يَبقى في الذاكِرَةِ ما قَبلَه.</para>
+    /// <para><b>ولِماذا عَدّادٌ لا «أَكبَرُ القيمَتَين»</b>: <c>Forget</c> لا يَعرِفُ الإصدارَ الجَديد (يُناديه بابُ الحَذفِ بَعدَ <c>Erase</c> بِلا وَثيقَةٍ مَحفوظَة)،
+    /// فَبَعدَ مَحوِه لا قيمَةَ في الذاكِرَةِ تُقارَنُ بِها قِراءَةٌ قَديمَة؛ والعَدّادُ يُغلِقُ السِباقَ لِكُلِّ مُنادٍ لِـ<c>Forget</c> بِلا تَغييرِ نِدائِه. وإن مُحِيَ
+    /// مَرَّتَينِ في أَثناءِ قِراءَتَين أُعيدَت الثانِيَةُ بِلا حِفظ.</para>
+    /// </summary>
+    internal static async Task<int?> CachedVersionAsync(IMemoryCache cache, string key, Func<Task<int?>> read)
+    {
+        if (cache.TryGetValue(key, out int? cached)) return cached;
+        int? version = null;
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var epoch = Forgotten.GetValueOrDefault(key);
+            version = await read();
+            lock (CacheSync)
+            {
+                if (Forgotten.GetValueOrDefault(key) != epoch) continue;
+                cache.Set(key, version, CacheFor);
+                return version;
+            }
+        }
+        return version;
+    }
+
+    /// <summary>يَمحو الإصدارَ المَحفوظ — فَورَ الرَفع، فَلا يَبقى رَمزٌ مُسقَطٌ يَعبُرُ دَقيقَةَ الحِفظ.</summary>
+    /// <remarks>‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٧) ويَزيدُ عَدّادَ المَحوِ تَحتَ القُفلِ نَفسِه — فَقِراءَةٌ بَدَأَت قَبلَه لا تَحفَظُ ما قَرَأَت (<see cref="CachedVersionAsync"/>).</remarks>
+    public static void Forget(IMemoryCache cache, string tenant, Guid userId)
+    {
+        var key = Key(tenant, userId);
+        lock (CacheSync)
+        {
+            Forgotten.AddOrUpdate(key, 1, (_, n) => n + 1);
+            cache.Remove(key);
+        }
+    }
+
+    /// <summary>
+    /// <para><b>أَثَرُ «اخرج من كل الأجهزة» عَلى وَثيقَةِ حِسابِ المَتجَر</b> — نَقِيّ: يَرفَعُ الإصدارَ، <b>ويَمحو اشتِراكاتِ الإشعارِ كُلَّها</b>
+    /// (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-2 + A5). كانَ يَرفَعُ الإصدارَ وَحدَه و<c>WebPushService</c> يُرسِلُ إلى كُلِّ اشتِراكٍ مَحفوظٍ بِلا جَلسَة —
+    /// فَالهاتِفُ المَسروقُ يَبقى يَعرِضُ نَصَّ المُحادَثاتِ وإشعاراتِ الصَفَقاتِ عَلى شاشَتِه المُقفَلَة بِلا حَدّ (الاشتِراكُ لا يَنتَهي بِثَلاثينَ يَوماً).
+    /// وكُلُّ جِهازٍ — هذا مِنها — يَشتَرِكُ مِن جَديدٍ بِنِداءِ <c>App.razor</c> القائِمِ بَعدَ دُخولِه التالي.</para>
+    /// </summary>
+    public static void Revoke(User user, DateTime now)
+    {
+        user.SessionVersion++;
+        user.PushSubscriptions.Clear();
+        user.UpdatedAt = now;
+    }
+
+    /// <summary>«اخرج من كل الأجهزة» لِحِسابِ مَتجَر — يُطَبِّقُ <see cref="Revoke"/> ويَحفَظُه ويَمحو المَحفوظ. <c>false</c> = لا حِساب.</summary>
+    /// <remarks>‏(‏2026-10-29، G-1) بِـ<see cref="AccountWrites.UpdateAsync{T}"/>: كاتِبٌ سَبَقَه يُعادُ عَلَيه الرَفعُ مِن قِراءَةٍ جَديدَة، ولا يَكتُبُ
+    /// أَحَدٌ فَوقَه نُسخَةً قُرِئَت قَبلَه.</remarks>
+    public static async Task<bool> RevokeTenantAsync(IDocumentStore store, IMemoryCache cache, string slug, Guid userId)
+    {
+        var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u => { Revoke(u, DateTime.UtcNow); return true; });
+        if (user is null) return false;
+        Forget(cache, slug, userId);
+        return true;
+    }
+
+    /// <summary>أَكثَرُ العَناوينِ الَّتي يَسحَبُها خُروجٌ واحِد — نِطاقاتُ المَتجَرِ في مُتَصَفِّحٍ واحِد (العامُّ وكُلُّ دَور) لا تَبلُغُها.</summary>
+    public const int DeviceEndpointsLimit = 10;
+
+    /// <summary>
+    /// <para><b>الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه</b> (‏2026-10-30، الموجَة ١٢ F1 البَند ٨؛ تَوصيفُه <c>a620502</c>): بابُ الخُروجِ كانَ
+    /// يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه
+    /// مِن جِهازٍ مُشتَرَك (P1)؛ وسكربتُ <c>App.razor</c> صارَ يُرسِلُ عَناوينَ اشتِراكاتِ هذا المَتجَرِ في المُتَصَفِّحِ مَعَ استِمارَةِ الخُروج.</para>
+    /// <para>يَمحو مِن حِسابِ <paramref name="userId"/> <b>وَحدَه</b> ما يَقبَلُه <see cref="PushSubscriptionDoor.IsPushServiceEndpoint"/> مِن العَناوين
+    /// (حَتّى <see cref="DeviceEndpointsLimit"/>) — فَعُنوانُ حِسابٍ آخَرَ لا يُوجَدُ في قائِمَتِه فَلا يُمَسّ، وما لَيسَ عُنوانَ خِدمَةِ إشعارٍ لا يَبلُغُ المَخزَن.
+    /// والكِتابَةُ بِـ<see cref="AccountWrites.UpdateAsync{T}"/> وشَرطِ الجَلسَةِ <paramref name="admit"/> يُعطيه البابُ — فَجَلسَةٌ أَسقَطَها رَفعٌ قَبلَ القِراءَةِ لا
+    /// تَكتُب. <c>true</c> = مُحِيَ شَيء.</para>
+    /// </summary>
+    public static async Task<bool> ForgetDeviceAsync(IDocumentStore store, string slug, Guid userId, IEnumerable<string?> endpoints,
+        Func<User, bool> admit, CancellationToken ct = default)
+    {
+        var drop = endpoints.Where(PushSubscriptionDoor.IsPushServiceEndpoint).Select(e => e!)
+            .Distinct(StringComparer.Ordinal).Take(DeviceEndpointsLimit).ToHashSet(StringComparer.Ordinal);
+        if (drop.Count == 0) return false;
+        var removed = 0;
+        await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+        {
+            removed = u.PushSubscriptions.RemoveAll(p => drop.Contains(p.Endpoint));
+            if (removed > 0) u.UpdatedAt = DateTime.UtcNow;
+            return removed > 0;
+        }, ct, admit);
+        return removed > 0;
+    }
+
+    /// <summary>نَظيرُها لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة.</summary>
+    public static async Task<bool> RevokeStudioAsync(IDocumentStore store, IMemoryCache cache, Guid userId)
+    {
+        var user = await AccountWrites.UpdateAsync<StudioUser>(store, StudioAuth.Tenant, userId, u => { u.SessionVersion++; return true; });
+        if (user is null) return false;
+        Forget(cache, StudioAuth.Tenant, userId);
+        return true;
+    }
+
+    /// <summary>جِسمُ البَوّابَة: يَنزِعُ مِن الطَلَبِ كُلَّ كوكيِّ جَلسَةٍ أَسقَطَه رَفعُ الإصدار، ويَمحوه مِن المُتَصَفِّح.</summary>
+    /// <remarks>
+    /// <para>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — I-SEC-1 الجَولَةُ الأُولى؛ تَوصيفُه <c>4ef835a</c>) <b>والنَتيجَةُ تُقاسُ بِمُحَلِّلِ القارِئِ نَفسِه</b>: بَعدَ
+    /// كُلِّ نَزعٍ يُعادُ الفَحصُ عَلى <c>Request.Cookies</c> المُعادِ تَحليلُه — فَإن بَقِيَ رَمزٌ ساقِطٌ يَراه القارِئ (نُسخَةٌ كانَت مَحجوبَة، أَو رَأسٌ لا يُطابِقُ
+    /// تَقسيمُه تَحليلَه) ولَم يُغَيِّر النَزعُ شَيئاً أَو بَلَغَ <see cref="Passes"/>، <b>يُمحى رَأسُ <c>Cookie</c> كُلُّه</b> فَيَصيرُ الطَلَبُ مَجهولاً. الشَرطُ
+    /// «لا رَمزَ ساقِطاً بَعدَ البَوّابَةِ عِندَ أَيِّ قارِئ» يُفحَصُ بِالبِناءِ لا بِحُجَّةٍ عَن تَطابُقِ مُحَلِّلَين.</para>
+    /// <para>‏(‏2026-10-30، الموجَة ١٢) <b>والمَحوُ دِفاعيٌّ بِلا حالَةٍ مَقيسَةٍ تَبلُغُه</b>: ثَلاثَةٌ وثَلاثونَ رَأساً مَحقوناً عَلى نُسخَةٍ فَرعُ المَحوِ فيها «يَضَعُ المَنزوعَ
+    /// ويَخرُج» لَم يَبقَ في أَيٍّ مِنها رَمزٌ ساقِطٌ عِندَ القارِئ — المُحَلِّلُ يَرُدُّ ما لا يُطابِقُ تَقسيمَ «;». يَبقى لِأَنّ كُلفَتَه صِفرٌ عَلى رَأسٍ سَليم.</para>
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«بِمُحَلِّلِ القارِئِ نَفسِه» صارَ بِمُحَلِّلَيه</b>:
+    /// <c>c297172</c> أَعطى القارِئَ مُحَلِّلاً ثانِياً لِلاسمِ بِالبادِئَة (<c>AuthSession.HeaderCookies</c>) والبَوّابَةُ بَقِيَت عَلى القامُوس — فَالحُكمُ والفَحصُ بَعدَ النَزعِ
+    /// صارا عَلى <see cref="ReadablePairs"/>: كُلُّ زَوجٍ بِقيمَتِه، لا قيمَةُ القامُوسِ تَحتَ الاسم. والنَزعُ كَما كانَ بِلا حالَةِ أَحرُفٍ يَأخُذُ كُلَّ مُكَرَّرٍ لِلاسمِ المُسقَط.</para>
+    /// </remarks>
+    public static async Task ApplyAsync(HttpContext ctx)
+    {
+        if (CheckedCookieNames(ReadablePairs(ctx.Request)).Count == 0) return;
+        var store = ctx.RequestServices.GetRequiredService<IDocumentStore>();
+        var cache = ctx.RequestServices.GetRequiredService<IMemoryCache>();
+        var deleted = new List<string>();
+        for (var pass = 1; ; pass++)
+        {
+            var revoked = await RevokedNamesAsync(ReadablePairs(ctx.Request), store, cache);
+            if (revoked.Count == 0) break;
+            var header = ctx.Request.Headers.Cookie.ToString();
+            var stripped = WithoutCookies(header, revoked);
+            deleted.AddRange(revoked.SelectMany(n => new[] { n, n + ".name" }).Concat(DroppedNames(header, revoked)));
+            if (pass >= Passes || stripped == header) { ctx.Request.Headers.Cookie = string.Empty; break; }
+            ctx.Request.Headers.Cookie = stripped;
+        }
+        if (deleted.Count == 0) return;
+        var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(ctx.Request) };
+        foreach (var name in deleted.Distinct(StringComparer.Ordinal))
+            ctx.Response.Cookies.Delete(name, opts);
+    }
+
+    /// <summary>عَدَدُ مَرّاتِ النَزعِ قَبلَ مَحوِ الرَأسِ كُلِّه — نَزعٌ ثُمَّ فَحصٌ يَكفيانِ لِكُلِّ رَأسٍ مَقيس، والثالِثَةُ لا تَصِلُ إلّا بِتَحليلٍ لا يُطابِقُه التَقسيم.</summary>
+    public const int Passes = 3;
+
+    /// <summary>ما أَسقَطَه رَفعُ الإصدارِ مِن <see cref="CheckedCookieNames"/> — بِالرَمزِ الَّذي يَقرَؤُه القارِئُ تَحتَ ذلِكَ الاسم.</summary>
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>بِكُلِّ زَوجٍ مِن <see cref="ReadablePairs"/></b> لا بِقيمَةِ القامُوسِ
+    /// تَحتَ الاسم — فَالاسمُ يُسقَطُ إن حَمَلَ زَوجٌ مِنه رَمزاً ساقِطاً أَيّاً كانَ تَرتيبُه وحالَتُه وسَطرُه.</remarks>
+    private static async Task<List<string>> RevokedNamesAsync(IReadOnlyList<KeyValuePair<string, string>> pairs, IDocumentStore store, IMemoryCache cache)
+    {
+        var revoked = new List<string>();
+        var checkedNames = CheckedCookieNames(pairs).ToHashSet(StringComparer.Ordinal);
+        foreach (var (name, token) in pairs)
+        {
+            if (!checkedNames.Contains(name) || revoked.Contains(name, StringComparer.Ordinal)) continue;
+            if (AuthHandlers.ParseToken(token) is not { } parsed || AuthHandlers.SessionVersionOf(token) is not int version) continue;
+            if (IsRevoked(version, await AccountVersionAsync(store, cache, parsed.TenantSlug, parsed.UserId))) revoked.Add(name);
+        }
+        return revoked;
+    }
+
+    /// <summary>تُسَجَّلُ قَبلَ نِقاطِ القالِبِ وصَفَحاتِه (‏<c>Program.cs</c>) — فَكُلُّ قارِئٍ لِلجَلسَةِ بَعدَها يَرى الكوكيَّ المُسقَطَ غائِباً.</summary>
+    public static IApplicationBuilder UseSessionVersionGate(this IApplicationBuilder app)
+        => app.Use(async (ctx, next) => { await ApplyAsync(ctx); await next(ctx); });
+}

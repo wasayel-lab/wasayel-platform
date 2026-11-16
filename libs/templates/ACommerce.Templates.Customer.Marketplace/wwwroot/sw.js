@@ -75,6 +75,23 @@ self.addEventListener('notificationclick', (event) => {
         for (const c of all) {
             if (c.url.includes(url)) return c.focus();
         }
+        for (const c of all) {
+            const asPath = pathFormOnStoreHost(c.url, url);
+            if (asPath && asPath.includes(url)) return c.focus();
+        }
         return self.clients.openWindow(url);
     })());
 });
+
+// ‏(2026-11-12، W13-4·C2f-R3·1) عَلى مُضيفِ المَتجَرِ أَو الدَور يُحَوَّلُ رابِطُ الإشعار (/{slug}/…) إلى عُنوانِه النَظيف (/…)، فَالنافِذَةُ الَّتي فَتَحَها
+// لا تَحمِلُه. هذا عُنوانُ النافِذَةِ كَما يَكتُبُه شَكلُ المَسار — فَيُسأَلُ السُؤالُ نَفسُه. والنِطاقُ / أَو /r/{role}/ وَحدَه (صَفحَةٌ نَظيفَةٌ عَلى مُضيف)؛
+// وفي وَضعِ المَسارِ النِطاقُ /{slug}/… فَلا شَيء.
+function pathFormOnStoreHost(href, url) {
+    if (!/^\/(r\/[^/]+\/)?$/.test(new URL(self.registration.scope).pathname)) return null;
+    const store = /^\/([^/?#]+)/.exec(url);
+    if (!store) return null;
+    const at = new URL(href);
+    const label = at.hostname.split('.')[0];
+    if (label !== store[1] && !label.startsWith(store[1] + '-')) return null;
+    return at.origin + '/' + store[1] + (at.pathname === '/' ? '' : at.pathname) + at.search + at.hash;
+}

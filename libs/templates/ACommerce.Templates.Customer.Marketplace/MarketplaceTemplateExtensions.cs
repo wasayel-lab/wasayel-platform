@@ -5,16 +5,19 @@ using ACommerce.Kit.Favorites;
 using ACommerce.Kit.Listings;
 using ACommerce.Platform.I18n;
 using ACommerce.Platform.Shared;
+using ACommerce.Platform.Shared.Metering;
 using ACommerce.Templates.Customer.Marketplace.Api;
 using ACommerce.Templates.Customer.Marketplace.Billing;
 using ACommerce.Templates.Customer.Marketplace.Gates;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
+using ACommerce.Templates.Customer.Marketplace.Shipping;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ACommerce.Templates.Customer.Marketplace;
@@ -30,9 +33,13 @@ public static class MarketplaceTemplateExtensions
     public static IServiceCollection AddCustomerMarketplaceTemplate(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4) قَوالِبُ صَفَحاتِ الدَورِ لِحاقِنِ المُضيف: يَضَعُ دَورَ مُضيفِ الدَورِ في مَسارِ GET ما يُطابِقُها وَحدَه.
+        services.AddSingleton(Services.Ux.RoleHostPages.Templates);
         services.AddScoped<AuthSession>();
         services.AddScoped<L>();
         services.AddScoped<ACommerce.Kit.Realtime.Client.RealtimeClient>();
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-4) الهُبُّ يَقرَأُ الجَلسَةَ مِن كوكي الطَلَبِ بِالقَرارِ الواحِد — لا رَمزَ في رابِط.
+        services.AddSingleton<ACommerce.Kit.Realtime.Server.RealtimeHub.SessionCookieReader>(AuthSession.ResolveToken);
         services.AddScoped<ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService>();
         // قِراءَةُ إعلانٍ واحِد — يَسأَلُها **مُستَهلِكان**: شاشَةُ
         // التَحرير (فَلا تَفتَح جَلسَةً بِيَدِها، والطَبَقَة الثامِنَة
@@ -44,20 +51,36 @@ public static class MarketplaceTemplateExtensions
         // `IDocumentStore`. وهذا بِعَينِه شَرطُ تَشغيلِها في MAUI
         // Blazor Hybrid حَيثُ لا قاعِدَةَ بَيانات على الهاتِف.
         services.AddScoped<Services.Queries.TenantDirectory>();
+        // ‏(‏2026-11-07، W13-1·C1D-3) واجِهَةُ المَنَصَّة — الصَفحَةُ الأُولى تَقرَؤُها بِاسمِها، وخَريطَةُ المَوقِعِ في العُدَّةِ بِواجِهَتِها.
+        services.AddScoped<Services.Queries.TenantShowcase>();
+        services.AddScoped<ACommerce.Kit.Tenants.ITenantShowcase>(sp => sp.GetRequiredService<Services.Queries.TenantShowcase>());
         services.AddScoped<Services.Queries.AuditLogQueries>();
         services.AddScoped<Services.Queries.ShellQueries>();
         services.AddScoped<Services.Queries.AccountQueries>();
+        // ‏(‏2026-10-29، قَرارُ المالِك د53) «بَياناتي»: استِعلامٌ واحِدٌ تَقرَؤُه الصَفحَةُ والتَنزيل.
+        services.AddScoped<Services.Queries.UserDataQueries>();
         services.AddScoped<Services.Queries.StorefrontQueries>();
         services.AddScoped<Services.Queries.StudioQueries>();
         services.AddScoped<Services.Queries.PlatformStatsQueries>();
         services.AddScoped<Services.Queries.TenantAdminQueries>();
         services.AddScoped<Services.Queries.PlatformBillingQueries>();
+        // ‏(‏2026-11-12، W13-6·٥ — ADR-051 §١٣) قارِئُ صَفحَتَي العَدِّ لِمُشرِفِ المَنَصَّة: المَجموعُ مَعَ الذَيلِ الخامّ في لَقطَةٍ واحِدَة.
+        services.AddScoped<Services.Queries.MeterQueries>();
+        // ‏(‏2026-11-13، W13-6·٢٠ — ADR-051 §٢٤) مُطابَقَةُ المَتجَرِ في صَفحَتِه: المَصادِرُ والنِيّاتُ والمَجاميعُ في لَقطَةٍ واحِدَة — الدالَّةُ الَّتي يُناديها السكربت.
+        services.AddScoped<Services.Metering.MeterReconciliation>();
         // مُزَوِّد الخَلفيّات المُسَمّى: كُلّ وَكيل مَنطِقيّ (Studio / Analysis)
         // يَطلُب مِلَفَّه بِاسمِه، والمُزَوِّد يَحُلّه ويُخَزِّن خَلفيَّة واحِدَة
         // لِكُلّ مِلَفّ مُتَمايِز. تَسجيل واحِد بَدَل الخَلفيَّة المُشتَرَكَة.
         services.AddSingleton<
             ACommerce.Templates.Customer.Marketplace.Services.IAgentBackendProvider,
             ACommerce.Templates.Customer.Marketplace.Services.AgentBackendProvider>();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٥ — ADR-051 §١٩؛ التَصميم §6.1) عَميلُ الخَلفِيّاتِ الثَلاثِ واحِدٌ مِن المَصنَعِ بِالمُستَدعي المَعدود — كانَت تَبني ثَلاثَةً بِـ`new`.
+        // **بِلا مُهلَةِ عَميل**: المُهلَةُ مِن الطَلَب (`AgentCallBound`، ‏2026-10-24) كَما كانَت عَلى العُمَلاءِ الثَلاثَة.
+        ACommerce.Platform.Shared.Metering.ProviderHttpExtensions.AddProviderHttp<ACommerce.Templates.Customer.Marketplace.Services.IAgentBackend>(services,
+            (_, client) => client.Timeout = System.Threading.Timeout.InfiniteTimeSpan);
+        // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) مِفتاحُ وَكيلِ التَصميم — مُطفَأٌ ما لَم يُضَأ `Studio:Agent:Enabled`؛ ويَسأَلُه الوَكيلُ قَبلَ أَيِّ نِداء.
+        services.AddSingleton(sp => Services.Incubator.StudioAgentSwitch.From(
+            sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentService>();
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor>();
 
@@ -82,6 +105,17 @@ public static class MarketplaceTemplateExtensions
         // عُمرِ الخِدمَة.
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService>();
 
+        // خِزانَةُ أَسرارِ المُستَأجِر (‏ADR-032 الخُطوَتانِ 4 و7) — Singleton: المِفتاحُ
+        // الرَئيسُ يُقرَأُ مَرَّةً مِن التَهيئَة (`Providers__Kek__v1`). وغِيابُه أَو
+        // تَلَفُه **خِزانَةٌ غَيرُ مُتاحَةٍ لا إقلاعٌ يَسقُط** (الخُطوَة 11): بِطاقَةُ
+        // المُزَوِّدِ الَّذي يَحتاجُها تُخفى، ورَبطُه يُرَدُّ بِـ`vault_unavailable`.
+        services.AddSingleton(sp => ACommerce.Platform.Providers.ProviderVault.FromKek(
+            sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()[ACommerce.Platform.Providers.ProviderVault.KekConfigKey]));
+
+        // عَميلُ بَوّابَةِ المُستَأجِر (‏ADR-032 الخُطوَة 8) — يُسَجَّلُ دائِماً بِجِوارِ الخِزانَةِ الَّتي تَفُكُّ مِفتاحَه: لا يَحمِلُ سِرّاً،
+        // ومِفتاحُ المُستَأجِرِ يُفَكُّ لِكُلِّ نِداءٍ ويُمَرَّرُ إلَيه. وبابُ البِطاقَةِ يُرسَمُ حَيثُ يُحَلُّ مِفتاحٌ مَختومٌ وتَفُكُّه الخِزانَة.
+        ACommerce.Kit.Payments.MoyasarClientExtensions.AddMoyasarGateway(services);
+
         // ─── الاستِحقاق ──────────────────────────────────────────────────
         // Scoped لا Singleton: بِلا كاش — الرَصيد حالَة تَتَغَيَّر بِكُلّ
         // عَمَلِيَّة، وكاشُها هو بِعَينِه ما يَجعَل الفَحص يَكذِب. والقِراءَة
@@ -105,6 +139,9 @@ public static class MarketplaceTemplateExtensions
         // مُستَثمِر.
         _ = ACommerce.Kit.Theme.ThemeCatalog.Default;
         _ = ACommerce.Kit.Theme.ThemePresetCatalog.Preload();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٣ — ADR-051 §١٩) المُستَدعي المَعدودُ المُفرَدُ بِكاتِبِ المُضيف، فَتَحُلُّ الحاوِيَةُ باني الخِدمَةِ الأَطوَلَ (ثَلاثَةُ وُسَطاءَ
+        // كُلُّها مُسَجَّلَة) لا مَقعَدَ الاختِبار — يَحرُسُه `MeterCompositionTests` (G6d). والسَطرُ الَّذي تَحتَه بِحَرفِه (يَقرَؤُه `WebPushVapidKeysTests`).
+        ACommerce.Platform.Shared.Metering.ProviderCallsExtensions.AddProviderCalls(services);
         services.AddSingleton<ACommerce.Templates.Customer.Marketplace.Services.WebPushService>();
         services.AddScoped<Gates.GatePipeline>();
         services.AddScoped<Commands.AcceptTermsHandler>();
@@ -130,6 +167,25 @@ public static class MarketplaceTemplateExtensions
 
         // خَدَمات الـ Deals (تَدَفُّق العَمَلِيّات المُوَحَّد).
         services.AddScoped<Services.Deals.DealsService>();
+        // إشعاراتُ الصَفقَةِ عَلى الأُنبوبِ القائِم (P1-5) — تَحقِنُ المَخزَنَ والجَرَسَ والدَفعَ.
+        services.AddScoped<Services.Deals.DealNotices>();
+        // تَقييمُ الطَرَفِ الآخَرِ خَلفَ بَوّابَتِه (‏ADR-033 §٦‑ح) — عَلى خِدمَتَي الصَفَقاتِ والتَقييماتِ القائِمَتَين.
+        services.AddScoped<Services.Deals.DealReviews>();
+        // شَحنُ الصَفَقاتِ عَبرَ OTO (‏ADR-033 الخُطوَة 3) — عَلى خِدمَةِ الصَفَقاتِ القائِمَةِ وعَميلِ OTO
+        // الَّذي يُسَجِّلُه المُضيف (`AddOtoShipping`)، فَلا أُنبوبَ ثانِيَ لِلانتِقال.
+        services.AddScoped<Services.Deals.DealShipping>();
+        // حِسابُ الشَحنِ لِلبائِعِ داخِلَ المَتجَر (‏ADR-033 الخُطوَة 7، تَيّارُ S8، ‏2026-10-12) — عَلى خِدمَةِ المُزَوِّدينَ والخِزانَةِ
+        // وعَميلِ OTO القائِمَة؛ والمَدخَلُ وَثيقَةُ الرَبطِ نَفسُها بِمُعَرِّفٍ مُرَكَّب، فَلا خِزانَةَ ثانِيَةَ ولا وَثيقَةَ ثانِيَة.
+        services.AddScoped<Services.Shipping.VendorShippingService>();
+        // التَحَقُّقُ مِن دَفعِ المُشتَري عِندَ بَوّابَةِ المَتجَر (‏ADR-032 الخُطوَة 9، تَيّارُ S9، ‏2026-10-12) — عَلى خِدمَةِ الصَفَقاتِ وخِدمَةِ
+        // المُزَوِّدينَ والخِزانَةِ وعَميلِ البَوّابَةِ القائِمَة؛ مُستَهلِكُها نُقطَةُ `/{slug}/payments/verify` في `Billing/TenantGatewayEndpoints.cs`.
+        services.AddScoped<Services.Deals.GatewayPayments>();
+        // وإلغاءُ الطَلَبِ عِندَ انتِهاءِ مُهلَةِ فاتورَتِه رِسالَةٌ مُجَدوَلَةٌ في Wolverine المُرَكَّبِ أَصلاً (‏2026-10-29، قَرارُ المالِك د5 (٤)؛ ‏ADR-046) — مُعالِجُها
+        // يُكتَشَفُ بِنَوعِه وطابورُها بِصُندوقٍ مُستَديم؛ والسَطرانِ في `GatewayInvoiceExpiry.Configure` يَقرَؤُهُما البُرهانُ الحَيُّ نَفسُهُما.
+        Wolverine.HostBuilderExtensions.ConfigureWolverine(services, Services.Deals.GatewayInvoiceExpiry.Configure);
+        // وإلغاءُ الفاتورَةِ عِندَ البَوّابَةِ بَعدَ إلغاءِ آخِرِ صَفقَةٍ قائِمَةٍ تَدفَعُ لَها (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الثانِيَة؛ ‏ADR-032 §٨‑ز) —
+        // عَلى خِدمَةِ المُزَوِّدينَ والخِزانَةِ وعَميلِ البَوّابَةِ القائِمَة؛ مُستَهلِكُه `DealsService` بِحَقنِه، فَكُلُّ بابِ إلغاءٍ يَمُرُّ بِه.
+        services.AddScoped<Services.Deals.GatewayInvoiceCloser>();
 
         // التَّقييمات (تَقييم مُتَبادَل بَعد اكتِمال صَفقَة).
         services.AddScoped<ACommerce.Kit.Reviews.ReviewsService>();
@@ -155,6 +211,14 @@ public static class MarketplaceTemplateExtensions
         // طَلَبَين (‏POST ثُمَّ تَحويلٌ ثُمَّ تَصيير)، والكاش تَحتَه
         // هُوَ نَفسُ `IMemoryCache` المُسَجَّل في المِنَصَّة.
         services.AddSingleton<Services.Api.ApiKeyRevealStore>();
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) **كاتِبُ الصادِر** هُنا لا في العُدَد: يَملِكُ القاعِدَةَ وذاكِرَةَ المَتاجِر، والعُدَدُ تَعرِفُ
+        // مُستَدعيها المَعدودَ وَحدَه (`ProviderCalls` يَسأَلُ الحاوِيَةَ عَنه). مُضيفٌ بِلا القالِبِ يَبقى بِلا كاتِب — ويُحَمِّرُه G6d عَلى المُضيفِ المُرَكَّب.
+        services.AddSingleton<ACommerce.Platform.Shared.Metering.OutboundRecorder, Services.Metering.UsageLedgerWriter>();
+        // ‏(‏2026-11-12، W13-6·١٣) وذاكِرَتُه مَعَه: الكاتِبُ يَقرَأُ `IMemoryCache` وكانَ يَأتيه مِن `AddPlatformMultiTenancy` وَحدَه — فَلَمّا صارَت خِدمَةُ الإشعارِ
+        // (مُفرَدُ القالِبِ الَّذي يَبلُغُه `DealNotices` في مُعالِجاتِ Wolverine) تَطلُبُ المُستَدعيَ المَعدود، صارَ مُضيفٌ بِتَركيبِ القالِبِ وَحدَه بِلا ذاكِرَةٍ لا يَبني
+        // مُعالِجَ المُهلَة (مَقيس: `LiveScheduledExpiryProofTests` «Unable to resolve service for type 'IMemoryCache' while attempting to activate
+        // 'UsageLedgerWriter'» ومُحاوَلاتٌ 0). و`AddMemoryCache` يُضيفُ إن غابَ ولا يَستَبدِل — فَفي مُضيفِ الإنتاجِ هِيَ ذاكِرَةُ الحَلّالِ نَفسُها.
+        services.AddMemoryCache();
 
         // ─── شَكلُ وَثيقَتَي الـAPI في Marten ────────────────────────────
         // <b>هُنا لا في `HostingExtensions`</b>: الاعتِمادُ يَمشي مِن
@@ -179,8 +243,25 @@ public static class MarketplaceTemplateExtensions
             // فَالعَزلُ مَجّانِيٌّ بِصِفرِ سَطر: لا استِعلامَ عابِراً
             // لِلمُستَأجِرينَ مُمكِنٌ أَصلاً. ومُعَرِّفُه <b>هُوَ
             // القُدرَة</b> — رَبطٌ فَعّالٌ واحِدٌ لِكُلّ قُدرَة.
+            // ومَدخَلُ البائِعِ الوَثيقَةُ نَفسُها بِمُعَرِّفٍ مُرَكَّبٍ `{capability}:{listing_owner}` (‏ADR-033 الخُطوَة 7، ‏2026-10-12) —
+            // لا يُصادِفُ مُعَرِّفَ قُدرَة، ومُجموعَةُ المَتجَرِ تَتَجاوَزُه بِقاعِدَةٍ مُسَمّاة (`TenantProviderBinding.IsVendorEntryId`).
             opts.Schema.For<ACommerce.Platform.Providers.TenantProviderBinding>()
                 .Identity(x => x.Id);
+
+            // والصَفقَةُ <b>بِتَزامُنٍ تَفاؤُلِيّ</b> (‏ADR-036، ‏2026-10-12): كِتابَتانِ قَرَأَتا النُسخَةَ نَفسَها لا تَمحو
+            // أَخيرَتُهُما الأُولى — تُرَدُّ بِرَمزٍ. والتَسجيلُ دالَّةُ الخِدمَةِ الكاتِبَةِ نَفسِها، يُناديها البُرهانُ الحَيُّ أَيضاً.
+            Services.Deals.DealsService.RegisterDocument(opts);
+
+            // وحِسابُ الاستوديو — ومِنه مُشرِفُ المَنَصَّة — <b>بِتَزامُنٍ تَفاؤُلِيٍّ</b> كَحِسابِ المَتجَر (‏2026-10-29، تَدقيقُ الموجَة ١١ G-1 —
+            // ADR-041 §٣): إصدارُ جَلسَتِه لا يُعيدُه حِفظٌ قَرَأَ قَبلَ الرَفع. ونَظيرُه `User` في `HostingExtensions`. وبِهذا يَخرُجُ مِن
+            // قائِمَةِ غَيرِ المُسَجَّلِ (`MartenSchemaVerbTests.PinnedUnregistered`) فَيَدخُلُ عَرضَ المُخَطَّطِ وتَوكيدَه.
+            opts.Schema.For<Services.Incubator.StudioUser>().Identity(x => x.Id).UseOptimisticConcurrency(true);
+
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051) **دَفتَرُ العَدِّ ومُستَمِعُه** هُنا لا في `HostingExtensions`: المُستَمِعُ يَعرِفُ وَثائِقَ القالِب
+            // (الصَفقَة)، والاعتِمادُ يَمشي مِن القالِبِ إلى النَواة. جَداوِلُ `meter.*` ميزَةُ Weasel يَراها فِعلُ المُخَطَّطِ بِهذا النِداء، والمُستَمِعُ
+            // واحِدٌ يَبلُغُ كُلَّ جَلسَة (`MeterListenerShapeTests` يَعُدُّه)؛ ونَقضُه سَطرُه وَحدَه (ADR-051 §٨).
+            opts.Storage.Add(new Services.Metering.UsageLedgerFeature(opts.Advanced.Migrator));
+            opts.Listeners.Add(new Services.Metering.UsageListener());
         });
 
         return services;
@@ -200,8 +281,13 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] IOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) قَناةٌ لا يَعرِضُها المَتجَرُ تُرَدُّ قَبلَ كُلِّ شَيء (`LoginChannels`) — كانَ البابُ لا يَسأَلُ قَناةَ المَتجَر.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var phone = req.Form["phone"].ToString().Trim();
             var asRole = req.Form["as"].ToString().Trim();
+            // وتُبقي التَحويلاتُ الجَوّالَ مَعروضاً حينَ لَيسَ قَناةَ المَتجَر (`via=phone`) — رابِطُ القَناةِ الأُولى بايتاتُه كَما كانَت.
+            var via = Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone);
             if (channel is null)
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_unavailable" +
@@ -209,16 +295,24 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(phone))
                 return Results.Redirect(Link(req, slug,
                     $"login?err=phone_required" +
-                    (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")));
-            await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default);
-            var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
-            return Results.Redirect(Link(req, slug, $"login?stage=verify&phone={Uri.EscapeDataString(phone)}{asParam}"));
-        }).DisableAntiforgery();
+                    (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}") + via));
+            var asParam = (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}") + via;
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-9) رَدُّ الحِصَّةِ أَو عُطلُ القَناةِ رِسالَةٌ لا صَفحَةُ ‏500 — كَبابَي البَريدِ والاستوديو.
+            string attemptId;
+            try { attemptId = (await AuthHandlers.RequestPhoneOtpHandler(new RequestPhoneOtp(phone), tenant, channel, default)).AttemptId; }
+            catch (Exception) { return Results.Redirect(Link(req, slug, $"login?err=send_failed{asParam}")); }
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-13) الرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الرَقَم — والصَفحَةُ تَقرَأُ الرَقَمَ مِنه.
+            return Results.Redirect(Link(req, slug, $"login?stage=verify&attempt={Uri.EscapeDataString(attemptId)}{asParam}"));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/phone/verify",
-            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
+            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant,
+                   [FromServices] IOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، A2) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ الإرسال — فَرَمزٌ لا يَفتَحُ قَناةً لا يَعرِضُها المَتجَر.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Phone, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             // اقبَل HTML form (واجِهَة المُستَخدِم) أَو JSON (الـ APIs والفُحوصات).
             string phone = "", code = "", asRoleEarly = "";
             if (req.HasFormContentType)
@@ -240,28 +334,38 @@ public static class MarketplaceTemplateExtensions
                     }
                 } catch { /* بِنيَة غَير مُتَوَقَّعَة → نَترُك الحُقول فارِغَة، يَفشَل verify بِشَكل صَريح */ }
             }
-            var result = await AuthHandlers.VerifyPhoneOtpHandler(new VerifyPhoneOtp(phone, code), tenant, store);
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1 — A2) القَناةُ الثانِيَةُ تُدخِلُ مَن رَبَطَها ولا تُسَجِّل (`LoginChannels.Registers`) —
+            // كانَ هذا السَطرُ يُنادي المُعالِجَ الَّذي يُنشِئ، فَجَوّالٌ لا يَحمِلُه حِسابٌ في مَتجَرِ بَريدٍ صارَ حِساباً ثانِياً. والرَدُّ بَعدَ الرَمز.
+            var (result, refusal) = await AuthHandlers.VerifyPhoneOtpAsync(new VerifyPhoneOtp(phone, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Phone));
+            if (refusal is not null) return Results.Redirect(Link(req, slug, $"login?err={refusal}"));
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&phone={Uri.EscapeDataString(phone)}&err=code_invalid"));
-            var asRole = (asRoleEarly ?? "").ToLowerInvariant();
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, phone, AuthHandlers.AuthKind.PhoneOtp, "code_invalid")}"
+                    + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Phone)));
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             // كَتابَة cookie باسم يَتَضَمَّن الدَور — يَسمَح بِجَلَسات مُتَوازِيَة
             // (راكِب في تَبويب، سائِق في آخَر) في نَفس المُتَصَفِّح.
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
+            var needsName = false;
             await using (var qs = store.QuerySession(slug))
             {
                 var user = await qs.LoadAsync<User>(result.UserId);
+                needsName = user is not null && Services.Queries.ActorName.NeedsName(user);
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
-                        $"{user.FullName} · {user.Phone}",
+                        // ‏(‏2026-10-29، قَرارُ المالِك د52 (٣) «أ») الاسمُ وَحدَه — كُلُّ نُسخَةٍ مِن الهاتِفِ في صَناديقِ المُديرينَ خَطَرُ تَسريبٍ بِلا فائِدَة،
+                        // والتَفاصيلُ في صَفحَةِ المُستَخدِمينَ لِمَن يَملِكُ صَلاحِيَّتَها.
+                        $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+            // ‏(2026-10-29، قَرارُ المالِك د40 «ج») الاسمُ يُطلَبُ عِندَ أَوَّلِ دُخول: ما دامَ «عُضو جَديد» تَسبِقُ خُطوَةُ الاسمِ مَسارَ ما بَعدَ الدُخول.
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(req, slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Email OTP ──────────────────────────────────────────────────
@@ -274,36 +378,44 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] IEmailOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) قَناةٌ لا يَعرِضُها المَتجَرُ تُرَدُّ قَبلَ كُلِّ شَيء — كانَ بَريدٌ مَزروعٌ يُدخِلُ مَتجَرَ جَوّالٍ أَو نَفاذ (A3).
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Email, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var email = EmailAddress.Normalize(req.Form["email"].ToString());
             var asRole = req.Form["as"].ToString().Trim();
-            var asParam = string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}";
+            // وتُبقي التَحويلاتُ البَريدَ مَعروضاً حينَ لَيسَ قَناةَ المَتجَر (`via=email`) — ورابِطُ مَتجَرِ البَريدِ بايتاتُه كَما كانَت.
+            var asParam = (string.IsNullOrEmpty(asRole) ? "" : $"&as={Uri.EscapeDataString(asRole)}")
+                          + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email);
             // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
             if (channel is null)
                 return Results.Redirect(Link(req, slug, $"login?err=email_unavailable{asParam}"));
             if (string.IsNullOrEmpty(email))
                 return Results.Redirect(Link(req, slug, $"login?err=email_required{asParam}"));
             if (!EmailAddress.IsValid(email))
-                return Results.Redirect(Link(req, slug,
-                    $"login?err=email_invalid&email={Uri.EscapeDataString(email)}{asParam}"));
+                return Results.Redirect(Link(req, slug, $"login?err=email_invalid{asParam}"));
+            string attemptId;
             try
             {
-                await AuthHandlers.RequestEmailOtpHandler(new RequestEmailOtp(email), tenant, channel, default);
+                attemptId = (await AuthHandlers.RequestEmailOtpHandler(new RequestEmailOtp(email), tenant, channel, default)).AttemptId;
             }
             catch (InvalidOperationException)
             {
                 // فَشَل الإرسال أَو تَجاوُز حَدّ المُعَدَّل — لا نَدفَع
                 // المُستَخدِم إلى شاشَة كود لَن يَصِلَه أَبَداً.
-                return Results.Redirect(Link(req, slug,
-                    $"login?err=send_failed&email={Uri.EscapeDataString(email)}{asParam}"));
+                return Results.Redirect(Link(req, slug, $"login?err=send_failed{asParam}"));
             }
-            return Results.Redirect(Link(req, slug,
-                $"login?stage=verify&email={Uri.EscapeDataString(email)}{asParam}"));
-        }).DisableAntiforgery();
+            // ‏(‏2026-10-24، lens-security-13) المُحاوَلَةُ لا العُنوان — والعُنوانُ لا يُعادُ في رابِطِ خَطَإٍ أَيضاً (كانَ يَملَأُ الحَقل).
+            return Results.Redirect(Link(req, slug, $"login?stage=verify&attempt={Uri.EscapeDataString(attemptId)}{asParam}"));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/email/verify",
-            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant) =>
+            async (string slug, HttpRequest req, HttpResponse res, IDocumentStore store, ITenantContext tenant,
+                   [FromServices] IEmailOtpChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-29، A2) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ الإرسال.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Email, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             // اقبَل HTML form (واجِهَة المُستَخدِم) أَو JSON (الـ APIs والفُحوصات).
             string email = "", code = "", asRoleEarly = "";
             if (req.HasFormContentType)
@@ -326,26 +438,34 @@ public static class MarketplaceTemplateExtensions
                 } catch { /* بِنيَة غَير مُتَوَقَّعَة → نَترُك الحُقول فارِغَة، يَفشَل verify بِشَكل صَريح */ }
             }
             email = EmailAddress.Normalize(email);
-            var result = await AuthHandlers.VerifyEmailOtpHandler(new VerifyEmailOtp(email, code), tenant, store);
+            // ‏(‏2026-10-30، A2) القَرارُ نَفسُه: بَريدٌ لا يَحمِلُه حِسابٌ مُتَحَقَّقاً مِنه في مَتجَرِ جَوّالٍ يُرَدُّ بِـ`contact_not_linked` ولا يُنشِئُ حِساباً.
+            var (result, refusal) = await AuthHandlers.VerifyEmailOtpAsync(new VerifyEmailOtp(email, code), tenant, store, Services.LoginChannels.Registers(tenant.AuthChannel, AuthChannels.Email));
+            if (refusal is not null) return Results.Redirect(Link(req, slug, $"login?err={refusal}"));
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&email={Uri.EscapeDataString(email)}&err=code_invalid"));
-            var asRole = (asRoleEarly ?? "").ToLowerInvariant();
+                    $"login?{Services.LoginStageQuery.Retry(tenant.Slug, req.HasFormContentType ? req.Form["attempt"].ToString() : null, email, AuthHandlers.AuthKind.EmailOtp, "code_invalid")}"
+                    + Services.LoginChannels.ViaSuffix(tenant.AuthChannel, AuthChannels.Email)));
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, (asRoleEarly ?? "").ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
             // إن كانَ المُستَخدِم أُنشِئ تَوّاً، أَخطِر مُديري المَتجَر.
+            var needsName = false;
             await using (var qs = store.QuerySession(slug))
             {
                 var user = await qs.LoadAsync<User>(result.UserId);
+                needsName = user is not null && Services.Queries.ActorName.NeedsName(user);
                 if (user is not null && (DateTime.UtcNow - user.CreatedAt).TotalMinutes < 1)
                     await NotifyAdminsAsync(store, slug, "new_user",
                         "مُستَخدِم جَديد سَجَّل",
-                        $"{user.FullName} · {user.Email}",
+                        // ‏(د52 (٣) «أ») الاسمُ وَحدَه — والبَريدُ في صَفحَةِ المُستَخدِمين.
+                        $"{user.FullName}",
                         $"/admin/tenants/{slug}/users");
             }
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
+            // ‏(2026-10-29، د40 «ج») خُطوَةُ الاسمِ أَوَّلاً ما دامَ الاسمُ افتِراضِيّاً — كَبابِ الهاتِف.
+            return Results.Redirect(Services.Queries.MemberNameStep.Route(needsName, await PostLoginRouteAsync(req, slug, result.UserId, asRole, store), p => Link(req, slug, p)));
         }).DisableAntiforgery();
 
         // ─── Nafath ─────────────────────────────────────────────────────
@@ -354,17 +474,23 @@ public static class MarketplaceTemplateExtensions
                    [FromServices] INafathChannel? channel) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 A-SESS-1) قَناةُ المَتجَرِ وَحدَها تُسَجِّل (ADR-042 §٥) — كانَ بابا نَفاذٍ لا يَسأَلانِها فَمَتجَرُ جَوّالٍ أَو بَريدٍ يُنشِئُ حِسابَ هُوِيَّةٍ ثانِياً.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var nid = req.Form["nid"].ToString().Trim();
             // نَفسُ الفَشَلِ المُغلَقِ — راجِع مَسارَ الهاتِف أَعلاه.
             if (channel is null)
                 return Results.Redirect(Link(req, slug, $"login?err=nafath_unavailable"));
             if (string.IsNullOrEmpty(nid) || nid.Length != 10)
                 return Results.Redirect(Link(req, slug, $"login?err=nid_required"));
-            var pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default);
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) لِلبَدءِ حِصَّةٌ الآن — والرَدُّ (أَو عُطلُ القَناة) رِسالَةٌ لا صَفحَةُ ‏500، كَبابِ الاستوديو.
+            NafathPending pending;
+            try { pending = await AuthHandlers.RequestNafathHandler(new RequestNafath(nid), tenant, channel, default); }
+            catch (Exception) { return Results.Redirect(Link(req, slug, "login?err=send_failed")); }
+            // ‏(‏2026-10-24، lens-security-13) المُحاوَلَةُ تَكفي — الصَفحَةُ تَقرَأُ الهُوِيَّةَ مِنها، ولا هُوِيَّةَ في الرابِط.
             return Results.Redirect(Link(req, slug,
-                $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
-                $"&attempt={pending.AttemptId}&code={pending.DisplayCode}"));
-        }).DisableAntiforgery();
+                $"login?stage=verify&attempt={Uri.EscapeDataString(pending.AttemptId)}&code={pending.DisplayCode}"));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/{slug}/auth/nafath/verify",
             async (string slug, HttpRequest req, HttpResponse res,
@@ -372,6 +498,9 @@ public static class MarketplaceTemplateExtensions
                    IDocumentStore store) =>
         {
             if (!tenant.IsResolved) return Results.NotFound();
+            // ‏(‏2026-10-30، A-SESS-1) القَرارُ نَفسُه الَّذي يَسأَلُه بابُ البَدء — فَتَأكيدٌ لا يُنشِئُ حِساباً في مَتجَرٍ لا يَعرِضُ نَفاذاً.
+            if (!Services.LoginChannels.Offers(tenant.AuthChannel, AuthChannels.Nafath, channel is not null))
+                return Results.Redirect(Link(req, slug, $"login?err={Services.LoginChannels.NotOffered}"));
             var nid = req.Form["nid"].ToString().Trim();
             var attempt = req.Form["attempt"].ToString();
             if (channel is null)
@@ -380,15 +509,15 @@ public static class MarketplaceTemplateExtensions
                 new VerifyNafath(attempt, nid), tenant, channel, store, default);
             if (result is null)
                 return Results.Redirect(Link(req, slug,
-                    $"login?stage=verify&nid={Uri.EscapeDataString(nid)}" +
-                    $"&attempt={attempt}&code=00&err=not_approved"));
-            var asRole = req.Form["as"].ToString().Trim().ToLowerInvariant();
+                    $"login?stage=verify&attempt={Uri.EscapeDataString(attempt)}&code=00&err=not_approved"));
+            var asRole = await HeldAdminClaimOrNoneAsync(store, slug, result.UserId, req.Form["as"].ToString().Trim().ToLowerInvariant());   // ‏2026-11-11، SEC-C2b-R2-5
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3) عَلى مُضيفِ الإدارَةِ دُخولٌ لا يَحمِلُ دَورَها لا يُكتَب (`AdminHostSignIn`).
+            if (Services.Ux.AdminHostSignIn.Refusal(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, asRole) is { } refusedHere) return Results.Redirect(refusedHere);
             AuthSession.WriteCookie(res, slug, result,
                 role: string.IsNullOrEmpty(asRole) ? null : asRole);
-            if (!string.IsNullOrEmpty(asRole))
-                await AssignRoleAsync(slug, result.UserId, asRole, store);
-            return Results.Redirect(await PostLoginRouteAsync(slug, result.UserId, asRole, store));
-        }).DisableAntiforgery();
+            await AssignClaimedRoleAsync(slug, result.UserId, asRole, store);
+            return Results.Redirect(await PostLoginRouteAsync(req, slug, result.UserId, asRole, store));
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Language toggle ─────────────────────────────────────────────
         app.MapPost("/lang/{lang}", (string lang, HttpRequest req, HttpResponse res) =>
@@ -403,21 +532,114 @@ public static class MarketplaceTemplateExtensions
             // لا بِشَرط مَحَلِّيّ. كانَت تُمَرَّر كَما هي: تَحويل مَفتوح.
             return Results.Redirect(
                 Services.LocalRedirect.Resolve(req.Form["return"].ToString(), "/"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Logout ─────────────────────────────────────────────────────
         app.MapPost("/{slug}/auth/logout",
-            async (string slug, HttpContext http, IDocumentStore store) =>
+            async (string slug, HttpContext http, IDocumentStore store, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه الَّتي يُرسِلُها سكربتُ `App.razor` — لِحِسابِ الجَلسَةِ
+            // وَحدَه وبِشَرطِها؛ وبِلا جَلسَةٍ يَمسَحُ الكوكيّاتِ كَما كانَ ولا يَكتُب.
+            // ‏(‏2026-11-05، الموجَة ١٢ G2 · ٢ — مُراجَعَةُ F1 عَلى `bcd83f7`؛ تَوصيفُه `c368e9d`) **وبِأَفضَلِ جُهد**: عَطَبُ قاعِدَةٍ أَو تَعارُضٌ أَو استِمارَةٌ مَكسورَةٌ
+            // كانَ يُسقِطُ الخُروجَ ‏500 بِلا كوكيٍّ مَمحُوّ؛ صارَ سَطراً في السِجِلّ، ومَسحُ الكوكيّاتِ والتَحويلُ بَعدَه يَجريانِ دائِماً.
+            var log = logs.CreateLogger("ACommerce.Logout");
+            var token = AuthSession.ResolveToken(http.Request, slug);
+            if (http.Request.HasFormContentType && AuthHandlers.ParseToken(token) is { } session && session.TenantSlug == slug)
+                try
+                {
+                    await Services.SessionVersionGate.ForgetDeviceAsync(store, slug, session.UserId, (await http.Request.ReadFormAsync())["push_endpoint"].ToArray(),
+                        admit: u => Services.SessionVersionGate.StillOpen(u, token));
+                }
+                catch (Exception ex) { Microsoft.Extensions.Logging.LoggerExtensions.LogWarning(log, ex, "الخُروج: تَعَذَّرَ سَحبُ اشتِراكاتِ هذا المُتَصَفِّحِ في {Slug} ({Kind}) — تُمسَحُ الكوكيّاتُ كَما هي", slug, ex.GetType().Name); }
             // اِجلِب أَدوار المَتجَر لِنَمسَح cookies كُلّ الأَدوار المُمكِنَة
             // (المُستَخدِم قَد يَكون مَفتوحاً بِأَكثَر مِن دَور). كانَ يَمسَح
             // cookie واحِد فَيَتَسَرَّب /r/{role}/.
-            await using var qs = store.QuerySession();
-            var tenant = await qs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            var roles = tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>();
-            AuthSession.ClearAllCookiesForTenant(http.Response, slug, roles);
-            return Results.Redirect($"/{slug}");
+            // ‏(‏2026-11-05، G2 · ٢) والأَدوارُ مِن كوكيّاتِ هذا المُتَصَفِّحِ نَفسِها (`AuthSession.RoleCookiesIn`) لا مِن وَثيقَةِ المَتجَر: تُمحى بِتَهجِئَتِها الَّتي يَحمِلُها
+            // (والمُتَصَفِّحُ يُفَرِّقُ بَينَ الحالات)، ودَورٌ حُذِفَ مِن المَتجَرِ لا يُبقي كوكيَّه، والقاعِدَةُ الغائِبَةُ لا تُبقي الجَلسَة. والكوكيّاتُ كُلُّها بِـ`Path=/` فَيَحمِلُها الطَلَب.
+            AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والكَعكاتُ مَقصورَةٌ عَلى مُضيفِها، فَعَلى مُضيفٍ لِلمَتجَرِ
+            // يَمُرُّ الخُروجُ بِمُضيفاتِه الأُخرى (`LogoutHops`) — كانَ عُضوٌ يَخرُجُ عَلى مُضيفِ المَتجَرِ يَبقى داخِلاً عَلى مُضيفِ دَورِه. وفي وَضعِ المَسارِ كَما كان.
+            if (Services.Ux.LogoutHops.Begin(http, slug, token, DateTimeOffset.UtcNow) is { } hop) return Results.Redirect(hop);
+            return Results.Redirect(Home(http.Request, slug));
         }).DisableAntiforgery();
+
+        // ─── مَحَطَّةُ مُرورِ الخُروجِ عَلى مُضيفٍ آخَرَ لِلمَتجَر (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة · SEC-C2b-R2-2؛ ADR-050 §١٤) ─────
+        // `GET` بِتَذكِرَةٍ مُوَقَّعَةٍ لِلحِسابِ الَّذي خَرَج: يَمحو جَرَّةَ هذا المُضيفِ لِلمَتجَر (إلّا جَلسَةَ حِسابٍ آخَر) ويُحَوِّلُ إلى المَحَطَّةِ التالِيَةِ مِن أَدوارِ
+        // المَتجَرِ لا مِن الطَلَب. ولا يَقرَأُ القاعِدَةَ ولا يَكتُبُها؛ وبِلا تَذكِرَةٍ صالِحَةٍ لا يَمحو شَيئاً.
+        app.MapGet("/{slug}/auth/logout/continue", (string slug, HttpContext http) =>
+        {
+            var (clear, next) = Services.Ux.LogoutHops.Continue(http, slug, DateTimeOffset.UtcNow);
+            if (clear) AuthSession.ClearAllCookiesForTenant(http.Response, slug, AuthSession.RoleCookiesIn(http.Request.Cookies.Keys, slug));
+            return Results.Redirect(next ?? Home(http.Request, slug));
+        });
+
+        // ─── اخرج من كل الأجهزة (‏2026-10-28، قَرارُ المالِك د28) ──────────
+        // يَرفَعُ إصدارَ جَلسَةِ الحِسابِ فَيَسقُطُ كُلُّ رَمزٍ صَدَرَ لَه — عَلى هذا الجِهازِ وغَيرِه — عِندَ `SessionVersionGate`. والخُروجُ أَعلاه
+        // يَبقى لِلجِهازِ وَحدَه. وكوكيّاتُ الأَدوارِ عَلى هذا الجِهازِ تَسقُطُ عِندَ البَوّابَةِ في الطَلَبِ التالي بِلا قائِمَةِ أَدوار.
+        app.MapPost("/{slug}/me/sessions/revoke",
+            async (string slug, HttpContext http, HttpRequest req, IDocumentStore store, IMemoryCache cache) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            await Services.SessionVersionGate.RevokeTenantAsync(store, cache, slug, parsed.Value.UserId);
+            AuthSession.ClearAllCookiesForTenant(http.Response, slug, Array.Empty<string>());
+            return Results.Redirect(Home(req, slug));
+        }).RequireFormBody().DisableAntiforgery();
+
+        // ─── أَضِف بَريدَك / أَضِف جَوّالَك (‏2026-10-28، قَرارُ المالِك د27 «ج»؛ NIST 800-63B) ──────────
+        // وَسيلَةُ دُخولٍ ثانِيَةٌ تُضافُ مِن جَلسَةٍ مُثبَتَةٍ وبَعدَ رَمزٍ يَصِلُها — ولا دَمجَ تِلقائِيّ: وَسيلَةٌ في حِسابٍ آخَرَ تُرفَضُ بِرَمزٍ يَشرَحُ الحَلّ.
+        // والرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الوَسيلَة (نَسَقُ أَبوابِ الدُخول)؛ والقَرارُ والأَثَرُ في `AccountContacts` و`ContactLink`.
+        app.MapPost("/{slug}/me/contact/start",
+            async (string slug, HttpRequest req, IDocumentStore store, ITenantContext tenant,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            // ‏(‏2026-10-29، A2) لا يُربَطُ نَوعٌ لا تَعرِضُه صَفحَةُ الدُخول — نَصُّ «فَتَدخُلُ بَعدَها بِه» صادِقٌ بِالبِناء.
+            var outcome = await Services.AccountContacts.StartAsync(store, slug, parsed.Value.UserId,
+                req.Form["kind"].ToString(), req.Form["value"].ToString(), phoneChannel, emailChannel,
+                Services.LoginChannels.Offered(tenant.AuthChannel, phoneChannel is not null, emailChannel is not null), req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, outcome.AttemptId is { } id
+                ? $"me?contact=verify&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
+        }).RequireFormBody().DisableAntiforgery();
+
+        app.MapPost("/{slug}/me/contact/verify", async (string slug, HttpRequest req, IDocumentStore store,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var attempt = req.Form["attempt"].ToString();
+            // ‏(‏2026-10-29، A3) والقَناتانِ لِإشعارِ الوَسيلَةِ الأُخرى المُتَحَقَّقِ مِنها — والإشعارُ والتَدقيقُ في `AccountContacts.NoticeLinkedAsync`.
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والرَبطُ يَسأَلُ الجَلسَةَ عَلى القِراءَةِ الجَديدَة — كانَ تَأكيدٌ عَبَرَ البَوّابَةَ قَبلَ الرَفعِ يَربِطُ بَعدَه.
+            var refusal = await Services.AccountContacts.VerifyAsync(store, slug, parsed.Value.UserId, attempt,
+                req.Form["code"].ToString(), DateTime.UtcNow, phoneChannel, emailChannel, req.HttpContext.RequestAborted, admit: u => Services.SessionVersionGate.StillOpen(u, AuthSession.ResolveToken(req, slug)));
+            return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterVerify(slug, parsed.Value.UserId, attempt, refusal)));
+        }).RequireFormBody().DisableAntiforgery();
+
+        // ─── احذِف الوَسيلَةَ المُضافَة (‏2026-10-29، تَدقيقُ الموجَة ١١ A3) ──────────
+        // وَسيلَةٌ زُرِعَت بِجَلسَةٍ مُستَعارَةٍ كانَت تَبقى تُدخِلُ بَعدَ «اخرج من كل الأجهزة» ولا تُرى. يَحذِفُها صاحِبُ الحِسابِ بِرَمزٍ إلى الوَسيلَةِ
+        // الباقِيَة، والمُضافُ وَحدَه يُحذَف (`ContactLink.ValidateUnlink`) — والقَرارُ والأَثَرُ في `AccountContacts`.
+        app.MapPost("/{slug}/me/contact/remove/start",
+            async (string slug, HttpRequest req, IDocumentStore store,
+                   [FromServices] IOtpChannel? phoneChannel, [FromServices] IEmailOtpChannel? emailChannel) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var outcome = await Services.AccountContacts.StartRemoveAsync(store, slug, parsed.Value.UserId,
+                req.Form["kind"].ToString(), phoneChannel, emailChannel, req.HttpContext.RequestAborted);
+            return Results.Redirect(Link(req, slug, outcome.AttemptId is { } id
+                ? $"me?contact=remove&attempt={Uri.EscapeDataString(id)}" : $"me?err={outcome.Refusal}"));
+        }).RequireFormBody().DisableAntiforgery();
+
+        app.MapPost("/{slug}/me/contact/remove/verify", async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null || parsed.Value.TenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
+            var attempt = req.Form["attempt"].ToString();
+            var refusal = await Services.AccountContacts.VerifyRemoveAsync(store, slug, parsed.Value.UserId, attempt,
+                req.Form["code"].ToString(), DateTime.UtcNow, req.HttpContext.RequestAborted, admit: u => Services.SessionVersionGate.StillOpen(u, AuthSession.ResolveToken(req, slug)));
+            return Results.Redirect(Link(req, slug, Services.AccountContacts.AfterRemove(slug, parsed.Value.UserId, attempt, refusal)));
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── عَدّادات الـ unread لِـ realtime-nav.js ───────────────────────
         // الـ JS عَلى المُتَصَفِّح يُنادي هذا عِندَ كُلّ <c>unread_changed</c>
@@ -464,8 +686,8 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Services.LocalRedirect.Resolve(
-                req.Form["return"].ToString(), $"/{slug}/listings/{id}"));
-        }).DisableAntiforgery()
+                req.Form["return"].ToString(), Home(req, slug, $"listings/{id}")));
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ خارِجَ مَسار العَرض ────
@@ -482,16 +704,22 @@ public static class MarketplaceTemplateExtensions
         // في تَوثيقِه («لا يُثبِت أَنّ الحارِس يَرُدّ»). والحارِسُ
         // الحَقيقيّ هُنا على **المَفعول بِه**: إعلانٌ غَير مَوجود أَو
         // مَحذوف يُرَدّ ‏404 قَبلَ أَيّ كِتابَة.
+        //
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-5) **والحَدُّ هُنا الآن، لا الحارِس**: كانَ كُلُّ طَلَبٍ يُلحِقُ حَدَثاً بِلا حَدّ، وكانَ
+        // `ResolveToken` في الجِسمِ يَجعَلُ الفاحِصَ يَعُدُّها مَحروسَة. صارَت النِسبَةُ في `ListingViews.ViewerOf`، والنُقطَةُ مُثَبَّتَةً عامَّةً
+        // بِسَبَبِها في `WriteEndpointGuardTests.PinnedPublic`، ومُشاهَدَةٌ واحِدَةٌ لِكُلِّ زائِرٍ في الإعلانِ في السّاعَةِ تُعَدُّ قَبلَ أَيِّ قِراءَة.
+        // ‏(‏2026-10-28، قَرارُ المالِك د58) «في السّاعَةِ» صارَ «في اليَوم»، ولِلعَدّادِ سَقفُ مَفاتيح؛ و`logs` لِسَطرِ التَحذيرِ حينَ يَمتَلِئ (`ListingViews.Counts`).
         app.MapPost("/{slug}/listings/{id:guid}/view",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
-            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
-            var viewerId = parsed is { } p && p.TenantSlug == slug
-                ? p.UserId : (Guid?)null;
+            var viewerId = Services.ListingViews.ViewerOf(req, slug);
+            if (!Services.ListingViews.Counts(slug, id, viewerId, Services.ListingViews.ClientIp(req), logs))
+                return Results.NoContent();
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null || listing.IsDeleted) return Results.NotFound();
+            // ‏(‏2026-10-29، I-SEC-3) مُعَرِّفٌ لا مَجرى لَه يُعيدُ مِفتاحَ مُشاهَدَتِه — وإلّا مَلَأَت المُعَرِّفاتُ العَشوائِيَّةُ سَقفَ المَفاتيح.
+            if (listing is null || listing.IsDeleted) return Services.ListingViews.NotFound(req, slug, id, viewerId, existed: listing is not null);
 
             s.Events.Append(id, new ListingViewed(id, viewerId, DateTime.UtcNow));
             await s.SaveChangesAsync();
@@ -500,21 +728,30 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Start chat from listing ────────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/chat",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
+
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الطَرَفُ مالِكُ الإعلانِ بِالمِفتاحِ الَّذي يَقرَؤُه كُلُّ بابٍ يَسأَلُ المِلكِيَّة (`CheckoutCart.OwnerOf`) — كانَ
+            // `Guid.NewGuid()` «صاحِب الإعلان» بِلا وَثيقَة فَلا تَصِلُ المُحادَثَةُ أَحَداً. وإعلانٌ بِلا مالِكٍ أَو مالِكُه غائِبٌ (`AccountErasure.PartnerGone`) يُرَدُّ إلى صَفحَتِه
+            // بِـ`partner_missing` قَبلَ أَيِّ كِتابَة؛ ومالِكُه يَعودُ إلَيها بِلا مُحادَثَةٍ مَعَ نَفسِه.
+            var origin = Link(req, slug, $"listings/{id}");
+            var ownerId = Services.Deals.CheckoutCart.OwnerOf(listing);
+            if (ownerId == userId) return Results.Redirect(origin);
+            var owner = ownerId is { } oid ? await s.LoadAsync<User>(oid) : null;
+            if (Services.Identity.AccountErasure.PartnerGone(owner)) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
 
             var existing = await s.Query<Conversation>()
-                .Where(c => c.ListingId == id && (c.OwnerId == userId || c.PartnerId == userId))
+                .Where(c => c.ListingId == id && ((c.OwnerId == userId && c.PartnerId == owner.Id) || (c.OwnerId == owner.Id && c.PartnerId == userId)))
                 .FirstOrDefaultAsync();
             Guid convId;
             if (existing is not null) convId = existing.Id;
@@ -524,7 +761,7 @@ public static class MarketplaceTemplateExtensions
                 {
                     Id = Guid.NewGuid(),
                     OwnerId = userId, OwnerName = userName,
-                    PartnerId = Guid.NewGuid(), PartnerName = "صاحِب الإعلان",
+                    PartnerId = owner.Id, PartnerName = Services.Queries.ActorName.Of(owner) ?? "",
                     Subject = listing.Title, ListingId = id, LastAt = DateTime.UtcNow
                 };
                 s.Store(conv);
@@ -564,13 +801,15 @@ public static class MarketplaceTemplateExtensions
             if (Gates.SelfGrantPolicy.IsAdminRole(picked))
                 return Results.Redirect(Link(req, slug, $"me/role?err={Gates.SelfGrantPolicy.RefusalCode}"));
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
+            // ‏(‏2026-10-29، G-1) تَغييرُ هذا البابِ وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب (`AccountWrites.UpdateAsync`).
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والجَلسَةُ عَلى القِراءَةِ الجَديدَةِ (`StillOpen`) — نَسَقُ أَبوابِ «حِسابي» كُلِّها.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+            {
+                u.ActiveRole = role;
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.ActiveRole = role;
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
 
             // إن كانَ لِلدَور حُقول بَيانات مَطلوبَة غَير مَملوءَة، حَوِّل
             // إلى onboarding. لَو البَيانات مَوجودَة (مَثَلاً المُستَخدِم
@@ -583,9 +822,8 @@ public static class MarketplaceTemplateExtensions
                 .Any(f => !roleValues.TryGetValue(f.Code, out var v) || string.IsNullOrEmpty(v));
             if (needsOnboarding)
                 return Results.Redirect(Link(req, slug, $"me/role/onboarding"));
-            return Results.Redirect(string.IsNullOrEmpty(picked.HomeRoute)
-                ? $"/{slug}" : $"/{slug}{picked.HomeRoute}");
-        }).DisableAntiforgery()
+            return Results.Redirect(RoleHome(req, slug, picked.Slug, picked.HomeRoute));
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/me/role/onboarding/save",
@@ -599,34 +837,40 @@ public static class MarketplaceTemplateExtensions
             // مَوضِع الالتِقاط (onboarding): مَسار الدَور المُؤَلَّف بَعد
             // الحِفظ يُقرَأ مِن تَعريفِه.
             var tenant = await LoadTenantWithRolesAsync(store, slug);
-            if (tenant is null) return Results.Redirect($"/{slug}");
+            if (tenant is null) return Results.Redirect(Home(req, slug));
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
+            // ‏(‏2026-10-29، G-1) حُقولُ الاستِمارَةِ وَحدَها عَلى قِراءَةٍ جَديدَة، ويُعادُ تَطبيقُها مَرَّةً إن سَبَقَه كاتِب.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+            {
+                foreach (var (key, vals) in req.Form)
+                {
+                    if (!key.StartsWith("role_", StringComparison.Ordinal)) continue;
+                    var rest = key["role_".Length..];
+                    var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                    if (attrIdx <= 0) continue;
+                    var roleSlug = rest[..attrIdx];
+                    var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                    if (!u.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                    {
+                        dict = new Dictionary<string, string>();
+                        u.RoleAttributesJson[roleSlug] = dict;
+                    }
+                    dict[attrCode] = vals.ToString();
+                }
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
-            foreach (var (key, vals) in req.Form)
-            {
-                if (!key.StartsWith("role_", StringComparison.Ordinal)) continue;
-                var rest = key["role_".Length..];
-                var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
-                if (attrIdx <= 0) continue;
-                var roleSlug = rest[..attrIdx];
-                var attrCode = rest[(attrIdx + "_attr_".Length)..];
-                if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
-                {
-                    dict = new Dictionary<string, string>();
-                    user.RoleAttributesJson[roleSlug] = dict;
-                }
-                dict[attrCode] = vals.ToString();
-            }
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
-
             var active = tenant.Roles.FirstOrDefault(r => r.Slug == user.ActiveRole);
-            return Results.Redirect(string.IsNullOrEmpty(active?.HomeRoute)
-                ? $"/{slug}" : $"/{slug}{active.HomeRoute}");
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-1) كانَ الفَرعُ الفارِغُ يَبني بِـ`active.Slug` حَيثُ `active` قَد يَكونُ null (عُضوٌ بِلا دَورٍ
+            // فَعّال، أَو دَورُه المُخَزَّنُ لَيسَ مِن أَدوارِ المَتجَر) ← 500 بَعدَ الكِتابَة. والجَوابُ الآنَ جَوابُ الأَساسِ 50d6293 بِحَرفِه: جَذرُ المَتجَر.
+            // والمُتَرجِمُ يَحرُسُه: CS8602 خَطَأٌ في هذا المِلَفّ (`.editorconfig` القالِب).
+            if (active is null) return Results.Redirect(Home(req, slug));
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) وبَيتُ الدَورِ عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة (`Home` ← `StoreUrl.For`) لا مُضيفِ الدَور:
+            // كانَ `RoleHome` — عُضوٌ دَخَلَ بِـ`as=vendor` عَلى مُضيفِ المَتجَرِ يُحَوَّلُ إلى `{slug}-vendor.R/me/listings` فَيُرسَمُ بِلا جَلسَة (لا `Domain=`).
+            // والإعدادُ لَيسَ تَبديلاً لِلدَور — المُنتَقي (`/me/role/save`) هُوَ العابِرُ المُعلَن. وفي وَضعِ المَسارِ `/{slug}{home}` بِحَرفِه.
+            return Results.Redirect(Home(req, slug, active.HomeRoute ?? ""));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
@@ -680,7 +924,8 @@ public static class MarketplaceTemplateExtensions
                         var ext = ct.Split('/')[1].Replace("jpeg", "jpg");
                         var key = $"tenants/{slug}/avatars/{userId}.{ext}";
                         await using var stream = avatar.OpenReadStream();
-                        var stored = await files.UploadAsync(key, stream, ct);
+                        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) الرَفعُ نِداءٌ مَعدود: المَتجَرُ ومُعَرِّفُ نِداءٍ جَديد (رَفعٌ ثانٍ رَفعٌ آخَر)؛ والمِفتاحُ لا يَدخُلُ الدَفتَرَ إلّا مُستَعاراً.
+                        var stored = await files.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, slug, ProviderCall.FreshRequestId()), key, stream, ct);
                         newAvatarUrl = stored.PublicUrl;
                     }
                     catch (ACommerce.Kit.Files.FileStorageException) { /* الاسمُ يُحفَظ، والصورَةُ لا */ }
@@ -690,52 +935,54 @@ public static class MarketplaceTemplateExtensions
             // الخَصائِص الديناميكِيَّة: كُلّ حَقل بِالـ form بِالبادِئَة
             // attr_<Code> يُحَدِّث user.AttributesJson. لا نَمسَح المَفاتيح
             // غَير المَوجودَة (سَلوك upsert: نُحَدِّث المُمَرَّر، نَتُرك الباقي).
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
-            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.FullName = fullName;
-            if (newAvatarUrl is not null) user.AvatarUrl = newAvatarUrl;
-            user.UpdatedAt = DateTime.UtcNow;
-
-            // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
-            // قُرِئَ وحُسِمَ أَعلى الجِسمِ قَبلَ أَيِّ أَثَر — فَما يَبلُغُ
-            // هُنا دَورٌ مَرَّ بِـ`SelfGrantPolicy` وَحدَه.
-            if (!string.IsNullOrEmpty(activeRole)) user.ActiveRole = activeRole;
-
-            // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
-            // role_<roleSlug>_attr_<Code> = خاصّ بِدَور.
-            foreach (var (key, vals) in req.Form)
+            // ‏(‏2026-10-29، G-1) ما تَحمِلُه الاستِمارَةُ وَحدَه عَلى قِراءَةٍ جَديدَة (`AccountWrites.UpdateAsync`) — كانَ يُحفَظُ فَوقَ ما كَتَبَه
+            // غَيرُه بَينَ القِراءَةِ والحِفظ، ومِنه إصدارُ الجَلسَة.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
             {
-                if (key.StartsWith("attr_", StringComparison.Ordinal))
+                u.FullName = fullName;
+                if (newAvatarUrl is not null) u.AvatarUrl = newAvatarUrl;
+                u.UpdatedAt = DateTime.UtcNow;
+
+                // الدَور النَّشِط (يَظهَر فَقَط لَو المَتجَر يُعَرِّف أَدواراً).
+                // قُرِئَ وحُسِمَ أَعلى الجِسمِ قَبلَ أَيِّ أَثَر — فَما يَبلُغُ
+                // هُنا دَورٌ مَرَّ بِـ`SelfGrantPolicy` وَحدَه.
+                if (!string.IsNullOrEmpty(activeRole)) u.ActiveRole = activeRole;
+
+                // خَصائِص ديناميكِيَّة: attr_<Code> = بروفايل عامّ،
+                // role_<roleSlug>_attr_<Code> = خاصّ بِدَور.
+                foreach (var (key, vals) in req.Form)
                 {
-                    user.AttributesJson[key["attr_".Length..]] = vals.ToString();
-                }
-                else if (key.StartsWith("role_", StringComparison.Ordinal))
-                {
-                    // role_{slug}_attr_{code}
-                    var rest = key["role_".Length..];
-                    var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
-                    if (attrIdx <= 0) continue;
-                    var roleSlug = rest[..attrIdx];
-                    var attrCode = rest[(attrIdx + "_attr_".Length)..];
-                    if (string.IsNullOrEmpty(roleSlug) || string.IsNullOrEmpty(attrCode)) continue;
-                    if (!user.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                    if (key.StartsWith("attr_", StringComparison.Ordinal))
                     {
-                        dict = new Dictionary<string, string>();
-                        user.RoleAttributesJson[roleSlug] = dict;
+                        u.AttributesJson[key["attr_".Length..]] = vals.ToString();
                     }
-                    dict[attrCode] = vals.ToString();
+                    else if (key.StartsWith("role_", StringComparison.Ordinal))
+                    {
+                        // role_{slug}_attr_{code}
+                        var rest = key["role_".Length..];
+                        var attrIdx = rest.IndexOf("_attr_", StringComparison.Ordinal);
+                        if (attrIdx <= 0) continue;
+                        var roleSlug = rest[..attrIdx];
+                        var attrCode = rest[(attrIdx + "_attr_".Length)..];
+                        if (string.IsNullOrEmpty(roleSlug) || string.IsNullOrEmpty(attrCode)) continue;
+                        if (!u.RoleAttributesJson.TryGetValue(roleSlug, out var dict))
+                        {
+                            dict = new Dictionary<string, string>();
+                            u.RoleAttributesJson[roleSlug] = dict;
+                        }
+                        dict[attrCode] = vals.ToString();
+                    }
                 }
-            }
-            s.Store(user);
-            await s.SaveChangesAsync();
+                return true;
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
+            if (user is null) return Results.Redirect(Link(req, slug, $"me"));
 
             AuthSession.UpdateNameCookie(req.HttpContext.Response, slug, fullName);
             // عُد إلى returnUrl إن أُرسِل (يَحفَظ سِياق الدَّور /r/{role}/me).
             // كانَ الشَرط StartsWith("/") وَحدَه — يُمَرِّر //evil.com.
             return Results.Redirect(Services.LocalRedirect.Resolve(
                 req.Form["returnUrl"].ToString(), Link(req, slug, $"me")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── حَذفُ الحِسابِ داخِلَ التَطبيق ──────────────────────────────
@@ -773,7 +1020,8 @@ public static class MarketplaceTemplateExtensions
         // مَحقونَةً بِمُستَأجِرِها.
         app.MapPost("/{slug}/me/delete/confirm",
             async (string slug, HttpContext http, HttpRequest req, IDocumentStore store,
-                   Services.Queries.TenantDirectory tenants, L l) =>
+                   Services.Queries.TenantDirectory tenants, L l, IMemoryCache cache,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, ACommerce.Kit.Files.IFileStorage files, Microsoft.Extensions.Logging.ILoggerFactory logs) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -781,28 +1029,78 @@ public static class MarketplaceTemplateExtensions
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
 
-            await using var session = store.LightweightSession(slug);
-            var user = await session.LoadAsync<User>(userId);
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ G-1 — F1 جَعَلَ `User` بِتَزامُنٍ تَفاؤُلِيّ) الحَذفُ كُلُّه يُعادُ مَرَّةً مِن قِراءَةٍ جَديدَة إن كَتَبَ غَيرُه الحِسابَ بَينَ القِراءَةِ
+            // والحِفظ — نَسَقُ `AccountWrites.UpdateAsync` بِعَدَدِ مُحاوَلاتِه — والجَلسَةُ تُسأَلُ عَلى كُلِّ قِراءَة (`StillOpen`)؛ والثانِيَةُ إن رُدَّت تَرمي: يَفشَلُ مُغلَقاً.
+            Services.Identity.AccountErasure.Counts? done = null;   // ‏ما مَحاه الحِفظُ الناجِح — وارِداتُه ومِلَفّاتُه لِما بَعدَه
+            for (var attempt = 1; ; attempt++)
+            {
+                await using var session = store.LightweightSession(slug);
+                var user = await session.LoadAsync<User>(userId);
+                if (user is { DeletedAt: null } && !Services.SessionVersionGate.StillOpen(user, token)) return Results.Redirect(Link(req, slug, $"login"));
 
-            // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
-            // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
-            var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
-                user, req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
+                // كَلِمَةُ التَأكيدِ مِن القامُوسِ لا حَرفِيَّةً في بَوّابَة
+                // (القاعِدَة ١١) — والمَعروضُ عَلى الشاشَةِ هُوَ المُقارَنُ بِه.
+                // ‏(‏2026-10-29، قَرارُ المالِك د52) والصَفَقاتُ الجارِيَةُ تُعَدُّ بِالجَلسَةِ نَفسِها وتَبلُغُ البَوّابَةَ قَبلَ كَلِمَةِ التَأكيد — `AccountErasure.OpenDealsAsync`
+                // سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
+                // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) والرِحلاتُ الجارِيَةُ بَعدَها بِالجَلسَةِ نَفسِها — `AccountErasure.OpenTripsAsync` سُؤالُ صَفحَةِ الحَذفِ بِعَينِه.
+                var violation = ACommerce.Kit.Auth.AccountDeletion.Validate(
+                    user, await Services.Identity.AccountErasure.OpenDealsAsync(session, userId),
+                    (await Services.Identity.AccountErasure.OpenTripsAsync(session, userId)).Count,
+                    req.Form["confirm"].ToString(), l["account.delete.confirm_word"]);
 
-            if (violation is not null)
-                return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
+                if (violation is not null)
+                    return Results.Redirect(Link(req, slug, $"me/delete?err={violation.Code}"));
 
-            ACommerce.Kit.Auth.AccountDeletion.Erase(user!, DateTime.UtcNow);
-            session.Store(user!);
-            await session.SaveChangesAsync();
+                var now = DateTime.UtcNow;
+                // ‏(2026-10-29، د40) والأَسماءُ قَبلَ Erase لا الاسمُ وَحدَه: اسمُ نَشاطِه صارَ يُكتَبُ في نُسَخٍ عِندَ غَيرِه (إشعارُ القَبولِ مَثَلاً).
+                var nameBefore = Services.Queries.ActorName.NamesOf(user!);
+                var contactsBefore = Services.Identity.AccountErasure.ContactsOf(user!);   // ‏(مُراجَعَةُ S2 الجَولَة ١) وإشعارُ التَسجيلِ القَديمِ يَحمِلُ وَسيلَتَه
+                ACommerce.Kit.Auth.AccountDeletion.Erase(user!, now);
+                session.Store(user!);
+                // ‏(د60) والسَلَّةُ تَحمِلُ اسمَه وجَوّالَه وعُنوانَه مِن خُطُواتِ الإتمام — تُحذَفُ مَعَه.
+                session.Delete<ACommerce.Kit.Cart.Cart>(userId);
+                // ‏(د56) مَفاتيحُ الرَبطِ بِاسمِه تُبطَلُ في المُعامَلَةِ نَفسِها — لا يَبقى مِفتاحٌ يَتَكَلَّمُ بِاسمِ حِسابٍ مَحذوف.
+                await Services.Api.ApiKeyService.RevokeActorKeysAsync(session, slug, userId, now);
+                // ‏(د52 «أ») ونُسَخُ اسمِه القابِلَةُ لِلتَعديلِ في المُعامَلَةِ نَفسِها — والقَرارُ والأَثَرُ في `AccountErasure`؛ ‏(‏2026-10-30، B-PRIV-1) ومَعَها إعلاناتُه
+                // تُسحَبُ والعُروضُ المُعَلَّقَةُ عَلَيها تُرفَض، وتَعودُ الصَفَقاتُ الوارِدَةُ الَّتي لَم يَقبَلْها.
+                var erased = await Services.Identity.AccountErasure.EraseCopiesAsync(session, slug, userId, nameBefore, contactsBefore);
+                try { await session.SaveChangesAsync(); done = erased; break; }
+                catch (JasperFx.ConcurrencyException) when (attempt < ACommerce.Kit.Auth.Server.AccountWrites.Attempts) { }
+            }
+            Services.SessionVersionGate.Forget(cache, slug, userId);   // ‏(د28) Erase رَفَعَ الإصدار — لا يَنتَظِرُ دَقيقَةَ الحِفظ
+            // ‏(‏2026-10-30، B-PRIV-1) الوارِدَةُ تُلغيها المَنصَّةُ بَعدَ الحِفظِ (`CancelAsync` تَفتَحُ جَلسَتَها) بِسَبَبٍ مِن القامُوس، ويُخبَرُ صاحِبُ كُلٍّ بِالأُنبوبِ القائِم
+            // بِاسمِ «حِسابٌ مَحذوف» — والمَحذوفُ هُوَ المُلغي فَلا يُكتَبُ في صُندوقِه شَيء.
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٤ — XS-1 و8357c95 (ب)) والشَرطُ عَلى قِراءَةٍ جَديدَةٍ قَبلَ كُلِّ مُحاوَلَة، والتَعارُضُ يُعادُ مَرَّة (`AccountErasure.CloseIncomingAsync`).
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٢؛ تَوصيفُه 6610358) والمُشتَري يُخبَرُ بِنَصٍّ لا يُسَمّي مُلغياً ويَقولُ السَبَبَ كَسَطرِ الصَفقَة (`NotifyClosedByErasureAsync`) —
+            // كانَ «حِسابٌ مَحذوف أَلغى طَلَبَكَ» والسِجِلُّ يَقولُ المَنصَّة.
+            foreach (var closed in await Services.Identity.AccountErasure.CloseIncomingAsync(deals, slug, userId, done!.IncomingDeals, l["account.delete.cancel_reason"]))
+                await notices.NotifyClosedByErasureAsync(slug, closed, userId, l);
+            // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1؛ تَوصيفُه 7f2f776) ومِلَفّاتُه بَعدَ الحِفظ: صورَتُه بِمِفتاحِها الحَتمِيِّ وصُوَرُ إعلاناتِه — كانَ `Erase` يُفرِغُ
+            // الرابِطَ وَحدَه والمِلَفُّ عامٌّ يَحمِلُ رابِطَه شُرَكاءُ مُحادَثَتِه. بِأَفضَلِ جُهد: ما يَتَعَذَّرُ يُكتَبُ في السِجِلِّ ولا يُعيدُ الحِساب (`AccountErasure.DeleteFilesAsync`).
+            await Services.Identity.AccountErasure.DeleteFilesAsync(files, done.Files.Keys, logs.CreateLogger("ACommerce.AccountErasure"));
 
             var tenant = await tenants.FindAsync(slug);
             AuthSession.ClearAllCookiesForTenant(http.Response, slug,
                 tenant?.Roles.Select(r => r.Slug) ?? Array.Empty<string>());
 
-            return Results.Redirect($"/{slug}?deleted=1");
-        }).DisableAntiforgery()
-          .RequireStoreWritable();
+            return Results.Redirect(Home(req, slug) + "?deleted=1");
+        }).DisableAntiforgery().RequireFormBody();
+        // ‏(‏2026-11-04، الموجَة ١٢ G1 · ٦ — XS-3؛ تَوصيفُه 365dfdc) **وبِلا `RequireStoreWritable`** — مُثَبَّتٌ بِسَبَبِه في `PinnedUngatedStoreWrites`: الحَذفُ بابٌ يَفتَحُه
+        // صاحِبُ الحِسابِ فَيُنفَّذُ دونَ انتِظار (د53)، وأَمانُ حِسابٍ لا مُحتَوىً في المَتجَر — كانَ «السَماحُ» و«التَعليقُ» يَرُدّانِه بِـ`store_locked` ولا يُمحى شَيء.
+
+        // ─── «بَياناتي» — تَنزيلُ المِلَفِّ الآليّ (‏2026-10-29، قَرارُ المالِك د53 «ج») ─────────────────────
+        // قِراءَةٌ لا كِتابَة: الاستِعلامُ نَفسُه الَّذي تَرسُمُه صَفحَةُ `/{slug}/me/data` (`UserDataQueries.ExportAsync`)، بِصيغَةِ JSON.
+        // والحارِسُ في التَوقيع (`.RequireAuth()` — جَلسَةُ صاحِبِ البَيانات، ومُعَرِّفُه مِنها لا مِن الطَلَب)، و`no-store` لِأَنَّ المِلَفَّ
+        // بَياناتٌ شَخصِيَّةٌ لا تُحفَظُ في وَسيطٍ ولا في ذاكِرَةِ المُتَصَفِّحِ المُشتَرَكَة.
+        app.MapGet("/{slug}/me/data/download",
+            async (string slug, HttpContext http, Services.Queries.UserDataQueries data, ACommerce.Kit.Culture.ICultureContext culture) =>
+        {
+            var export = await data.ExportAsync(slug, http.UserId(), DateTime.UtcNow, http.RequestAborted);
+            if (export is null) return Results.Redirect(Link(http.Request, slug, "me"));
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.File(Services.Queries.UserDataExport.ToJsonBytes(export), "application/json; charset=utf-8",
+                Services.Queries.UserDataExport.FileName(slug, export.GeneratedAt, culture.TimeZone));
+        }).RequireAuth();
 
         // ─── Plans subscribe ────────────────────────────────────────────
         // **الباقَةُ بِسِعرٍ لا تُباعُ مِن هُنا إطلاقاً.** كانَ الجِسمُ
@@ -816,15 +1114,18 @@ public static class MarketplaceTemplateExtensions
         //
         // **والمَجّانِيَّة لَم تُمَسّ**: `Price == 0` تُمنَح ذاتِيّاً
         // بِنَفس الحَدَث ونَفس المَجرى.
+        //
+        // **والمُدخَلُ رابِطٌ تُصَيِّرُه `PlanPay` لا «يَقبِض»** (‏ADR-032 الخُطوَة 8، ‏2026-10-12 — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
+        // `Tenant.PaymentProviderConfigured`، وصارَ يَصدُقُ لِمِفتاحٍ مَختومٍ بِلا رابِط — فَتُحالُ الباقَةُ إلى صَفحَةٍ بِلا رابِط.
         app.MapPost("/{slug}/plans/{planId}/subscribe",
             async (string slug, string planId, HttpRequest req, IDocumentStore store,
-                   Services.Queries.TenantDirectory tenants) =>
+                   Services.TenantProviderService providers) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/plans"));
             var (userId, _, _) = parsed.Value;
-            var configured = (await tenants.FindAsync(slug))?.PaymentProviderConfigured ?? false;
+            var configured = (await providers.ForAsync(slug)).PlansPayable;
 
             await using var s = store.LightweightSession(slug);
             var outcome = await Services.Subscriptions.PlanSubscribeService.SubscribeAsync(
@@ -840,13 +1141,13 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Support open ticket ────────────────────────────────────────
         app.MapPost("/{slug}/support/open",
-            async (string slug, HttpRequest req, IDocumentStore store) =>
+            async (string slug, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
             var subject = req.Form["subject"].ToString().Trim();
             var body    = req.Form["body"].ToString().Trim();
             if (subject.Length == 0 || body.Length == 0) return Results.Redirect(Link(req, slug, $"support"));
@@ -857,38 +1158,39 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"support"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Report listing — يَفتَح طَلَب دَعم مُسبَق التَعبِئَة ─────────
         app.MapPost("/{slug}/listings/{id:guid}/report",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
 
             var reason = req.Form["reason"].ToString().Trim();
             var note   = req.Form["note"].ToString().Trim();
             if (string.IsNullOrEmpty(reason)) reason = "غَير مُحَدَّد";
 
             await using var s = store.LightweightSession(slug);
+            // ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢) النُصوصُ الثَلاثَةُ بِحَرفِها مِن `ListingReport` — المَحوُ يَربِطُ الإشعارَ بِتَذكِرَتِه بِها.
             var ev = new ACommerce.Kit.Support.TicketCreated(
                 Guid.NewGuid(), userId, userName,
-                Subject: $"تَبليغ: {reason}",
+                Subject: Services.Listings.ListingReport.TicketSubject(reason),
                 Body:    $"الإعلان: /{slug}/listings/{id}\nالسَّبَب: {reason}\n\n{note}",
                 At:      DateTime.UtcNow);
             s.Events.StartStream<ACommerce.Kit.Support.Ticket>(ev.Id, ev);
             await s.SaveChangesAsync();
             await NotifyAdminsAsync(store, slug, "report",
-                $"بَلاغ: {reason}",
-                $"{userName} بَلَّغَ عَن إعلان",
-                $"/admin/tenants/{slug}/tickets");
+                Services.Listings.ListingReport.NoticeTitle(reason),
+                Services.Listings.ListingReport.NoticeBody(userName),
+                Services.Listings.ListingReport.NoticeUrl(slug, id));
             return Results.Redirect(Link(req, slug, $"listings/{id}?reported=1"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Create listing — gates: auth + terms + permission ──────────
@@ -972,7 +1274,8 @@ public static class MarketplaceTemplateExtensions
                 {
                     await using var stream = f.OpenReadStream();
                     var key = $"tenants/{slug}/listings/{id}/{photoUrls.Count}.{ext}";
-                    var stored = await files.UploadAsync(key, stream, f.ContentType);
+                    // ‏(‏2026-11-12، W13-6·١٣) كُلُّ صورَةٍ رَفعٌ مَعدودٌ بِمُعَرِّفِ نِداءٍ جَديد.
+                    var stored = await files.UploadAsync(ProviderCall.ForChannel(OutboundUnits.FileUpload, slug, ProviderCall.FreshRequestId()), key, stream, f.ContentType);
                     photoUrls.Add(stored.PublicUrl);
                 }
                 catch { /* صَورَة فاشِلَة لا تَكسِر الإعلان */ }
@@ -990,7 +1293,8 @@ public static class MarketplaceTemplateExtensions
             // (الإلحاق بِنُسخَة مُتَوَقَّعَة). الخاسِر يُعيد القِراءَة
             // مَرَّةً واحِدَة، فَإن نَفِدَ الرَصيد فَالجَواب <b>مَنع
             // صَريح بِرِسالَتِه</b> لا فَشَل غامِض ولا خَمسُمِئَة.
-            var nudged = new HashSet<Guid>();
+            // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) لِكُلِّ مُستَخدِمٍ أَوَّلُ إشعارٍ كُتِبَ لَه — مُعَرِّفُه مِفتاحُ الإرسالِ المَعدود (كانَ `HashSet<Guid>` بِالمُستَخدِمِ وَحدَه).
+            var nudged = new Dictionary<Guid, Guid>();
             var quotaExhausted = false;
 
             async Task<bool> AttemptAsync()
@@ -1039,9 +1343,10 @@ public static class MarketplaceTemplateExtensions
                 foreach (var ss in savedSearches)
                 {
                     if (!ss.Matches(newListing)) continue;
+                    var matchNotice = Guid.NewGuid();
                     s.Store(new ACommerce.Kit.Notifications.Notification
                     {
-                        Id = Guid.NewGuid(),
+                        Id = matchNotice,
                         UserId = ss.UserId,
                         Type = "saved_search_match",
                         Title = l.Format("notifications.saved_search.title", ss.Label),
@@ -1049,7 +1354,7 @@ public static class MarketplaceTemplateExtensions
                         RelatedUrl = $"/{slug}/listings/{id}",
                         At = DateTime.UtcNow
                     });
-                    nudged.Add(ss.UserId);
+                    nudged.TryAdd(ss.UserId, matchNotice);
                 }
 
                 try
@@ -1074,10 +1379,10 @@ public static class MarketplaceTemplateExtensions
             if (quotaExhausted)
                 return Results.Redirect(Link(req, slug, $"create-listing?err=quota"));
 
-            foreach (var uid in nudged)
+            foreach (var (uid, matchNotice) in nudged)
             {
                 await NudgeAsync(hub, slug, uid);
-                await push.SendAsync(store, slug, uid,
+                await push.SendAsync(store, slug, uid, matchNotice,
                     l["notifications.saved_search.push_title"],
                     title,
                     url: $"/{slug}/listings/{id}",
@@ -1088,7 +1393,7 @@ public static class MarketplaceTemplateExtensions
                 title,
                 $"/{slug}/listings/{id}", hub);
             return Results.Redirect(Link(req, slug, $"listings/{id}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireTerms()
           .RequirePermission("listing.create")
           // الحارِس مُعلَن في التَوقيع لا في الجِسم (القاعِدَة ٦): يَرُدّ
           // قَبل رَفع الصُوَر، والحَسم الذَرِّيّ في ConsumeAsync داخِل
@@ -1132,7 +1437,7 @@ public static class MarketplaceTemplateExtensions
 
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?saved=1"));
-        }).DisableAntiforgery().RequireAuth().RequireListingOwner()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireListingOwner()
           .RequireStoreWritable();
 
         // ─── Delete listing — نَفسُ الحارِسَين ونَفسُ الخِدمَة ──────────
@@ -1192,7 +1497,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(Link(req, slug, $"me/searches?saved=1"));
 
             static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/searches/{id:guid}/delete",
@@ -1234,7 +1539,7 @@ public static class MarketplaceTemplateExtensions
 
         // ─── Submit offer on a listing ──────────────────────────────────
         app.MapPost("/{slug}/listings/{id:guid}/offers",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames) =>
         {
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
@@ -1244,7 +1549,7 @@ public static class MarketplaceTemplateExtensions
 
             if (!await HasPermissionAsync(req.HttpContext, slug, userId, "offer.submit", store))
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=forbidden"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "—";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "—";
 
             var priceStr = req.Form["price"].ToString().Trim();
             var message  = req.Form["message"].ToString().Trim();
@@ -1266,7 +1571,11 @@ public static class MarketplaceTemplateExtensions
 
             await using var s = store.LightweightSession(slug);
             var listing = await s.Events.AggregateStreamAsync<Listing>(id);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1) ولا عَرضَ عَلى إعلانٍ مَحذوفٍ أَو أَغلَقَ مالِكُه حِسابَه: الحَذفُ يَسحَبُ إعلاناتِه (`ListingDeleted`)، وكانَ
+            // هذا البابُ لا يَسأَلُ `IsDeleted` فَيولَدُ عَرضٌ عَلى إعلانٍ لا يَراه أَحَد؛ ولِحِسابٍ حُذِفَ قَبلَ ذلك `CheckoutCart.OwnerGone` القاعِدَةُ نَفسُها لِلسَلَّة.
+            if (listing.IsDeleted || await Services.Deals.CheckoutCart.OwnerGoneAsync(s, listing))
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
             // مَنع صاحِب الإعلان مِن تَقديم عَرض عَلى نَفسه.
             if (listing.Attributes.TryGetValue("owner_id", out var ownerStr2) &&
                 ownerStr2 == userId.ToString())
@@ -1275,9 +1584,11 @@ public static class MarketplaceTemplateExtensions
             // مَنع تَقديم عَرض جَديد إن كانَ السائِق في رِحلَة نَشِطَة، أَو
             // إن قَطَع رِحلَة في آخِر ٥ دَقائِق (تَهدِئَة لِمَنع الاستِغلال).
             var matches = await s.Query<ACommerce.Kit.Offers.ListingMatch>().ToListAsync();
-            var active = matches.FirstOrDefault(m =>
-                m.OffererId == userId &&
-                m.Status == ACommerce.Kit.Offers.TripStatus.Active);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٣ — F2B-1) والرِحلَةُ عَلى إعلانٍ مَحذوفٍ لَيسَت نَشِطَة (`AccountErasure.LiveTrip`): صَفحَتُه لا تَرسُمُ استِمارَةَ إنهاءٍ ولا إلغاء،
+            // فَكانَ السائِقُ يُحَوَّلُ إلَيها عَن كُلِّ عَرضٍ جَديدٍ ولا نَقرَةَ تُخرِجُه — ويُحَرِّرُ هذا مَن عَلِقَ بِحَذفٍ صَريحٍ أَو بِحَذفِ حِسابٍ قَبلَ مَنعِ الحَذفِ بِالرِحلَة.
+            ACommerce.Kit.Offers.ListingMatch? active = null;
+            foreach (var m in matches.Where(m => m.OffererId == userId && m.Status == ACommerce.Kit.Offers.TripStatus.Active))
+                if (Services.Identity.AccountErasure.LiveTrip(m, await s.LoadAsync<Listing>(m.Id))) { active = m; break; }
             if (active is not null)
                 return Results.Redirect(Link(req, slug, $"listings/{active.Id}?err=active_trip"));
             var lastAbort = matches
@@ -1306,12 +1617,12 @@ public static class MarketplaceTemplateExtensions
             s.Events.StartStream<ACommerce.Kit.Offers.Offer>(oid, ev);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{id}?offer=submitted"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Accept an offer (listing owner) ────────────────────────────
         app.MapPost("/{slug}/offers/{id:guid}/accept",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store, L l,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, L l, Services.Queries.AccountQueries actorNames,
                    Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
                    ACommerce.Templates.Customer.Marketplace.Services.WebPushService push) =>
         {
@@ -1331,10 +1642,17 @@ public static class MarketplaceTemplateExtensions
             // القَبول عَن غَير المالِك لكِنّ التَّحَقُّق هُنا هو الحاجِز
             // الفِعليّ.
             var listing = await s.Events.AggregateStreamAsync<Listing>(offer.ListingId);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
             if (!listing.Attributes.TryGetValue("owner_id", out var ownerStr) ||
                 ownerStr != acceptorId.ToString())
                 return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err=not_owner"));
+            // ‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ د52 (١)) عَرضُ حِسابٍ حُذِفَ لا يُقبَل — بَعدَ المالِكِ لا قَبلَه (القاعِدَة ٦): الحَذفُ يَسحَبُ المُعَلَّق
+            // (`AccountErasure.EraseEvents`)، وهذا لِعَرضٍ سَبَقَ حَذفُه ذلك؛ وإلّا وُلِدَت مُطابَقَةٌ ومُحادَثَةٌ مَعَ حِسابٍ لا وُجودَ لَه.
+            if (Services.Identity.AccountErasure.OffererGone(await s.LoadAsync<User>(offer.OffererId)))
+                return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err={Services.Identity.AccountErasure.OffererGoneCode}"));
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO8) وعَرضٌ انتَهَت مُدَّتُه لا يُقبَل — بَعدَ المالِكِ وقَبلَ أَيِّ كِتابَة؛ وصَفحَتا الإعلانِ و«عُروضي» تَسأَلانِ الدالَّةَ نَفسَها.
+            if (ACommerce.Kit.Offers.OfferExpiry.ExpiredAt(offer, DateTime.UtcNow))
+                return Results.Redirect(Link(req, slug, $"listings/{offer.ListingId}?err={ACommerce.Kit.Offers.OfferExpiry.Code}"));
 
             var now = DateTime.UtcNow;
             s.Events.Append(id, new ACommerce.Kit.Offers.OfferAccepted(id, now));
@@ -1363,7 +1681,7 @@ public static class MarketplaceTemplateExtensions
 
             // افتَح مُحادَثَة مُؤَقَّتَة لِلتَنسيق — تَنتَهي بَعد 24 ساعَة.
             // الـ Owner هُنا = المُتَّصِل (مالِك الإعلان)، Partner = مُقَدِّم العَرض.
-            var acceptorName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            var acceptorName = await actorNames.ActorNameAsync(slug, acceptorId) ?? "أنا";
             var conv = new Conversation
             {
                 Id = Guid.NewGuid(),
@@ -1378,9 +1696,10 @@ public static class MarketplaceTemplateExtensions
             s.Store(conv);
 
             // إشعار لِلسائِق بِأَنّ عَرضَه قُبِلَ.
+            var acceptedNotice = Guid.NewGuid();
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = acceptedNotice,
                 UserId = offer.OffererId,
                 Type = "offer_accepted",
                 Title = l["notifications.offer_accepted.title"],
@@ -1392,7 +1711,7 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             // أَخطِر السائِق فَوراً — الإشعار + المُحادَثَة ظَهَرا.
             await NudgeAsync(hub, slug, offer.OffererId);
-            await push.SendAsync(store, slug, offer.OffererId,
+            await push.SendAsync(store, slug, offer.OffererId, acceptedNotice,
                 l["notifications.offer_accepted.title"],
                 l.Format("notifications.offer_accepted.push_body", acceptorName, offer.Price),
                 url: $"/{slug}/chats/{conv.Id}",
@@ -1413,7 +1732,7 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
-                return Results.Redirect($"/{slug}");
+                return Results.Redirect(Home(req, slug));
 
             // فَقَط مالِك الإعلان يَستَطيع رَفض عَرض (مَن أَرادَ سَحب
             // عَرضِه يَستَخدِم /withdraw).
@@ -1459,7 +1778,7 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect(Link(req, slug, $"listings/{listingId}?err=not_driver"));
 
             var listing = await s.Events.AggregateStreamAsync<Listing>(listingId);
-            if (listing is null) return Results.Redirect($"/{slug}");
+            if (listing is null) return Results.Redirect(Home(req, slug));
 
             // قارِن المَسافَة بَين مَوقِع السائِق وَ نُقطَة الانطِلاق.
             if (listing.Attributes.TryGetValue("pickup_lat", out var plat) &&
@@ -1472,7 +1791,7 @@ public static class MarketplaceTemplateExtensions
                 var dKm = ACommerce.Kit.Offers.OfferHelpers.DistanceKm(lat, lng, pLat, pLng);
                 if (dKm > 1.0)   // عَتَبَة 1 كم — يُمكِن جَعلُها قابِلَة لِلتَكوين
                     return Results.Redirect(
-                        $"/{slug}/listings/{listingId}?err=too_far&dist={dKm:0.#}");
+                        Home(req, slug, $"listings/{listingId}?err=too_far&dist={dKm:0.#}"));
             }
 
             match.ArrivedAt = DateTime.UtcNow;
@@ -1481,9 +1800,10 @@ public static class MarketplaceTemplateExtensions
             s.Store(match);
 
             // أَخطِر الراكِب — السائِق وَصَل.
+            var arrivedNotice = Guid.NewGuid();
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = arrivedNotice,
                 UserId = ParseListingOwnerId(listing) ?? Guid.Empty,
                 Type = "driver_arrived",
                 Title = l["notifications.driver_arrived.title"],
@@ -1497,14 +1817,14 @@ public static class MarketplaceTemplateExtensions
             if (ownerGuid.HasValue)
             {
                 await NudgeAsync(hub, slug, ownerGuid.Value);
-                await push.SendAsync(store, slug, ownerGuid.Value,
+                await push.SendAsync(store, slug, ownerGuid.Value, arrivedNotice,
                     l["notifications.driver_arrived.title"],
                     l.Format("notifications.driver_arrived.body", match.OffererName),
                     url: $"/{slug}/listings/{listingId}",
                     tag: $"arrived-{listingId}");
             }
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=arrived"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Trip lifecycle — complete / abort ──────────────────────────
@@ -1589,7 +1909,7 @@ public static class MarketplaceTemplateExtensions
             }
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"listings/{listingId}?trip=aborted"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/offers/{id:guid}/withdraw",
@@ -1603,7 +1923,7 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var offer = await s.Events.AggregateStreamAsync<ACommerce.Kit.Offers.Offer>(id);
             if (offer is null || offer.Status != ACommerce.Kit.Offers.OfferStatus.Pending)
-                return Results.Redirect($"/{slug}");
+                return Results.Redirect(Home(req, slug));
             // فَقَط مُقَدِّم العَرض يَسحَب عَرضَه.
             if (offer.OffererId != offererId)
                 return Results.Redirect(Link(req, slug, $"me/offers"));
@@ -1670,24 +1990,26 @@ public static class MarketplaceTemplateExtensions
         // مُلائِمَة. الـ scope يُحدِّد حَدّ الـ PWA — تَنَقُّل المُستَخدِم
         // خارِجَه يَفتَحه المُتَصَفِّح كَ صَفحَة عاديَّة. لِمَتاجِر بِلا
         // أَدوار (ashare/ejar) نَعرِض manifest عَلى /{slug} بِلا role.
+        // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والبَيانُ يَتبَعُ المُضيفَ الَّذي يُطلَبُ عَلَيه —
+        // `PwaManifestDecision.AppBase`: عَلى مُضيفِ المَتجَرِ `/` و`/r/{role}/`، وفي وَضعِ المَسارِ كَما كان (`LivePwaManifestCharacterizationTests`).
         app.MapGet("/api/{slug}/manifest.json", async (
-            string slug, IDocumentStore store) =>
-            await BuildManifestAsync(slug, role: null, store));
+            string slug, HttpRequest req, IDocumentStore store) =>
+            await BuildManifestAsync(slug, role: null, store, Services.Ux.StoreUrl.ViewOf(req.HttpContext)));
 
         app.MapGet("/api/{slug}/r/{role}/manifest.json", async (
-            string slug, string role, IDocumentStore store) =>
-            await BuildManifestAsync(slug, role, store));
+            string slug, string role, HttpRequest req, IDocumentStore store) =>
+            await BuildManifestAsync(slug, role, store, Services.Ux.StoreUrl.ViewOf(req.HttpContext)));
 
         // أَيقونَة تِلقائيَّة SVG — تَستَخدِم لَون المَتجَر + الحَرف الأَوَّل
         // مِن اسم الدَور (أَو إيموجي الدَور إن كانَ مَضبوطاً). إذا كانَ
         // المُصَمِّم رَفَعَ أَيقونَة مُخَصَّصَة (Role.PwaIconUrl) نُحَوِّل لَها.
         app.MapGet("/api/{slug}/icon.svg", async (
-            string slug, IDocumentStore store) =>
-            await BuildIconAsync(slug, role: null, store));
+            string slug, IDocumentStore store, HttpResponse res) =>
+            await BuildIconAsync(slug, role: null, store, res));
 
         app.MapGet("/api/{slug}/r/{role}/icon.svg", async (
-            string slug, string role, IDocumentStore store) =>
-            await BuildIconAsync(slug, role, store));
+            string slug, string role, IDocumentStore store, HttpResponse res) =>
+            await BuildIconAsync(slug, role, store, res));
 
         // ─── بِطاقَة المُشارَكَة — PNG نُقَطِيّ ──────────────────────────
         // أَيقونَة الـ PWA أَعلاه SVG، وأَكثَر مِنَصّات المُشارَكَة
@@ -1731,26 +2053,22 @@ public static class MarketplaceTemplateExtensions
             if (parsed is null) return Results.Unauthorized();
             var (userId, _, _) = parsed.Value;
 
-            using var doc = await System.Text.Json.JsonDocument.ParseAsync(req.Body);
-            var root = doc.RootElement;
-            var endpoint = root.GetProperty("endpoint").GetString() ?? "";
-            var keys = root.GetProperty("keys");
-            var p256dh = keys.GetProperty("p256dh").GetString() ?? "";
-            var auth   = keys.GetProperty("auth").GetString() ?? "";
-            if (string.IsNullOrEmpty(endpoint)) return Results.BadRequest();
+            // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-12) كانَ الشَرطُ «عُنوانٌ غَيرُ فارِغ» وَحدَه — فَأَيُّ عُنوانٍ يُحفَظُ ويَطرُقُه الخادِمُ
+            // بِـPOST، والقائِمَةُ بِلا حَدّ. ما يُقبَلُ قَرارُ `PushSubscriptionDoor` (‏https عَلى مُضيفي خِدماتِ الإشعار، ومَفتاحا المُتَصَفِّح)، وحَقلٌ
+            // ناقِصٌ ‏400 لا ‏500؛ و`Keep` يَحِلُّ مَحَلَّ صَفِّ الجِهازِ نَفسِه ويُبقي الأَحدَث.
+            var sub = await Services.PushSubscriptionDoor.ReadAsync(req.Body, DateTime.UtcNow);
+            if (sub is null) return Results.BadRequest();
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
-            if (user is null) return Results.NotFound();
-            // اِستَبدِل subscription بِنَفس الـ endpoint (نَفس الجِهاز/المُتَصَفِّح)
-            user.PushSubscriptions.RemoveAll(p => p.Endpoint == endpoint);
-            user.PushSubscriptions.Add(new ACommerce.Kit.Auth.PushSubscription
+            // ‏(‏2026-10-29، G-1) يُنادى في كُلِّ صَفحَة، وكانَ حِفظُه الكامِلُ يُعيدُ إصدارَ جَلسَةٍ رُفِعَ بَينَ قِراءَتِه وحِفظِه — والآن الاشتِراكُ
+            // وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            // ‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ لِلمَسار F1) والجَلسَةُ تُسأَلُ عَلى القِراءَةِ الجَديدَةِ (`StillOpen`) — كانَ طَلَبٌ عَبَرَ البَوّابَةَ قَبلَ
+            // «اخرج من كل الأجهزة» وقَرَأَ بَعدَه يَكتُبُ عُنوانَ السارِقِ عَلى الحِسابِ المَرفوع؛ والجَلسَةُ المُغلَقَةُ ‏401 كَالرَمزِ الغائِب.
+            var saved = await AccountWrites.UpdateAsync<User>(store, slug, userId, user =>
             {
-                Endpoint = endpoint, P256dh = p256dh, Auth = auth,
-                CreatedAt = DateTime.UtcNow
-            });
-            s.Store(user);
-            await s.SaveChangesAsync();
+                Services.PushSubscriptionDoor.Keep(user.PushSubscriptions, sub);
+                return true;
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
+            if (saved is null) return Results.Unauthorized();
             return Results.Ok();
         }).DisableAntiforgery();
 
@@ -1764,19 +2082,25 @@ public static class MarketplaceTemplateExtensions
         {
             var userId = http.UserId();
             var role   = http.Role();
+            // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) تَحويلاتُ هذا البابِ الثَلاثَةُ عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤)
+            // لا رابِطُ تَنَقُّل (`LinkFor`): القَبولُ يُرسَلُ مِن صَفحَةِ الشُروطِ عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة، وما بَعدَه هُناك.
             // نَفس القَرار الواحِد — كانَ StartsWith("/") وَحدَه هُنا أَيضاً.
             var returnUrl = Services.LocalRedirect.Resolve(
-                req.Query["returnUrl"].ToString(), AuthSession.LinkFor(slug, role, ""));
+                req.Query["returnUrl"].ToString(), Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, ""));
 
             var cmd = new Commands.AcceptTermsCommand(userId, slug, TermsPolicy.CurrentVersion);
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٦) قَبولُ الشُروطِ سِجِلٌّ يَبقى بَعدَ الجَلسَة — فَيُكتَبُ مِن جَلسَةٍ مَفتوحَةٍ عَلى القِراءَةِ الجَديدَةِ وَحدَها.
+            var token = AuthSession.ResolveToken(req, slug);
+            bool accepted;
             try
             {
-                await pipeline.ExecuteAsync(cmd, () => handler.HandleAsync(cmd));
+                accepted = await pipeline.ExecuteAsync(cmd, () => handler.HandleAsync(cmd, admit: u => Services.SessionVersionGate.StillOpen(u, token)));
             }
             catch (Gates.GateDeniedException ex)
             {
-                return Results.Redirect(AuthSession.LinkFor(slug, role, $"login?err={ex.GateName}"));
+                return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, $"login?err={ex.GateName}"));
             }
+            if (!accepted) return Results.Redirect(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(http), slug, role, "login?err=auth"));
             return Results.Redirect(returnUrl);
         }).DisableAntiforgery().RequireAuth();
 
@@ -1825,36 +2149,45 @@ public static class MarketplaceTemplateExtensions
             if (radius < 0) radius = 0;
             if (radius > 500) radius = 500;
 
-            await using var s = store.LightweightSession(slug);
-            var user = await s.LoadAsync<User>(userId);
+            // ‏(‏2026-10-29، G-1) المِنطَقَةُ وَحدَها عَلى قِراءَةٍ جَديدَة، ويُعادُ تَطبيقُها مَرَّةً إن سَبَقَه كاتِب.
+            var user = await AccountWrites.UpdateAsync<User>(store, slug, userId, u =>
+            {
+                u.AnchorLat = lat;
+                u.AnchorLng = lng;
+                u.RadiusKm  = radius;
+                u.UpdatedAt = DateTime.UtcNow;
+                return true;
+            }, admit: u => Services.SessionVersionGate.StillOpen(u, token));
             if (user is null) return Results.Redirect(Link(req, slug, $"me"));
-            user.AnchorLat = lat;
-            user.AnchorLng = lng;
-            user.RadiusKm  = radius;
-            user.UpdatedAt = DateTime.UtcNow;
-            s.Store(user);
-            await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"me/area?saved=1"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Start direct chat with another user ────────────────────────
-        // مُستَخدَم في صَفحَة /{slug}/drivers — العَميل يَفتَح مُحادَثَة
-        // مُباشَرَة مَع سائِق بِلا حاجَة لِنَشر طَلَب مِشوار.
+        // مُستَهلِكان: صَفحَةُ /{slug}/drivers — مَولِدُه — (العَميل يَفتَح مُحادَثَة
+        // مُباشَرَة مَع سائِق بِلا حاجَة لِنَشر طَلَب مِشوار)، وزِرُّ «تَواصَل مَع
+        // البائِع» عَلى صَفحَةِ الصَفقَة `MyDealDetail.razor` (‏S1·٧). كانَ يُسقِطُ
+        // كُلَّ فَشَلٍ عَلى `/drivers` — فَمُشتَرٍ حُذِفَ حِسابُ بائِعِه يُقذَفُ إلى
+        // صَفحَةِ السائِقينَ بِلا كَلِمَة. فَصارَ يَقرَأُ مَنشَأَه مِن `returnUrl`
+        // (بِـ`LocalRedirect.Resolve` القائِمَة — القاعِدَة ٨ — وإلّا مَسقَطُ الرَأس)
+        // ويَعودُ إلَيه عِندَ الطَرَفِ المَحذوفِ بِرَمزِه (`ChatStartReturn.Failure`).
+        // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) **وكانَ ذلك كاذِباً لِلمَحذوفِ بِالحَذف**: السُؤالُ كانَ `partner is null`، والحَذفُ يُبقي الوَثيقَةَ
+        // بِـ`DeletedAt` (`AccountDeletion.Erase`) فَتُفتَحُ المُحادَثَةُ مَعَه. فَصارَ يَسأَلُ `AccountErasure.PartnerGone` — غائِبٌ أَو مَحذوف — قَبلَ أَيِّ قِراءَةٍ أُخرى.
         app.MapPost("/{slug}/users/{userId:guid}/chat",
-            async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l) =>
+            async (string slug, Guid userId, HttpRequest req, IDocumentStore store, L l, Services.Queries.AccountQueries actorNames) =>
         {
+            var origin = Services.LocalRedirect.Resolve(req.Form["returnUrl"].ToString(), Link(req, slug, $"drivers"));
             var token = AuthSession.ResolveToken(req, slug);
             var parsed = AuthHandlers.ParseToken(token);
-            if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/drivers"));
+            if (parsed is null) return Results.Redirect(Link(req, slug, Services.ChatStartReturn.Login(origin)));
             var (meId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, $"login"));
-            if (meId == userId) return Results.Redirect(Link(req, slug, $"drivers"));
-            var meName = AuthSession.ResolveUserName(req, slug) ?? "أنا";
+            if (meId == userId) return Results.Redirect(origin);
+            var meName = await actorNames.ActorNameAsync(slug, meId) ?? "أنا";
 
             await using var s = store.LightweightSession(slug);
             var partner = await s.LoadAsync<User>(userId);
-            if (partner is null) return Results.Redirect(Link(req, slug, $"drivers"));
+            if (Services.Identity.AccountErasure.PartnerGone(partner)) return Results.Redirect(Services.ChatStartReturn.Failure(origin, Services.ChatStartReturn.PartnerMissing));
 
             // ابحَث عَن مُحادَثَة قائِمَة بَين الاثنَين (بِلا ListingId).
             var existing = (await s.Query<Conversation>()
@@ -1865,12 +2198,14 @@ public static class MarketplaceTemplateExtensions
             if (existing is not null)
                 return Results.Redirect(Link(req, slug, $"chats/{existing.Id}"));
 
+            // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-3؛ د40 «ج») واسمُ الطَرَفِ بِالقاعِدَةِ الَّتي يُكتَبُ بِها كُلُّ اسمِ فاعِل — اسمُ النَشاطِ حَيثُ وُجِد (`ActorName.Of`)
+            // كَـ`meName` أَعلاه — وكانَ `partner.FullName` فَيَظهَرُ البائِعُ «عُضو جَديد» في المُحادَثَةِ الَّتي تُفتَحُ مِن صَفحَةِ الصَفقَة.
             var conv = new Conversation
             {
                 Id = Guid.NewGuid(),
                 OwnerId = meId, OwnerName = meName,
-                PartnerId = partner.Id, PartnerName = partner.FullName,
-                Subject = l.Format("chats.direct.subject", partner.FullName),
+                PartnerId = partner.Id, PartnerName = Services.Queries.ActorName.Of(partner),
+                Subject = l.Format("chats.direct.subject", Services.Queries.ActorName.Of(partner)),
                 ListingId = null,
                 LastAt = DateTime.UtcNow,
                 // مُحادَثَة عامَّة بِلا TTL — لَيسَت مُؤَقَّتَة كَالمَشوار.
@@ -1879,7 +2214,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(conv);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, $"chats/{conv.Id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── تَعليمُ مُحادَثَةٍ مَقروءَة — أَمرٌ صَريح لا أَثَرٌ في عَرض ──
@@ -1953,32 +2288,40 @@ public static class MarketplaceTemplateExtensions
             if (conv is null) return Results.Redirect(Link(req, slug, $"chats"));
             if (conv.OwnerId != userId && conv.PartnerId != userId) return Forbidden();
             if (conv.IsExpired) return Results.Redirect(Link(req, slug, $"chats/{conversationId}?err=expired"));
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه da21e91) الطَرَفُ الآخَرُ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) — يُرَدُّ قَبلَ الرِسالَةِ والإشعار،
+            // وكانَ يُحفَظانِ ويَصِلُ الإشعارُ حِساباً مَمحُوّاً. والغُرفَةُ لا تَرسُمُ الاستِمارَةَ لَه بِالسُؤالِ نَفسِه.
+            var recipientId = userId == conv.OwnerId ? conv.PartnerId : conv.OwnerId;
+            if (Services.Identity.AccountErasure.PartnerGone(await s.LoadAsync<User>(recipientId))) return Results.Redirect(Link(req, slug, $"chats/{conversationId}?err={Services.ChatStartReturn.PartnerMissing}"));
 
             var msg = new Message
             {
                 Id = Guid.NewGuid(), ConversationId = conversationId,
                 SenderId = userId, Body = body, SentAt = DateTime.UtcNow
             };
-            s.Store(msg);
+            // ‏(‏2026-11-12، W13-6·٩ — تَوصيفُه 09859e2) `Insert` لا `Store`: الرِسالَةُ تولَدُ هُنا بِمُعَرِّفٍ جَديدٍ في كُلِّ إرسال، وعَدُّها (`chat.message`)
+            // يَقرَأُ وِلادَتَها مِن `Inserts` وَحدَها — و`Store` إدراجٌ-أَو-تَحديثٌ لا يُمَيِّزُها. وما يَكتُبُه البابُ بِحَرفِه (التَوصيفُ أَخضَرُ بِلا مَسّ).
+            s.Insert(msg);
             conv.LastMessage = body.Length > 100 ? body[..100] : body;
             conv.LastAt = msg.SentAt;
             // أَنشِئ إشعاراً لِلطَّرَف الآخَر — يَظهَر في /notifications +
             // عَلى جَرَس الـ topnav. تَحَقُّق سَريع: لا تُكَرِّر إشعاراً عَلى
             // نَفس المُحادَثَة في آخِر ٣٠ ثانِيَة لِتَفادي السپام لَو أَرسَل
             // المُستَخدِم رَسائِل مُتَتالِيَة.
-            var recipientId = userId == conv.OwnerId ? conv.PartnerId : conv.OwnerId;
             var senderName  = userId == conv.OwnerId ? conv.OwnerName  : conv.PartnerName;
-            var since = DateTime.UtcNow.AddSeconds(-30);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) الحَدُّ بِلا `Kind=Utc` (`ModelCallRecord.Instant`): Marten يُقارِنُ `At` عَموداً بِلا مِنطَقَة، وكانَ Npgsql
+            // يَرُدُّ `DateTime.UtcNow…` فَيَرمي البابُ قَبلَ أَيِّ حِفظٍ لِكُلِّ رِسالَة.
+            var since = Services.Metering.ModelCallRecord.Instant(DateTime.UtcNow.AddSeconds(-30));
             var hasRecent = await s.Query<ACommerce.Kit.Notifications.Notification>()
                 .AnyAsync(n => n.UserId == recipientId &&
                                n.Type == "chat_message" &&
                                n.RelatedUrl == $"/{slug}/chats/{conversationId}" &&
                                n.At > since);
+            var chatNotice = Guid.NewGuid();
             if (!hasRecent)
             {
                 s.Store(new ACommerce.Kit.Notifications.Notification
                 {
-                    Id = Guid.NewGuid(),
+                    Id = chatNotice,
                     UserId = recipientId,
                     Type = "chat_message",
                     Title = l.Format("notifications.chat_message.title", senderName),
@@ -1993,13 +2336,13 @@ public static class MarketplaceTemplateExtensions
             await s.SaveChangesAsync();
             await NudgeAsync(hub, slug, recipientId);
             if (!hasRecent)
-                await push.SendAsync(store, slug, recipientId,
+                await push.SendAsync(store, slug, recipientId, chatNotice,
                     l.Format("notifications.chat_message.title", senderName),
                     conv.LastMessage ?? "—",
                     url: $"/{slug}/chats/{conversationId}",
                     tag: $"chat-{conversationId}");
             return Results.Redirect(Link(req, slug, $"chats/{conversationId}"));
-        }).DisableAntiforgery().RequireAuth().RequireTerms()
+        }).DisableAntiforgery().RequireFormBody().RequireAuth().RequireTerms()
           .RequireStoreWritable();
 
         // ─── Admin: create tenant ───────────────────────────────────────
@@ -2027,52 +2370,48 @@ public static class MarketplaceTemplateExtensions
             var catsRaw = f["categories"].ToString();
 
             // ── سَلاسِل الإعادَة في حالَة الخَطَأ ──
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) وما فاتَ حَدَّه يَعودُ فارِغاً — كَـ`StudioStoreCreate.Refused`:
+            // نَسخُه يَجعَلُ العُنوانَ بِطولِه فَيَضيعُ `Location`؛ وما في حَدِّه يُنسَخُ بِحَرفِه كَما كان.
+            static string Within(string v, int max) => v.Length <= max ? v : "";
             string Back(string err) => "/admin/tenants/new" + "?err=" + err
                 + "&slug="     + Uri.EscapeDataString(slug)
-                + "&name="     + Uri.EscapeDataString(name)
-                + "&tagline="  + Uri.EscapeDataString(tagline)
+                + "&name="     + Uri.EscapeDataString(Within(name, Services.Incubator.StudioStoreCreate.NameMax))
+                + "&tagline="  + Uri.EscapeDataString(Within(tagline, Services.Incubator.StudioStoreCreate.TagLineMax))
                 + "&color="    + Uri.EscapeDataString(color)
-                + "&city="     + Uri.EscapeDataString(city)
+                + "&city="     + Uri.EscapeDataString(Within(city, Services.Incubator.StudioStoreCreate.CityMax))
                 + "&channel="  + Uri.EscapeDataString(channel)
                 + "&categories=" + Uri.EscapeDataString(catsRaw);
 
             // ── فَلتَرَة ──
-            if (string.IsNullOrEmpty(slug) ||
-                !System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
-                return Results.Redirect(Back("slug_required"));
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بِشَكلِ المُعَرِّفِ الواحِد (`SlugRefusal`): كانَ
+            // `^[a-z0-9_-]+$` بِلا قائِمَةِ مَحجوز، فَيَقبَلُ `_studio` و`_platform` (أَقسامَ القاعِدَة) و`pricing`. والفارِغُ والشَكلُ رَمزُهُما القائِمُ هُنا.
+            if (Services.Incubator.TenantFromAnalysisFactory.SlugRefusal(slug) is { } slugRefused)
+                return Results.Redirect(Back(slugRefused == Services.Incubator.TenantFromAnalysisFactory.SlugReserved ? slugRefused : "slug_required"));
             if (string.IsNullOrEmpty(name))   return Results.Redirect(Back("name_required"));
             if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
                 return Results.Redirect(Back("color_invalid"));
+            // ‏(‏2026-11-07، W13-1·SEC2-C1-2) حُدودُ الاستِمارَةِ في الخادِمِ بِأَرقامِ بابِ الإنشاءِ نَفسِها — كانَت في المُتَصَفِّحِ وَحدَه.
+            if (Services.Incubator.StudioStoreCreate.LengthRefusal(name, tagline, city) is { } tooLong)
+                return Results.Redirect(Back(tooLong));
 
-            // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" ──
-            var categories = new List<ACommerce.Kit.Tenants.Category>();
-            var idx = 0;
-            foreach (var line in catsRaw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var parts = line.Split('|', StringSplitOptions.TrimEntries);
-                if (parts.Length < 2) return Results.Redirect(Back("bad_categories"));
-                var cslug = parts[0].Trim().ToLowerInvariant();
-                var clabel = parts[1].Trim();
-                if (string.IsNullOrEmpty(cslug) || string.IsNullOrEmpty(clabel))
-                    return Results.Redirect(Back("bad_categories"));
-                categories.Add(new ACommerce.Kit.Tenants.Category
-                {
-                    Slug = cslug,
-                    Label = clabel,
-                    Icon  = parts.Length > 2 ? parts[2].Trim() : "🏠",
-                    Kind  = parts.Length > 3 ? parts[3].Trim().ToLowerInvariant() : "",
-                    SortOrder = idx++
-                });
-            }
-            if (categories.Count == 0) return Results.Redirect(Back("no_categories"));
+            // ── الفِئات: كُلّ صَفّ "slug | label | icon | kind" — بِالمُحَلِّلِ المُشتَرَكِ نَفسِه ──
+            // (‏2026-10-29، قَرارُ المالِك د25 (٢-أ)): كانَت تُحَلَّلُ هُنا في الجِسمِ بِأَربَعَةِ فُروقٍ عَن
+            // `CategoriesSaveService.Parse` (الأَيقونَةُ 🏠، وعَمودُ أَيقونَةٍ فارِغٌ يُكتَبُ فارِغاً، وسَطرُ المَسافاتِ يُرَدّ، ورَمزا
+            // `bad_categories`/`no_categories`) — فَمُصادِقُ قيَمِ التَجميعِ لا يَبلُغُها. صارَت تَمُرُّ بِه، فَالكُتّابُ الثَلاثَةُ واحِد.
+            var (categories, catsCode) = CategoriesSaveService.Parse(catsRaw);
+            if (catsCode is not null) return Results.Redirect(Back(catsCode));
 
             // ── تَحَقُّق مِن عَدَم تَكرار الـ slug ──
             await using var s = store.LightweightSession();
             var existing = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
             if (existing is not null) return Results.Redirect(Back("slug_taken"));
+            // ‏(‏2026-11-07، W13-4·C2b·4) ومُضيفُ دَورٍ مُمكِنٍ لَه اسمُ مَتجَرٍ قائِم — الرَمزُ نَفسُه (`RoleHostCollision`).
+            if (await Services.TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug) is not null) return Results.Redirect(Back("slug_taken"));
 
             // ── إنشاء ──
-            s.Store(new ACommerce.Kit.Tenants.Tenant
+            // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) إدراجٌ لا upsert: مُشرِفانِ بِمُعَرِّفٍ واحِدٍ مَعاً كانَ يُقالُ لِكِلَيهِما «أُنشِئ» ويَبقى مَتجَرُ آخِرِهِما
+            // (‏4/4 جَولاتٍ مَقيسَة) — والآنَ الثاني يُرَدُّ بِـ`slug_taken` كَمَن جاءَ بَعدَ الكِتابَة.
+            s.Insert(new ACommerce.Kit.Tenants.Tenant
             {
                 Id          = slug,
                 Name        = name,
@@ -2080,7 +2419,7 @@ public static class MarketplaceTemplateExtensions
                 TagLine     = tagline,
                 City        = city,
                 AuthChannel = channel,
-                Categories  = categories,
+                Categories  = categories!,
                 CreatedAt   = DateTime.UtcNow,
                 // المُنشِئ هُوَ المالِك: كانَ المُستَأجِر يولَد يَتيماً
                 // (OwnerUserId = Guid.Empty)، فَيَرُدّ TenantAdminGuard
@@ -2088,7 +2427,8 @@ public static class MarketplaceTemplateExtensions
                 // StudioOwnershipSeeder لِأَوَّل مُستَخدِم — أَيّاً كانَ.
                 OwnerUserId = creator.User!.Id
             });
-            await s.SaveChangesAsync();
+            try { await s.SaveChangesAsync(); }
+            catch (JasperFx.DocumentAlreadyExistsException) { return Results.Redirect(Back("slug_taken")); }
             return Results.Redirect($"/admin");
         }).DisableAntiforgery();
 
@@ -2096,7 +2436,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/tenants/{slug}/users/{userId:guid}/grant-admin",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Queries.StudioQueries studioNames) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
@@ -2114,9 +2454,9 @@ public static class MarketplaceTemplateExtensions
             s.Store(user);
             await s.SaveChangesAsync();
             // تَصعيد صَلاحِيّات — يُسَجَّل دائِماً (نَفس scope الـ tenant).
-            await audit.WriteAsync(slug, auth.UserId, auth.UserName ?? "admin",
-                "user.grant_admin", "User", userId.ToString(),
-                note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+            await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
+                // ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-4) بِلا اسمِ الهَدَفِ في الحاشِيَة — المُعَرِّفُ يُسَمّي الصَفّ، والاسمُ يَبقى بَعدَ حَذفِ حِسابِه في سِجِلٍّ لا يُعَدَّل.
+                "user.grant_admin", "User", userId.ToString(), ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: "tenant_admin");
             return Results.Redirect($"/admin/tenants/{slug}/users?saved=1");
         }).DisableAntiforgery();
@@ -2124,7 +2464,7 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/tenants/{slug}/users/{userId:guid}/revoke-admin",
             async (string slug, Guid userId, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Queries.StudioQueries studioNames) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Forbidden();
@@ -2141,9 +2481,9 @@ public static class MarketplaceTemplateExtensions
             user.UpdatedAt = DateTime.UtcNow;
             s.Store(user);
             await s.SaveChangesAsync();
-            await audit.WriteAsync(slug, auth.UserId, auth.UserName ?? "admin",
-                "user.revoke_admin", "User", userId.ToString(),
-                note: user.FullName, ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
+            await audit.WriteAsync(slug, auth.UserId, await studioNames.ActorNameAsync(auth.UserId) ?? "admin",
+                // ‏(‏2026-10-30، B-PRIV-4) ولا اسمَ الهَدَفِ هُنا أَيضاً.
+                "user.revoke_admin", "User", userId.ToString(), ip: req.HttpContext.Connection.RemoteIpAddress?.ToString(),
                 before: before, after: user.ActiveRole);
             return Results.Redirect($"/admin/tenants/{slug}/users?saved=1");
         }).DisableAntiforgery();
@@ -2169,7 +2509,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/roles", $"/admin/tenants/{slug}/roles", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: decide a tenant-authored role definition ────────────
         // القَرار البَشَريّ الَّذي يُحيي تَعريفاً أَلَّفَه الوَكيل. مُعَلَّق
@@ -2201,7 +2541,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/roles?saved=1"
                 : $"/admin/tenants/{slug}/roles?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: باقَةُ المُستَأجِر في وَسايِل ───────────────────────
         // **الحارِسُ حارِسُ مُشرِفِ المَنَصَّة** — بِخِلاف نُقطَةِ
@@ -2229,7 +2569,7 @@ public static class MarketplaceTemplateExtensions
                 req.Form["grace"], req.Form["price"], DateTime.UtcNow);
 
             await using var s = store.LightweightSession();
-            var violations = Services.Subscriptions.TenantPlanAdminService.Set(
+            var violations = await Services.Subscriptions.TenantPlanAdminService.SetAsync(
                 s, slug, f.PlanId, f.StartsAt, f.ExpiresAt,
                 f.GraceDays, f.Price, by, DateTime.UtcNow);
             if (violations.Count > 0)
@@ -2237,7 +2577,7 @@ public static class MarketplaceTemplateExtensions
                     $"?err={Uri.EscapeDataString(violations[0].Code)}");
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/tenants/{slug}/plan/status",
             async (string slug, HttpRequest req, IDocumentStore store,
@@ -2260,7 +2600,7 @@ public static class MarketplaceTemplateExtensions
             if (!ok) return Results.Redirect($"/admin/tenants/{slug}/plan?err=tenant_plan_missing");
             await s.SaveChangesAsync();
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // وتَعليماتُ التَحويلِ إلى وَسايِل — نَصٌّ واحِدٌ لِلمَنَصَّة
         // كُلِّها، يَراه رائِدُ الأَعمال في الاستوديو. حَرفِيَّةٌ في
@@ -2284,7 +2624,7 @@ public static class MarketplaceTemplateExtensions
                 s, settings, req.Form["instructions"].ToString(), by, DateTime.UtcNow);
             await s.SaveChangesAsync();
             return Results.Redirect("/admin/transfer?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: propose / decide a tenant theme ─────────────────────
         // نَفس عَقد تَعريفات الأَدوار حَرفاً: اقتِراح يَكتُب **مُعَلَّقاً**،
@@ -2313,7 +2653,7 @@ public static class MarketplaceTemplateExtensions
             var (ok, msg) = await themes.ProposeAsync(slug, themeSlug, json, by);
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_propose");
             return ok ? Results.Ok(msg) : Results.BadRequest(msg);
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/tenants/{slug}/theme/{themeSlug}/decide",
             async (string slug, string themeSlug, HttpRequest req, IDocumentStore store,
@@ -2333,7 +2673,7 @@ public static class MarketplaceTemplateExtensions
 
             await LogTenantConfigChangeAsync(audit, req, slug, auth, "tenant.theme_decide");
             return ok ? Results.Ok(msg) : Results.BadRequest(msg);
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: apply a curated preset (the live switcher) ──────────
         // نُقطَة الزِرّ الواحِد في /admin/tenants/{slug}/theme. لا تُضيف
@@ -2363,7 +2703,7 @@ public static class MarketplaceTemplateExtensions
             return Results.Redirect(ok
                 ? $"/admin/tenants/{slug}/theme?saved={Uri.EscapeDataString(msg)}"
                 : $"/admin/tenants/{slug}/theme?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save categories ─────────────────────────────────────
         // إعادَة كِتابَة قائِمَة الفِئات بِالكامِل (overwrite). الإعلانات
@@ -2384,7 +2724,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/categories", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save branding ───────────────────────────────────────
         // المَنطِق في BrandingSaveService — تَعريفٌ واحِد يُنادِيه هذا
@@ -2405,7 +2745,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}", $"/admin/tenants/{slug}/branding", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save PWA per-role (name + custom icon) ──────────────
         // مُتَعَدِّد الـ parts (file upload). لِكُلّ دَور: name_{slug} +
@@ -2427,7 +2767,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/pwa", $"/admin/tenants/{slug}/pwa", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save regions ────────────────────────────────────────
         // اِحذِف كُلّ DiscoveryRegions الحالِيَّة لِلتَّينَنت ثُمّ أَعِد البِناء.
@@ -2449,7 +2789,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/admin/tenants/{slug}/regions", $"/admin/tenants/{slug}/regions", "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: save attribute definitions for a scope ──────────────
         // الـ scope إمّا CategoryId (لِإعلانات تِلك الفِئَة) أَو
@@ -2477,38 +2817,46 @@ public static class MarketplaceTemplateExtensions
             var page = $"/admin/tenants/{slug}/attributes" +
                        (request.Scope is { } id ? $"?scope={id}" : "");
             return TenantConfigSurface.Outcome(result, page, page, "/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: Agent — ask ─────────────────────────────────────────
+        // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) النِقاطُ الأَربَعُ تَسأَلُ مِفتاحَ الوَكيلِ بَعدَ حارِسِ المُشرِفِ وقَبلَ أَيِّ قِراءَةٍ أَو نِداء:
+        // مُطفَأٌ ⇐ إلى الصَفحَةِ وهي تَقولُ النَصَّ المُغلَق.
         app.MapPost("/admin/agent/ask",
             async (HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             var msg = req.Form["message"].ToString().Trim();
             if (string.IsNullOrEmpty(msg))
                 return Results.Redirect("/admin/agent?err=empty#composer");
             await agent.AskAsync(msg);
             return Results.Redirect("/admin/agent#latest");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Admin: Agent — apply a pending tool call ───────────────────
         app.MapPost("/admin/agent/tool/{toolId}/apply",
             async (string toolId, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentToolExecutor exec) =>
         {
-            if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
+            var admin = await Services.PlatformAdminGuard.EvaluateAsync(store, auth);
+            if (!admin.Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             var session = await agent.LoadSessionAsync();
             var turn = session.Turns.LastOrDefault(t => t.Tool?.Id == toolId);
             if (turn?.Tool is null)
                 return Results.Redirect("/admin/agent?err=tool_missing#latest");
 
-            var (ok, msg) = await exec.ExecuteAsync(turn.Tool.Name, turn.Tool.InputJson);
+            // ‏(‏2026-10-25، W8-3 — lens-security-14) بِاسمِ المُشرِف: ما يَلِدُه create_tenant مِلكُه — كَـ`/admin/tenants/create`.
+            var (ok, msg) = await exec.ExecuteAsPlatformAdminAsync(turn.Tool.Name, turn.Tool.InputJson, admin.User!.Id);
             await agent.UpdateToolStatusAsync(toolId, ok ? "applied" : "error", msg);
             await agent.ContinueAfterToolAsync();
             return Results.Redirect("/admin/agent#latest");
@@ -2518,10 +2866,12 @@ public static class MarketplaceTemplateExtensions
         app.MapPost("/admin/agent/tool/{toolId}/reject",
             async (string toolId, IDocumentStore store,
                    Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             await agent.UpdateToolStatusAsync(toolId, "rejected", null);
             await agent.ContinueAfterToolAsync();
             return Results.Redirect("/admin/agent#latest");
@@ -2530,53 +2880,30 @@ public static class MarketplaceTemplateExtensions
         // ─── Admin: Agent — reset conversation ──────────────────────────
         app.MapPost("/admin/agent/reset",
             async (IDocumentStore store, Services.Incubator.StudioAuth auth,
+                   Services.Incubator.StudioAgentSwitch agentSwitch,
                    ACommerce.Templates.Customer.Marketplace.Services.AgentService agent) =>
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            if (!agentSwitch.Enabled) return Results.Redirect("/admin/agent");
             await agent.ResetAsync();
             return Results.Redirect("/admin/agent");
         }).DisableAntiforgery();
 
-        // ─── Studio — مُصادَقَة وهميَّة + بَدء مِن صَفحَة الهبوط ──────────
-        // صَفحَة الهبوط تُرسِل المُطالَبَة هُنا؛ نَحفَظها في cookie مُؤَقَّت
-        // ثُمَّ نُحَوِّل لِلدُخول. بَعد الدُخول الناجِح نُنشِئ جَلسَة تَحليل
-        // بِالمُطالَبَة ونُشَغِّلها.
-        // **ومَن دَخَلَ أَصلاً يُستَأنَفُ هُنا، لا يُرسَلُ إلى بابٍ
-        // دَخَلَه.** كانَ التَحويلُ إلى `/studio/auth` غَيرَ مَشروط،
-        // وتِلكَ تَرى الجَلسَةَ قائِمَةً فَتَقفِزُ إلى `/studio` —
-        // **والكَعكَةُ تَبقى غَيرَ مُستَهلَكَة**، فَلا تَحليلَ يُبدَأ
-        // ولا رِسالَةَ تُقال. قيسَ حَيّاً ‏2026-08-30: الكَعكَةُ
-        // مَملوءَةٌ في المُتَصَفِّحِ والصَفحَةُ تَقولُ «لا أَفكار بَعد».
-        // فَالتَدَفُّقُ كانَ أَخضَرَ لِأَوَّلِ زيارَةٍ في العُمرِ
-        // وأَحمَرَ لِكُلِّ زيارَةٍ بَعدَها (القاعِدَة ١٢).
-        app.MapPost("/studio/begin", async (
-            HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.StudioAuth auth) =>
+        // ─── Admin: عُنوانُ الزائِرِ كَما يَراه الخادِم — قِياسٌ مُؤَقَّت (‏2026-10-28، قَرارُ المالِك د57 «ب») ──────────
+        // قِراءَةٌ خالِصَة لِمُشرِفِ المَنَصَّةِ وَحدَه: هَل يُلحِقُ الـSpace عُنوانَ الزائِرِ الحَقيقيَّ أَم يُمَرِّرُ رَأسَه؟ — شَرطُ حَدِّ العُنوانِ
+        // وشَرطُ حَذفِ هذِه النُقطَةِ في `Services.ClientAddressProbe`. ولا يُخَزَّنُ الجَوابُ في وَسيطٍ (`no-store`). والحارِسُ نُسخَةُ الحَقنِ مِن
+        // `PlatformAdminGuard` (قَرارُ `RequirePlatformAdmin` بِعَينِه) — فَلا تَأخُذُ النُقطَةُ `IDocumentStore` (‏`EndpointStoreInjectionTests`).
+        app.MapGet("/admin/diagnostics/client-address",
+            async (HttpRequest req, HttpResponse res, Services.PlatformAdminGuard admin) =>
         {
-            var prompt = req.Form["prompt"].ToString().Trim();
-            if (!string.IsNullOrEmpty(prompt))
-                res.Cookies.Append(StudioPromptCookie, Uri.EscapeDataString(prompt),
-                    new CookieOptions { IsEssential = true, Path = "/",
-                        Expires = DateTimeOffset.UtcNow.AddHours(2) });
+            if (!(await admin.EvaluateAsync()).Allowed)
+                return Forbidden();
+            res.Headers.CacheControl = "no-store";
+            return Results.Json(Services.ClientAddressProbe.Of(req));
+        });
 
-            auth.Load();
-            if (auth.IsAuthenticated)
-                // المُطالَبَةُ تُمَرَّرُ صَريحَةً: الكَعكَةُ كُتِبَت على
-                // `Response` في هذا الطَلَبِ نَفسِه، **ولا تَظهَرُ في
-                // `Request.Cookies`** — فَقِراءَةُ الطَلَبِ وَحدَها
-                // تَرُدُّ `null` ويَسكُتُ العَطَبُ كَما كان.
-                return await ResumeStudioPromptAsync(
-                           req, res, auth.UserId!.Value, auth.UserName ?? "",
-                           store, scopeFactory, incubator,
-                           checkConsent: true,
-                           promptOverride: string.IsNullOrEmpty(prompt) ? null : prompt)
-                       ?? Results.Redirect("/studio");
-
-            return Results.Redirect("/studio/auth");
-        }).DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/begin` (استِمارَةُ الفِكرَةِ وكَعكَتُها) — التَحليلُ لَيسَ في رِحلَةِ رائِدِ الأَعمال؛ والمَتجَرُ يُنشَأُ بِـ`/studio/apps/create`.
 
         // ─── بابُ الاستوديو — عَبر القَناة المُسَجَّلَة، والغِيابُ إغلاق ──
         // ‏`IOtpChannel?` **اختِياريَّةٌ في التَوقيع** — نَفسُ شَكل نِقاط
@@ -2591,9 +2918,10 @@ public static class MarketplaceTemplateExtensions
             if (string.IsNullOrEmpty(phone)) return Results.Redirect("/studio/auth?err=phone");
             try { await Services.Incubator.StudioAuth.SendPhoneCodeAsync(channel, phone, ct); }
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
-            return Results.Redirect(
-                $"/studio/auth?stage=verify&method=phone&phone={Uri.EscapeDataString(phone)}");
-        }).DisableAntiforgery();
+            // ‏(‏2026-10-24، lens-security-13) مُعَرِّفُ المُحاوَلَةِ لا رَقَمُ مُشرِفِ المَنَصَّة.
+            return Results.Redirect("/studio/auth?method=phone&" + (Services.LoginStageQuery.Verify(
+                Services.Incubator.StudioAuth.Tenant, phone, Services.Incubator.StudioAuthDoor.Kind(Services.Incubator.StudioAuthMethod.Phone)) ?? "err=send_failed"));
+        }).RequireFormBody().DisableAntiforgery();
 
         // نَظيرُه لِلبَريد — وهُوَ ما لَم يَكُن مَوجوداً إطلاقاً: المَمنوحُ
         // بِـ`PLATFORM_ADMIN_EMAIL` كانَ مُهَيَّأً بِلا بابٍ يَبلُغُه.
@@ -2607,14 +2935,13 @@ public static class MarketplaceTemplateExtensions
                 return Results.Redirect("/studio/auth?err=email_invalid");
             try { await Services.Incubator.StudioAuth.SendEmailCodeAsync(channel, email, ct); }
             catch (Exception) { return Results.Redirect("/studio/auth?err=send_failed"); }
-            return Results.Redirect(
-                $"/studio/auth?stage=verify&method=email&email={Uri.EscapeDataString(email)}");
-        }).DisableAntiforgery();
+            return Results.Redirect("/studio/auth?method=email&" + (Services.LoginStageQuery.Verify(
+                Services.Incubator.StudioAuth.Tenant, email, Services.Incubator.StudioAuthDoor.Kind(Services.Incubator.StudioAuthMethod.Email)) ?? "err=send_failed"));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/auth/verify", async (
             HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator) =>
+            Services.Queries.TenantDirectory tenants) =>
         {
             var method = Services.Incubator.StudioAuthDoor.Parse(req.Form["method"].ToString())
                          ?? Services.Incubator.StudioAuthMethod.Phone;
@@ -2622,29 +2949,40 @@ public static class MarketplaceTemplateExtensions
             var subject = Services.Incubator.StudioAuth.NormalizeSubject(
                 method, req.Form[field].ToString());
             var code  = req.Form["code"].ToString().Trim();
-            var back  = $"/studio/auth?stage=verify&method={field}" +
-                        $"&{field}={Uri.EscapeDataString(subject)}";
             var user = await Services.Incubator.StudioAuth.VerifyAsync(
                 store, res, method, subject, code);
-            if (user is null) return Results.Redirect($"{back}&err=code");
+            if (user is null)
+                return Results.Redirect($"/studio/auth?method={field}&" + Services.LoginStageQuery.Retry(
+                    Services.Incubator.StudioAuth.Tenant, req.Form["attempt"].ToString(), subject, Services.Incubator.StudioAuthDoor.Kind(method), "code"));
 
-            // اِربِط المَتاجِر اليَتيمَة بِأَوَّل مُستَخدِم (لَو هذا أَوَّل تَسجيل).
-            await Services.Incubator.StudioOwnershipSeeder.RunAsync(store);
+            // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — lens-security-14؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هُنا رَبطُ المَتاجِرِ اليَتيمَةِ بِأَقدَمِ
+            // مُستَخدِمٍ عِندَ كُلِّ دُخول — فَأَوَّلُ مَن سَجَّلَ نَفسَه عَلى قاعِدَةٍ بِلا مُشرِفٍ مَلَكَ ashare وejar وorder عِندَ أَوَّلِ دُخولِه (مَقيس).
+            // صارَ البَذّارُ عِندَ الإقلاعِ وَحدَه، ولِمُشرِفِ المَنَصَّةِ وَحدَه (`StudioOwnershipSeeder`).
 
             // مُطالَبَة مُعَلَّقَة؟ أَنشِئ جَلسَة وشَغِّل التَّحليل في الخَلفِيَّة.
             // الجِسمُ في `ResumeStudioPromptAsync` — ويُنادى مِن نُقطَةِ
             // قَبولِ الشُروطِ أَيضاً، وذاكَ ما رَفَعَ الـ405.
-            return await ResumeStudioPromptAsync(
-                       req, res, user.Id, user.FullName,
-                       store, scopeFactory, incubator, checkConsent: true)
-                   ?? Results.Redirect("/studio");
-        }).DisableAntiforgery();
+            // ‏(‏2026-11-07، W13-1·٤ — ADR-049 §٨) ومَن لا مَتجَرَ لَه يَبلُغُ استِمارَةَ الإنشاءِ لا لَوحَةً فارِغَة.
+            // ‏(‏2026-11-07، W13-1·٥) والاستِئنافُ خَرَج — لا فِكرَةَ مُعَلَّقَةً تُبدَأُ بَعدَ الدُخول.
+            return Results.Redirect(Services.Incubator.StudioStoreCreate.AfterSignIn((await tenants.ListOwnedByAsync(user.Id)).Count));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/logout", (HttpResponse res) =>
         {
             Services.Incubator.StudioAuth.DeleteCookie(res);
             return Results.Redirect("/");
         }).DisableAntiforgery();
+
+        // ‏(‏2026-10-28، قَرارُ المالِك د28) نَظيرُ «اخرج من كل الأجهزة» لِحِسابِ الاستوديو — ومِنه مُشرِفُ المَنَصَّة، أَثمَنُ جَلسَةٍ تُسرَق.
+        app.MapPost("/studio/me/sessions/revoke",
+            async (HttpResponse res, IDocumentStore store, IMemoryCache cache, Services.Incubator.StudioAuth auth) =>
+        {
+            auth.Load();
+            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
+            await Services.SessionVersionGate.RevokeStudioAsync(store, cache, auth.UserId!.Value);
+            Services.Incubator.StudioAuth.DeleteCookie(res);
+            return Results.Redirect("/studio/auth");
+        }).RequireFormBody().DisableAntiforgery();
 
         // قَبول الشُروط — يَحفَظ ConsentRecord، ثُمَّ **يَستَأنِف
         // المُطالَبَةَ المُعَلَّقَةَ إن وُجِدَت**، وإلّا حَوَّلَ لِـ
@@ -2656,9 +2994,7 @@ public static class MarketplaceTemplateExtensions
         // فَكانَ القَبولُ يَنتَهي بِـ**‏405** لِكُلّ مُستَخدِمٍ جَديدٍ
         // جاءَ بِفِكرَةٍ مِن صَفحَة الهُبوط.
         app.MapPost("/studio/consent/accept", async (
-            HttpRequest req, HttpResponse res, IDocumentStore store,
-            IServiceScopeFactory scopeFactory,
-            Services.Incubator.FeasibilityAnalysisService incubator,
+            HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth) =>
         {
             auth.Load();
@@ -2678,36 +3014,11 @@ public static class MarketplaceTemplateExtensions
             });
             await s.SaveChangesAsync();
 
-            // الشُروطُ قُبِلَت الآن، فَلا يُعادُ فَحصُها
-            // (`checkConsent: false`) — وإلّا دارَت الصَفحَةُ على نَفسِها.
-            return await ResumeStudioPromptAsync(
-                       req, res, auth.UserId!.Value, auth.UserName ?? "",
-                       store, scopeFactory, incubator, checkConsent: false)
-                   ?? Results.Redirect(returnUrl);
-        }).DisableAntiforgery();
+            // ‏(‏2026-11-07، W13-1·٥) والاستِئنافُ خَرَج — العَودَةُ إلى الوِجهَةِ وَحدَها (استِمارَةُ الإنشاءِ حينَ جاءَ مِنها).
+            return Results.Redirect(returnUrl);
+        }).RequireFormBody().DisableAntiforgery();
 
-        // تَقييم قِسم في دِراسَة (👍/👎) — لِتَحسين الـ prompt لاحِقاً.
-        app.MapPost("/studio/s/{id:guid}/feedback", async (
-            Guid id, HttpRequest req, IDocumentStore store,
-            Services.Incubator.StudioAuth auth) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var section = req.Form["section"].ToString().Trim();
-            var rating  = req.Form["rating"].ToString().Trim();
-            if (rating is not ("up" or "down") || string.IsNullOrEmpty(section))
-                return Results.Redirect($"/studio/s/{id}");
-
-            await using var s = store.LightweightSession(
-                Services.Incubator.FeasibilityAnalysisService.IncubatorTenant);
-            var session = await s.LoadAsync<Services.Incubator.IncubatorSession>(id);
-            if (session is null || session.OwnerUserId != auth.UserId!.Value)
-                return Results.Redirect("/studio");
-            session.SectionFeedback[section] = rating;
-            s.Store(session);
-            await s.SaveChangesAsync();
-            return Results.Redirect($"/studio/s/{id}#section-{section}");
-        }).DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/feedback` — لا تُكتَبُ في دِراسَةٍ قَديمَة؛ صَفحَتُها قِراءَةٌ فَقَط.
 
         // ─── اختِيارُ دَرَجَة — والمَدفوعَةُ لا تُمنَح ذاتِيّاً ──────
         //
@@ -2762,29 +3073,34 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery();
 
         // تَصدير دِراسَة Excel — يَتَطَلَّب tier فيه AllowExport.
+        // ‏(‏2026-11-07، W13-1·٥ — ADR-049 §٢) تَصديرٌ لِبَياناتِ صاحِبِ الدِراسَةِ القَديمَةِ قِراءَةً — يَقرَؤُها مِن `StudioQueries` لا مِن خِدمَةِ التَحليل،
+        // فَلا نُقطَةَ استوديو تَبلُغُ خِدمَةً تُنادي نَموذَجاً (`StudioAnalysisRetiredTests`).
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2D-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `/studio/ideas` كانَ مَدخَلَ «أَفكاري وتَحاليلي» في شَريطِ
+        // كُلِّ صَفحَةِ استوديو حَتّى W13-1·٥ (`@page` ثانٍ عَلى `StudioHome`)، فَهُوَ في تاريخِ المُتَصَفِّحاتِ وعَلاماتِها — وصارَ 404 بِجِسمٍ فارِغٍ تَرسُمُه صَفحَةُ خَطَإِ
+        // المُتَصَفِّحِ بِلا طَريقِ عَودَة. يُحَوَّلُ إلى اللَوحَة، ولا يَقرَأُ شَيئاً ولا يَكتُب.
+        app.MapGet("/studio/ideas", () => Results.Redirect("/studio"));
+
         app.MapGet("/studio/s/{id:guid}/export.xlsx", async (
-            Guid id,
+            Guid id, HttpContext http,
             Services.Incubator.StudioAuth auth,
-            Services.Incubator.FeasibilityAnalysisService svc,
-            Services.Incubator.StudioTierService tier,
+            Services.Queries.StudioQueries studio,
             Services.Incubator.FeasibilityExcelExporter exporter) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var session = await svc.LoadAsync(id);
+            var session = await studio.LoadStudyAsync(id);
             if (session is null || session.OwnerUserId != auth.UserId!.Value)
                 return Results.NotFound();
             if (session.AnalysisJson is null)
                 return Results.Redirect($"/studio/s/{id}");
 
-            // ‏`Export` لا `refine`: هذا **حَجبُ ميزَةٍ لا خَرقُ حِصَّة**،
-            // وكانَت الشاشَةُ تَقول «بَلَغتَ حَدَّ التَحسينات» لِمَن لَم
-            // يَبلُغه — سَطرٌ يَكذِب.
-            var (_, limits) = await tier.ReadWithLimitsAsync(auth.UserId!.Value);
-            if (!limits.AllowExport)
-                return Results.Redirect(
-                    $"/studio/s/{id}?upgrade={Services.Incubator.StudioUpgradeReason.Export}");
+            // ‏(‏2026-11-07، W13-1·٧ — ADR-049 §٢ و§٧) كانَ هُنا حَجبُ «ميزَةِ التَصدير» بِـ`AllowExport`. والدِراسَةُ القَديمَةُ بَياناتُ صاحِبِها،
+            // تُصَدَّرُ لَه قِراءَةً بِلا باقَة — والرَمزُ `export` لا تَكتُبُه بَوّابَةٌ بَعدَ اليَوم، والحَقلُ يَتيمٌ حَتّى ADR التَسعير.
 
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `no-store, private` كَتَنزيلِ «بَياناتي»:
+            // كانَ الجَوابُ بِلا `Cache-Control`، والمَسارُ يَنتَهي بِـ`.xlsx` — امتِدادٌ تُخَزِّنُه طَبَقَةُ Cloudflare (W13-3) افتِراضاً، فَيَصدُقُ «صاحِبُها وَحدَه»
+            // في الطَلَبِ الأَوَّلِ وَحدَه ويَأخُذُ الدِراسَةَ مِن الحافَّةِ مَن يَحمِلُ الرابِط.
+            http.Response.Headers.CacheControl = "no-store, private";
             var bytes = exporter.Export(session);
             return Results.File(bytes,
                 contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -2809,14 +3125,14 @@ public static class MarketplaceTemplateExtensions
             string slug, HttpRequest req,
             Services.Incubator.StudioAuth auth,
             Services.Queries.TenantDirectory tenants,
-            Services.Export.TenantExportService export,
+            Services.Export.TenantExportService export, Services.Queries.StudioQueries studioNames,
             CancellationToken ct) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
 
             var result = await export.ProduceAsync(
-                slug, await tenants.FindAsync(slug, ct), auth.UserId, auth.UserName,
+                slug, await tenants.FindAsync(slug, ct), auth.UserId, await studioNames.ActorNameAsync(auth.UserId, ct),
                 req.HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
 
             return result.Refusal != Services.Export.TenantExportRefusal.None
@@ -2825,52 +3141,38 @@ public static class MarketplaceTemplateExtensions
                 : Results.File(result.Zip!, "application/zip", result.FileName);
         }).DisableAntiforgery();
 
-        // إعادَة تَوليد قِسم واحِد مِن الدِراسَة (refine) بِناءً عَلى مُلاحَظَة.
-        app.MapPost("/studio/s/{id:guid}/refine", async (
-            Guid id, HttpRequest req, IServiceScopeFactory scopeFactory,
-            Services.Incubator.StudioAuth auth,
-            Services.Incubator.StudioTierService tier,
-            Services.Incubator.FeasibilityAnalysisService svc) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-            var section = req.Form["section"].ToString().Trim();
-            var feedback = req.Form["feedback"].ToString().Trim();
-            if (string.IsNullOrEmpty(section) || string.IsNullOrEmpty(feedback))
-                return Results.Redirect($"/studio/s/{id}");
-
-            var gate = await tier.CheckRefineAsync(auth.UserId!.Value);
-            if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
-            await tier.RecordRefineAsync(auth.UserId!.Value);
-
-            // شَغِّل في الخَلفِيَّة، لا نُعَلِّق الـ POST عَلى الـ LLM.
-            _ = Task.Run(async () =>
-            {
-                using var scope = scopeFactory.CreateScope();
-                var bg = scope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RefineSectionAsync(id, section, feedback); }
-                catch { /* تُعرَض الدِراسَة كَما هي عَلى الفَشَل */ }
-            });
-            return Results.Redirect($"/studio/s/{id}?refining={section}");
-        }).DisableAntiforgery();
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/refine` — لا نِداءَ نَموذَجٍ مِن الاستوديو؛ و`RefineSectionAsync` بِلا مُنادٍ مُثَبَّتٌ يَتيماً في `StudioAnalysisRetiredTests`.
 
         // ═══ Cart + Checkout (نَمَط Order.V2) ══════════════════════════════
         // POST /{slug}/listings/{id}/cart/add — أَضِف إلى السَّلَّة.
         app.MapPost("/{slug}/listings/{id:guid}/cart/add",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.TenantDirectory tenants) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, _, _) = parsed.Value;
+            // **وبابُ السَلَّةِ بابُ الصَفحَةِ نَفسُه** (‏2026-10-24، تَيّارُ S15 البَند L): مَتجَرٌ لا يَستَعمِلُ نَمَطُه السَلَّة لا تُرسَمُ فيه
+            // استِمارَتُها، ويُرَدُّ هُنا قَبلَ أَيِّ قِراءَةٍ لِلسَلَّةِ أَو كِتابَة — كانَ طَلَبٌ مَصنوعٌ يَكتُبُ سَلَّةً لا تَعرِضُها الواجِهَة.
+            if (!Services.Patterns.CartDoor.Opens(Services.Patterns.PatternProfileResolver.Of(await tenants.FindAsync(slug))))
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Patterns.CartDoor.ClosedCode}"));
             await using var s = store.LightweightSession(slug);
             var listing = await s.LoadAsync<Listing>(id);
-            if (listing is null) return Results.Redirect(Link(req, slug, "explore"));
+            // ولا يوضَعُ في السَلَّةِ إعلانٌ حُذِفَ أَو أَخفاه المُشرِف (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-3): الحَذفُ ناعِمٌ فَكانَ `listing is null` لا يُمسِكُه.
+            if (!Services.Deals.CheckoutCart.Buyable(listing)) return Results.Redirect(Link(req, slug, "explore"));
+            // ولا إعلانَ أَغلَقَ مالِكُه حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1): وُلِدَت عَلَيه صَفقَةٌ مَربوطَةٌ بِحِسابٍ مَمحُوٍّ لا يُنَفِّذُها أَحَد.
+            if (await Services.Deals.CheckoutCart.OwnerGoneAsync(s, listing)) return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
+            // **ولا يَشتَري المَرءُ إعلانَه** (‏ADR-033 §٦‑ب‑١ مُلحَقاً، ‏2026-10-11): كانَ هذا البابُ يَأخُذُ أَيَّ
+            // إعلانٍ — والشاشَةُ وَحدَها تُخفي زِرَّ السَلَّةِ عَن مالِكِه، و`curl` لا يَرى الشاشَة — فَتولَدُ صَفقَةٌ
+            // يَطلُبُ فيها المالِكُ مِن نَفسِه. يُرَدُّ قَبلَ أَيِّ كِتابَةٍ بِرَمزِ مَسارِ العَرضِ نَفسِه (`?err=self`)
+            // وتَقرَؤُه صَفحَةُ الإعلانِ مِن القامُوس؛ والهُوِيَّةُ بِقيمَةِ المُعَرِّفِ بِالمُحَلِّلِ القائِم.
+            if (ParseListingOwnerId(listing) == userId) return Results.Redirect(Link(req, slug, $"listings/{id}?err=self"));
             int.TryParse(req.Form["qty"].ToString(), out var qty);
             if (qty <= 0) qty = 1;
             var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId)
                 ?? new ACommerce.Kit.Cart.Cart { Id = userId };
+            // ونَمَطُ سَلَّةِ المَتجَر (‏2026-10-29، قَرارُ المالِك د2؛ تَوصيفُه `0dbb2dd`): «لِكُلِّ بائِعٍ سَلَّة» يَرُدُّ بائِعاً ثانِياً قَبلَ أَيِّ كِتابَة، والصَفحَةُ تَعرِضُ الإكمالَ أَو الإفراغ.
+            if (await Services.Patterns.CartModes.RefusalAsync(await tenants.FindAsync(slug), s, cart, listing) is { } mixedOut)
+                return Results.Redirect(Link(req, slug, $"listings/{id}?err={mixedOut}"));
             var existing = cart.Items.FirstOrDefault(i => i.ListingId == id);
             if (existing is not null) existing.Quantity += qty;
             else cart.Items.Add(new ACommerce.Kit.Cart.CartItem
@@ -2882,7 +3184,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // POST /{slug}/cart/{listingId}/qty — تَعديل كَمِّيَّة.
@@ -2903,7 +3205,7 @@ public static class MarketplaceTemplateExtensions
             s.Store(cart);
             await s.SaveChangesAsync();
             return Results.Redirect(Link(req, slug, "cart"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         app.MapPost("/{slug}/cart/clear", async (string slug, HttpRequest req, IDocumentStore store) =>
@@ -2918,14 +3220,38 @@ public static class MarketplaceTemplateExtensions
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
+        // POST /{slug}/checkout/details — خُطوَتا الإتمامِ الأولى والثانِيَة (‏2026-10-28، قَرارُ المالِك د60 «ب»؛ OWASP وCWE-598): كانَتا
+        // `method="get"` فَالاسمُ والجَوّالُ والعُنوانُ في رابِطِ الصَفحَة (تَوصيفُه `bddc7ae`). صارَتا تُرسِلانِ هُنا فَتُحفَظُ في السَلَّة
+        // (`Cart.Checkout`) ويَمضي الرابِطُ بِرَقمِ الخُطوَةِ وَحدَه؛ والقَرارُ — ما يُقبَلُ وإلى أَينَ — في `CheckoutDetails.Apply` النَقِيَّة.
+        app.MapPost("/{slug}/checkout/details", async (string slug, HttpRequest req, IDocumentStore store) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            await using var s = store.LightweightSession(slug);
+            var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);
+            if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
+            var next = Services.Deals.CheckoutDetails.Apply(cart, req.Form);
+            s.Store(cart);
+            await s.SaveChangesAsync();
+            return Results.Redirect(Link(req, slug, Services.Deals.CheckoutDetails.StepPath(next)));
+        }).DisableAntiforgery().RequireFormBody()
+          .RequireStoreWritable();
+
         // POST /{slug}/checkout/submit — تَحويل السَّلَّة إلى صَفقَة + إفراغ.
         // كُلّ بَند في السَّلَّة → Deal مُنفَصِل (لِأَنّ الـ Deal فيه الإعلان
-        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). يَدخُل Deals بِمَرحَلَة Booked
-        // مُباشَرَةً (السَّلَّة تَعني أَنّ المُشتَري ثَبَّتَ النِيَّة).
+        // وكُلّ بَند قَد يَكون مالِكُه مُختَلِف). تَدخُلُ الصَفقَةُ بِمَرحَلَة **Offered**
+        // (‏`DealsService.StartAsync`) **ومالِكُ إعلانِها طَرَفٌ مُقابِلٌ مِن الوِلادَة** —
+        // `BindListingOwnerAsync` أَدناه — إلّا أَن يَكونَ المُشتَري نَفسَه، أَو إعلاناً لا يَحمِلُ
+        // `owner_id` مُعَرِّفاً (إعلاناتُ البَذر)، فَتولَدُ بِلا طَرَف. **ولا يُخرِجُها مِن `Offered` إلّا
+        // الطَرَف**: قَبولُ البائِعِ عَبرَ `/deals/{id}/accept`، أَو المَسارُ الإداريُّ بِجانِبِ المَتجَر —
+        // فاعِلُ `Booked` الطَرَفُ المُقابِل، والمُشتَري لا يَحجِزُ طَلَبَه (‏ADR-033 §٦‑ط). وتاريخُ هذا
+        // التَعليقِ — «Booked مُباشَرَةً» ثُمَّ «بِلا طَرَفٍ» ثُمَّ «المُشتَري يُحَرِّكُ Offered» — في ‏ADR-033
+        // §٢‑ج‑أ و§٦‑ب‑١ و§٦‑ط: كُلٌّ صَدَقَ يَومَه وأُعيدَت كِتابَتُه إلى الكودِ ‏2026-10-11.
         app.MapPost("/{slug}/checkout/submit",
             async (string slug, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals,
-                   ACommerce.Kit.Payments.IPaymentProvider payments) =>
+                   Services.Deals.DealsService deals, Services.Deals.GatewayPayments gateway,
+                   ACommerce.Kit.Payments.IPaymentProvider payments, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
@@ -2938,6 +3264,9 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var cart = await s.LoadAsync<ACommerce.Kit.Cart.Cart>(userId);
             if (cart is null || cart.Items.Count == 0) return Results.Redirect(Link(req, slug, "cart"));
+            // مُراجَعَةُ السَلَّة (‏2026-10-24؛ ADR-032 §٨‑ح‑١).
+            if (await Services.Deals.CheckoutCart.RefreshAsync(s, cart)) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
+                .RefusalPath(Services.Deals.CheckoutCart.Changed)));
 
             var tenant = await s.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
 
@@ -2949,46 +3278,98 @@ public static class MarketplaceTemplateExtensions
             // وبِطاقَةٌ في مَتجَرٍ لا يَقبِضُ **تُرَدُّ ولا تُبَدَّلُ
             // صامِتَةً**: تَحويلُ طَلَبِ بِطاقَةٍ إلى نَقدٍ بِلا كَلِمَةٍ
             // تَبديلُ عَقدٍ مِن تَحتِ المُشتَري. والسَلَّةُ تَبقى.
-            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(
-                pay, tenant?.PaymentProviderConfigured ?? false);
+            //
+            // **والمُزَوِّدُ يُسأَلُ عَن قُدرَتِه قَبلَ أَن يُنادى** (‏ADR-032
+            // §٢‑د، ‏2026-10-11): رابِطٌ مَلصوقٌ وَحدَه كانَ يَفتَحُ البِطاقَةَ
+            // عَلى `UnavailablePaymentProvider` في الإنتاج — فَشَلٌ مُؤَكَّد.
+            //
+            // **ومَتجَرٌ رَبَطَ مِفتاحَه يَقبِضُ بِبَوّابَتِه** (‏ADR-032 الخُطوَة 8 — شَطرُ `CardOffered`، ‏2026-10-12؛ ولا يُعادُ حَرفٌ فَوقَ
+            // ما سَبَق): المُدخَلانِ أَعلاه كَما كانا، وتُحسَبُ مَعَهُما مَرَّةً — بِالدالَّةِ الَّتي تُناديها الشاشَةُ بِحَرفِها — ثَلاثَةُ البَوّابَة
+            // (مِفتاحٌ مَختومٌ مَربوط، خِزانَةٌ تَفُكّ، عَميلٌ مُسَجَّل)؛ والقَرارُ نَقِيٌّ في `CheckoutCardFacts`. فَفي الإنتاجِ البِطاقَةُ بِالثَلاثَةِ
+            // لا بِغَيرِها، ومَتجَرٌ بِمِفتاحٍ لا يَقبِضُ بِمُزَوِّدِ النُسخَةِ في أَيِّ بيئَة.
+            var pattern = PatternFromTenant(tenant);
+            var card = await gateway.CardFactsAsync(slug, tenant?.PaymentProviderConfigured ?? false, ACommerce.Kit.Payments.PaymentChargeSurface.CanCharge(payments), cart, pattern);
+            var (payMethod, payRefusal) = Services.Deals.CheckoutPaymentPolicy.Decide(pay, card.Collects, card.ChargerCanCharge);
             if (payRefusal is not null)
                 return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
-                    .RefusalPath(payRefusal, name, phone, addr)));
+                    .RefusalPath(card.GatewayRefusal ?? payRefusal)));
 
-            var pattern = PatternFromTenant(tenant);
+            // ─── بَوّابَةُ المَتجَر (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) ─────────────────────────────
+            // البِطاقَةُ في مَتجَرٍ يَفُكُّ مِفتاحَ بَوّابَتِه تُدفَعُ عَلى صَفحَتِها المُستَضافَةِ بَعدَ أَن تولَدَ الصَفَقات: فاتورَةٌ واحِدَةٌ
+            // لِلسَلَّةِ كُلِّها، ولا حَجزَ عِندَ الباب — فَنافِذَةُ ‏ADR-036 §٨‑٣ لا تَقَعُ لَها. ويُسأَلُ مَرَّةً قَبلَ الحَلقَة؛ وما سِواه كَما كان.
+            // (‏2026-10-12، الخُطوَة 8: والسُؤالُ صارَ مُدخَلَ القَرارِ نَفسَه — `card.ThroughGateway` — لا فَكّاً ثانِياً لِلمِفتاح.)
+            var viaGateway = Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod) && card.ThroughGateway;
             Guid firstDealId = Guid.Empty;
+            // الصَفَقاتُ الَّتي لَها مالِكٌ — يُشعَرُ بَعدَ الحَفظِ لا داخِلَ الحَلقَة (P1-5).
+            var born = new List<Guid>();
+            // ومالِكُ إعلانِ كُلِّ صَفقَةٍ وُلِدَت بِتَرتيبِها — مَجموعاتُ الشَحنِ بَعدَ الحَلقَة (‏2026-10-29، قَرارُ المالِك د13 «ب»).
+            var bornVendors = new List<(Guid DealId, string Vendor)>();
+            var created = new List<Guid>();
+            // وتَعَذُّرُ الحَجزِ عِندَ مُزَوِّدِ النُسخَةِ يوقِفُ الحَلقَةَ ويُلغي ما وُلِدَ — كَفَشَلِ فَتحِ الفاتورَة (‏2026-10-29، قَرارُ المالِك د8 (٢)).
+            var holdFailed = false;
+            // **والسَلَّةُ يُطالَبُ بِها بِوِلادَةِ صَفقَةِ بَندِها الأَوَّل** (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1؛ ‏ADR-036 §١٤): مُعَرِّفُ كُلِّ صَفقَةٍ مِن
+            // نُسخَةِ السَلَّةِ الَّتي قُرِئَت (`CheckoutClaim.DealIdFor`)، فَإرسالٌ ثانٍ قَرَأَ النُسخَةَ نَفسَها يُرَدُّ حِفظُ بَندِه الأَوَّلِ قَبلَ أَيِّ حَجزٍ أَو فاتورَةٍ
+            // أَو إشعار، ويَعودُ إلى «صَفقاتي» حَيثُ صَفَقاتُ الأَوَّل. كانَ يَلِدُ مَجموعَةً ثانِيَة (تَوصيفُه `94a7ef0`).
+            var line = 0;
             foreach (var item in cart.Items)
             {
                 var listing = await s.LoadAsync<Listing>(item.ListingId);
-                if (listing is null) continue;
+                // ودِفاعٌ أَخيرٌ بِالدالَّةِ نَفسِها: إعلانٌ حُذِفَ بَينَ المُراجَعَةِ والحَلقَةِ يُتَخَطّى (‏2026-10-24).
+                if (!Services.Deals.CheckoutCart.Buyable(listing)) { line++; continue; }
 
                 var amount = item.UnitPriceSar * item.Quantity;
-                var deal = await deals.StartAsync(slug, pattern,
-                    initiatorId: userId, initiatorName: name,
-                    listingId: item.ListingId, listingTitle: item.Title,
-                    amountSar: amount,
-                    attributes: new()
-                    {
-                        ["qty"] = item.Quantity.ToString(),
-                        ["addr"] = addr,
-                        ["phone"] = phone,
-                        // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
-                        // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم.
-                        ["pay_method"] = payMethod
-                    });
+                Services.Deals.Deal deal;
+                try
+                {
+                    deal = await deals.StartAsync(slug, pattern,
+                        initiatorId: userId, initiatorName: name,
+                        listingId: item.ListingId, listingTitle: item.Title,
+                        amountSar: amount,
+                        id: Services.Deals.CheckoutClaim.DealIdFor(slug, userId, cart.UpdatedAt, line++, item.ListingId),
+                        // وطَريقُ بَوّابَةِ المَتجَرِ يُعَلَّمُ في الوِلادَةِ نَفسِها — فَلا تَعلَقُ صَفقَتُه بِلا فاتورَةٍ وتَدخُلُ «دَفع» بِلا مال
+                        // (‏2026-10-13، G5 (xvi-g)؛ `GatewayPayments.MarkedAtBirth` و`AwaitsPayment`). وما سِواه بِحَرفِه.
+                        // (‏2026-11-05، الموجَة ١٢ G3 · ٨ — D-6): وتَجميعُ فِئَةِ الإعلانِ مِن فِئاتِ المَتجَرِ (`DealReturnRequest.CategoryKindOf`) — يَقرَؤُه «طَلَب استِرجاع»
+                        // فَلا يُرسَمُ عَلى خِدمَةٍ أَو فَعّالِيَّة (د30)؛ وبِلا تَجميعٍ لا مِفتاح.
+                        attributes: Services.Deals.DealReturnRequest.KindAtBirth(Services.Deals.GatewayPayments.MarkedAtBirth(new()
+                        {
+                            ["qty"] = item.Quantity.ToString(),
+                            // بِالثابِتَينِ لا بِحَرفِيَّة: القارِئُ (تَفصيلُ الصَفقَةِ لِلبائِع)
+                            // يَقرَأُ نَفسَ الحَرف (P1-4).
+                            [Services.Deals.Deal.DeliveryAddressAttribute] = addr,
+                            [Services.Deals.Deal.DeliveryPhoneAttribute] = phone,
+                            // المُطَبَّعَةُ لا الخام — فَما يُقرَأُ مِن
+                            // الصَفقَةِ بَعدَ سَنَةٍ قيمَةٌ مِن المَعجَم. وبِالثابِتِ الَّذي يَقرَأُ بِه
+                            // `DealsPolicy` لا بِحَرفِيَّة — الكاتِبُ والقارِئُ حَرفٌ واحِد.
+                            [Services.Deals.CheckoutPayMethods.AttributeKey] = payMethod
+                        }, viaGateway), Services.Deals.DealReturnRequest.CategoryKindOf(tenant?.Categories, listing.CategorySlug)));
+                }
+                catch (JasperFx.ConcurrencyException) when (created.Count == 0)
+                {
+                    return Results.Redirect(Link(req, slug, "deals"));
+                }
                 if (firstDealId == Guid.Empty) firstDealId = deal.Id;
-                if (listing.Attributes.TryGetValue("owner_id", out var oid))
-                    await deals.AttachRefAsync(slug, deal.Id, "listing_owner", oid);
-
+                created.Add(deal.Id);
+                // **والحَجزُ ومَراجِعُه قَبلَ الرَبط** (‏ADR-036 §٨، ‏2026-10-12؛ مُراجَعَةُ تَيّارِ S6a الأولى — ولا
+                // يُعادُ حَرفٌ فَوقَه): كانَت كُتلَةُ الدَفعِ بَعدَ رَبطِ البائِع، والصَفقَةُ بَعدَ الرَبطِ في قائِمَتِه وهو
+                // طَرَفٌ يُلغي عِندَ `Offered` — فَإلغاؤُه أَثناءَ نِداءِ المُزَوِّدِ لا يَجِدُ `payment_id` فَلا يُستَرجَعُ شَيء،
+                // ثُمَّ يُلحَقُ المَرجِعُ عَلى صَفقَةٍ مُلغاة (`DealCheckoutPaymentOrderTests`). فَيُحجَزُ المَبلَغُ ويُلحَقُ
+                // مَرجِعُه ما دامَت الصَفقَةُ لا يَراها غَيرُ المُشتَري ومالِكِ التَطبيق، ثُمَّ يُربَطُ البائِع.
                 // اِحجِز المَبلَغ عَبر مُزَوِّد الدَّفع (Authorize، لا
                 // capture بَعد — يَتِمّ الـ capture عِندَ تَأكيد البائِع).
+                // (و«عِندَ تَأكيدِ البائِع» لَم يَصدُق حَرفاً: القَبضُ عِندَ دُخولِ `Paid` في `MoveAsync`، وكانَ
+                // يُدخِلُها أَيُّ الطَرَفَين؛ ومُنذُ ‏ADR-033 §٦‑ط (‏2026-10-11) يُدخِلُها المُشتَري وَحدَه — فاعِلُ
+                // `Paid` — بِنَقرَةِ «تَأكيد: دَفع». يُصَحَّحُ ولا يُعادُ حَرفٌ فَوقَه.)
                 // **والنَقدُ عِندَ الاستِلامِ لا يَستَدعي المُزَوِّد** —
                 // والقَرارُ مِن الدالَّةِ النَقِيَّةِ لا مِن حَرفِيَّةٍ
                 // في الجِسم.
                 // idempotency-key بِـ dealId يَمنَع تَكرار الـ authorize
                 // لَو أَعادَ المُستَخدِم submit بِنَفس النَّموذَج.
+                // (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-1 — ولا يُعادُ حَرفٌ فَوقَه: لَم يَصدُق قَبلَ اليَوم — المُعَرِّفُ كانَ جَديداً في كُلِّ إرسال
+                // فَالمِفتاحُ لا يَمنَعُ شَيئاً (تَوصيفُه `94a7ef0`). وصَدَقَ بِالمُطالَبَةِ أَعلاه: المُعَرِّفُ مِن نُسخَةِ السَلَّة، والإرسالُ الثاني يُرَدُّ قَبلَ هذا السَطر.)
                 if (Services.Deals.CheckoutPaymentPolicy.CallsProvider(payMethod))
                 {
+                    // وبِبَوّابَةِ المَتجَرِ لا حَجزَ هُنا — الفاتورَةُ بَعدَ الحَلقَة (‏ADR-032 الخُطوَة 10).
+                    if (!viaGateway)
                     try
                     {
                         var pr = await payments.AuthorizeAsync(new(
@@ -3012,21 +3393,78 @@ public static class MarketplaceTemplateExtensions
                     catch (Exception ex)
                     {
                         // فَشَل الدَّفع لا يَكسِر الـ POST بِأَكمَلِه — الصَّفقَة
-                        // تَبقى في حالَة Booked لكِن مَعلَّمَة بِخَطَأ، والمالِك
+                        // تَبقى في حالَة Offered لكِن مَعلَّمَة بِخَطَأ، والمالِك
                         // يَستَطيع رُؤيَتها يَدَويّاً.
                         await deals.AttachRefAsync(slug, deal.Id, "payment_error", ex.Message);
+                        holdFailed = true;
                     }
+                }
+                // (‏2026-10-29، قَرارُ المالِك د8 (٢) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: «الصَّفقَة تَبقى في حالَة Offered … والمالِك يَستَطيع رُؤيَتها» لَم يَعُد —
+                // سُلوكٌ واحِدٌ في الطَريقَين: لا يولَدُ بَندٌ بَعدَه، وتُلغى صَفَقاتُ السَلَّةِ بَعدَ الحَلقَةِ ويُفَكُّ ما حُجِز، والسَلَّةُ كَما هي بِرَمزِها.)
+                if (holdFailed) break;
+
+                if (listing.Attributes.TryGetValue("owner_id", out var oid))
+                {
+                    await deals.AttachRefAsync(slug, deal.Id, "listing_owner", oid);
+                    // **والبائِعُ طَرَفٌ مُقابِلٌ مِن الوِلادَة** (‏ADR-033 §٦،
+                    // ‏2026-10-11): صُفوفُ `counterparty` في الكاتالوج (Booked ·
+                    // Shipping · Delivered) تُسَمّيه مِن أَوَّلِ لَحظَة، و`/accept`
+                    // يَبقى فِعلَه هُوَ — بِهُوِيَّتِه لا بِاستِعارَةِ المُبادِر.
+                    await deals.BindListingOwnerAsync(slug, deal.Id, oid);
+                    born.Add(deal.Id);
+                    bornVendors.Add((deal.Id, oid));
                 }
             }
 
+            // **الفاتورَةُ الواحِدَةُ قَبلَ حَذفِ السَلَّة** (‏ADR-032 الخُطوَة 10): بِمَجموعِ الصَفَقاتِ ومُعَرِّفاتِها، ورابِطُ العَودَةِ صَفحَةُ
+            // `pay/return` بِالصَفقَةِ الأولى. وإن لَم تُفتَح أَلغَت الخِدمَةُ الصَفَقاتِ بِاسمِ المُشتَري ولَم يُخصَم شَيء — فَتَعودُ الاستِمارَةُ
+            // بِرَمزِها والسَلَّةُ كَما هي. وإن فُتِحَت حُوِّلَ المُشتَري إلى صَفحَةِ الدَفعِ المُستَضافَة.
+            // **ولا يُشعَرُ بائِعٌ بِطَلَبٍ لَم تُفتَح فاتورَتُه — لا بِوِلادَتِه ولا بِإلغائِه** (‏2026-10-13، G5 (xv-g)؛ ‏ADR-032 §٨‑ح‑١٠؛ قَرارٌ لا تَرتيبُ
+            // أَسطُر): الرُجوعُ أَدناه قَبلَ إشعارِ الوِلادَة، فَيَسمَعُ البائِعُ بِالطَلَبِ حينَ يَقدِرُ المُشتَري عَلى دَفعِه؛ والإلغاءُ بِاسمِ المُشتَري
+            // لا يُخبِرُ أَحَداً (`DealNotices.TellsTheBuyer`، ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه)، وسَبَبُه مَكتوبٌ عَلى الصَفقَةِ في قائِمَتِه.
+            // ومُثَبَّتٌ في `GatewayOpenFailureNoticesTests`.
+            // (‏2026-10-29، قَرارُ المالِك د8 — ولا يُعادُ حَرفٌ فَوقَه: «ولا إشعارَ إلغاءٍ لِبائِعٍ في الأُنبوبِ كُلِّه» لَم يَعُد يَصدُق — صارَ لِلبائِعِ إشعارُ إلغاءٍ
+            // واحِدٌ (`DealNotices.NotifyVendorCancelledAsync`) تَمُرُّ بِه أَبوابُ الإلغاء؛ والقَرارُ نَفسُه يَستَثني هذا الفَرع: لَم يُخبَر بِالوِلادَةِ فَلا يُخبَرُ بِالإلغاء.)
+            // والحَجزُ الَّذي تَعَذَّرَ يَمشي طَريقَ الفاتورَةِ الَّتي لَم تُفتَح بِحَرفِه: الإلغاءُ بِاسمِ المُشتَري، والسَلَّةُ بِنُسخَةٍ جَديدَة، والرُجوعُ بِرَمزِه قَبلَ أَيِّ إشعار.
+            if (holdFailed)
+            {
+                await gateway.CancelUnsecuredAsync(slug, new Services.Deals.DealPayer(userId), created, l["checkout.payment.cancel_hold_failed"]);
+                cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync();
+                return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy.RefusalPath(Services.Deals.CheckoutPayMethods.HoldFailed)));
+            }
+            var opened = viaGateway && created.Count > 0 ? await gateway.OpenInvoiceAsync(slug, new Services.Deals.DealPayer(userId), created,
+                tenant?.Name ?? slug, Billing.PayPalOrderSurface.OriginFrom(req) + Link(req, slug, Services.Deals.GatewayReturn.PathFor(firstDealId, null)), l) : null;
+            // والسَلَّةُ تَبقى — بِنُسخَةٍ جَديدَة (‏2026-10-24، ‏ADR-036 §١٤): صَفَقاتُ هذِه المُحاوَلَةِ أُلغِيَت بِمُعَرِّفاتِ نُسخَتِها، فَإعادَةُ المُشتَري تَلِدُ بِغَيرِها.
+            if (opened is { Ok: false }) { cart.UpdatedAt = DateTime.UtcNow; s.Store(cart); await s.SaveChangesAsync(); }
+            if (opened is { Ok: false }) return Results.Redirect(Link(req, slug, Services.Deals.CheckoutPaymentPolicy
+                .RefusalPath(Services.Deals.CheckoutPayMethods.GatewayOpenFailed)));
+
+            // **ومُنتَجاتُ البائِعِ الواحِدِ مِن هذِه السَلَّةِ تُشحَنُ بِطَلَبٍ واحِدٍ وبوليصَةٍ واحِدَة** (‏2026-10-29، قَرارُ المالِك د13 «ب»؛ تَوصيفُه `ee46c53`):
+            // يُكتَبُ لِكُلِّ صَفقَةٍ مِن مَجموعَةِ بائِعٍ (اثنَتانِ فَأَكثَر) أَخَواتُها — نَسَقُ أَخَواتِ الفاتورَة — بَعدَ أَن نَجَحَ الطَلَب، ولا يُكتَبُ لِصَفقَةٍ وَحدَها لِبائِعِها.
+            // والصَفقَةُ لِكُلِّ بَندٍ كَما كانَت: التَجميعُ عِندَ الشَحن (`DealShipping.ShipAsync`) لا في نَموذَجِ الصَفقَة.
+            await Services.Deals.DealShipGroup.WriteAsync(deals, slug, bornVendors);
+
             s.Delete<ACommerce.Kit.Cart.Cart>(userId);
             await s.SaveChangesAsync();
+            // **بَعدَ الحَفظ**: إشعارٌ لِمالِكِ إعلانِ كُلِّ صَفقَةٍ عَلى الأُنبوبِ القائِم
+            // (وَثيقَةٌ ثُمَّ جَرَسٌ ثُمَّ دَفعٌ فَوريّ) — كانَ صِفراً، فَالبائِعُ لا يَعلَمُ
+            // بِالطَلَبِ إلّا إن فَتَحَ «صَفقات» بِنَفسِه (P1-5). التَركيبُ في `DealNotices`.
+            await notices.NotifyNewDealsAsync(slug, born, l);
 
-            return Results.Redirect(Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
-        }).DisableAntiforgery()
+            return Results.Redirect(opened?.Url ?? Link(req, slug, firstDealId == Guid.Empty ? "deals" : $"deals/{firstDealId}"));
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // POST /{slug}/vendor/{vendorId}/chat — اِبدَأ مُحادَثَة مَع بائِع.
+        //
+        // كانَ يَرتَدُّ إلى `chat/{id}` — مَسارٌ **لا صَفحَةَ لَه**: صِفرُ `@page`
+        // بِـ`/{slug}/chat/` في المُستَودَع (مَقيس ‏2026-10-11)، وغُرفَةُ
+        // المُحادَثَةِ `chats/{conversationId}` (`ChatRoom.razor`). فَكانَ زِرُّ
+        // «تَواصَل مَع البائِع» في `VendorProfile` يُنشِئُ المُحادَثَةَ **ثُمَّ
+        // يُسقِطُ الناقِرَ عَلى «غَيرُ مَوجود»** — بابٌ يَفتَحُ عَلى لا شَيء
+        // (القاعِدَة ١٢)؛ وأُنبوبا البَدءِ الآخَران (`listings/{id}/chat`،
+        // `users/{userId}/chat`) يَرتَدّانِ إلى `chats/` أَصلاً. مُثَبَّتٌ في
+        // `ChatStartRedirectTests`.
         app.MapPost("/{slug}/vendor/{vendorId:guid}/chat",
             async (string slug, Guid vendorId, HttpRequest req, IDocumentStore store) =>
         {
@@ -3036,53 +3474,34 @@ public static class MarketplaceTemplateExtensions
             await using var s = store.LightweightSession(slug);
             var me = await s.LoadAsync<User>(userId);
             var vendor = await s.LoadAsync<User>(vendorId);
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥؛ تَوصيفُه 9dc8354) بائِعٌ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) يُرَدُّ إلى صَفحَتِه قَبلَ أَيِّ كِتابَة — كانَ
+            // البابُ لا يَسأَلُ شَيئاً فَتُفتَحُ مُحادَثَةٌ مَعَ حِسابٍ مَمحُوّ. والصَفحَةُ لا تَرسُمُ الزِرَّ لَه بِالسُؤالِ نَفسِه.
+            if (Services.Identity.AccountErasure.PartnerGone(vendor)) return Results.Redirect(Services.ChatStartReturn.Failure(Link(req, slug, $"vendor/{vendorId}"), Services.ChatStartReturn.PartnerMissing));
             // اِبحَث مُحادَثَة قائِمَة بَين الطَّرَفَين (بِأَيّ اتِّجاه).
             var existing = await s.Query<ACommerce.Kit.Chat.Conversation>()
                 .Where(c => (c.OwnerId == userId && c.PartnerId == vendorId)
                          || (c.OwnerId == vendorId && c.PartnerId == userId))
                 .FirstOrDefaultAsync();
             if (existing is not null)
-                return Results.Redirect(Link(req, slug, $"chat/{existing.Id}"));
+                return Results.Redirect(Link(req, slug, $"chats/{existing.Id}"));
             var convo = new ACommerce.Kit.Chat.Conversation
             {
                 Id = Guid.NewGuid(),
-                OwnerId = userId, OwnerName = me?.FullName ?? "أَنا",
-                PartnerId = vendorId, PartnerName = vendor?.FullName ?? "البائِع",
+                // ‏(‏2026-10-30، B-PRIV-3؛ د40 «ج») بِـ`ActorName.Of` لا `FullName` — اسمُ نَشاطِ البائِعِ حَيثُ وُجِد، كَصَفحَتِه وصَفحَةِ الصَفقَة.
+                OwnerId = userId, OwnerName = Services.Queries.ActorName.Of(me) ?? "أَنا",
+                PartnerId = vendorId, PartnerName = Services.Queries.ActorName.Of(vendor) ?? "البائِع",
                 CreatedAt = DateTime.UtcNow, LastAt = DateTime.UtcNow
             };
             s.Store(convo);
             await s.SaveChangesAsync();
-            return Results.Redirect(Link(req, slug, $"chat/{convo.Id}"));
+            return Results.Redirect(Link(req, slug, $"chats/{convo.Id}"));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
-        // ─── Studio Reviews (تَقييم مُتَبادَل لِصَفقَة مُكتَمِلَة) ─────────
-        app.MapPost("/studio/apps/{slug}/deals/{id:guid}/review",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Incubator.StudioAuth auth,
-                   Services.Deals.DealsService deals,
-                   ACommerce.Kit.Reviews.ReviewsService reviews) =>
-        {
-            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
-            var body = req.Form["body"].ToString().Trim();
-            var targetIsCounterparty = req.Form["target"].ToString() == "counterparty";
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals");
-
-            var (target, targetName, author, authorName) = targetIsCounterparty
-                ? (deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—",
-                   deal.InitiatorId, deal.InitiatorName)
-                : (deal.InitiatorId, deal.InitiatorName,
-                   deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—");
-            if (target == Guid.Empty)
-                return Results.Redirect($"/studio/apps/{slug}/deals/{id}?err=no-target");
-
-            var r = await reviews.SubmitAsync(slug, target, targetName, author, authorName,
-                rating, body, dealId: id, dealPattern: deal.Pattern);
-            await deals.AttachRefAsync(slug, id, $"review_{(targetIsCounterparty ? "cp" : "init")}", r.Id.ToString("N"));
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).DisableAntiforgery();
+        // ─── لا «تَقييمَ نِيابَةً» مِن الاستوديو (‏2026-10-29، قَرارُ المالِك د39 «ب») ─────────
+        // كانَت هُنا `POST /studio/apps/{slug}/deals/{id}/review`: تَسأَلُ مِلكِيَّةَ المَتجَرِ ثُمَّ تَكتُبُ بِاسمِ أَيِّ الطَرَفَينِ تَقييماً «مَوثوقاً» في أَيِّ
+        // مَرحَلَةٍ بِلا `DealReviewAuthorization` ولا مُعَرِّفٍ حَتمِيّ (تَوصيفُها `DealStudioProxyReviewTests`). «لا يكتب التقييم إلا صاحبه بعد اكتمال
+        // صفقته» — فَحُذِفَت هِيَ واستِمارَتُها ونَصُّ تَلميحِها، وبَقِيَ بابُ العُضوِ `/{slug}/deals/{id}/review` بِـ`DealReviews` الكاتِبَ الوَحيد.
 
         // ─── Studio Listings moderation (إخفاء/إظهار/حَذف إشرافيّ) ───────
         app.MapPost("/studio/apps/{slug}/listings/{id:guid}/moderate",
@@ -3115,7 +3534,7 @@ public static class MarketplaceTemplateExtensions
                 $"listing.{action}", "listing", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/listings");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio Tickets (دَعم فَنّيّ — رَدّ + إغلاق) ──────────────────
         app.MapPost("/studio/apps/{slug}/tickets/{id:guid}/reply",
@@ -3139,7 +3558,7 @@ public static class MarketplaceTemplateExtensions
                 note: body.Length > 80 ? body[..80] + "…" : body,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/tickets/{id}?replied=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/tickets/{id:guid}/close",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3159,14 +3578,14 @@ public static class MarketplaceTemplateExtensions
         // ═══ النَّمَط العامّ: عُروض → صَفقات بَين عِدَّة أَدوار (عميل) ═══
         // عميل يُقَدِّم عَرضاً على إعلان → يُنشِئ Deal(Offered).
         app.MapPost("/{slug}/listings/{id:guid}/deal",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, $"login?returnUrl=/{slug}/listings/{id}"));
             var (userId, tenantSlug, _) = parsed.Value;
             if (tenantSlug != slug) return Results.Redirect(Link(req, slug, "login"));
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "عميل";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "عميل";
 
             decimal.TryParse(req.Form["amount"].ToString(), out var amount);
             var note = req.Form["note"].ToString().Trim();
@@ -3174,6 +3593,9 @@ public static class MarketplaceTemplateExtensions
             await using var qs = store.QuerySession(slug);
             var listing = await qs.LoadAsync<Listing>(id);
             if (listing is null || listing.IsDeleted) return Results.Redirect(Link(req, slug, "explore"));
+            // ‏(‏2026-10-30، الموجَة ١٢ F2 · ٨؛ تَوصيفُه 557b8e2) ولا عَرضَ عَلى إعلانٍ أَغلَقَ مالِكُه حِسابَه — سُؤالُ بابَي السَلَّةِ والعَرضِ بِعَينِه (`CheckoutCart.OwnerGoneAsync`)؛
+            // كانَ يُولِدُ صَفقَةً مَربوطَةً بِحِسابٍ مَمحُوٍّ لا يُنَفِّذُها أَحَد. والصَفحَةُ لا تَرسُمُ الاستِمارَةَ لَه بِالسُؤالِ نَفسِه.
+            if (await Services.Deals.CheckoutCart.OwnerGoneAsync(qs, listing)) return Results.Redirect(Link(req, slug, $"listings/{id}?err={Services.Deals.CheckoutCart.OwnerGoneCode}"));
             if (listing.Attributes.TryGetValue("owner_id", out var oid) && oid == userId.ToString())
                 return Results.Redirect(Link(req, slug, $"listings/{id}?err=self"));
 
@@ -3187,85 +3609,132 @@ public static class MarketplaceTemplateExtensions
 
             if (oid is not null && Guid.TryParse(oid, out var ownerGuid))
                 await deals.AttachRefAsync(slug, deal.Id, "listing_owner", ownerGuid.ToString());
+            // **ومالِكُ الإعلانِ يُشعَرُ بِالعَرض** — كانَ هذا المَسارُ يُولِدُ الصَفقَةَ بِصِفرِ إشعارٍ
+            // و`/checkout/submit` يُشعِر (فَجوَةٌ تَرَكَتها P1-5): البائِعُ لا يَعلَمُ بِعَرضٍ يَنتَظِرُ قَبولَه
+            // إلّا إن فَتَحَ «صَفقات». النِداءُ نَفسُه بَعدَ أَن حُفِظَت الصَفقَةُ ومَرجِعُها، والتَركيبُ في
+            // `DealNotices` (عَرضٌ عَلى إعلانٍ بِلا مالِكٍ لا يُشعِرُ أَحَداً — تَقرَأُ المَرجِعَ المَحفوظ).
+            await notices.NotifyNewDealsAsync(slug, new[] { deal.Id }, l);
 
             return Results.Redirect(Link(req, slug, $"deals/{deal.Id}"));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // مالِك الإعلان يَقبَل عَرضاً → Booked + يُصبِح الطَّرَف الثاني.
+        // (ولِصَفقَةِ السَلَّةِ هُوَ الطَرَفُ مِن الوِلادَة — ‏ADR-033 §٦‑ب‑١ — فَالقَبولُ يُحَرِّكُها
+        // ولا يُعَيِّنُه؛ وفي العَرضِ عَلى إعلانٍ يُعَيِّنُه ثُمَّ يُحَرِّك. صُحِّحَ ‏2026-10-11، مُراجَعَةٌ ثالِثَة.)
+        //
+        // **والحارِسُ في تَوقيعِ الخِدمَة** (القاعِدَة ٦؛ ‏ADR-033 §٢‑ج‑أ،
+        // ‏2026-10-11): كانَت هذِه النُقطَةُ تُعَيِّنُ **الناقِرَ نَفسَه** طَرَفاً
+        // مُقابِلاً لِأَيِّ صَفقَةٍ بِجَلسَةِ مَتجَرٍ وَحدَها (موجَزُ الفَجَوات
+        // P0-3) — والشاشَةُ تُخفي الزِرَّ عَن غَيرِ المالِك، و`curl` لا يَرى
+        // الشاشَة. القَرارُ كُلُّه في `DealAcceptAuthorization.Validate`
+        // النَقِيَّة، وهذا المَسارُ يُصَرِّحُ بِهُوِيَّةِ القابِلِ فَقَط؛
+        // والرَفضُ يَعودُ إلى الصَفحَةِ بِرَمزِه — نَسَقُ `/cancel` نَفسُه.
         app.MapPost("/{slug}/deals/{id:guid}/accept",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "المالِك";
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect(Link(req, slug, "deals"));
-            await deals.AssignCounterpartyAsync(slug, id, userId, userName);
-            await deals.AdvanceAsync(slug, id, deal.InitiatorId, userName, "قُبِلَ العَرض");
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "المالِك";
+            var res = await deals.AcceptAsync(slug, id, new Services.Deals.DealAcceptor(userId, userName));
+            // والمُشتَري يَعلَمُ أَنّ طَلَبَه قُبِل — عَلى نَسَقِ `offer_accepted` (P1-5).
+            if (res.Ok) await notices.NotifyAcceptedAsync(slug, res.Deal!, userName, l);
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
         }).DisableAntiforgery()
           .RequireStoreWritable();
 
         // أَيّ طَرَف يُحَرِّك المَرحَلَة التالِيَة بِحَسَب دَورِه.
         app.MapPost("/{slug}/deals/{id:guid}/advance",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
                    Services.Deals.DealsService deals) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             var note = req.Form["note"].ToString().Trim();
-            await deals.AdvanceAsync(slug, id, userId, userName, note);
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
-        }).DisableAntiforgery()
+            // والمَرحَلَةُ الَّتي رُسِمَت عَلَيها الاستِمارَةُ تُمَرَّرُ `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣): كانَت نَقرَتانِ مُتَتالِيَتانِ
+            // تَمضِيانِ مَرحَلَتَين — صَفقَةُ نَقدٍ مِن «حَجز» إلى «شَحن» بِلا بوليصَة (تَوصيفُه `23c362a`). وما سِوى اسمِ مَرحَلَةٍ لا يُسأَلُ عَنه كَما كان.
+            var res = await deals.AdvanceAsync(slug, id, userId, userName, note, from: Services.Deals.DealsService.ExpectedStage(req.Form["from"].ToString()));
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Code is { } code ? $"?err={code}" : "")));
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
+        // **والبائِعُ المَربوطُ يُلغي عِندَ `Offered` — رَفضُه لِلطَلَب — والمُشتَري يُخبَر** (‏ADR-033 §٦‑ج
+        // مُلحَقاً، ‏2026-10-11): الرَبطُ عِندَ الوِلادَةِ جَعَلَ البائِعَ طَرَفاً يَملِكُ الإلغاءَ مِن أَوَّلِ لَحظَة
+        // (`DealCancelAuthorization`)، فَأُبقِيَ وثُبِّتَ — وكانَ الإلغاءُ صامِتاً. القَرارُ «مَن يُشعَر»
+        // والتَركيبُ في `DealNotices`؛ ومَن يُلغي طَلَبَه هُوَ لا يُشعَر.
         app.MapPost("/{slug}/deals/{id:guid}/cancel",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals) =>
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             var reason = req.Form["reason"].ToString().Trim();
             // ‏§١١٫٦ أُغلِقَت: الجَلسَةُ الصالِحَةُ لَم تَعُد كافِيَةً —
             // الحارِسُ في تَوقيعِ الخِدمَة، وهذا المَسارُ يُصَرِّح
             // بِأَنَّه **لَيسَ** مُشرِفَ مَتجَر. مُستَخدِمُ المَتجَر
             // يُلغي صَفقَتَه هُوَ لا صَفقَةَ غَيرِه.
-            var res = await deals.CancelAsync(slug, id, new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false),
-                string.IsNullOrEmpty(reason) ? "إلغاء" : reason);
+            // والطَلَبُ كُلُّه — كُلُّ صَفَقاتِ فاتورَةِ البَوّابَةِ المَفتوحَة — بِـ`scope=order` (‏2026-10-13، G5 M4؛ ‏ADR-032 §٨‑ز مُلحَقاً): إلغاءُ
+            // صَفقَةٍ واحِدَةٍ مِنها يُرَدُّ بِـ`deal_invoice_shared`، والصَفحَةُ تَرسُمُ هذا البابَ بَدَلَه لِمَن يُلغي صَفَقاتِ الفاتورَةِ كُلَّها.
+            var by = new Services.Deals.DealCanceller(userId, userName, IsStoreAdmin: false);
+            var why = string.IsNullOrEmpty(reason) ? "إلغاء" : reason;
+            var order = req.Form["scope"].ToString() == "order"
+                ? await deals.CancelWholeInvoiceAsync(slug, id, by, why)
+                : null;
+            var res = order?.Result ?? await deals.CancelAsync(slug, id, by, why);
+            foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))
+                await notices.NotifyCancelledAsync(slug, gone, userId, userName, l);
             return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
-        }).DisableAntiforgery()
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
-        // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
-        app.MapPost("/{slug}/deals/{id:guid}/review",
-            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
-                   Services.Deals.DealsService deals,
-                   ACommerce.Kit.Reviews.ReviewsService reviews) =>
+        // ─── «طَلَب استِرجاع» (‏2026-10-29، قَرارُ المالِك د30 «١»؛ ‏ADR-047 §٥) ─────────
+        // زِرٌّ لِلمُشتَري في بَيعِ السِلَعِ بَعدَ التَسليمِ ولِسَبعَةِ أَيّامٍ مِنه (المادَّة ١٣): يُخبِرُ البائِعَ ويُسَجَّلُ في سِجِلِّ الصَفقَة، ولا يُحَرِّكُ مالاً.
+        // الحارِسُ جَلسَةُ العُضوِ قَبلَ أَيِّ حَقل، والقَرارُ كُلُّه في `DealReturnRequest` بِالوَقتِ المُمَرَّرِ والكِتابَةُ في الخِدمَة، والإشعارُ بَعدَ النَجاحِ وَحدَه.
+        app.MapPost("/{slug}/deals/{id:guid}/return",
+            async (string slug, Guid id, HttpRequest req, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealsService deals, Services.Deals.DealNotices notices, L l) =>
         {
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
             var (userId, _, _) = parsed.Value;
-            var userName = AuthSession.ResolveUserName(req, slug) ?? "مُستَخدِم";
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
+            var res = await deals.RequestReturnAsync(slug, id, new Services.Deals.DealReturnRequester(userId, userName),
+                req.Form["reason"].ToString().Trim(), DateTime.UtcNow);
+            if (res.Ok) await notices.NotifyReturnRequestedAsync(slug, res.Deal!, deals, l);   // ‏(‏2026-11-04، G1 · ٤) والبائِعُ الغائِبُ ⇐ إدارَةُ المَتجَرِ ومَرجِعُ «مَن أُخبِر»
+            return Results.Redirect(Link(req, slug, $"deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}")));
+        }).DisableAntiforgery().RequireFormBody()
+          .RequireStoreWritable();
+
+        // تَقييم الطَّرَف الآخَر بَعد اكتِمال الصَّفقَة.
+        //
+        // **والحارِسُ في تَوقيعِ الخِدمَة** (القاعِدَة ٦؛ المُراجَعَةُ الثالِثَةُ عَلى `8769fa4`،
+        // ‏2026-10-11؛ ‏ADR-033 §٦‑ح): كانَ هذا الجِسمُ يَختارُ الهَدَفَ — `CounterpartyId` لِلمُبادِرِ
+        // و`InitiatorId` لِمَن سِواه — ويَكتُبُ ما دامَ مَوجوداً، بِلا سُؤالٍ عَن الاكتِمالِ ولا
+        // العُضوِيَّةِ ولا النَفس؛ فَلَمّا رُبِطَ البائِعُ عِندَ الوِلادَةِ صارَ لِمُشتَري السَلَّةِ هَدَفٌ
+        // مِن لَحظَةِ الطَلَب. القَرارُ كُلُّه في `DealReviewAuthorization.Validate` النَقِيَّة، وهذا
+        // المَسارُ يُصَرِّحُ بِهُوِيَّةِ الكاتِبِ فَقَط. **والرَفضُ لا يُحمَلُ في `?err`**: الشاشَةُ تَرسُمُ
+        // الاستِمارَةَ مِن البَوّابَةِ نَفسِها، فَلا يَبلُغُه إلّا طَلَبٌ لَم تَرسُمه — ويَعودُ إلى حَيثُ
+        // كانَ يَعود (لا صَفقَة ← «صَفقاتي»، وإلّا صَفحَتُها).
+        app.MapPost("/{slug}/deals/{id:guid}/review",
+            async (string slug, Guid id, HttpRequest req, Services.Queries.AccountQueries actorNames,
+                   Services.Deals.DealReviews reviews) =>
+        {
+            var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
+            if (parsed is null) return Results.Redirect(Link(req, slug, "login"));
+            var (userId, _, _) = parsed.Value;
+            var userName = await actorNames.ActorNameAsync(slug, userId) ?? "مُستَخدِم";
             if (!int.TryParse(req.Form["rating"].ToString(), out var rating)) rating = 5;
             var body = req.Form["body"].ToString().Trim();
 
-            var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect(Link(req, slug, "deals"));
-            var (target, targetName) = deal.InitiatorId == userId
-                ? (deal.CounterpartyId ?? Guid.Empty, deal.CounterpartyName ?? "—")
-                : (deal.InitiatorId, deal.InitiatorName);
-            if (target != Guid.Empty && !await reviews.HasReviewedAsync(slug, userId, id))
-                await reviews.SubmitAsync(slug, target, targetName, userId, userName,
-                    rating, body, dealId: id, dealPattern: deal.Pattern);
-            return Results.Redirect(Link(req, slug, $"deals/{id}"));
-        }).DisableAntiforgery()
+            var res = await reviews.SubmitAsync(slug, id, new Services.Deals.DealReviewer(userId, userName), rating, body);
+            return Results.Redirect(Link(req, slug, res.Deal is null ? "deals" : $"deals/{id}"));
+        }).DisableAntiforgery().RequireFormBody()
           .RequireStoreWritable();
 
         // ─── Admin: تَعليق/تَفعيل مُستَأجِر (إجراء مَنصَّة) ───────────────
@@ -3297,69 +3766,79 @@ public static class MarketplaceTemplateExtensions
                 "tenant", slug, note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect("/admin");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio Deals (تَدَفُّق العَمَلِيّات: المالِك يَتَدَخَّل أَو يُنفِّذ) ─
         // كُلّ الإجراءات تَفحَص مِلكِيَّة المُستَأجِر قَبل العَمَل.
-        app.MapPost("/studio/apps/{slug}/deals/seed",
-            async (string slug, HttpRequest req, IDocumentStore store,
-                   Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals) =>
-        {
-            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
-            var pattern = req.Form["pattern"].ToString().Trim();
-            if (string.IsNullOrEmpty(pattern)) pattern = "marketplace";
-            // أَنشِئ Deal تَجريبيَّة لِعَرض التَّدَفُّق في الواجِهَة.
-            var owner = auth.UserId!.Value;
-            await deals.StartAsync(slug, pattern,
-                initiatorId: owner, initiatorName: "صاحِب الفِكرَة",
-                listingId: null, listingTitle: $"عَمَلِيَّة تَجريبيَّة — {pattern}",
-                amountSar: 250m);
-            return Results.Redirect($"/studio/apps/{slug}/deals");
-        }).DisableAntiforgery();
-
+        // (‏2026-10-29، قَرارُ المالِك د32 «٢»؛ ‏ADR-047 §٦): كانَ هُنا `POST /studio/apps/{slug}/deals/seed` — «العَمَلِيَّة التَجريبِيَّة»: يَكتُبُ بِـ`StartAsync`
+        // صَفقَةً حَقيقِيَّةً في المَتجَرِ (250، مُبادِرُها صاحِبُ الفِكرَةِ بِلا إعلان) تَقِفُ عِندَ «عَرض» لِأَنّ حارِسَ المُبادِرِ يَرُدُّ أَوَّلَ نَقرَةٍ إدارِيَّة.
+        // حُذِفَ مَعَ مَدخَلَيه (القاعِدَتانِ ١ و١٢): لا مُشتَرٍ وَهمِيٌّ ولا استِثناءٌ مِن الحارِس. والصَفَقاتُ التَجريبِيَّةُ الَّتي وُلِدَت قَبلُ باقِيَة، ويُلغيها صاحِبُ
+        // المَتجَرِ مِن الاستوديو بِبابِ `/cancel` أَدناه إن شاء.
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/advance",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var note = req.Form["note"].ToString().Trim();
             var deal = await deals.LoadAsync(slug, id);
-            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals");
+            // ورَدُّ كُلِّ بابٍ يَحمِلُ رَمزَه إلى صَفحَتِه، والنَصُّ مِن القامُوسِ بِبادِئَةِ الاستوديو (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)):
+            // كانَت النِقاطُ الثَلاثُ تَعودُ بِلا كَلِمَة (تَوصيفُه `StudioDealRefusalTests`).
+            if (deal is null) return Results.Redirect($"/studio/apps/{slug}/deals?err={Services.Deals.DealCancelAuthorization.DealNotFound}");
+            // ولا يُكتَبُ شَيءٌ لِصَفقَةٍ لا يُحَرِّكُها هذا المَسار — بِالدالَّةِ نَفسِها الَّتي تَرسُمُ بِها الصَفحَةُ الزِرّ
+            // (القاعِدَة ١٢؛ ‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12): كانَ الزِرُّ يُرسَمُ لِكُلِّ صَفقَةٍ لَها تالٍ، والنَقرَةُ تُرَدُّ
+            // بِلا كَلِمَةٍ عِندَ خُطوَتَي المُشتَري وصَفقَةِ البَذرَة — وبَعدَ أَن يُكتَبَ التَعيينُ حَيثُ لا طَرَف.
+            // (‏2026-10-13: والرَدُّ بِرَمزِه — `AdminPathRefusal` هي «لِماذا» الدالَّةِ نَفسِها، و`AdminPathCanMove` «لا رَمز».)
+            if (Services.Deals.DealsService.AdminPathRefusal(deal, auth.UserId!.Value) is { } refused) return Results.Redirect($"/studio/apps/{slug}/deals/{id}?err={refused}");
 
             if (deal.CounterpartyId is null)
                 await deals.AssignCounterpartyAsync(slug, id,
                     auth.UserId!.Value, "مالِك التَّطبيق");
 
-            var actorId = deal.Stage == Services.Deals.DealStage.Offered
-                ? deal.InitiatorId
-                : (deal.CounterpartyId ?? auth.UserId!.Value);
-            var result = await deals.AdvanceAsync(slug, id, actorId, "مالِك التَّطبيق (إداريّ)", note);
+            // يُحَرِّكُ بِهُوِيَّةِ جانِبِ المَتجَر — الطَرَفِ المُقابِلِ، أَو مالِكِ التَطبيقِ إن لَم يَكُن —
+            // ولا يَستَعيرُ المُشتَري بَعدَ اليَوم (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ يَستَعيرُ المُبادِرَ عِندَ
+            // `Offered` لِأَنّ الخِدمَةَ كانَت تَسأَلُ فاعِلَ المَرحَلَةِ الحالِيَّة؛ وتَسأَلُ اليَومَ فاعِلَ
+            // المَدخولَة (`Booked` = الطَرَف) — فَيَمضي بِما يَمضي بِه جانِبُ المَتجَرِ ويَقِفُ عِندَ خُطوَةِ
+            // المُشتَري (يَدفَع، يَستَلِم) كَما وَقَفَ عِندَها قَبلُ بِمَرحَلَةٍ أَبعَد.
+            var actorId = deal.CounterpartyId ?? auth.UserId!.Value;
+            // والمَرحَلَةُ الَّتي رُسِمَ عَلَيها «→ التالي» تُمَرَّرُ `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣) — نَسَقُ بابِ العُضو.
+            var result = await deals.AdvanceAsync(slug, id, actorId, "مالِك التَّطبيق (إداريّ)", note, from: Services.Deals.DealsService.ExpectedStage(req.Form["from"].ToString()));
             if (result.Ok && result.Deal is not null)
                 await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                     "deal.advance", "deal", id.ToString(),
-                    note: $"→ {result.Deal.Stage}" + (string.IsNullOrEmpty(note) ? "" : $" · {note}"),
+                    // ما بَلَغَته خُطوَةُ المالِكِ لا ما بَلَغَته الصَفقَةُ بَعدَها (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى): مُنذُ د4 قد تَدخُلُ المَنصَّةُ «دَفع» في العَمَلِيَّةِ نَفسِها.
+                    note: Services.Deals.DealsService.AdvanceAuditNote(result.Deal, actorId, note),
                     ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).DisableAntiforgery();
+            // والمُشتَري يَعلَمُ أَنّ إدارَةَ المَتجَرِ قَبِلَت طَلَبَه (‏2026-10-24، تَدقيقُ الإطلاق brief-P1a-1) — نَسَقُ `/accept` والـAPI؛ كانَ صامِتاً (`727bc9f`).
+            if (Services.Deals.DealNotices.IsAcceptance(result)) await notices.NotifyAcceptedByStoreAsync(slug, result.Deal!, auth.UserId!.Value, l);
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (result.Code is { } code ? $"?err={code}" : ""));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/cancel",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
                    Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
-                   Services.Audit.AuditWriter audit) =>
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
         {
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var reason = req.Form["reason"].ToString().Trim();
             if (string.IsNullOrEmpty(reason)) reason = "إلغاء إداريّ";
             // ‏`StudioOwnsAsync` أَعلاه أَثبَتَ مِلكِيَّةَ المَتجَر —
             // فَالسُلطَةُ تُقال هُنا صَراحَةً بَدَلَ أَن تُستَنتَج.
-            var res = await deals.CancelAsync(slug, id,
-                new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true), reason);
-            if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
-                "deal.cancel", "deal", id.ToString(), note: reason,
-                ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).DisableAntiforgery();
+            // والطَلَبُ كُلُّه بِـ`scope=order` (‏2026-10-13، G5 M4): إلغاءُ صَفقَةٍ واحِدَةٍ مِن فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَةٍ يُرَدُّ بِرَمزِه.
+            var by = new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true);
+            var order = req.Form["scope"].ToString() == "order" ? await deals.CancelWholeInvoiceAsync(slug, id, by, reason) : null;
+            var res = order?.Result ?? await deals.CancelAsync(slug, id, by, reason);
+            foreach (var gone in order?.Cancelled ?? (res.Ok ? new[] { res.Deal! } : Array.Empty<Services.Deals.Deal>()))
+            {
+                await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+                    "deal.cancel", "deal", gone.Id.ToString(), note: reason,
+                    ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+                // والمُشتَري يُخبَرُ كَما يُخبَرُ مِن بابِ العُضو — بِنَصِّ «إدارَةِ المَتجَر» (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛
+                // ‏ADR-036 §١٢‑٣): كانَ هذا الإلغاءُ صامِتاً (تَوصيفُه `DealNoticeDoorsTests`). و«مَن يُخبَر» والتَركيبُ في الخِدمَة.
+                await notices.NotifyCancelledByStoreAsync(slug, gone, auth.UserId!.Value, l);
+            }
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/deals/{id:guid}/dispute",
             async (string slug, Guid id, HttpRequest req, IDocumentStore store,
@@ -3369,12 +3848,37 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
             var reason = req.Form["reason"].ToString().Trim();
             if (string.IsNullOrEmpty(reason)) reason = "نِزاع";
-            await deals.DisputeAsync(slug, id, auth.UserId!.Value, "مالِك التَّطبيق", reason);
-            await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
+            // ولا تَدقيقَ لِنِزاعٍ لَم يُكتَب، ورَدُّه بِرَمزِه إلى الصَفحَة (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (ii)؛ ‏ADR-036 §١٢‑٢): كانَ
+            // السَطرُ يُكتَبُ بِلا شَرطٍ والنَتيجَةُ تُسقَط — تَعارُضُ نُسخَةٍ أَو صَفقَةٌ غَيرُ فَعّالَة تُسَجَّلُ «نِزاعاً» (تَوصيفُه `1b73c48`).
+            var res = await deals.DisputeAsync(slug, id, auth.UserId!.Value, "مالِك التَّطبيق", reason);
+            if (res.Ok) await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
                 "deal.dispute", "deal", id.ToString(), note: reason,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
-            return Results.Redirect($"/studio/apps/{slug}/deals/{id}");
-        }).DisableAntiforgery();
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Code}"));
+        }).RequireFormBody().DisableAntiforgery();
+
+        // ─── حَسمُ النِزاع — بِجِوارِ بابِ فَتحِه (‏2026-10-29، قَرارُ المالِك د38؛ ‏ADR-047 §٢) ─────────
+        // كانَت «نِزاع» طَريقاً بِلا مَخرَج (تَوصيفُه `DealDisputeDeadEndTests`). صاحِبُ المَتجَرِ يَحسِمُ بِأَحَدِ البَديلَين — «إلغاء» بِأَثَرِ الإلغاءِ الماليِّ القائِم
+        // أَو «استئناف» مِن المَرحَلَةِ نَفسِها — والقَرارُ كُلُّه في `DealDisputeResolution` والكِتابَةُ في `DealsService.ResolveDisputeAsync`، والطَرَفانِ يُخبَرانِ
+        // بِالنَتيجَة (`DealNotices.NotifyDisputeResolvedAsync`). والسُلطَةُ تُقالُ صَراحَةً بَعدَ `StudioOwnsAsync`، ولا تَدقيقَ ولا إشعارَ لِحَسمٍ لَم يُكتَب.
+        app.MapPost("/studio/apps/{slug}/deals/{id:guid}/resolve",
+            async (string slug, Guid id, HttpRequest req, IDocumentStore store,
+                   Services.Incubator.StudioAuth auth, Services.Deals.DealsService deals,
+                   Services.Audit.AuditWriter audit, Services.Deals.DealNotices notices, L l) =>
+        {
+            if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
+            var outcome = req.Form["outcome"].ToString().Trim();
+            var note = req.Form["note"].ToString().Trim();
+            var by = new Services.Deals.DealCanceller(auth.UserId!.Value, "مالِك التَّطبيق", IsStoreAdmin: true);
+            var res = await deals.ResolveDisputeAsync(slug, id, by, outcome, string.IsNullOrEmpty(note) ? l["studio.deal.resolve_default_reason"] : note);
+            if (res.Ok)
+            {
+                await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق", "deal.dispute_resolve", "deal", id.ToString(),
+                    note: $"{res.Outcome}: {note}", ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
+                await notices.NotifyDisputeResolvedAsync(slug, res.Deal!, auth.UserId!.Value, res.Outcome!, l);
+            }
+            return Results.Redirect($"/studio/apps/{slug}/deals/{id}" + (res.Ok ? "" : $"?err={res.Violation!.Code}"));
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio per-app config saves (داخِل studio، redirect مَحَلّيّ) ─
         // مُحَقِّق المِلكِيَّة: المُستَخدِم يَجِب أَن يَكون مالِك الـ tenant.
@@ -3384,7 +3888,14 @@ public static class MarketplaceTemplateExtensions
             if (!auth.IsAuthenticated) return false;
             await using var qs = docStore.QuerySession();
             var t = await qs.LoadAsync<ACommerce.Kit.Tenants.Tenant>(slug);
-            return t is not null && t.OwnerUserId == auth.UserId!.Value;
+            if (t is null || t.OwnerUserId != auth.UserId!.Value) return false;
+            // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٨ — ADR-051 §١٥؛ التَصميم §5.4) **والمِلكِيَّةُ المُثبَتَةُ تَملَأُ حامِلَ العَدّ**: ‏`/studio/*` لا يُحَلُّ فيه مَتجَر
+            // (`studio` مَحجوز، `ReservedTenantSlugs`)، فَالحامِلُ فارِغٌ حَتّى هُنا — وهذِه الدالَّةُ تَحمِلُ القيمَ الثَلاثَ بَعدَ `await` قِراءَتِها: المَتجَرُ،
+            // ورائِدُ أَعمالِه (صاحِبُ الجَلسَة = مالِكُه)، والدَورُ `_entrepreneur`. والحامِلُ مَرجِعٌ فَيَراه الحِفظُ بَعدَ عَودَتِها (R1)، والقَرارُ نَفسُه لَم يُمَسّ.
+            ACommerce.Platform.Shared.Metering.MeterScope.Current?.Fill(t.Id,
+                entrepreneur: ACommerce.Platform.Shared.Metering.MeterScope.OwnerOf(t.OwnerUserId),
+                role: ACommerce.Platform.Shared.Metering.MeterSentinels.Entrepreneur);
+            return true;
         }
 
         // ─── حارِس ادمن المَتجَر — لِكُلّ /admin/tenants/{slug}/* ─────────
@@ -3446,7 +3957,10 @@ public static class MarketplaceTemplateExtensions
         {
             studioAuth.Load();
             if (studioAuth.IsAuthenticated)
-                return (studioAuth.UserId, studioAuth.UserName ?? "studio");
+                // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) الاسمُ مِن وَثيقَتِه لا مِن الكوكي؛ و22 مُنادِياً لِهذا الدالَّةِ لا يُمَرِّرونَ خِدمَةً،
+                // فَتُطلَبُ مِن خِدماتِ الطَلَبِ نَفسِه (نَسَقُ `TenantAuthChannelDoor.OfferedIn(http.RequestServices)`).
+                return (studioAuth.UserId, await req.HttpContext.RequestServices
+                    .GetRequiredService<Services.Queries.StudioQueries>().ActorNameAsync(studioAuth.UserId) ?? "studio");
             var parsed = AuthHandlers.ParseToken(AuthSession.ResolveToken(req, slug));
             if (parsed is not null) return (parsed.Value.UserId, "tenant_admin");
             return (null, "anonymous");
@@ -3473,7 +3987,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/branding", $"/studio/apps/{slug}/branding", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: تَأليفُ باقَةٍ لِمُستَخدِمي المَتجَر ───────────────
         // **أَوَّلُ كاتِبٍ لِـ`TenantPlanDefinition` في المُستَودَع**:
@@ -3506,7 +4020,7 @@ public static class MarketplaceTemplateExtensions
 
             var (ok, msg) = await plans.AuthorAsync(slug, definition, $"studio · {auth.UserId}");
             return Results.Redirect(ok ? $"{page}?saved=1" : $"{page}?err={Uri.EscapeDataString(msg)}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: اقتِراحُ حُزمَةِ مَظهَر ────────────────────────────
         // **الناقِصُ كانَ الاقتِراحَ لا القَرار**: دَورَةُ اعتِمادِ
@@ -3531,7 +4045,7 @@ public static class MarketplaceTemplateExtensions
 
             return Results.Redirect($"/studio/apps/{slug}/theme?" +
                 (ok ? "saved=1" : $"err={Uri.EscapeDataString(msg)}"));
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/categories/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3547,7 +4061,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/categories", $"/studio/apps/{slug}/categories", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/roles/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3563,7 +4077,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/roles", $"/studio/apps/{slug}/roles", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/regions/save", async (
             string slug, HttpRequest req, IDocumentStore store,
@@ -3579,7 +4093,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/regions", $"/studio/apps/{slug}/regions", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: save PWA apps (per-role name + icon) ───────────────
         // نَفس مَنطِق /admin/tenants/{slug}/pwa/save لَكِن داخِل واجِهَة الـ
@@ -3598,7 +4112,7 @@ public static class MarketplaceTemplateExtensions
 
             return TenantConfigSurface.Outcome(result,
                 $"/studio/apps/{slug}/pwa", $"/studio/apps/{slug}/pwa", "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── Studio: save attribute definitions for a scope ─────────────
         // نَفس مَنطِق /admin/tenants/{slug}/attributes/save لَكِن داخِل واجِهَة
@@ -3619,128 +4133,72 @@ public static class MarketplaceTemplateExtensions
             var page = $"/studio/apps/{slug}/attributes" +
                        (request.Scope is { } id ? $"?scope={id}" : "");
             return TenantConfigSurface.Outcome(result, page, page, "/studio");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
-        // بِناء Tenant فِعليّ مِن جَلسَة تَحليل (الجِسر بَين الفِكرَة والتَّطبيق).
-        app.MapPost("/studio/s/{id:guid}/build", async (
-            Guid id, HttpRequest req, HttpContext http,
-            Services.Incubator.FeasibilityAnalysisService incubator,
-            Services.Incubator.TenantFromAnalysisFactory factory,
+        // ─── إنشاءُ مَتجَرٍ بِاليَد (‏2026-11-07، الموجَة ١٣ W13-1·٣ — ADR-049 §٤) ─────────────────────────────────
+        // البابُ الوَحيدُ الَّذي كانَ يَملِكُ مِنه رائِدُ الأَعمالِ مَتجَراً هُوَ `/build` أَدناه، ويَشتَرِطُ تَحليلاً `Completed` لا يَكتُبُه إلّا نِداءُ
+        // نَموذَجٍ ناجِح — فَبِلا مِفتاحٍ لا مَتجَر. هُنا الحَرَسُ المُشتَرَكُ بِتَرتيبِه (‏`StudioStoreBirthCharacterizationTests`) وبَينَ الهُوِيَّةِ
+        // والحِصَّةِ المُوافَقَةُ الرابِعَة (كانَت تُسأَلُ في الاستِئنافِ وَحدَه)؛ ثُمَّ المَصنَعُ نَفسُه بِنَمَطٍ وقِطاعٍ فارِغَين وبِلا مَصدَر — المَتجَرُ
+        // الَّذي كانَ `/build` يَكتُبُه لِجَلسَةٍ بِالوَصفِ وَحدَه بايتاً. ولا `IDocumentStore` في التَوقيع: المُوافَقَةُ مِن `StudioQueries`.
+        // والمَسارُ حَرفِيٌّ لا ثابِتاً: ماسِحاتُ النِقاطِ (الحَرَس، والنَزيف، والمَخزَن) تَقرَأُ الحَرفِيَّ — والثابِتُ `StudioStoreCreate.Endpoint` يُطابِقُه في اختِبار.
+        app.MapPost("/studio/apps/create", async (
+            HttpRequest req, HttpContext http,
+            Services.Incubator.StudioAuth auth,
+            Services.Queries.StudioQueries studio,
             Services.Incubator.StudioTierService tier,
-            Services.Incubator.StudioAuth auth) =>
+            Services.Incubator.TenantFromAnalysisFactory factory) =>
         {
             auth.Load();
             if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
             var ownerId = auth.UserId!.Value;
-
-            var session = await incubator.LoadAsync(id);
-            if (session is null || session.OwnerUserId != ownerId)
-                return Results.Redirect("/studio");
-            if (session.Status != Services.Incubator.IncubatorStatus.Completed)
-                return Results.Redirect($"/studio/s/{id}");
-
+            if (!await studio.HasConsentedAsync(ownerId, Services.Incubator.ConsentPolicy.CurrentVersion))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.ConsentPage);
             var gate = await tier.CheckBuildAsync(ownerId);
             if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
+                return Results.Redirect($"{Services.Incubator.StudioStoreCreate.Page}?upgrade={gate.BreachCode}");
 
-            var slug    = req.Form["slug"].ToString().Trim().ToLowerInvariant();
-            var name    = req.Form["name"].ToString().Trim();
-            var color   = req.Form["color"].ToString().Trim();
-            var tagLine = req.Form["tagline"].ToString().Trim();
-            var city    = req.Form["city"].ToString().Trim();
-
-            var err = await factory.ValidateSlugAsync(slug);
-            if (err is not null)
-                return Results.Redirect($"/studio/s/{id}?build_err={Uri.EscapeDataString(err)}");
-            if (string.IsNullOrEmpty(name))
-                return Results.Redirect($"/studio/s/{id}?build_err=name_required");
-            if (!System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9A-Fa-f]{6}$"))
-                return Results.Redirect($"/studio/s/{id}?build_err=color_invalid");
-
-            // القَناةُ **تُشتَقُّ مِن المُهَيَّإ في هذِه النُسخَة**، ولا
-            // تُكتَبُ ثابِتَةً. كانَت `"phone"` في المَصنَع، وعَلى نُسخَةٍ
-            // بِالبَريدِ وَحدَه (تَوصِيَة `docs/DEPLOY.md` §٢·ب) كانَ ذلكَ
-            // يُنتِج مَتجَراً لا يَدخُلُه أَحَد. ولا قَناةَ ⇒ **لا مَتجَرَ
-            // بِبابٍ مُغلَق**: رِسالَةٌ صَريحَةٌ يَقرَؤُها العَميل.
+            var form = Services.Incubator.StudioStoreCreate.Read(req.Form);
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) استِمارَةُ الصاحِبِ نَفسُها بَعدَ أَن وَلَدَت
+            // مَتجَرَه تُجابُ بِمَتجَرِه: نَقرَتانِ يَصِلُ ثانيهِما بَعدَ الحِفظِ كانَ يُقالُ لَه «مُستَخدَم مِن قَبل» عَن مَتجَرِه، والمُتَصَفِّحُ يُبقي الجَوابَ الأَخير.
+            // يُسأَلُ بَعدَ الرَفضِ وَحدَه — عِندَ سُؤالِ المُعَرِّفِ وعِندَ وِلادَةٍ لَم تَقَع — ولا يَكتُبُ ولا يَعُدّ (‏`factory.RepeatOfAsync`).
+            if (await factory.ValidateSlugAsync(form.Slug) is { } slugRefused)
+                return Results.Redirect(slugRefused == Services.Incubator.TenantFromAnalysisFactory.SlugTaken && await factory.RepeatOfAsync(ownerId, form) is { } own
+                    ? own : Services.Incubator.StudioStoreCreate.Refused(slugRefused, form));
+            if (string.IsNullOrEmpty(form.Name))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.NameRequired, form));
+            if (!Services.Incubator.StudioStoreCreate.ColorValid(form.Color))
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.StudioStoreCreate.ColorInvalid, form));
+            // ‏(‏2026-11-07، W13-1·SEC-C1-3) حَدّا الاستِمارَةِ في الخادِم — كانا في المُتَصَفِّحِ وَحدَه؛ والمَنطِقُ في `StudioStoreCreate` لا في الجِسم.
+            if (Services.Incubator.StudioStoreCreate.LengthRefusal(form) is { } tooLong)
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(tooLong, form));
             var channel = Services.Incubator.TenantAuthChannelDoor.Default(
                 Services.Incubator.TenantAuthChannelDoor.OfferedIn(http.RequestServices));
             if (channel is null)
-                return Results.Redirect(
-                    $"/studio/s/{id}?build_err={Services.Incubator.TenantAuthChannelDoor.NoChannel}");
+                return Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantAuthChannelDoor.NoChannel, form));
 
-            var sector = session.Answers.TryGetValue("sector", out var sec) ? sec : "";
-            await factory.CreateAsync(slug, name, color, tagLine, city,
-                session.SuggestedPattern, sector, channel, ownerId, id);
-            await tier.RecordStoreBuiltAsync(ownerId);
-            return Results.Redirect($"/studio/apps/{slug}?built=1");
-        }).DisableAntiforgery();
-
-        // إعادَة تَحليل مِن داخِل لوحَة العميل (تُبقيه في مَساحَة /studio).
-        //
-        // كانَت هذه النُقطَة <b>بِلا حارِس واحِد</b> بَينَ أُختَيها
-        // المَحروسَتَين (‏/refine و/build) — مَجهول يَقلِب حالَة أَيّ دِراسَة
-        // إلى Analyzing ويُطلِق تَحليل LLM في الخَلفِيَّة بِتَكلِفَتِه.
-        // القياس الحَيّ فَضَحَها: أُختاها تَرُدّان 302 إلى /studio/auth
-        // وهي تَرُدّ 302 إلى صَفحَة النَجاح. والحارِس هُنا هُوَ
-        // <b>قَرارُهُما نَفسُه حَرفِيّاً</b> — جَلسَة studio صالِحَة، ثُمَّ
-        // مِلكِيَّة الدِراسَة — لا حارِسٌ ثانٍ مَكتوب بِيَدٍ ثانِيَة.
-        //
-        // ═══ ‏2026-08-30 — والحارِسُ الأَوَّلُ لَم يَكُنِ الحارِسَ كُلَّه ═══
-        //
-        // أُضيفَت جَلسَةُ الاستوديو والمِلكِيَّةُ ولَم تُضَف <b>بَوّابَةُ
-        // الحِصَّة</b>: قائِمَةُ الوُسَطاءِ لا تَحوي
-        // <c>StudioTierService</c> إطلاقاً. فَصاحِبُ دِراسَةٍ عَلى
-        // <c>spark</c> (تَحليلٌ واحِدٌ شَهرِيّاً) يَنقُر «إعادَة»
-        // بِلا سَقف، وكُلُّ نَقرَةٍ <b>نِداءا</b> نَموذَجِ لُغَةٍ بِـ
-        // <c>MaxTokens: 8000</c> عَلى <b>مِفتاحِ المالِك</b>.
-        //
-        // والعِلاجُ بَندان لا بَند، لِأَنّ البَوّابَةَ وَحدَها فَحصٌ
-        // ثُمَّ إطلاقٌ بِنافِذَةٍ بَينَهُما:
-        //   ‏١. <c>CheckAnalyzeAsync</c> — نَفسُ بَوّابَةِ
-        //      `ResumeStudioPromptAsync`، ونَفسُ شَكلِ `/refine`.
-        //   ‏٢. <c>TryClaimAnalysisAsync</c> — حَجزٌ ذَرِّيٌّ بِمِفتاحِ
-        //      فَرادَةٍ في Postgres، فَخَمسونَ طَلَباً عَلى نَفسِ
-        //      المُعَرِّفِ يَفوزُ مِنها واحِد.
-        //
-        // <b>والتَرتيبُ جُزءٌ مِنَ العِلاج</b>: البَوّابَةُ تَسبِقُ
-        // الحَجز (فَلا يُقلَبُ شَيءٌ لِمَن تَجاوَزَ حِصَّتَه)، والحَجزُ
-        // يَسبِقُ العَدّ (فَخاسِرُ السِباقِ لا يُنفِقُ حِصَّةً)،
-        // والعَدُّ يَسبِقُ الإطلاق.
-        app.MapPost("/studio/s/{id:guid}/analyze", async (
-            Guid id, IServiceScopeFactory scopeFactory,
-            Services.Incubator.StudioAuth auth,
-            Services.Incubator.StudioTierService tier,
-            Services.Incubator.FeasibilityAnalysisService svc) =>
-        {
-            auth.Load();
-            if (!auth.IsAuthenticated) return Results.Redirect("/studio/auth");
-
-            var session = await svc.LoadAsync(id);
-            if (session is null || session.OwnerUserId != auth.UserId!.Value)
-                return Results.Redirect("/studio");
-
-            var gate = await tier.CheckAnalyzeAsync(auth.UserId!.Value);
-            if (!gate.Allowed)
-                return Results.Redirect($"/studio/s/{id}?upgrade={gate.BreachCode}");
-
-            // الحَجزُ والتَشغيلُ لا يَفتَرِقان. وكُلُّ ما لَيسَ
-            // `Claimed` يَعني «لا تُطلِق» — والوِجهَةُ صَفحَةُ
-            // الدِراسَةِ نَفسُها، وهي تَقولُ «التَحليلُ جارٍ» بِحالَتِها
-            // لا بِرِسالَةٍ ثانِيَة. فَالرَفضُ يُرى ولا يُبتلَع.
-            var claim = await svc.TryClaimAnalysisAsync(id);
-            if (claim != Services.Incubator.FeasibilityAnalysisService.ClaimOutcome.Claimed)
-                return Results.Redirect($"/studio/s/{id}");
-
-            await tier.RecordAnalysisAsync(auth.UserId!.Value);
-            _ = Task.Run(async () =>
+            // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F2) المَصنَعُ يُدرِجُ لا يَدهَس: مَن كَتَبَ المُعَرِّفَ بَعدَ سُؤالِ `ValidateSlugAsync` أَعلاه فازَ، وهذا
+            // الطَلَبُ يُجابُ كَمَن جاءَ بَعدَه (`slug_taken` بِما كُتِب) ولا يُعَدُّ لَه مَتجَرٌ لَم يُكتَب — العَدُّ بَعدَ الإدراجِ الناجِحِ وَحدَه.
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والإدراجُ والعَدُّ وسُؤالُ السَقفِ حِفظٌ واحِد: كانَ
+            // `CheckBuildAsync` أَعلاه ثُمَّ إدراجٌ ثُمَّ عَدٌّ بِلا قُفل، فَالدَفعَةُ المُتَزامِنَةُ تَعبُرُ السَقفَ (‏60 مَتجَراً والعَدّادُ 14، و46 جَواباً 500 بَعدَ
+            // الكِتابَة). والآن المَصنَعُ يُعيدُ الوَثيقَةَ ولا يَكتُبُها، و`RecordStoreBuiltAsync` يُعيدُ السُؤالَ ويُدرِجُ ويَعُدُّ مَعاً؛ والسُؤالُ أَعلاه
+            // يَبقى رَدّاً قَبلَ قِراءَةِ حَقل.
+            var tenant = await factory.CreateAsync(form.Slug, form.Name, form.Color, form.TagLine, city: "",
+                pattern: "", sector: "", authChannel: channel, ownerId: ownerId, sourceAnalysisId: null, write: false);
+            var birth = await tier.RecordStoreBuiltAsync(ownerId, s => s.Insert(tenant));
+            if (birth.Outcome != Services.Incubator.StudioTierService.StoreBirthOutcome.Born && await factory.RepeatOfAsync(ownerId, form) is { } ownStore)
+                return Results.Redirect(ownStore);
+            return birth.Outcome switch
             {
-                using var scope = scopeFactory.CreateScope();
-                var bg = scope.ServiceProvider
-                    .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-                try { await bg.RunAnalysisAsync(id); } catch { }
-            });
-            return Results.Redirect($"/studio/s/{id}");
-        }).DisableAntiforgery();
+                Services.Incubator.StudioTierService.StoreBirthOutcome.Born => Results.Redirect($"/studio/apps/{form.Slug}?built=1"),
+                Services.Incubator.StudioTierService.StoreBirthOutcome.SlugTaken =>
+                    Results.Redirect(Services.Incubator.StudioStoreCreate.Refused(Services.Incubator.TenantFromAnalysisFactory.SlugTaken, form)),
+                _ => Results.Redirect($"{Services.Incubator.StudioStoreCreate.Page}?upgrade={birth.Gate.BreachCode}"),
+            };
+        }).RequireFormBody().DisableAntiforgery();
+
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/build` — بابُ الإنشاءِ اليَدَوِيُّ أَعلاه يَكتُبُ المَتجَرَ نَفسَه بايتاً (‏`StudioStoreBirthCharacterizationTests`) بِلا شَرطِ تَحليل.
+
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `POST /studio/s/{id}/analyze` — لا تَحليلَ يُبدَأُ مِن الاستوديو؛ وحاضِنَةُ المُشرِفِ تُبقي بابَها `/admin/incubator/{id}/analyze`.
 
         // ─── Incubator — طبقة التحليل الاستثماري ─────────────────────────
         // نُسخَة الـ admin مِن الحاضِنَة: أَداة مَنصَّة لا أَداة عُمَلاء
@@ -3765,12 +4223,14 @@ public static class MarketplaceTemplateExtensions
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) جَلسَةُ المَنَصَّةِ وَحدَها: كانَ المُعَرِّفُ يَقبَلُ دِراسَةَ عَميلٍ فَيَكتُبُ فيها.
+            if (await svc.LoadPlatformAsync(id) is null) return Results.NotFound();
             var qid = req.Form["questionId"].ToString().Trim();
             var answer = req.Form["answer"].ToString().Trim();
             if (!string.IsNullOrEmpty(qid))
                 await svc.SaveAnswerAsync(id, qid, answer);
             return Results.Redirect($"/admin/incubator/{id}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/admin/incubator/{id:guid}/analyze",
             async (Guid id, IServiceScopeFactory scopeFactory, IDocumentStore store,
@@ -3779,6 +4239,9 @@ public static class MarketplaceTemplateExtensions
         {
             if (!(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
+            // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) جَلسَةُ المَنَصَّةِ وَحدَها، قَبلَ الحَجز: كانَ المُعَرِّفُ يَقبَلُ دِراسَةَ
+            // عَميلٍ فَيُرسِلُ وَصفَه إلى مُزَوِّدِ التَحليل — والخُصوصِيَّةُ لا تُسَمّيه لِأَنّه لا يَبلُغُه إلّا نَصُّ المُشرِف.
+            if (await svc.LoadPlatformAsync(id) is null) return Results.NotFound();
 
             // الحَجزُ يَقلِبُ الحالَةَ فَوراً (مُتَزامِناً) لِتَعرِضَ
             // صَفحَةُ الدِراسَةِ المُؤَشِّر، ثُمَّ يُشَغَّلُ التَحليلُ
@@ -3799,7 +4262,8 @@ public static class MarketplaceTemplateExtensions
                     var bg = scope.ServiceProvider
                         .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
                     try { await bg.RunAnalysisAsync(id); }
-                    catch { /* الحالة تبقى Analyzing؛ تظهر مهلة في الواجهة */ }
+                    // الحالة تبقى Analyzing حتّى StaleAfter؛ والسطر يقول لماذا.
+                    catch (Exception ex) { Services.Incubator.FeasibilityAnalysisService.LogBackgroundFailure(scope.ServiceProvider, id, "admin.analyze", ex); }
                 });
             }
             return Results.Redirect($"/admin/incubator/{id}/study");
@@ -3838,7 +4302,8 @@ public static class MarketplaceTemplateExtensions
             if (!await StudioOwnsAsync(store, auth, slug)) return Results.Redirect("/studio");
 
             var request = Services.Api.ApiKeySurface.Read(req);
-            var violations = Services.Api.ApiKeyValidator.Validate(request);
+            // ‏(‏2026-10-29، CO10) المُصادِقُ ثُمَّ حالُ الفاعِل (`ActorGone`، د56) — فاعِلٌ رَحَلَ يُرَدُّ قَبلَ أَن يولَدَ مِفتاحٌ مَيِّت.
+            var violations = await keys.ValidateIssueAsync(slug, request);
             if (violations.Count > 0)
                 return Results.Redirect($"/studio/apps/{slug}/keys?err={violations[0].Code}");
 
@@ -3850,7 +4315,7 @@ public static class MarketplaceTemplateExtensions
                 "apikey.issue", "apikey", issued.Key.Id, note: issued.Key.Name,
                 ip: req.HttpContext.Connection.RemoteIpAddress?.ToString());
             return Results.Redirect($"/studio/apps/{slug}/keys?issued={issued.Key.Id}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         app.MapPost("/studio/apps/{slug}/keys/{keyId}/revoke", async (
             string slug, string keyId, HttpRequest req, IDocumentStore store,
@@ -3886,16 +4351,19 @@ public static class MarketplaceTemplateExtensions
         //
         // والقَرارُ نَفسُه في `ProviderBindSurface` — نَظيرُ
         // `ApiKeySurface` حَرفاً: جِسمُ النُقطَةِ لا يُختَبَر.
+        // (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج» — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: وبَعدَ الكِتابَةِ يُسَجَّلُ إشعارُ الدَفعِ عِندَ البَوّابَة —
+        // `GatewayPayments.ConnectNoticesAsync`، ولا يَفعَلُ شَيئاً لِتَعريفٍ بِلا وارِد؛ وفَشَلُه رَمزٌ في الرَبطِ لا يَرُدُّ الرَبط.)
+        // (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى — ولا يُعادُ حَرفٌ فَوقَه: ويُمَرِّرُ القُدرَةَ الَّتي كَتَب — رَبطُ قُدرَةٍ أُخرى كانَ يُعيدُ تَسجيلَ إشعارِ الدَفعِ ويَختِمُ سِرّاً فَوقَ العامِل.)
         app.MapPost("/studio/apps/{slug}/providers/bind", async (
             string slug, HttpRequest req, IDocumentStore store,
             Services.Incubator.StudioAuth auth,
-            Services.TenantProviderService providers,
-            Services.Audit.AuditWriter audit) =>
+            Services.TenantProviderService providers, ACommerce.Platform.Providers.ProviderVault vault,
+            Services.Audit.AuditWriter audit, Services.Deals.GatewayPayments gateway) =>
         {
             if (!await Services.TenantAdminGuard.CanAdministerAsync(store, auth, req, slug))
                 return Results.Redirect("/studio");
 
-            var read = Services.Providers.ProviderBindSurface.FromForm(req);
+            var read = Services.Providers.ProviderBindSurface.FromForm(req, slug, vault);
             if (read.NeedsPlatformAdmin &&
                 !(await Services.PlatformAdminGuard.EvaluateAsync(store, auth)).Allowed)
                 return Forbidden();
@@ -3907,6 +4375,8 @@ public static class MarketplaceTemplateExtensions
             var bound = await providers.BindProviderAsync(
                 slug, read.Capability, read.ProviderSlug, read.Values,
                 auth.UserId?.ToString() ?? "");
+            // ‏(‏2026-11-07، W13-4·C2b·3 — G14) العُنوانُ يُسَجَّلُ عِندَ البَوّابَةِ ويَبقى: بِأَصلِ المَنَصَّةِ مَتى هُيِّئَ النِطاق، لا بِمُضيفِ الطَلَب.
+            await gateway.ConnectNoticesAsync(slug, read.Capability, Services.Ux.StoreUrl.PlatformOrigin(req));
             await SyncPaymentProviderFlagAsync(store, providers, slug);
 
             await audit.WriteAsync(slug, auth.UserId, "مالِك التَّطبيق",
@@ -3916,7 +4386,7 @@ public static class MarketplaceTemplateExtensions
                 after: Services.Providers.ProviderBindSurface.AuditLine(bound));
 
             return Results.Redirect($"/studio/apps/{slug}/providers?bound={read.Capability}");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // السَحبُ يُوقِفُ **الآن** — ولِذلك لا يَمُرّ بِدَورَةِ اعتِماد.
         app.MapPost("/studio/apps/{slug}/providers/{capability}/revoke", async (
@@ -3962,25 +4432,57 @@ public static class MarketplaceTemplateExtensions
         // السَبَبِ حَرفاً، ونُقطَةُ الرِسالَةِ **بِلا مُستَأجِر**.
         app.MapPaddleBilling();
 
+        // ─── الشَحنُ عَبرَ OTO (‏ADR-033 الخُطوَة 3) ─────────────────────────
+        // مِلَفٌّ مُنفَصِلٌ لِلسَبَبِ نَفسِه: نِطاقُ المُراجَعَةِ وسَقفُ النَزيفِ لَه وَحدَه.
+        app.MapOtoShipping();
+        // وسَطحُ البائِع (‏ADR-033 الخُطوَة 7، ‏2026-10-12) — مِلَفٌّ ثالِثٌ لِلسَبَبِ نَفسِه.
+        app.MapVendorShipping();
+
+        // ─── التَحَقُّقُ مِن الدَفعِ عِندَ بَوّابَةِ المَتجَر (‏ADR-032 الخُطوَة 9، ‏2026-10-12) ─────────────────
+        // مِلَفٌّ مُنفَصِلٌ لِلسَبَبِ نَفسِه: نِطاقُ المُراجَعَةِ وسَقفُ النَزيفِ لَه وَحدَه. وصَفحَةُ العَودَةِ مُكَوِّنُ Razor لا نُقطَة.
+        app.MapTenantGateway();
+
         return app;
     }
 
     // اِستِخراج الدَور مِن Referer لِلطَلَبات POST الَّتي تَأتي مِن صَفحَة
     // داخِل /{slug}/r/{role}/... — نَستَخدِمه لِبِناء redirect role-aware.
+    // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · C2a-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والقَرارُ في `StoreHostPage.RoleFromReferer` النَقِيَّة: كانَ مَسارُ
+    // الـReferer يُقرَأُ كَما هُوَ، فَصَفحَةُ دَورٍ بِعُنوانِها النَظيفِ عَلى مُضيفِ المَتجَرِ (الـcanonical) تُرجِعُ تَحويلاتِ `Link` الـ179 بِلا دَور.
     private static string? RoleFromReferer(HttpRequest req)
-    {
-        var referer = req.Headers["Referer"].ToString();
-        if (string.IsNullOrEmpty(referer)) return null;
-        try
-        {
-            var uri = new Uri(referer);
-            return AuthSession.ExtractRoleFromPath(new PathString(uri.AbsolutePath));
-        }
-        catch { return null; }
-    }
+        => Services.Ux.StoreHostPage.RoleFromReferer(
+            req.Headers["Referer"].ToString(), req.Host.Value, Services.Ux.StoreHostPage.HostSlug(req.HttpContext),
+            req.HttpContext.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] as string);   // ‏W13-4·C2b·4: ومُضيفُ الدَورِ دَورُه
 
-    private static string Link(HttpRequest req, string slug, string path)
-        => AuthSession.LinkFor(slug, RoleFromReferer(req), path);
+    // ‏`internal` لا `private` (‏2026-10-12، ‏ADR-033 الخُطوَة 3): نُقطَتا الشَحنِ في مِلَفِّهِما
+    // (`Shipping/OtoShippingEndpoints.cs`) تَرتَدّانِ إلى صَفحَةِ الصَفقَةِ بِالدَورِ نَفسِه — نُسخَةٌ ثانِيَةٌ
+    // مِن قِراءَةِ الدَورِ تَنجَرِف.
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والعُنوانُ عَلى المُضيفِ الَّذي يَخدِمُ هذا الطَلَب (`StoreUrl.For`)
+    // بِطَلَبِه هُوَ لا بِالوَصّالِ الساكِن: عَلى مُضيفِ المَتجَرِ نَظيف، وما سِواه بِشَكلِ المَسارِ بِحَرفِه (`StoreLinkCharacterizationTests`).
+    internal static string Link(HttpRequest req, string slug, string path)
+        => Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, RoleFromReferer(req), path);
+
+    /// <summary><b>جَذرُ المَتجَرِ (أَو صَفحَةٌ بِلا دَورٍ فيه) عَلى المُضيفِ الَّذي يَخدِمُ هذا الطَلَب</b> (‏2026-11-07، W13-4·C2b·1): كانَت عَشرَةُ تَحويلاتٍ تَكتُبُ
+    /// <c>$"/{slug}"</c> بِيَدِها — عَلى مُضيفِ المَتجَرِ تُظهِرُ <c>ashare.R/ashare</c>. والآنَ <c>/</c> هُناك، و<c>/{slug}</c> بِحَرفِه في وَضعِ المَسار.</summary>
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) بِحُروفٍ يَحمِلُها <c>Location</c> (<see cref="Services.LocalRedirect.Ascii"/>): مَسارُ الدَورِ
+    /// يُؤَلِّفُه المَتجَرُ و<c>/مثال</c> كانَ 500. وASCII بِحَرفِه.</remarks>
+    private static string Home(HttpRequest req, string slug, string path = "")
+        => Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.For(Services.Ux.StoreUrl.ViewOf(req.HttpContext), slug, null, path));
+
+    /// <summary><b>بَيتُ الدَورِ بَعدَ اختِيارِه أَو إعدادِه</b> (‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — مُنتَقي الدَور): عَلى مُضيفٍ لِهذا المَتجَرِ والدَورُ لَه
+    /// مُضيف ← مُضيفُ ذلكَ الدَور (<c>StoreUrl.Link</c>)؛ وما سِوى ذلك <see cref="Home"/> بِحَرفِها — في وَضعِ المَسارِ <c>/{slug}{home}</c> بِلا دَورٍ كَما كان.
+    /// <para>‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>بَعدَ الاختِيارِ وَحدَه</b>: «حِفظُ بَياناتِ الدَورِ» يُحَوِّلُ بِـ
+    /// <see cref="Home"/> عَلى المُضيفِ الَّذي يَحمِلُ الجَلسَة — كانَ هذا فَيُغادِرُ المُضيفَ الَّذي كَتَبَ الكَعكَة.</para></summary>
+    private static string RoleHome(HttpRequest req, string slug, string role, string? homeRoute)
+    {
+        var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-02 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) العابِرُ المُعلَنُ بِاسمِه (`StoreUrl.App`) — `Link` صارَ يَبقى عَلى المُضيف
+        // لِدَورِ الصَفحَة؛ والجَوابُ بِحَرفِه (`RoleHostSessionLinkCharacterizationTests`).
+        // ‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) بِحُروفٍ يَحمِلُها `Location` — `Home` كَذلك.
+        return Services.Ux.StoreUrl.OnHostOf(view, slug) && ACommerce.Kit.Roles.RoleHostNames.ByCatalogSlug.ContainsKey(role)
+            ? Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.App(view, slug, role, homeRoute ?? ""))
+            : Home(req, slug, homeRoute ?? "");
+    }
 
     /// <summary>رابِطُ الرَفض حينَ لا قَناةَ مُسَجَّلَةٌ لِطَريقَةِ دُخولِ
     /// الاستوديو. <b>الرَمزُ مِن الجَدوَلِ لا مِن حَرفِيَّةٍ مَنسوخَة</b>:
@@ -3990,89 +4492,8 @@ public static class MarketplaceTemplateExtensions
     private static string StudioDoorClosed(Services.Incubator.StudioAuthMethod method)
         => $"/studio/auth?err={Services.Incubator.StudioAuthDoor.UnavailableError(method)}";
 
-    /// <summary>كوكي المُطالَبَة المُعَلَّقَة — يُكتَب في
-    /// <c>/studio/begin</c> ويُستَهلَك مَرَّةً واحِدَة.</summary>
-    private const string StudioPromptCookie = "ac.studio.prompt";
-
-    /// <summary>
-    /// <para><b>استِئنافُ المُطالَبَةِ المُعَلَّقَة — مَوضِعٌ واحِد،
-    /// نُقطَتانِ تُنادِيانِه.</b> صاحِبُ الجَلسَةِ كَتَبَ فِكرَتَه في
-    /// صَفحَةِ الهُبوطِ قَبلَ أَن يَملِكَ حِساباً، فَحُفِظَت في كوكي.
-    /// وتُستَهلَك في مَوضِعَين: بَعدَ التَحَقُّقِ مُباشَرَةً لِمَن سَبَقَ
-    /// أَن وافَقَ على الشُروط، وبَعدَ القَبولِ لِمَن لَم يُوافِق.</para>
-    ///
-    /// <para><b>ولِماذا استُخرِجَت (‏2026-08-23)</b>: كانَ المَوضِعُ
-    /// الثاني يُنجَز بِإعادَةِ التَحويلِ إلى النُقطَةِ الأولى نَفسِها —
-    /// <c>/studio/consent?returnUrl=/studio/auth/verify</c> — وتِلكَ
-    /// النُقطَةُ <c>POST</c> فَقَط، فَكانَ التَحويلُ يَنتَهي إلى
-    /// <b>‏405</b> بَعدَ قَبولِ الشُروطِ مُباشَرَةً. أَي أَنّ أَوَّلَ
-    /// دُخولٍ لِمُستَخدِمٍ جَديدٍ بِفِكرَةٍ مَكتوبَة كانَ يَنتَهي بِخَطَإ
-    /// بروتوكول. والحَلُّ لَيسَ تَبديلَ الوِجهَة وَحدَه: وِجهَةٌ تُصَيَّر
-    /// بِـ<c>GET</c> تَرفَع الـ405 <b>وتُسقِط الفِكرَةَ صامِتَةً</b> —
-    /// لِأَنّ لا قارِئَ لِلكوكي غَيرَ هذا الجِسم. فَاستُخرِجَ الجِسمُ
-    /// ليُنادى مِن حَيثُ يَقَع القَرار.</para>
-    ///
-    /// <para>يُعيد <c>null</c> إن لَم تَكُن ثَمَّةَ مُطالَبَة — فَيُكمِل
-    /// المُنادي بِوِجهَتِه الطَبيعِيَّة.</para>
-    /// </summary>
-    private static async Task<IResult?> ResumeStudioPromptAsync(
-        HttpRequest req, HttpResponse res, Guid userId, string userName,
-        IDocumentStore store, IServiceScopeFactory scopeFactory,
-        Services.Incubator.FeasibilityAnalysisService incubator,
-        bool checkConsent,
-        string? promptOverride = null)
-    {
-        // **مَصدَرانِ لِلمُطالَبَة، وأَحَدُهُما لا غِنى عَنه**: بابُ
-        // الدُخولِ ونُقطَةُ الشُروطِ يَقرَآنِها مِن كَعكَةِ **طَلَبٍ
-        // سابِق**؛ و`‎/studio/begin` يُمَرِّرُها صَريحَةً لِأَنَّه هُوَ
-        // مَن كَتَبَها للتَوّ على `Response` — وكَعكَةُ الرَدِّ لا
-        // تَظهَرُ في `Request.Cookies` أَبَداً.
-        var raw = promptOverride;
-        if (string.IsNullOrEmpty(raw))
-        {
-            var promptCookie = req.Cookies[StudioPromptCookie];
-            if (string.IsNullOrEmpty(promptCookie)) return null;
-            raw = Uri.UnescapeDataString(promptCookie);
-        }
-        if (string.IsNullOrEmpty(raw)) return null;
-
-        if (checkConsent)
-        {
-            await using var consentQs = store.QuerySession(Services.Incubator.StudioAuth.Tenant);
-            var consents = await consentQs.Query<Services.Incubator.ConsentRecord>()
-                .Where(c => c.UserId == userId &&
-                            c.Version == Services.Incubator.ConsentPolicy.CurrentVersion)
-                .ToListAsync();
-            if (consents.Count == 0)
-                // ‏**وِجهَةُ العَودَةِ صَفحَةٌ تُصَيَّر بِـ`GET`**، ولا
-                // تَحمِل استِئنافاً: نُقطَةُ القَبولِ نَفسُها تَستَأنِف
-                // بِالنِداءِ أَدناه.
-                return Results.Redirect("/studio/consent?returnUrl=/studio");
-        }
-
-        res.Cookies.Delete(StudioPromptCookie);
-        var prompt = raw;
-
-        // tier gate — هَل بَلَغ المُستَخدِم حَدّ تَحاليلِه؟
-        using var checkScope = scopeFactory.CreateScope();
-        var tier = checkScope.ServiceProvider
-            .GetRequiredService<Services.Incubator.StudioTierService>();
-        var gate = await tier.CheckAnalyzeAsync(userId);
-        if (!gate.Allowed) return Results.Redirect($"/studio?upgrade={gate.BreachCode}");
-
-        var s = await incubator.StartAsync(userId, userName);
-        await incubator.SaveAnswerAsync(s.Id, "description", prompt);
-        await incubator.MarkAnalyzingAsync(s.Id);
-        await tier.RecordAnalysisAsync(userId);
-        _ = Task.Run(async () =>
-        {
-            using var scope = scopeFactory.CreateScope();
-            var bg = scope.ServiceProvider
-                .GetRequiredService<Services.Incubator.FeasibilityAnalysisService>();
-            try { await bg.RunAnalysisAsync(s.Id); } catch { }
-        });
-        return Results.Redirect($"/studio/s/{s.Id}");
-    }
+    // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَ مِن هُنا `ResumeStudioPromptAsync` وكَعكَتُه `ac.studio.prompt` — لا فِكرَةَ تُستَأنَفُ بَعدَ الدُخول؛
+    // والمُوافَقَةُ صارَت تُسأَلُ قَبلَ استِمارَةِ الإنشاءِ وفي بابِه.
 
     /// <summary>
     /// <para><b>هَل هذا الفَشَل تَضارُبُ نُسخَة تَيار؟</b> — أَي: خَسِرَ
@@ -4112,7 +4533,7 @@ public static class MarketplaceTemplateExtensions
 
     // ─── PWA — manifest builder ──────────────────────────────────────
     private static async Task<IResult> BuildManifestAsync(
-        string slug, string? role, IDocumentStore store)
+        string slug, string? role, IDocumentStore store, Services.Ux.HostView view)
     {
         // مَوضِع الالتِقاط: الأَدوار مُجَسَّدَة واللَقطَة مَعَها. دَور
         // مُعَرَّف وَقتَ التَّشغيل (وَثيقَة Marten) لا يوجَد في
@@ -4125,7 +4546,8 @@ public static class MarketplaceTemplateExtensions
         if (!string.IsNullOrEmpty(role))
             r = tenant.Roles.FirstOrDefault(x => x.Slug == role);
 
-        var prefix    = string.IsNullOrEmpty(role) ? $"/{slug}" : $"/{slug}/r/{role}";
+        // ‏(‏2026-11-07، W13-4·C2b·2) جَذرُ التَطبيقِ عَلى المُضيفِ الَّذي يَطلُبُ البَيان — كانَ `/{slug}[/r/{role}]` دائِماً.
+        var prefix    = Services.Ux.PwaManifestDecision.AppBase(view, slug, role);
         // الـ icon endpoint مُسَجَّل تَحت /api/… لا تَحت scope الـ PWA،
         // فَنُشير إليه بِالمَسار المُطلَق الصَحيح. تَركه تَحت prefix يُسَبِّب
         // 404 وَيُفشِل installability check (لا أَيقونات صالِحَة).
@@ -4136,7 +4558,7 @@ public static class MarketplaceTemplateExtensions
                       : r is not null            ? $"{tenant.Name} — {r.Label}"
                                                  : tenant.Name;
         var shortName = r?.Label ?? tenant.Name;
-        var shortcuts = BuildShortcuts(slug, role, r, iconUrl, roleSet);
+        var shortcuts = BuildShortcuts(prefix, r, iconUrl, roleSet);
 
         return Results.Json(new
         {
@@ -4176,13 +4598,12 @@ public static class MarketplaceTemplateExtensions
         }, contentType: "application/manifest+json");
     }
 
-    private static object[] BuildShortcuts(string slug, string? role,
+    private static object[] BuildShortcuts(string prefix,
         ACommerce.Kit.Roles.Role? r, string iconUrl,
         ACommerce.Kit.Roles.TenantRoleSet roleSet)
     {
         // shortcuts حَسَب الدَور — مُختَصَرَات تَظهَر في long-press عَلى
-        // الأَيقونَة (Android + Edge).
-        var prefix = string.IsNullOrEmpty(role) ? $"/{slug}" : $"/{slug}/r/{role}";
+        // الأَيقونَة (Android + Edge). والبادِئَةُ جَذرُ التَطبيقِ نَفسُه (‏W13-4·C2b·2).
         var icons  = new[] { new { src = iconUrl, sizes = "any", type = "image/svg+xml" } };
 
         // المُختَصَرات مِرآة الـ nav لا مَعجَم ثالِث: كُلّ مُختَصَر أَساسيّ
@@ -4256,8 +4677,13 @@ public static class MarketplaceTemplateExtensions
 
     // ─── PWA — icon builder (SVG ديناميكيّ) ───────────────────────────
     private static async Task<IResult> BuildIconAsync(
-        string slug, string? role, IDocumentStore store)
+        string slug, string? role, IDocumentStore store, HttpResponse res)
     {
+        // ‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الأَيقونَةُ مِلَفٌّ لا مُستَنَد: تُفتَحُ وَحدَها بِلا سكربتٍ ولا
+        // مَوارِدَ ولا تَخمينِ نَوع — فَلَو بَلَغَها مُحتَوىً لَم يَقصِدهُ القالِبُ لَم يَجرِ عَلى أَصلِ الجَذرِ الَّذي يَسكُنُه /studio و/admin.
+        res.Headers.ContentSecurityPolicy = "default-src 'none'; sandbox";
+        res.Headers.XContentTypeOptions = "nosniff";
+
         // نَفس مَوضِع الالتِقاط: الـ manifest يُشير إلى هذه النُقطَة في
         // icons، فَقِراءَة خام هُنا كانَت تُرَكِّب أَيقونَة المَتجَر
         // لِدَور مُعَرَّف وَقتَ التَّشغيل بَدَل أَيقونَتِه هو.
@@ -4269,19 +4695,10 @@ public static class MarketplaceTemplateExtensions
             r = tenant.Roles.FirstOrDefault(x => x.Slug == role);
 
         // أَيقونَة مُخَصَّصَة (data URL) → نَفُكّ الـ base64 وَنُقَدِّمها كَ صورَة.
-        var custom = r?.PwaIconDataUrl;
-        if (!string.IsNullOrEmpty(custom) && custom.StartsWith("data:"))
-        {
-            var comma = custom.IndexOf(',');
-            if (comma > 0)
-            {
-                var meta = custom.Substring(5, comma - 5);   // "image/png;base64"
-                var b64  = custom[(comma + 1)..];
-                var contentType = meta.Split(';')[0];
-                try { return Results.File(Convert.FromBase64String(b64), contentType); }
-                catch { /* fall through to generated */ }
-            }
-        }
+        // ‏(‏2026-11-07، SEC-C2a-1) PNG أَو WebP بِبَصمَةِ بايتاتِهِما وَحدَهُما (`PwaSaveService.StoredRaster`) — كانَ يُعيدُ المُخزَّنَ بِنَوعِه المُخزَّنِ أَيّاً كانَ،
+        // ومِنه image/svg+xml بِسكربت؛ وما سِوى ذلك (ومِنه SVG خُزِّنَت قَبلَ اليَوم) يَسقُطُ إلى المُوَلَّدَة.
+        if (PwaSaveService.StoredRaster(r?.PwaIconDataUrl) is { } raster)
+            return Results.File(raster.Bytes, raster.ContentType);
 
         // أَيقونَة مَولَّدَة: مُرَبَّع 512x512 بِلَون المَتجَر + الإيموجي/الحَرف.
         var color    = tenant.BrandColor;
@@ -4301,7 +4718,9 @@ public static class MarketplaceTemplateExtensions
     // الـ client (JS في App.razor) يَستَمِع لِـ "unread_changed" عَلى hub
     // /realtime ويُحَدِّث الـ badges. آمِنَة لِلاستِدعاء حَتَّى لَو الـ hub
     // غَير مُتاح — اِلتِقاط الاستِثناء بِصَمت.
-    private static async Task NudgeAsync(
+    // `internal` لا `private` مُنذُ P1-5: `Services.Deals.DealNotices` تُنادي الجَرَسَ
+    // نَفسَه — أُنبوبٌ واحِدٌ لا نُسخَةٌ ثانِيَة (القاعِدَة ٨).
+    internal static async Task NudgeAsync(
         Microsoft.AspNetCore.SignalR.IHubContext<ACommerce.Kit.Realtime.Server.RealtimeHub> hub,
         string slug, Guid userId)
     {
@@ -4329,11 +4748,13 @@ public static class MarketplaceTemplateExtensions
         if (admins.Count == 0) return;
 
         var now = DateTime.UtcNow;
+        // ‏(‏2026-11-12، W13-6·١٣ — ADR-051 §١٩) إشعارُ كُلِّ مُديرٍ بِمُعَرِّفِه — مِفتاحُ إرسالِه المَعدود.
+        var notices = admins.ToDictionary(a => a.Id, _ => Guid.NewGuid());
         foreach (var admin in admins)
         {
             s.Store(new ACommerce.Kit.Notifications.Notification
             {
-                Id = Guid.NewGuid(),
+                Id = notices[admin.Id],
                 UserId = admin.Id,
                 Type = type,
                 Title = title,
@@ -4348,7 +4769,7 @@ public static class MarketplaceTemplateExtensions
             foreach (var admin in admins) await NudgeAsync(hub, slug, admin.Id);
         if (push is not null)
             foreach (var admin in admins)
-                await push.SendAsync(store, slug, admin.Id, title, body,
+                await push.SendAsync(store, slug, admin.Id, notices[admin.Id], title, body,
                     url: relatedUrl, tag: $"admin-{type}-{Guid.NewGuid():N}");
     }
 
@@ -4390,7 +4811,15 @@ public static class MarketplaceTemplateExtensions
     {
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return false;
-        if (tenant.Roles.Count == 0) return true;   // legacy mode
+        // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return true;   // legacy mode`. صارَ يَسأَلُ الدالَّةَ نَفسَها: الإدارِيَّةُ لا تُعطى لِمَتجَرٍ بِلا أَدوار.
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `if (tenant.Roles.Count == 0) return …Has(tenant.Roles, null, permission);`
+        // — والقَرارُ بِحَرفِه، ومَعَ القَبولِ يَكتُبُ `_none` الَّذي قَرَّرَه في حامِلِ العَدّ (شَكلُ `PermissionFilter` بِعَينِه).
+        if (tenant.Roles.Count == 0)
+        {
+            var open = ACommerce.Kit.Roles.RolePermissions.Has(tenant.Roles, null, permission);
+            if (open) ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, ACommerce.Platform.Shared.Metering.MeterSentinels.None);
+            return open;
+        }
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
@@ -4400,8 +4829,14 @@ public static class MarketplaceTemplateExtensions
         // عَلى نُقطَة كِتابَة بِلا دَور. راجِع Gates.EffectiveRole.
         var effectiveRole = await Gates.EffectiveRole.ResolveAsync(
             http, slug, userId, user.ActiveRole);
-        return ACommerce.Kit.Roles.RolePermissions.Has(
+        var allowed = ACommerce.Kit.Roles.RolePermissions.Has(
             tenant.Roles, effectiveRole, permission);
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ — شَكلُ
+        // `PermissionFilter` بِعَينِه: لِمَتجَرِه وَحدَه، وأَوَّلُ كاتِبٍ يَفوز. فَعَرضٌ يَمُرُّ مِن هُنا يُعَدُّ `offer.submit` بِدَورِ مُقَدِّمِه لا `_unresolved`.
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1) كانَ `….Fill(slug, role: effectiveRole)` — فَـ`_none` الوَسيطِ (المُخَزَّنَةُ فارِغَة) يَفوزُ عَلى دَورٍ مُؤَلَّفٍ
+        // مُعتَمَدٍ قَبِلَ بِه الحارِس. فَالدَورُ المَقبولُ يَحِلُّ مَحَلَّ المُؤَقَّت (`FillAcceptedRole`).
+        if (allowed) ACommerce.Platform.Shared.Metering.MeterScope.Current?.FillAcceptedRole(slug, effectiveRole);
+        return allowed;
     }
 
     /// <summary>
@@ -4416,8 +4851,11 @@ public static class MarketplaceTemplateExtensions
     /// التَعريفات داخِل <c>Tenant</c> فَيَصير لِلحَقيقَة مَصدَران. لِذلك
     /// <c>/admin/tenants/{slug}/roles/save</c> يَبقى عَلى تَحميلِه
     /// المُباشِر بِـ <c>LightweightSession</c>.</para>
+    ///
+    /// <para><b>و<c>internal</c> لا <c>private</c> (‏2026-10-28، قَرارُ المالِك د42 «أ»)</b>: <see cref="Gates.PermissionFilter"/> — حارِسُ
+    /// <c>.RequirePermission(…)</c> — يَقرَؤُها بِعَينِها، فَحارِسا النَشرِ والعَرضِ قِراءَةٌ واحِدَة لا نُسخَتان.</para>
     /// </summary>
-    private static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
+    internal static async Task<ACommerce.Kit.Tenants.Tenant?> LoadTenantWithRolesAsync(
         IDocumentStore store, string slug)
         => (await LoadTenantAndRolesAsync(store, slug)).Tenant;
 
@@ -4467,6 +4905,11 @@ public static class MarketplaceTemplateExtensions
         return Gates.SelfGrantPolicy.IsAdminRole(picked);
     }
 
+    /// <summary>تَسكينُ الدَورِ المُدَّعى بَعدَ التَحَقُّقِ إن وُجِد — شَرطُ الأَبوابِ الثَلاثَةِ (<c>if (!string.IsNullOrEmpty(asRole))</c>) بِحَرفِه، خارِجَ أَجسامِها
+    /// (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-3: سَطرُ الرَفضِ عَلى مُضيفِ الإدارَةِ دَخَلَ كُلَّ باب، والشَرطُ خَرَجَ فَلا يَنمو عَدّادُ النَزيف).</summary>
+    private static Task AssignClaimedRoleAsync(string slug, Guid userId, string asRole, IDocumentStore store)
+        => string.IsNullOrEmpty(asRole) ? Task.CompletedTask : AssignRoleAsync(slug, userId, asRole, store);
+
     // تَسكين دَور لِمُستَخدِم بَعد تَوثيقِه — يُستَدعَى مِن /verify عِندَ
     // وُجود ?as=role مِن صَفحَة الدُخول. tenant_admin مَمنوع: يَجِب أَن
     // يُمنَح يَدَويّاً مِن /admin/tenants/{slug}/users.
@@ -4482,13 +4925,27 @@ public static class MarketplaceTemplateExtensions
         var picked = tenant.Roles.FirstOrDefault(r => r.Slug == roleSlug);
         if (picked is null || Gates.SelfGrantPolicy.IsAdminRole(picked)) return;
 
-        await using var s = store.LightweightSession(slug);
-        var user = await s.LoadAsync<ACommerce.Kit.Auth.User>(userId);
-        if (user is null) return;
-        user.ActiveRole = roleSlug;
-        user.UpdatedAt = DateTime.UtcNow;
-        s.Store(user);
-        await s.SaveChangesAsync();
+        // ‏(‏2026-10-29، G-1) كاتِبُ دُخول: الدَورُ وَحدَه عَلى قِراءَةٍ جَديدَة، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+        await AccountWrites.UpdateAsync<ACommerce.Kit.Auth.User>(store, slug, userId, u =>
+        {
+            u.ActiveRole = roleSlug;
+            u.UpdatedAt = DateTime.UtcNow;
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// <para><b>دَعوى <c>tenant_admin</c> عِندَ الدُخولِ لِمَن لا يَحمِلُه تُسقَط</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R2-5 وSEC-C2b-R3-2): استِمارَةُ دُخولِ
+    /// <c>{slug}-admin.R</c> تُرسِلُ <c>as=tenant_admin</c>، فَكانَ العُضوُ يَأخُذُ كَعكَةَ دَورِ الإدارَةِ ويُحَوَّلُ إلى <c>/manage</c> فَيُرَدّ — رِحلَةٌ تَنتَهي بِرَفض
+    /// (القاعِدَة ١٢). الدَورُ لا يُمنَحُ ذاتِيّاً (ADR-028) والحارِسُ يُحرِسُه (G7)؛ وهُنا لا تُكتَبُ كَعكَتُه ولا يُطلَبُ مَنحُه، ويُحَوَّلُ العُضوُ إلى دَورِه المُخَزَّن.
+    /// وما سِوى دَعوى الإدارَةِ — ومَن يَحمِلُها — بِحَرفِه.</para>
+    /// </summary>
+    private static async Task<string> HeldAdminClaimOrNoneAsync(IDocumentStore store, string slug, Guid userId, string asRole)
+    {
+        if (!Gates.SelfGrantPolicy.IsAdminSlug(asRole)) return asRole;
+        await using var qs = store.QuerySession(slug);
+        var user = await qs.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        return user is not null && string.Equals(user.ActiveRole, asRole, StringComparison.Ordinal) ? asRole : "";
     }
 
     // قَرار التَّوجيه بَعد دُخول ناجِح:
@@ -4496,16 +4953,24 @@ public static class MarketplaceTemplateExtensions
     //  2) إن وُجِدَ <paramref name="asRole"/> (مِن ?as= أَو /r/role/login)
     //     → URL مَفروع تَحت /r/{role}/ لِيَفصِل الـ session.
     //  3) خِلاف ذلك: نَتَّبِع ActiveRole مِن user doc (legacy/no-prefix).
+    //
+    // ‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والوِجهاتُ كُلُّها بِـ`StoreUrl.For` عَلى المُضيفِ الَّذي
+    // كَتَبَ الكَعكَة: عَلى مُضيفِ المَتجَرِ نَظيفَة (`/`، `/r/{role}/…`)، وفي وَضعِ المَسارِ `/{slug}/…` بِحَرفِها. ولا تُغادِرُ المُضيفَ أَبَداً — الكَعكَةُ
+    // مَقصورَةٌ عَلَيه (ADR-050 §٥)، فَتَحويلٌ إلى مُضيفٍ آخَرَ بَعدَ الدُخولِ يُسقِطُ الجَلسَةَ لِتَوِّها.
     private static async Task<string> PostLoginRouteAsync(
-        string slug, Guid userId, string? asRole, IDocumentStore store)
+        HttpRequest req, string slug, Guid userId, string? asRole, IDocumentStore store)
     {
+        var view = Services.Ux.StoreUrl.ViewOf(req.HttpContext);
+        // ‏(‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3، يُلحَق) كُلُّ وِجهَةٍ بِحُروفٍ يَحمِلُها `Location` (`LocalRedirect.Ascii`): `HomeRoute` يُؤَلِّفُه المَتجَر.
+        string At(string? role, string path = "") => Services.LocalRedirect.Ascii(Services.Ux.StoreUrl.For(view, slug, role, path));
+
         var tenant = await LoadTenantWithRolesAsync(store, slug);
         if (tenant is null || tenant.Roles.Count == 0)
-            return $"/{slug}";
+            return At(null);
 
-        await using var t = store.LightweightSession(slug);
-        var user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
-        if (user is null) return $"/{slug}";
+        ACommerce.Kit.Auth.User? user;
+        await using (var t = store.QuerySession(slug)) user = await t.LoadAsync<ACommerce.Kit.Auth.User>(userId);
+        if (user is null) return At(null);
 
         // إن لَم يُعطَ asRole + لا ActiveRole + دَور واحِد → اِضبِطه تِلقائيّاً.
         //
@@ -4521,19 +4986,24 @@ public static class MarketplaceTemplateExtensions
             tenant.Roles.Count == 1 && string.IsNullOrEmpty(user.ActiveRole) &&
             !Gates.SelfGrantPolicy.IsAdminRole(tenant.Roles[0]))
         {
-            user.ActiveRole = tenant.Roles[0].Slug;
-            t.Store(user);
-            await t.SaveChangesAsync();
+            // ‏(‏2026-10-29، G-1) كاتِبُ دُخول: يُسَكَّنُ الدَورُ عَلى قِراءَةٍ جَديدَةٍ إن بَقِيَ فارِغاً، ويُعادُ مَرَّةً إن سَبَقَه كاتِب.
+            var only = tenant.Roles[0].Slug;
+            user = await AccountWrites.UpdateAsync<ACommerce.Kit.Auth.User>(store, slug, userId, u =>
+            {
+                if (!string.IsNullOrEmpty(u.ActiveRole)) return false;
+                u.ActiveRole = only;
+                return true;
+            }) ?? user;
         }
 
         // الدَور الفِعليّ الَّذي سَنَستَخدِمُه لِلـ URL: asRole إن وُجِدَ، أَو
         // ActiveRole كَ احتِياط.
         var effectiveRoleSlug = !string.IsNullOrEmpty(asRole) ? asRole : user.ActiveRole;
         if (string.IsNullOrEmpty(effectiveRoleSlug))
-            return $"/{slug}/me/role";
+            return At(null, "me/role");
 
         var role = tenant.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
-        if (role is null) return $"/{slug}/me/role";
+        if (role is null) return At(null, "me/role");
 
         // الـ onboarding مَطلوب لَو دَور لَه حُقول مَطلوبَة لَم تُملَأ بَعد.
         var roleValues = user.RoleAttributesJson.TryGetValue(role.Slug, out var rv)
@@ -4546,15 +5016,15 @@ public static class MarketplaceTemplateExtensions
         // المُتَصَفِّح في هذا التَّبويب يَستَخدِم الـ cookie role-scoped.
         if (!string.IsNullOrEmpty(asRole))
         {
-            if (needsOnboarding) return $"/{slug}/r/{asRole}/me/role/onboarding";
+            if (needsOnboarding) return At(asRole, "me/role/onboarding");
             return string.IsNullOrEmpty(role.HomeRoute)
-                ? $"/{slug}/r/{asRole}"
-                : $"/{slug}/r/{asRole}{role.HomeRoute}";
+                ? At(asRole)
+                : At(asRole, role.HomeRoute);
         }
 
-        if (needsOnboarding) return $"/{slug}/me/role/onboarding";
+        if (needsOnboarding) return At(null, "me/role/onboarding");
         return string.IsNullOrEmpty(role.HomeRoute)
-            ? $"/{slug}" : $"/{slug}{role.HomeRoute}";
+            ? At(null) : At(null, role.HomeRoute);
     }
 
     // قِراءَة قِيمَة Guid مِن Dictionary مَع التَّعامُل مَع JsonElement

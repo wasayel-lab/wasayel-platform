@@ -1,4 +1,6 @@
 #!/usr/bin/env dotnet
+// ‏(‏2026-11-04) `PublishAot=false` لَيسَ زينَة: تَطبيقُ المِلَفِّ الواحِدِ يَفتَرِضُ AOT فَيَستَعيدُ Microsoft.DotNet.ILCompiler (‏NU1903 خَطَأٌ عَمداً تَحتَ إعلانِه) ويُطفِئُ الكودَ الديناميكِيَّ وَقتَ التَشغيل — كَما في count-listing-owners.cs.
+#:property PublishAot=false
 // ═══════════════════════════════════════════════════════════════════════
 //  الطَبَقَة السادِسَة — التَحَقُّق البَصَرِيّ الآلِيّ مِن صَفحَة حَيَّة
 // ───────────────────────────────────────────────────────────────────────
@@ -22,6 +24,12 @@
 //     dotnet run scripts/verify-runtime.cs -- --viewport 390x844 <url>
 //     dotnet run scripts/verify-runtime.cs -- --report-only <url>
 //     dotnet run scripts/verify-runtime.cs -- --json out.json <url>
+//     dotnet run scripts/verify-runtime.cs -- [--cookie n=v] --click '<css>' --expect '<path?query>' <url>
+//
+//  ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وَضعُ النَقرَة**: يَفتَحُ <url>، ويَنقُرُ أَوَّلَ عُنصُرٍ يُطابِقُ
+//  <css> نَقرَةً حَقيقيَّة (فَيَعتَرِضُها `blazor.web.js` تَنَقُّلاً مُحَسَّناً كَما يَعتَرِضُ نَقرَةَ المُستَخدِم)، ويَنتَظِرُ أَن يَصيرَ عُنوانُ الصَفحَةِ <expect>
+//  وجِسمُها غَيرَ فارِغ. **العِلَّةُ**: `curl` يَقرَأُ ما يَبعَثُه الخادِمُ ولا يَرى ما يُنَفِّذُه المُتَصَفِّح — فَصَفحَةٌ تُحَوِّلُ بِـ`<script>location.replace`
+//  كانَت ✓ في رِحلَةِ الإطلاقِ وهي فارِغَةٌ بَعدَ النَقر (السكربتُ في رُقعَةِ DOM لا يُنَفَّذ). رَمزُ الخُروج: ٠ وَصَلَ، ١ لَم يَصِل، ٢ لا عُنصُرَ يُنقَر.
 //
 //  رَمز الخُروج: ٠ إن لَم تُوجَد مُخالَفَة، ١ إن وُجِدَت
 //  (إلّا مَع `--report-only`)، ٢ عِند عَطَب تَشغيلِيّ.
@@ -41,6 +49,7 @@ bool reportOnly = false;
 string? jsonOut = null;
 string? injectCss = null;
 var cookies = new List<(string Name, string Value)>();
+string? clickCss = null, expectAt = null;
 string contractsPath = Path.Combine(AppContext.BaseDirectory, "spatial-contracts.json");
 // المِلَفّ المُفرَد يُبنى في مُجَلَّد مُؤَقَّت، فَالعُقود تُطلَب بِجِوار المَصدَر.
 string srcDir = Path.GetDirectoryName(Path.GetFullPath(GetSourcePath())) ?? ".";
@@ -73,6 +82,8 @@ for (int i = 0; i < args.Length; i++)
             break;
         }
         case "--json": jsonOut = args[++i]; break;
+        case "--click": clickCss = args[++i]; break;
+        case "--expect": expectAt = args[++i]; break;
         case "--contracts": contractsPath = args[++i]; break;
         default: urls.Add(args[i]); break;
     }
@@ -88,6 +99,32 @@ if (urls.Count == 0)
         "http://localhost:5050/theme-demo",
         "http://localhost:5050/owner-test",
     });
+}
+
+// ═══ صَفحَةٌ فُحِصَت صِفراً عَمياءُ لا سَليمَة (‏2026-10-25، تَدقيقُ الإطلاق lens-checkers-ci-9 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ═══
+// الأَداةُ تَطبَعُ لِكُلِّ صَفحَةٍ عَدَدَ عَناصِرِها وتَأكيداتِها، ولَم يَكُن فَرعٌ يُفشِلُها عَلى الصِفر: `exitCode` كانَ يُضبَطُ عَلى
+// المُخالَفاتِ وَحدَها، فَصَفحَةٌ بِصِفرِ تَأكيدٍ أَو صِفرِ عُنصُرٍ تَخرُجُ ٠ «لا مُخالَفَة» — وهو بِعَينِه «صِفرٌ مِن صِفر» الَّذي
+// تُحَذِّرُ مِنه `docs/VERIFICATION-RUNTIME.md`. ومِثلُها صَفحَةٌ لَم تَستَقِرَّ أَو رَمى سِكرِبتُها: تُعَدُّ مُخالَفَةً، فَيَحجُبُها
+// `--report-only` ويَخرُجُ ٠. **فَالصَفحَةُ العَمياءُ رَمزُ ٢** (عَطَبٌ تَشغيلِيّ: الأَداةُ لَم تَقِس)، **ولا يَحجُبُه `--report-only`** —
+// يَحجُبُ حُكمَ المُخالَفاتِ لا غِيابَ القِياس. والدالَّةُ `BlindPages` تُقاسُ قَبلَ كُلِّ تَشغيلٍ بِعَيِّناتٍ مَعلومَةِ الجَواب
+// (القاعِدَة ١٠: الأَداةُ تُقاسُ قَبلَ أَن يُوثَقَ بِها)، و`VerifyRuntimeBlindPageTests` يَحرُسُ مَوضِعَيها.
+{
+    // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): العَيِّناتُ مُسَمّاة — فَعَدَدُها في سَطرِ الاختِبارِ الذاتيِّ مِنها لا رَقمٌ مَكتوب.
+    var probeMeasured = new[]
+    {
+        new PageReport("probe:measured",    217, 37, new()),
+        new PageReport("probe:no-checks",   217,  0, new()),
+        new PageReport("probe:no-elements",   0, 37, new()),
+    };
+    var probeUnmeasured = new[] { "probe:unsettled" };
+    var probe = BlindPages(probeMeasured, probeUnmeasured);
+    var want = new[] { "probe:no-checks", "probe:no-elements", "probe:unsettled" };
+    if (!probe.SequenceEqual(want))
+    {
+        Console.Error.WriteLine($"✗ الاختِبارُ الذاتيُّ لِلصَفحَةِ العَمياء: المُنتَظَرُ «{string.Join(", ", want)}» والمَقروءُ «{string.Join(", ", probe)}» — الأَداةُ لا يوثَقُ بِها.");
+        return 2;
+    }
+    Console.WriteLine($"  [الطَبَقَة ٦] اختِبارٌ ذاتيّ: {want.Length} صَفَحاتٍ عَمياءَ مَحقونَة مِن {probeMeasured.Length + probeUnmeasured.Length} أُمسِكَت، والمَقيسَةُ مَرَّت.");
 }
 
 if (!File.Exists(contractsPath))
@@ -162,9 +199,43 @@ try
                 $$"""{"name":{{Cdp.JStr(name)}},"value":{{Cdp.JStr(value)}},"domain":"localhost","path":"/"}""");
     }
 
+    // ═══ وَضعُ النَقرَة (‏2026-11-07، W13-1·C1D-1) — قَبلَ القِياسِ المَكانيِّ ويَخرُجُ دونَه ═══
+    if (clickCss is not null)
+    {
+        if (expectAt is null) { Console.Error.WriteLine("✗ --click يَحتاجُ --expect"); return 2; }
+        int reached = 0, missed = 0, blindClicks = 0;
+        foreach (var url in urls)
+        {
+            await cdp.Send("Page.navigate", $$"""{"url":{{Cdp.JStr(url)}}}""");
+            await cdp.WaitForEvent("Page.loadEventFired", TimeSpan.FromSeconds(30));
+            await Task.Delay(1500);   // يَنتَظِرُ تَهيِئَةَ `blazor.web.js` واعتِراضَه النَقر
+            var clickJs = $$"""(function(){ var e = document.querySelector({{Cdp.JStr(clickCss)}}); if (!e) return 'none'; e.click(); return 'clicked'; })()""";
+            var clicked = (await cdp.Send("Runtime.evaluate", $$"""{"expression":{{Cdp.JStr(clickJs)}},"returnByValue":true}"""))
+                .RootElement.GetProperty("result").GetProperty("value").GetString();
+            if (clicked != "clicked") { Console.WriteLine($"  ✗ {url}: لا عُنصُرَ يُطابِقُ «{clickCss}»"); blindClicks++; continue; }
+            const string whereJs = """(function(){ var b = document.body ? document.body.innerText.trim().length : 0; return location.pathname + location.search + '|' + b; })()""";
+            string at = "?"; int bodyText = 0; var ok = false;
+            for (var tries = 0; tries < 60 && !ok; tries++)
+            {
+                await Task.Delay(250);
+                var w = (await cdp.Send("Runtime.evaluate", $$"""{"expression":{{Cdp.JStr(whereJs)}},"returnByValue":true}"""))
+                    .RootElement.GetProperty("result").GetProperty("value").GetString() ?? "?|0";
+                at = w[..w.LastIndexOf('|')]; bodyText = int.Parse(w[(w.LastIndexOf('|') + 1)..]);
+                ok = at == expectAt && bodyText > 0;
+            }
+            Console.WriteLine(ok ? $"  ✓ {url}: نَقرَةُ «{clickCss}» ⇒ {at} · نَصُّ الجِسمِ {bodyText} حَرفاً"
+                                 : $"  ✗ {url}: نَقرَةُ «{clickCss}» ⇒ {at} (المُنتَظَر {expectAt}) · نَصُّ الجِسمِ {bodyText} حَرفاً");
+            if (ok) reached++; else missed++;
+        }
+        Console.WriteLine($"  النَقَرات: فُحِصَ {urls.Count} · وَصَلَ {reached} · لَم يَصِل {missed} · بِلا عُنصُر {blindClicks}");
+        exitCode = blindClicks > 0 || urls.Count == 0 ? 2 : missed > 0 ? 1 : 0;
+        return exitCode;
+    }
+
     string js = BuildScript(contractsJson);
 
     var allReports = new List<PageReport>();
+    var unmeasured = new List<string>(); // ‏(‏2026-10-25) صَفحَةٌ لَم تَبلُغِ القِياس — `BlindPages` أَعلاه.
     int total = 0;
 
     Console.WriteLine();
@@ -240,6 +311,7 @@ try
             Console.WriteLine($"\n  ✗ {url} — لَم تَستَقِرّ الصَفحَة خِلال 12 ثانِيَة ({lastWhy}).");
             Console.WriteLine("      صَفحَةٌ تُقاس قَبلَ أَن تَستَقِرّ تُعطي مُخالَفاتٍ كاذِبَة أَو تَستُر حَقيقِيَّة.");
             total++;
+            unmeasured.Add(url);
             continue;
         }
 
@@ -263,6 +335,7 @@ try
         {
             Console.WriteLine($"\n  ✗ {url} — عَطَب في السِكرِبت: {ex}");
             total++;
+            unmeasured.Add(url);
             continue;
         }
 
@@ -296,11 +369,19 @@ try
         }
     }
 
+    // ‏(‏2026-10-25، lens-checkers-ci-9) صَفحَةٌ لَم تُقَس لا تُحسَبُ «لا مُخالَفَة» — الرَأسُ أَعلى المِلَفّ.
+    var blind = BlindPages(allReports, unmeasured);
+
     Console.WriteLine();
     Console.WriteLine("══════════════════════════════════════════════════════════");
-    Console.WriteLine(total == 0
+    Console.WriteLine(total == 0 && blind.Count == 0
         ? $"  ✓ لا مُخالَفَة — {allReports.Sum(r => r.Checks)} تَأكيداً على {allReports.Count} صَفحَة"
         : $"  ✗ {total} مُخالَفَة على {allReports.Count} صَفحَة");
+    if (blind.Count > 0)
+    {
+        Console.WriteLine($"  ✗ {blind.Count} صَفحَة لَم تُقَس (صِفرُ تَأكيدٍ أَو صِفرُ عُنصُرٍ أَو لَم تَبلُغِ القِياس) — رَمزُ ٢، ولا يَحجُبُه --report-only:");
+        foreach (var u in blind) Console.WriteLine($"     • {u}");
+    }
     Console.WriteLine("══════════════════════════════════════════════════════════");
     Console.WriteLine();
 
@@ -333,7 +414,7 @@ try
         Console.WriteLine($"  التَقرير: {jsonOut}");
     }
 
-    exitCode = (total > 0 && !reportOnly) ? 1 : 0;
+    exitCode = blind.Count > 0 ? 2 : (total > 0 && !reportOnly) ? 1 : 0;
 }
 catch (Exception e)
 {
@@ -405,6 +486,11 @@ static async Task<string> WaitForDebugger(int port)
 }
 
 static string BuildScript(string contractsJson) => "(function(C){\n" + Scripts.Body + "\n})(" + contractsJson + ")";
+
+// ‏(‏2026-10-25، lens-checkers-ci-9) الصَفَحاتُ الَّتي لَم تُقَس: قيسَت بِصِفرِ تَأكيدٍ أَو صِفرِ عُنصُر، أَو لَم تَبلُغِ القِياسَ أَصلاً.
+// دالَّةٌ خالِصَةٌ واحِدَة يَسأَلُها الاختِبارُ الذاتيُّ قَبلَ التَشغيلِ والحُكمُ بَعدَه — فَما يُقاسُ هُوَ ما يَحكُم.
+static List<string> BlindPages(IEnumerable<PageReport> measured, IEnumerable<string> unmeasured) =>
+    measured.Where(r => r.Checks == 0 || r.Elements == 0).Select(r => r.Url).Concat(unmeasured).ToList();
 
 // ─── جِسر CDP ───────────────────────────────────────────────────────
 sealed class Cdp(ClientWebSocket ws)

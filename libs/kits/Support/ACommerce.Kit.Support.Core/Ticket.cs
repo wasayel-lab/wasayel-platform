@@ -20,6 +20,15 @@ public sealed class Ticket
     { Replies.Add(new Reply { Id = e.ReplyId, AuthorName = e.AuthorName, FromStaff = e.FromStaff, Body = e.Body, At = e.At });
       UpdatedAt = e.At; if (e.FromStaff) Status = "answered"; }
     public void Apply(TicketClosed e) { Status = "closed"; UpdatedAt = e.At; }
+
+    /// <summary>(‏2026-10-30، تَدقيقُ الموجَة ١١ CO16) اسمُ كاتِبِ التَذكِرَةِ يُعادُ كَتبُه في مَجراها — عَلى التَذكِرَةِ ورُدودِه هُو (<c>FromStaff = false</c>)،
+    /// ورَدُّ الفَريقِ بِتَوقيعِه؛ فَإعادَةُ بِناءِ اللَقطَةِ مِن المَجرى لا تُعيدُ اسماً مُحِي. ولا يَمَسُّ <see cref="UpdatedAt"/>: لَيسَ نَشاطاً في التَذكِرَة.
+    /// مُصدِرُه الوَحيدُ مَحوُ الحِسابِ (<c>AccountErasure.EraseEvents(Ticket…)</c>).</summary>
+    public void Apply(TicketAuthorRenamed e)
+    {
+        AuthorName = e.AuthorName;
+        foreach (var r in Replies) if (!r.FromStaff) r.AuthorName = e.AuthorName;
+    }
 }
 
 public sealed class Reply
@@ -34,6 +43,7 @@ public sealed class Reply
 public sealed record TicketCreated(Guid Id, Guid AuthorId, string AuthorName, string Subject, string Body, DateTime At);
 public sealed record TicketReplied(Guid TicketId, Guid ReplyId, string AuthorName, bool FromStaff, string Body, DateTime At);
 public sealed record TicketClosed(Guid TicketId, DateTime At);
+public sealed record TicketAuthorRenamed(Guid TicketId, string AuthorName, DateTime At);
 
 public sealed record OpenTicket(Guid AuthorId, string AuthorName, string Subject, string Body);
 public sealed record ReplyTicket(Guid TicketId, Guid AuthorId, string AuthorName, bool FromStaff, string Body);

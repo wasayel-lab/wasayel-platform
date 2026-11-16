@@ -1,0 +1,167 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace ACommerce.Platform.Hosting;
+
+/// <summary>
+/// <para><b>رَأسُ <c>Host</c> لا يُقرَأُ يُجابُ 400 قَبلَ أَن يَقرَأَه أَحَد</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-5 وSEC-C2b-R2-6 وC2b-P2-06
+/// وSEC-C2b-R3-3؛ ADR-050 §١٣).</para>
+///
+/// <para><b>العِلَّةُ المَقيسَة</b> (عِندَ المُراجِعين، في وَضعِ المَسارِ وبِنِطاقٍ مُهَيَّأ): <c>Host: xn--zz.localhost</c> و<c>xn--mgbh0fb-vendor.localhost</c> ←
+/// <b>500</b> (<c>ArgumentException: Decoded string is not a valid IDN name</c> مِن <c>HostString.FromUriComponent</c> حينَ يَقرَأُ الحاقِنُ <c>Request.Host</c>)،
+/// و<c>localhost:99999</c> ← <b>500</b> (<c>UriFormatException: Invalid port</c> في <c>NavigationManager</c>). سابِقٌ لِلتَيّار، وسِجِلُّ « wildcard <c>*.R</c>» يَجعَلُ
+/// هذِه الأَسماءَ تَبلُغُ الأَصلَ مِن أَيِّ زائِر — فَمُعَدَّلُ الـ500 وحَجمُ السِجِلِّ بِيَدِه.</para>
+///
+/// <para><b>والقَرارُ دالَّةٌ نَقِيَّة</b> تَقرَأُ الرَأسَ الخامَ (<c>Headers.Host</c> — لا <c>Request.Host</c> الَّذي يَرمي): يُفَكُّ كَما يَفُكُّه الإطار، والمَنفَذُ في
+/// 0..65535، وعُنوانٌ يُبنى مِنه. ويُرَكَّبُ أَوَّلَ <see cref="HostingExtensions.UsePlatformRequestFront"/> (قَبلَ الحاقِن) — لا يَقرَأُ حالَةً مَخزونَة (القاعِدَة ٧).
+/// وفارِغٌ يَمُرُّ كَما كان (HTTP/1.0 بِلا <c>Host</c>؛ وKestrel يَرُدُّ غِيابَه في HTTP/1.1).</para>
+/// </summary>
+public static class HostHeaderGuard
+{
+    /// <summary>أَيُقرَأُ هذا الرَأسُ مُضيفاً ومَنفَذاً وعُنواناً بِلا استِثناء؟</summary>
+    public static bool IsReadable(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw)) return true;
+        try
+        {
+            var host = HostString.FromUriComponent(raw);
+            if (string.IsNullOrEmpty(host.Host)) return false;
+            var colon = raw.LastIndexOf(':');
+            if (colon > raw.LastIndexOf(']'))
+            {
+                var digits = raw[(colon + 1)..];
+                if (digits.Length is 0 or > 5 || !digits.All(char.IsAsciiDigit) || int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture) > 65535)
+                    return false;
+            }
+            return Uri.TryCreate($"http://{host.ToUriComponent()}/", UriKind.Absolute, out _);
+        }
+        catch (ArgumentException) { return false; }
+        catch (FormatException) { return false; }
+    }
+
+    /// <summary>
+    /// <para><b>واجِهَةُ الرُؤوسِ المُمَرَّرَةِ بِاسمِها</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2 وC2z-PATHS-R1-03): <c>Program.cs</c> كانَ
+    /// يُرَكِّبُ <c>app.UseForwardedHeaders()</c> سَطراً بِلا اسم، وهُوَ ما يَقرَأُ <c>X-Forwarded-Host</c> قَبلَ الحارِسِ أَعلاه — فَتَوصيفُ ما يَنجو يَقيسُ هذا التَركيبَ
+    /// بِاسمِه عَلى مُضيفٍ مُصَغَّرٍ بِسِياسَةِ المَنَصَّةِ نَفسِها (<see cref="ForwardedHeadersPolicy"/>)، فَيَبقى مِلَفُّه بِبَصمَتِه قَبلَ التَبديلِ وبَعدَه.
+    /// والخِياراتُ مِن الحاوِيَةِ كَما كانَت (<c>Configure&lt;ForwardedHeadersOptions&gt;(policy.ApplyTo)</c>).</para>
+    /// <para><b>‏(‏2026-11-11، التَبديل — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والرَأسُ يُسأَلُ قَبلَ أَن يُقرَأ</b>: خَلفَ عامِلٍ يُعيدُ كِتابَةَ <c>Host</c> (DEPLOY الخُطوَةُ ٦،
+    /// <c>ForwardedHeaders__AllowedHosts=R,*.R</c>) يَصِلُ اسمُ الزائِرِ في <c>X-Forwarded-Host</c>، و<c>ForwardedHeadersMiddleware</c> يَفُكُّه بِـ
+    /// <c>HostString.FromUriComponent</c> قَبلَ أَيِّ حارِس — فَـ<c>xn--zz.R</c> كانَ <b>500</b> بِأَثَرِ مُكَدَّس (مَقيسٌ عِندَ <c>61dab36</c>)، والحارِسُ في
+    /// <see cref="HostingExtensions.UsePlatformRequestFront"/> بَعدَه لا يَراه. الآن <see cref="ForwardedReadable"/> قَبلَه: <c>Host</c> الخامُ يُقرَأ، ومَتى صَدَّقَت
+    /// السِياسَةُ الرَأسَ (<see cref="ForwardedHeadersPolicy.TrustsForwardedHost"/>) فَكُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ فيه تُقرَأُ بِـ<see cref="IsReadable"/> — وإلّا 400.
+    /// وبِلا قائِمَةٍ لا يُقرَأُ الرَأسُ فَلا يُسأَل (الإطارُ لا يَلمِسُه). والحارِسُ في الأُنبوبِ باقٍ لِتَركيبٍ بِلا هذِه الواجِهَة.</para>
+    /// </summary>
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · SEC-C2z-R2-6 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والرَدُّ يَترُكُ سَطراً واحِداً في السِجِلّ</b>: هذِه
+    /// الواجِهَةُ قَبلَ <c>UseSerilogRequestLogging</c> (‏<see cref="HostingExtensions.UsePlatformHost"/>)، فَكانَت الـ400 بِلا أَثَرٍ — مَقيسٌ عِندَ المُراجِع: خَمسٌ
+    /// بِـ<c>Host</c> مُختَلَقٍ وإحدى عَشرَةَ خَلفَ العامِلِ بِصِفرِ سَطر، وكانَت قَبلَ <c>6271f4f</c> تُسَجَّلُ «responded 400» — فَسَبرُ المُضيفاتِ (ADR-050 §١٣)
+    /// لا يَراه المُشَغِّل. الآن تَحذيرٌ بِشَكلِ سَطرِ <c>[origin]</c> (<see cref="CrossOriginWriteMiddleware"/>): <c>[host] {الرَمز} {الفِعل} {المَسار} {الرَأس}
+    /// length=… values=… shape=…</c> — والقيمَةُ الخامُ لا تُكتَب (طولُها وعَدَدُ قيَمِها وصِنفٌ مِن مَعجَمٍ مُغلَق: <see cref="ShapeOf"/>)، لِأَنّها نَصٌّ يَختارُه
+    /// الزائِرُ ويَكتُبُه في سِجِلِّ غَيرِه.</remarks>
+    public static IApplicationBuilder UsePlatformForwardedHeaders(this IApplicationBuilder app, ForwardedHeadersPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        var log = app.ApplicationServices.GetService<ILoggerFactory>()?.CreateLogger(typeof(HostHeaderGuard).FullName!) ?? NullLogger.Instance;
+        app.Use(next => ctx =>
+        {
+            var headers = ctx.Request.Headers;
+            if (ForwardedRefusal(policy, headers.Host.ToString(), headers["X-Forwarded-Host"].ToString(), headers["X-Forwarded-Proto"].ToString()) is not { } refusal)
+                return next(ctx);
+            log.LogWarning("[host] {Code} {Method} {Path} {Header} length={Length} values={Values} shape={Shape}",
+                refusal.Code, ctx.Request.Method, ctx.Request.Path.Value, refusal.Header, refusal.Length, refusal.Values, refusal.Shape);
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Task.CompletedTask;
+        });
+        return app.UseForwardedHeaders();
+    }
+
+    /// <summary>رَدُّ الواجِهَةِ الأَمامِيَّة: رَمزُه، والرَأسُ الَّذي لا يُقرَأ، وطولُ قيمَتِه كُلِّها، وعَدَدُ قيَمِها، وصِنفُ أَوَّلِ قيمَةٍ لا تُقرَأ — بِلا القيمَةِ نَفسِها.</summary>
+    public sealed record ForwardedFrontRefusal(string Code, string Header, int Length, int Values, string Shape);
+
+    /// <summary>رَمزُ الرَدِّ لِـ<c>Host</c> لا يُقرَأ.</summary>
+    public const string HostUnreadable = "host_unreadable";
+    /// <summary>رَمزُ الرَدِّ لِقيمَةٍ في <c>X-Forwarded-Host</c> المُصَدَّقِ لا تُقرَأ.</summary>
+    public const string ForwardedHostUnreadable = "forwarded_host_unreadable";
+
+    /// <summary>رَمزُ الرَدِّ لِقيمَةٍ في <c>X-Forwarded-Proto</c> لَيسَت مُخَطَّطاً (‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-2).</summary>
+    public const string ForwardedProtoUnreadable = "forwarded_proto_unreadable";
+
+    /// <summary>القَرارُ نَفسُه الَّذي يُجيبُه <see cref="ForwardedReadable"/> — ومَعَه ما يُكتَبُ في السِجِلّ؛ <c>null</c> إن قُرِئَ كُلُّ شَيء.</summary>
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · SEC-C2z-R3-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و<c>X-Forwarded-Proto</c> يُسأَلُ كَذلك</b>
+    /// (<paramref name="forwardedProto"/>): السِياسَةُ تُصَدِّقُه دائِماً، و<c>ForwardedHeadersMiddleware</c> يَقبَلُ مَحارِفَ المُخَطَّطِ دونَ تَرتيبِها — فَـ<c>1http</c>
+    /// و<c>9</c> و<c>+x</c> تَصيرُ <c>Request.Scheme</c> ثُمَّ <b>500</b> عَلى كُلِّ صَفحَةٍ في الوَضعَين (<c>UriFormatException</c> في
+    /// <c>NavigationManager.set_BaseUri</c> — مَقيسٌ عِندَ <c>ad0a770</c> بِثَلاثِ القيَم: بِلا نِطاقٍ 15 مِن 15 صَفحَة، وبِنِطاقٍ 15 مِن 18 والثَلاثُ الباقِيَةُ 404 قَبلَ الصَفحَة).
+    /// الآن كُلُّ قيمَةٍ مَفصولَةٍ بِفاصِلَةٍ مُخَطَّطٌ يُقرَأ (<see cref="Uri.CheckSchemeName"/>) أَو فارِغَة — وإلّا 400. وما يُقرَأُ (<c>javascript</c>) يَمُرُّ كَما كان،
+    /// والعُنوانُ المُطلَقُ يَأخُذُ مُخَطَّطَه مِن {http, https} عِندَ بانيه (<c>AbsoluteScheme</c>).
+    /// <para>‏(‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1 وC2f-PATHS-R1-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>و«يُقرَأُ» صارَ «يَبني عُنواناً بِمُضيفٍ ومَنفَذ»</b>
+    /// (<see cref="IsReadableScheme"/>): <see cref="Uri.CheckSchemeName"/> وَحدَه أَمرَّ الحَرفَ الواحِدَ وfile وnet.pipe وvsmacros، فَكانَت 500 عَلى كُلِّ صَفحَةٍ في
+    /// الوَضعَين (مَقيسٌ عِندَ <c>7a9efc7</c>)، و«قيمَةٌ لا تُقرَأُ ← 400» أَعلاه لَم يَصدُق إلّا لِما يَرُدُّه ذلك الفاحِص.</para></remarks>
+    public static ForwardedFrontRefusal? ForwardedRefusal(ForwardedHeadersPolicy policy, string? host, string? forwardedHost, string? forwardedProto = null)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        if (!IsReadable(host)) return new(HostUnreadable, "Host", host?.Length ?? 0, 1, ShapeOf(host));
+        if (!string.IsNullOrEmpty(forwardedProto))
+        {
+            var protos = forwardedProto.Split(',');
+            foreach (var proto in protos)
+                if (proto.Trim() is { Length: > 0 } p && !IsReadableScheme(p))
+                    return new(ForwardedProtoUnreadable, "X-Forwarded-Proto", forwardedProto.Length, protos.Length, ShapeOf(p));
+        }
+        if (!policy.TrustsForwardedHost || string.IsNullOrEmpty(forwardedHost)) return null;
+        var values = forwardedHost.Split(',');
+        foreach (var value in values)
+            if (!IsReadable(value.Trim())) return new(ForwardedHostUnreadable, "X-Forwarded-Host", forwardedHost.Length, values.Length, ShapeOf(value.Trim()));
+        return null;
+    }
+
+    /// <summary>
+    /// <para><b>أَيَبني هذا المُخَطَّطُ عُنواناً بِمُضيفٍ ومَنفَذٍ ومَسارٍ كَما يَبنيه <c>NavigationManager</c>؟</b> (‏2026-11-11، W13-4·C2f-R1·1 — SEC-C2f-R1-1
+    /// وC2f-PATHS-R1-01). الصَفحَةُ تَبني أَساسَها <c>{Request.Scheme}://{Request.Host}/</c> وتَقرَأُ مَسارَه (<c>MainLayout.razor</c>:
+    /// <c>new Uri(Nav.Uri).AbsolutePath</c>)، و<see cref="Uri.CheckSchemeName"/> يَقبَلُ مُخَطَّطاتٍ لا يَبنيها <see cref="Uri"/> كَذلك: الحَرفُ الواحِدُ
+    /// (<c>a://h/x</c> مَسارُ قُرصٍ — <c>IsFile</c>)، و<c>file</c> و<c>vsmacros</c> (مَسارُ مِلَفٍّ أَو UNC — ومَنفَذٌ فيه لا يُقرَأ)، و<c>net.pipe</c> (لا مَنفَذ).</para>
+    /// <para>والسُؤالُ بِمُضيفٍ ومَنفَذٍ ثابِتَين (<c>h:1</c>) لا بِمُضيفِ الطَلَب: القَرارُ لا يَتَعَلَّقُ بِالمُضيف (‏<c>file</c> بِلا مَنفَذٍ كانَ يَبني الصَفحَةَ وبِه 500)،
+    /// ومَقيسٌ عَلى 95 مُخَطَّطاً و8 مُضيفاتٍ مَقروءَة أَنّه يُطابِقُ «يَبني الصَفحَةَ عَلى كُلِّ مُضيفٍ مَقروء» بِلا خِلاف (<c>SchemeRobustnessTests</c>).</para>
+    /// </summary>
+    public static bool IsReadableScheme(string scheme)
+        => Uri.CheckSchemeName(scheme)
+           && Uri.TryCreate(scheme + "://h:1/x", UriKind.Absolute, out var probe)
+           && !probe.IsFile && !probe.IsUnc
+           && string.Equals(probe.Scheme, scheme, StringComparison.OrdinalIgnoreCase)
+           && probe.AbsolutePath.StartsWith('/');
+
+    /// <summary><b>صِنفُ القيمَةِ الَّتي لا تُقرَأ — مَعجَمٌ مُغلَق</b>: <c>control</c> (مَحرَفُ تَحَكُّم)، <c>non_ascii</c>، <c>port</c> (مَنفَذٌ لَيسَ 0..65535)،
+    /// <c>idn</c> (<c>xn--</c> لا يُفَكّ)، <c>other</c>. يُكتَبُ في السِجِلِّ بَدَلَ القيمَة.</summary>
+    public static string ShapeOf(string? raw)
+    {
+        var v = raw ?? "";
+        if (v.Any(char.IsControl)) return "control";
+        if (v.Any(c => c > '\u007e')) return "non_ascii";
+        var colon = v.LastIndexOf(':');
+        if (colon > v.LastIndexOf(']'))
+        {
+            var digits = v[(colon + 1)..];
+            if (digits.Length is 0 or > 5 || !digits.All(char.IsAsciiDigit) || int.Parse(digits, System.Globalization.CultureInfo.InvariantCulture) > 65535) return "port";
+        }
+        if (v.Contains("xn--", StringComparison.OrdinalIgnoreCase)) return "idn";
+        return "other";
+    }
+
+    /// <summary>
+    /// <para><b>القَرارُ النَقِيُّ قَبلَ الرُؤوسِ المُمَرَّرَة</b>: <paramref name="host"/> الخامُ يُقرَأ (<see cref="IsReadable"/>)، و<paramref name="forwardedHost"/> — مَتى
+    /// صَدَّقَته <paramref name="policy"/> — كُلُّ قيمَةٍ فيه تُقرَأ (القيَمُ المُتَعَدِّدَةُ تَصِلُ مَفصولَةً بِفاصِلَة، والإطارُ يَأخُذُ آخِرَها؛ وتُسأَلُ كُلُّها فَلا يَتَعَلَّقُ
+    /// القَرارُ بِحَدِّ <c>ForwardLimit</c>).</para>
+    /// </summary>
+    public static bool ForwardedReadable(ForwardedHeadersPolicy policy, string? host, string? forwardedHost)
+        => ForwardedRefusal(policy, host, forwardedHost) is null;   // ‏(‏2026-11-11، SEC-C2z-R2-6 — يُلحَق) الجِسمُ في ForwardedRefusal بِحَرفِه
+
+    /// <summary>الوَسيط: 400 لِرَأسٍ لا يُقرَأ، وما سِواه إلى ما بَعدَه.</summary>
+    public static IApplicationBuilder UseHostHeaderGuard(this IApplicationBuilder app)
+        => app.Use(next => ctx =>
+        {
+            if (IsReadable(ctx.Request.Headers.Host.ToString())) return next(ctx);
+            ctx.Response.StatusCode = StatusCodes.Status400BadRequest;
+            return Task.CompletedTask;
+        });
+}

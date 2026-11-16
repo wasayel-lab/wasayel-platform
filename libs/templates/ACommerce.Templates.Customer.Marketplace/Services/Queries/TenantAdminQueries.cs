@@ -143,6 +143,12 @@ public sealed class TenantAdminQueries
     /// كانَ صَحيحاً بِالشَكل خاطِئاً بِالمَعنى: لا مُعامَلَةَ فيها
     /// تُقَرَّر، ولا صُندوقَ صادِراً يُتَجاوَز. فَهي **نُقلَةُ مَوضِعٍ
     /// خالِصَة**، وتُرَحَّل مَعَ القِراءات لا مَعَ الكِتابات.</para>
+    ///
+    /// <para><b>‏(‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ قَرارُ المالِك د52 (١)) واللَقطَةُ لا المَجرى</b>: كانَت تُبنى مِن مَجرى أَحداثِها
+    /// (<c>AggregateStreamAsync</c>)، والحَذفُ يَمحو اللَقطَةَ (<c>AccountErasure.EraseFrom(Ticket, …)</c>) لا المَجرى — فَكانَ صاحِبُ المَتجَرِ يَرى
+    /// اسمَ العُضوِ المَحذوفِ هُنا والنُصوصُ تَقولُ «لا تَعرِضُه شاشَة». وصارَت تَقرَأُ اللَقطَةَ المُباشِرَة (<c>Snapshot&lt;Ticket&gt;</c> مُنذُ وِلادَةِ الكيت،
+    /// فَلِكُلِّ تَذكِرَةٍ لَقطَة) — وهِيَ ما تَقرَؤُه قائِمَتُها (<see cref="AllTicketsAsync"/>). ورَدُّ الفَريقِ بَعدَ الحَذفِ يُطَبَّقُ عَلى اللَقطَةِ المُخَزَّنَة
+    /// فَيَبقى المَحو (مَقيسٌ حَيّاً). الحارِس: <c>StreamNameReaderTests</c>.</para>
     /// </summary>
     public async Task<Ticket?> TicketAsync(
         string tenantSlug, Guid id, CancellationToken ct = default)
@@ -150,7 +156,7 @@ public sealed class TenantAdminQueries
         try
         {
             await using var s = _store.QuerySession(tenantSlug);
-            return await s.Events.AggregateStreamAsync<Ticket>(id, token: ct);
+            return await s.LoadAsync<Ticket>(id, ct);
         }
         catch { return null; }
     }

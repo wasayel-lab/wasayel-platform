@@ -21,6 +21,16 @@ public sealed record SitemapEntry(
     double? Priority = null);
 
 /// <summary>
+/// <para><b>أَيُّ مَتجَرٍ تَعرِضُه المَنَصَّةُ واجِهَةً لَها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3): خَريطَةُ المَوقِعِ في هذِه العُدَّةِ تَسأَلُه إن
+/// سُجِّل، والقالِبُ يُجيبُه (‏<c>TenantShowcase</c>: إعلانٌ عَلى الأَقَلّ، وباقَةٌ لا في السَماحِ ولا مُعَلَّقَة) — العُدَّةُ لا تَعرِفُ الإعلاناتِ ولا الباقات.
+/// ومُستَهلِكاه في وَقتِ التَشغيلِ ثَلاثَة: الخَريطَةُ هُنا، وقائِمَةُ الصَفحَةِ الأُولى وإحصاءاتُها في القالِب (القاعِدَة ١).</para>
+/// </summary>
+public interface ITenantShowcase
+{
+    Task<IReadOnlyList<Tenant>> ShowcaseAsync(IReadOnlyList<Tenant> tenants, CancellationToken ct = default);
+}
+
+/// <summary>
 /// <para>بِناء وَثائِق الـ SEO — <c>robots.txt</c>، <c>sitemap.xml</c>،
 /// و JSON-LD لِلصَفحَة الرَئيسيَّة. كُلّ الدَوالّ هُنا <b>نَقِيَّة</b>:
 /// تَأخُذ مُستَأجِرين وَرابِطاً أَساسيّاً وَتُعيد نَصّاً — بِلا قاعِدَة
@@ -79,6 +89,31 @@ public static class SeoDocuments
            && !ReservedTenantSlugs.Contains(t.Slug);
 
     // ─── خَريطَة المَوقِع ────────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>خَريطَةُ مَوقِعِ مُضيفِ المَتجَر</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·6 — G13): عَلى <c>{slug}.R</c> المُضيفُ جَذرُ المَتجَر، فَالمُدخَلاتُ
+    /// عَناوينُه النَظيفَة — <c>{base}/</c> و<c>{base}/explore</c> وفِئاتُه — <b>ومَتجَرُه وَحدَه</b>. <b>والعِلَّةُ المَقيسَة</b>: كانَت الخَريطَةُ نَفسُها
+    /// تُخدَمُ عَلى كُلِّ مُضيفٍ فَتَسرُدُ كُلَّ مَتجَرٍ بِمَسارِه تَحتَ مُضيفِ غَيرِه (‏29 مِن 33 رابِطاً مَيِّتاً عَلى مُضيفِ <c>theme-demo</c>، 2026-08-30).
+    /// والمَتجَرُ غَيرُ العامِّ (<see cref="IsPublic"/>) أَو الغائِبُ لا مُدخَلَ لَه.</para>
+    /// </summary>
+    /// <param name="tenant">مَتجَرُ المُضيف (<c>null</c> أَو غَيرُ العامِّ ← لا مُدخَل).</param>
+    /// <param name="baseUrl">أَصلُ المُضيفِ الظاهِر، مَثَلاً <c>https://{slug}.R</c>.</param>
+    /// <param name="includeCategories">إدراج روابِط الفِئات.</param>
+    public static IReadOnlyList<SitemapEntry> StoreHostEntries(Tenant? tenant, string baseUrl, bool includeCategories = true)
+    {
+        if (tenant is null || !IsPublic(tenant)) return Array.Empty<SitemapEntry>();
+        var b = NormalizeBaseUrl(baseUrl);
+        var entries = new List<SitemapEntry>
+        {
+            new($"{b}/", null, "daily", 1.0),
+            new($"{b}/explore", null, "daily", 0.8),
+        };
+        if (includeCategories)
+            foreach (var c in tenant.Categories.Where(c => !string.IsNullOrWhiteSpace(c.Slug)).OrderBy(c => c.SortOrder)
+                                               .DistinctBy(c => c.Slug, StringComparer.Ordinal))
+                entries.Add(new($"{b}/explore?category={Uri.EscapeDataString(c.Slug)}", null, "weekly", 0.6));
+        return entries;
+    }
 
     /// <summary>
     /// يُحَوِّل قائِمَة مُستَأجِرين إلى مُدخَلات خَريطَة المَوقِع: رَئيسيَّة
@@ -141,6 +176,15 @@ public static class SeoDocuments
     }
 
     // ─── robots.txt ─────────────────────────────────────────────────────
+
+    /// <summary><b>robots.txt عَلى مُضيفِ الدَور</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2b-P3-01): لا زَحفَ ولا خَريطَة — تَطبيقُ الدَورِ لَيسَ نُسخَةً تُفَهرَسُ
+    /// مِن واجِهَةِ المَتجَر، ومُضيفُ المَتجَرِ <c>{slug}.R</c> النُسخَةُ الوَحيدَة.</summary>
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-05 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>الزَحفُ مَسموحٌ و<c>noindex</c> يَمنَعُ الفَهرَسَة</b>:
+    /// «لا زَحف» (<c>Disallow: /</c>) كانَ يُخفي <c>X-Robots-Tag: noindex</c> عَن الزاحِف — صَفحَةُ Google Search Central «Block Search indexing with noindex» (جُلِبَت
+    /// ‏2026-11-11): «If the page is blocked by a robots.txt file or the crawler can't access the page, the crawler will never see the noindex rule, and the page
+    /// can still appear in search results» — فَرابِطُ بِطاقَةِ الدَورِ مِن واجِهَةِ المَتجَرِ يُفَهرَسُ عُنواناً بِلا صَفحَة. الآن <c>Allow: /</c> بِلا خَريطَة،
+    /// والخَريطَةُ فارِغَة، وكُلُّ جَوابٍ بِـ<c>noindex</c> — فَيَزحَفُ ويَرى الرَأسَ ولا يُفَهرِس.</remarks>
+    public const string RoleHostRobotsTxt = "User-agent: *\nAllow: /\n";
 
     /// <summary>يَبني <c>robots.txt</c>: مَنع لَوحات الإدارَة والاستوديو
     /// وَالـ API وَصَفَحات المُستَخدِم الخاصَّة، مَع الإشارَة إلى خَريطَة

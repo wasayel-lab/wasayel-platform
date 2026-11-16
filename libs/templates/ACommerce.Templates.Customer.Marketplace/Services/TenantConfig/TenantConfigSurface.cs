@@ -46,7 +46,9 @@ public static class TenantConfigSurface
             req.Form["tagline"].ToString(),
             req.Form["city"].ToString(),
             req.Form["color"].ToString(),
-            req.Form.ContainsKey("channel") ? req.Form["channel"].ToString() : null);
+            req.Form.ContainsKey("channel") ? req.Form["channel"].ToString() : null,
+            // (‏2026-10-29، قَرارُ المالِك د2) — ونَمَطُ السَلَّةِ بِالعَقدِ نَفسِه: نَموذَجٌ لا يَحمِلُه يُعطي «لا تُغَيِّر».
+            req.Form.ContainsKey("cart_mode") ? req.Form["cart_mode"].ToString().Trim() : null);
 
     public static CategoriesSaveRequest ReadCategories(HttpRequest req) =>
         new(req.Form["categories"].ToString());

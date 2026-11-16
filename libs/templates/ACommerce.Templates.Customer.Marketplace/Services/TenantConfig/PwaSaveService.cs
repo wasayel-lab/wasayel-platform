@@ -50,8 +50,53 @@ public static class PwaSaveService
     /// <c>data:</c> داخِلَها.</summary>
     public const long MaxIconBytes = 256 * 1024;
 
+    /// <summary>
+    /// <para><b>صورَةٌ نُقَطِيَّةٌ وَحدَها</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه). كانَ <c>image/svg+xml</c>
+    /// هُنا: SVG مُستَنَدٌ يَحمِلُ سكربتاً، والنَوعُ مِن رَأسِ الجُزءِ والبايتاتُ تُخزَنُ كَما وَصَلَت، و<c>/api/{slug}/r/{role}/icon.svg</c> يُعيدُها بِنَوعِها عَلى
+    /// أَصلِ الجَذرِ نَفسِه الَّذي يَسكُنُه <c>/studio</c> و<c>/admin</c> — فَصاحِبُ أَيِّ مَتجَرٍ يُرسِلُ الرابِطَ لِمُشرِفِ المَنَصَّةِ أَو لِصاحِبِ مَتجَرٍ آخَر فَيَجري
+    /// سكربتُه بِكَعكاتِهِ (قيسَ: ‏302 ‎?saved=1 ثُمَّ 200 ‎image/svg+xml والسكربتُ في الجِسم). <b>والقائِمَةُ وَحدَها لا تَكفي</b>: النَوعُ دَعوى العَميل —
+    /// فَالبايتاتُ تُطابَقُ بِبَصمَتِها (<see cref="RasterTypeOf"/>) في الأَبوابِ الثَلاثَةِ وعِندَ الإجابَة.</para>
+    /// </summary>
     public static readonly IReadOnlySet<string> AllowedContentTypes =
-        new HashSet<string>(StringComparer.Ordinal) { "image/png", "image/svg+xml", "image/webp" };
+        new HashSet<string>(StringComparer.Ordinal) { "image/png", "image/webp" };
+
+    /// <summary><b>نَوعُ الصورَةِ مِن بايتاتِها لا مِن دَعواها</b> — بَصمَةُ PNG الثَمانِيَة (<c>89 50 4E 47 0D 0A 1A 0A</c>) أَو WebP (<c>RIFF</c>…<c>WEBP</c>)،
+    /// و<c>null</c> لِما سِواهُما (SVG وHTML وGIF وما لا يُعرَف).</summary>
+    public static string? RasterTypeOf(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])) return "image/png";
+        if (bytes.Length >= 12 && bytes[..4].SequenceEqual("RIFF"u8) && bytes.Slice(8, 4).SequenceEqual("WEBP"u8)) return "image/webp";
+        return null;
+    }
+
+    /// <summary>
+    /// <para><b>أَيقونَةٌ مُخزَّنَةٌ تُجابُ أَم لا — قَرارُ الإجابَةِ النَقِيّ</b> (‏2026-11-07، SEC-C2a-1): رابِطُ <c>data:</c> بِنَوعٍ مِن <see cref="AllowedContentTypes"/>
+    /// و<c>base64</c> صالِحٍ وبايتاتٍ تَحمِلُ بَصمَةَ ذلك النَوعِ ← البايتاتُ ونَوعُها؛ وما سِوى ذلك (ومِنه SVG خُزِّنَت قَبلَ هذا اليَوم) ← <c>null</c>
+    /// فَيُجيبُ البابُ بِالأَيقونَةِ المُوَلَّدَة. <b>فَالسَحبُ يَشمَلُ المُخزَّنَ لا الجَديدَ وَحدَه</b> — لا هِجرَةَ ولا كِتابَة.</para>
+    /// </summary>
+    public static (byte[] Bytes, string ContentType)? StoredRaster(string? dataUrl)
+    {
+        if (string.IsNullOrEmpty(dataUrl) || !dataUrl.StartsWith("data:", StringComparison.Ordinal)) return null;
+        var comma = dataUrl.IndexOf(',');
+        if (comma < 0) return null;
+        var meta = dataUrl[5..comma].Split(';');
+        if (meta.Length != 2 || meta[1] != "base64" || !AllowedContentTypes.Contains(meta[0])) return null;
+        byte[] bytes;
+        try { bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]); }
+        catch (FormatException) { return null; }
+        return RasterTypeOf(bytes) == meta[0] ? (bytes, meta[0]) : null;
+    }
+
+    /// <summary><b>بابُ رابِطِ <c>data:</c></b> (أَداةُ الوَكيل <c>set_pwa</c>، ‏2026-11-07، SEC-C2a-1): الرابِطُ نَفسُه مُطَبَّعاً
+    /// (<c>data:{النَوع};base64,{…}</c>) إن كانَ صورَةً نُقَطِيَّةً مِن القائِمَةِ بِبايتاتِها وفي حُدودِ <see cref="MaxIconBytes"/>، وإلّا <c>null</c>.</summary>
+    public static string? RasterDataUrl(string? dataUrl)
+    {
+        if (string.IsNullOrEmpty(dataUrl)) return null;
+        var comma = dataUrl.IndexOf(',');
+        if (comma < 5 || !dataUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return null;
+        var normalised = "data:" + dataUrl[5..comma].ToLowerInvariant() + dataUrl[comma..];
+        return StoredRaster(normalised) is { } raster && raster.Bytes.Length <= MaxIconBytes ? normalised : null;
+    }
 
     /// <summary><b>دالَّةُ القَرار، نَقِيَّة</b> (ق٣): أَيقونَةٌ
     /// تُقبَل أَو تُرَدّ بِرَمز — بِلا قِراءَةِ بايتٍ واحِد.</summary>
@@ -90,8 +135,10 @@ public static class PwaSaveService
             if (WhyIconRejected(icon) is { } code) return TenantConfigResult.Reject(code);
 
             var bytes = await icon.ReadBytesAsync(ct);
-            role.PwaIconDataUrl =
-                $"data:{icon.ContentType.ToLowerInvariant()};base64,{Convert.ToBase64String(bytes)}";
+            // ‏(‏2026-11-07، SEC-C2a-1) النَوعُ المُعلَنُ يُطابِقُ بَصمَةَ البايتات — وإلّا فَهُوَ دَعوى (SVG بِرَأسِ image/png مَثَلاً) تُرَدُّ بِرَمزِ النَوع.
+            var type = icon.ContentType.ToLowerInvariant();
+            if (RasterTypeOf(bytes) != type) return TenantConfigResult.Reject(TenantConfigCodes.IconBadType);
+            role.PwaIconDataUrl = $"data:{type};base64,{Convert.ToBase64String(bytes)}";
         }
 
         session.Store(t);

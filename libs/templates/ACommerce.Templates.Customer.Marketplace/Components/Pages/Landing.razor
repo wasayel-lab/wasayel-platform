@@ -1,6 +1,5 @@
 @page "/"
-@inject Services.Queries.TenantDirectory Tenants
-@inject Services.Queries.PlatformStatsQueries PlatformStats
+@inject Services.Queries.TenantShowcase Showcase
 @inject Services.Incubator.StudioAuth StudioAuthSvc
 @inject L L
 
@@ -42,7 +41,9 @@
     </nav>
 
     <section class="landing-hero">
-        <span class="landing-eyebrow"><AcIcon Name="sparkle" Size="16" /> @L.Markup("landing.hero.eyebrow")</span>
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٤ — ADR-049 §٨) النَصُّ بِلا ذَكاءٍ اصطِناعيٍّ ولا دَعوى غَيرِ مَقيسَة، والتَموضُعُ «مَن يَجمَعُ بائِعي غَيرِه ويَملِكُ
+           جُمهوراً يَبيعُ لَه»؛ والدَعوَةُ رابِطٌ إلى استِمارَةِ الإنشاءِ لِلزائِرِ والمُسَجَّلِ مَعاً — الزائِرُ يَدخُلُ أَوَّلاً ثُمَّ يَبلُغُها (`StudioStoreCreate.AfterSignIn`). *@
+        <span class="landing-eyebrow"><AcIcon Name="store" Size="16" /> @L.Markup("landing.hero.eyebrow")</span>
         @* الفَراغ الحافّ صَريح — رَأساً وذَيلاً. المُصَيِّر يَحذِف عُقدَة
            النَصّ الفارِغَة **في طَرَفَي** مُحتَوى العُنصُر (لا الذَيل
            وَحدَه كَما كُتِبَ في المَوجَة الأولى)، والداخِلِيَّة تَنجو.
@@ -52,42 +53,27 @@
         </h1>
         <p class="landing-sub">@((MarkupString)"\n            ")@L.Markup("landing.hero.sub")@((MarkupString)"\n        ")
         </p>
+        <a class="st-btn st-btn-primary st-btn-lg" href="/studio/new">@L.Markup("landing.cta.create")</a>
 
-        <form method="post" action="/studio/begin" class="landing-prompt">
-            @* و`placeholder` كَذلك — نَفس السَبَب: `<textarea>` هُنا ساكِن
-               بِالكامِل. (‏انظُر التَعليق على `alt` أَعلاه.) *@
-            <textarea name="prompt" required
-                      placeholder="@L["landing.idea.placeholder"]"></textarea>
-            <div class="landing-prompt-bar">
-                <span class="landing-prompt-hint">@L.Markup("landing.prompt.hint")</span>
-                <button type="submit" class="st-btn st-btn-primary">@((MarkupString)"\n                    ")@L.Markup("landing.prompt.submit")@((MarkupString)"\n                ")
-                </button>
-            </div>
-        </form>
-
-        <div class="landing-examples">
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.cars")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.food")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.gear")</span>
-            <span class="landing-example" onclick="fillPrompt(this)">@L.Markup("landing.example.home_services")</span>
-        </div>
+        @* ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) خَرَجَت مِن هُنا استِمارَةُ الفِكرَةِ وأَمثِلَتُها ونَصُّ بابِ التَحليلِ المُغلَق: لا تَحليلَ في رِحلَةِ
+           رائِدِ الأَعمال، والدَعوَةُ أَعلاه تَقودُ إلى استِمارَةِ الإنشاء. *@
     </section>
 
     <section class="landing-features">
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="bar-chart" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.analysis_title")</h3>
-            <p>@L.Markup("landing.feature.analysis_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="people" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.vendors_title")</h3>
+            <p>@L.Markup("landing.feature.vendors_body")</p>
         </div>
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="sparkle" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.launch_title")</h3>
-            <p>@L.Markup("landing.feature.launch_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="settings" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.setup_title")</h3>
+            <p>@L.Markup("landing.feature.setup_body")</p>
         </div>
         <div class="landing-feature">
-            <div class="landing-feature-icon"><AcIcon Name="target" Size="28" /></div>
-            <h3>@L.Markup("landing.feature.candid_title")</h3>
-            <p>@L.Markup("landing.feature.candid_body")</p>
+            <div class="landing-feature-icon"><AcIcon Name="credit-card" Size="28" /></div>
+            <h3>@L.Markup("landing.feature.payments_title")</h3>
+            <p>@L.Markup("landing.feature.payments_body")</p>
         </div>
     </section>
 
@@ -136,13 +122,6 @@
     }
 </div>
 
-<script>
-    function fillPrompt(el) {
-        var ta = document.querySelector('.landing-prompt textarea');
-        if (ta) { ta.value = el.textContent.trim(); ta.focus(); }
-    }
-</script>
-
 @code {
     IReadOnlyList<Tenant>? tenants;
     IReadOnlyDictionary<string, int> listingsByTenant = new Dictionary<string, int>();
@@ -152,7 +131,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        tenants = await Tenants.ListAsync();
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واجِهَةُ المَنَصَّةِ لا كُلُّ مُستَأجِر: كانَت `Tenants.ListAsync()`
+        // فَدَخَلَ القائِمَةَ والإحصاءاتِ كُلُّ مَتجَرٍ تُنشِئُه الاستِمارَةُ بِصِفرِ إعلانٍ («مَتاجِر مُطلَقَة 4»). والإحصاءاتُ تُعَدُّ عَلى المَعروضِ نَفسِه.
+        (tenants, var listings) = await Showcase.ListAsync();
         totalRoles = tenants.Sum(t => t.Roles.Count);
         var allCities = new HashSet<string>(
             tenants.Where(t => !string.IsNullOrEmpty(t.City)).Select(t => t.City!));
@@ -160,7 +141,7 @@
         // العَدُّ جَلسَةً لِكُلّ سلاج — `Listing` مُقتَرِنَة الإيجار،
         // فَلا استِعلامَ واحِداً يَعُدُّ كُلّ المَتاجِر. نَفسُ ما كانَت
         // الصَفحَةُ تَفعَلُه بِيَدِها، في مَوضِعِه الصَحيح.
-        listingsByTenant = await PlatformStats.ListingCountsAsync(tenants.Select(t => t.Slug));
+        listingsByTenant = tenants.ToDictionary(t => t.Slug, t => listings.GetValueOrDefault(t.Slug, 0), StringComparer.Ordinal);
         totalListings = listingsByTenant.Values.Sum();
         cityCount = allCities.Count;
     }

@@ -26,7 +26,8 @@
            لَوحَةِ المَنَصَّة. *@
         string backHref = From switch
         {
-            "tenant" => $"/{Slug}/r/admin/manage",
+            // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `lens-dead-doors-6`) كانَ `/{Slug}/r/admin/manage`: لا دَورَ «admin» في كاتالوج، والمَسارُ بِدَورٍ يَقرَأُ كوكي ذلِكَ الدَورِ وَحدَه — فَيَرى المُديرَ مَجهولاً. والمَسارُ بِلا دَورٍ يَقرَأُ أَيَّ جَلسَةٍ لِلمَتجَر (`AuthSession.ResolveCookieBase`).
+            "tenant" => AuthSession.LinkFor(Slug, null, "manage"),
             "studio" => $"/studio/apps/{Slug}",
             _        => $"/admin/tenants/{Slug}"
         };
@@ -49,22 +50,49 @@
 
         @if (users.Count == 0)
         {
-            <AcEmptyState IconName="user" Title="@L["admin.tenant_users.empty"]" />
+            @* المَتجَرُ الجَديدُ يولَدُ بِصِفرِ مُستَخدِم: المَصنَعُ يَضبُطُ
+               `OwnerUserId` ولا يُنشِئُ لِلمالِكِ مُستَخدِماً في واجِهَةِ
+               مَتجَرِه (‏ADR-032 §٦‑هـ). فَكانَ العُنوانُ وَحدَه يَعِدُ
+               بِتَعيينِ أَوَّلِ مُشرِفٍ ولا يَقولُ كَيف — والسَبيلُ قائِم:
+               المُستَخدِمُ يولَدُ بِأَوَّلِ دُخولٍ مِن `/{slug}/login`
+               (`AuthHandlers.GetOrCreateUserAsync`)، ثُمَّ يَعودُ المالِكُ
+               إلى هُنا فَيَمنَحُ نَفسَه. نَصٌّ لا زِرّ: عَدَدُ النَقراتِ
+               يُقاسُ قَبلَ أَن يُبنى (موجَزُ الفَجَوات P0-8، ‏2026-10-11). *@
+            <AcEmptyState IconName="user" Title="@L["admin.tenant_users.empty"]"
+                          Message="@(L.Format("admin.tenant_users.empty_hint", Slug))" />
         }
         else
         {
+            @* ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `brief-P0-8`) والتَلميحُ نَفسُه فَوقَ الجَدوَلِ
+               ما دامَ لا يَحمِلُ أَحَدٌ مِن المَسرودينَ `tenant.manage`: كانَ لا يُرسَمُ إلّا
+               في المَتجَرِ الخالي، فَمَن سَبَقَه إلى مَتجَرِه بائِعٌ أَو مُشتَرٍ رَأى صُفوفَهم
+               بِلا سَطرٍ يَقولُ كَيفَ يَصيرُ لَه صَفّ (‏RELEASE-READINESS §٢·١، التَعَثُّرُ ب).
+               والقَرارُ دالَّةُ الحارِسِ نَفسُها (`TenantAdminGuard.HasTenantManage`) لا تَعريفٌ
+               ثانٍ — فَالمَتجَرُ بِلا أَدوارٍ (الوَضعُ المَوروث) لا يُرسَمُ لَه. نَصٌّ لا زِرّ.
+               (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-3 الجَولَتانِ ١ و٢؛ تَوصيفُه `2215638` — ولا يُعادُ حَرفٌ فَوقَه: ويَسأَلُ `hasAdminRole` نَفسَه الَّذي يَرسُمُ
+               زِرَّ «مَنح إدارَة» الَّذي يُسَمّيه النَصّ — كانَ يُرسَمُ في مَتجَرٍ بِلا دَورِ tenant_admin تَحتَ تَحذيرِ no_admin_role ويَدُلُّ عَلى زِرٍّ لا يُرسَم.
+               وصياغَةُ تِلكَ الحالِ قَرارُ المالِك «أ» W8-3·٤.) *@
+            @if (hasAdminRole && !anyManager)
+            {
+                <AcAlert Variant="info" Message="@(L.Format("admin.tenant_users.empty_hint", Slug))" />
+            }
             <AcCard>
                 <ChildContent>
                     <div class="acm-cat-list">
                         @foreach (var u in users)
                         {
                             var isAdmin = u.ActiveRole == "tenant_admin";
+                            // ‏المُعَرِّفُ الَّذي دَخَلَ بِه: الهاتِفُ حَيثُ وُجِد، وإلّا البَريد — قاعِدَةُ عَرضِ
+                            // `AuthHandlers.GetOrCreateUserAsync` بِعَينِها. كانَ الصَفُّ يَرسُمُ الهاتِفَ وَحدَه،
+                            // فَمُستَخدِمُ البَريدِ بِلا مُعَرِّفٍ ظاهِرٍ واسمُه «عُضو جَديد» الحَرفِيّ — وتَلميحُ
+                            // الحالَةِ الفارِغَةِ يَقولُ لِلمالِكِ «بِجِوارِ هاتِفِك أَو بَريدِك» (‏2026-10-13).
+                            var shownId = string.IsNullOrEmpty(u.Phone) ? u.Email : u.Phone;
                             <div class="acm-cat-row">
                                 <span style="font-size:24px;"><AcIcon Name="@(isAdmin ? "people" : "user")" Size="24" /></span>
                                 <div style="flex:1;min-width:0;">
                                     <strong>@u.FullName</strong>
                                     <span style="color:var(--ac-text-muted);font-size:12px;display:block;direction:ltr;">
-                                        @u.Phone
+                                        @shownId
                                     </span>
                                     @if (!string.IsNullOrEmpty(u.ActiveRole))
                                     {
@@ -112,6 +140,7 @@
     Tenant? tenant;
     List<User> users = new();
     bool hasAdminRole;
+    bool anyManager;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -124,6 +153,7 @@
         if (tenant is null) return;
         hasAdminRole = tenant.Roles.Any(r => r.CatalogSlug == "tenant_admin");
         users = (await TenantAdmin.UsersAsync(Slug)).ToList();
+        anyManager = users.Any(u => Services.TenantAdminGuard.HasTenantManage(tenant, u));
     }
 
     string RoleLabel(string slug)

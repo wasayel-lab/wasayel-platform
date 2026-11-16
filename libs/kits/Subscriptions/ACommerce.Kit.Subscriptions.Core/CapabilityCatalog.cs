@@ -161,6 +161,10 @@ public static class CapabilityCatalog
     /// <summary><b>القُدُرات السَبع</b> — كُلّ ما يُحَدّ أَو يُباع اليَوم،
     /// مُرَتَّبَة أَبجَدِيّاً بِرَمزِها. الزِيادَة عَلَيها قَرار مُعلَن:
     /// سَطر هُنا + مَوضِع فَحص حَيّ + اختِبار سالِب يُثبِت المَنع.</summary>
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «كُلّ ما يُحَدّ أَو يُباع اليَوم» لَم يَعُد يَصدُقُ في ثَلاثٍ مِنها:
+    /// <c>StudioAnalyze</c> و<c>StudioRefine</c> و<c>StudioExport</c> لا يَحُدُّها شَيءٌ ولا تُباع — خَرَجَ التَحليلُ والتَحسينُ مِن الرِحلَة (<c>5ba4cac</c>)
+    /// وبَوّابَةُ التَصديرِ (<c>MTE.cs:2462</c> المَذكورَةُ في وَصفِها) أُزيلَت في <c>6420199</c>. <b>مُتَقاعِدَةٌ حَتّى ADR التَسعير (W13-2)</b>: حُقولُها
+    /// مُدخَلاتُ السُلَّمِ والإصلاحِ (<c>TierOrphanFieldsTests.LadderAndRepairInputsUntilThePricingAdr</c>) أَو يَتامى، وتُحذَفُ أَو تُعادُ رَوافِعَ هُناك.</remarks>
     public static readonly IReadOnlyList<Capability> All = new[]
     {
         new Capability(ApiCall, CapabilityKinds.Flag,

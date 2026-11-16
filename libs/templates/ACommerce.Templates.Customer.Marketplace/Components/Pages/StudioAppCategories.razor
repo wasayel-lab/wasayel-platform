@@ -7,7 +7,7 @@
 @*
     تَحرير الفِئات — textarea نَصّيّ: كُلّ سَطر "slug | اسم | إيموجي | تَجميع".
     أَبسَط مِن جَدوَل ديناميكيّ ويَكفي لِلتَّحرير السَريع. التَّجميع
-    اختياريّ (residential/commercial/fnb/transport/services/...).
+    اختِيارٌ مِن المَعجَمِ المُغلَقِ بِأَثَرِه (`CategoryKindSelect`، قَرارُ المالِك د25).
 *@
 
 <StudioShell Title="@($"{L["studio.app_categories.title"]} {tenant?.Name ?? Slug}")" Active="home">
@@ -29,6 +29,7 @@
             @if (Saved == "1")    { <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup("studio.app.saved") <AcIcon Name="check" Size="16" /></div> }
             @if (Err == "bad_format") { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_categories.err_format")</div> }
             @if (Err == "empty")  { <div class="st-chip st-chip-danger"  style="margin-bottom:14px;">@L.Markup("studio.app_categories.err_empty")</div> }
+            @if (Err == Services.Patterns.CategoryKinds.Unknown) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup("categories.kind.err_unknown")</div> }
 
             <form method="post" action="@($"/studio/apps/{Slug}/categories/save")" id="cats-form" class="st-card">
                 <p style="color:var(--st-muted);font-size:13px;margin:0 0 14px;">@((MarkupString)"\n                    ")@L.Markup("studio.app_categories.hint_before") = @L.Markup("studio.app_categories.hint_after")@((MarkupString)"\n                ")
@@ -50,21 +51,12 @@
                                 </div>
                                 <div>
                                     <span class="ac-chip-input-label">@L.Markup("studio.app_categories.kind_label")</span>
-                                    <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind" list="kind-list" style="direction:ltr;" />
+                                    <CategoryKindSelect Value="@c.Kind" />
                                 </div>
                             </div>
                         </div>
                     }
                 </div>
-
-                <datalist id="kind-list">
-                    <option value="residential"></option>
-                    <option value="commercial"></option>
-                    <option value="roommate"></option>
-                    <option value="vehicles"></option>
-                    <option value="events"></option>
-                    <option value="leisure"></option>
-                </datalist>
 
                 <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
                     <AcIcon Name="plus" Size="16" /> @L.Markup("studio.app_categories.add_row")@((MarkupString)"\n                ")
@@ -89,7 +81,7 @@
                         </div>
                         <div>
                             <span class="ac-chip-input-label">@L.Markup("studio.app_categories.kind_label")</span>
-                            <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                            <CategoryKindSelect />
                         </div>
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 @page "/studio/apps/{slug}/deals/{id:guid}"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
 @inject L L
@@ -15,6 +16,14 @@
         <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}/deals")">@L.Markup("studio.deal.back_list")</a>
     </TopBarActions>
     <ChildContent>
+        @* ─── رَفضُ المَسارِ الإداريِّ يُقرَأُ هُنا لا يُبتلَع (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)) ───
+           نِقاطُ `advance` و`cancel` و`dispute` تَرتَدُّ إلى هذِه الصَفحَةِ بِـ`?err=<code>` — وكانَت تَعودُ بِلا مُعامِلٍ يُقرَأ (تَوصيفُه
+           `StudioDealRefusalTests`). نَسَقُ شَريطِ `MyDealDetail` بِمَعجَمِ الاستوديو (`DealRefusalTexts.StudioKeyFor`): رَمزٌ لا نَصَّ لَه
+           لا يُرسَمُ لَه شَيء، والكَلامُ في القامُوس. *@
+        @if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)
+        {
+            <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errKey)</div>
+        }
         @if (deal is null)
         {
             <div class="st-card">@L.Markup("studio.deal.not_found")</div>
@@ -23,7 +32,7 @@
         {
             <div class="studio-page-head">
                 <h1>@(string.IsNullOrEmpty(deal.ListingTitle) ? $"{L["studio.deal.title_prefix"]} {Id.ToString()[..8]}" : deal.ListingTitle)</h1>
-                <p>@L.Markup("studio.deal.pattern_label") @deal.Pattern · @L.Markup("studio.deal.created_label") @deal.CreatedAt.ToString("yyyy-MM-dd HH:mm")</p>
+                <p>@L.Markup("studio.deal.pattern_label") @deal.Pattern · @L.Markup("studio.deal.created_label") @Culture.FormatTime(deal.CreatedAt, "yyyy-MM-dd HH:mm")</p>
             </div>
 
             @* شَريط مَراحِل (Stepper) *@
@@ -69,15 +78,50 @@
                 </div>
             </div>
 
+            @* طَلَبُ شَحنٍ قائِمٌ عِندَ OTO — يُقالُ لِصاحِبِ المَتجَرِ حينَ يُلغي (‏2026-10-29، قَرارُ المالِك د37 (٢) «أ»): الطَرَفانِ لا يُلغِيانِ
+               صَفقَةً لَها طَلَبٌ عِندَ OTO، وهُوَ يُلغيها مِن هُنا — والشُحنَةُ عَلى حِسابِ البائِعِ لا يُلغيها إلغاءُ الصَفقَة. يُرسَمُ فَوقَ زِرِّ الإلغاءِ
+               ما دامَت فَعّالَة، وبَعدَ الإلغاءِ عَلى الصَفقَةِ المُلغاةِ نَفسِها (الصَفحَةُ الَّتي يَعودُ إلَيها). *@
+            @* (‏2026-10-29، قَرارُ المالِك د38 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وعَلى صَفقَةٍ في «نِزاع» — بَديلُ «إلغاء» في بابِ الحَسمِ أَدناه إلغاءٌ مِن هُنا. *@
+            @* (‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): وطَلَبٌ يَحمِلُ مَعَها أَخَواتٍ لَم تُسَلَّم يُقالُ بِأَسمائِها ومَبلَغِ تَحصيلِه — فَلا تُلغى
+               وَحدَها، وبابُها «إلغاء الطَّلَب كامِلاً» أَو الإلغاءُ بَعدَ التَسليم. الدالَّةُ نَفسُها الَّتي يَرُدُّ بِها الكاتِب (`DealCancelAuthorization.LiveOnWaybill`). *@
+            @* (‏2026-11-05، الموجَة ١٢ G3 · ٦ — D-4؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): والشَريحَةُ مِن دالَّةٍ نَقِيَّة — «قائِمٌ» ما دامَت تَسيرُ في شُحنَة (`OnLiveWaybill`) لا ما دامَ الطَلَبُ
+               عِندَ OTO، ونَقدٌ قُبِضَ يَقولُ إنّ الإلغاءَ يَكتُبُ رَدَّه مُستَحَقّاً عَلى البائِع (`DealCancelAuthorization.StudioOtoChipOf`). *@
+            var otoChip = DealCancelAuthorization.StudioOtoChipOf(deal, waybillLive.Count);
+            @if (otoChip == StudioOtoChip.Live)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live")</div>
+            }
+            else if (otoChip == StudioOtoChip.LiveGroup)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Format("studio.deal.oto_order_live_group",
+                    DealCancelAuthorization.TitlesOf(waybillLive), deal.AmountSar + waybill.Sum(d => d.AmountSar))</div>
+            }
+            else if (otoChip == StudioOtoChip.DeliveredCash)
+            {
+                <div class="st-chip st-chip-warning" style="margin-top:14px;">@L.Markup("studio.deal.oto_order_live_delivered")</div>
+            }
+
+            @* «يَحتاجُ تَدَخُّلاً» عِندَ صاحِبِ المَتجَر (‏2026-10-29، قَرارُ المالِك د9 (١) «أ»): أَبلَغَت OTO أَنّ الشُحنَةَ فُقِدَت أَو تَلِفَت، ولَم تُغلَقِ
+               الصَفقَة — يُقَرِّرُ هُوَ والبائِعُ الإلغاءَ أَو التَعويضَ أَو إعادَةَ الإرسال. الدالَّةُ نَفسُها الَّتي تَقرَؤُها صَفحَةُ العُضو. *@
+            @if (DealShipping.NeedsIntervention(deal))
+            {
+                <div class="st-chip st-chip-danger" style="margin-top:14px;">@L.Markup("studio.deal.oto_needs_intervention")</div>
+            }
+
             @* الإجراءات *@
             @if (deal.Status == DealStatus.Active)
             {
                 <div class="st-section-title">@L.Markup("studio.deal.actions")</div>
                 <div class="st-card" style="display:flex;gap:10px;flex-wrap:wrap;">
-                    @if (DealsPolicy.Next(deal.Pattern, deal.Stage) is { } next)
+                    @* «→ التالي» حَيثُ يُحَرِّكُ المَسارُ الإداريُّ الصَفقَةَ وَحدَه — الدالَّةُ نَفسُها الَّتي تَسأَلُها النُقطَةُ قَبلَ أَيِّ
+                       كِتابَة (القاعِدَة ١٢؛ ‏ADR-033 §٦‑ط مُلحَقاً، ‏2026-10-12). كانَ يُرسَمُ لِكُلِّ صَفقَةٍ لَها تالٍ، فَيُرَدُّ بِلا
+                       كَلِمَةٍ عِندَ خُطوَتَي المُشتَري (دَفع، استِلام) وصَفقَةِ البَذرَةِ التَجريبِيَّة. *@
+                    @if (DealsService.AdminPathCanMove(deal, Auth.UserId!.Value) && DealsPolicy.Next(deal) is { } next)
                     {
+                        @* والمَرحَلَةُ الَّتي رُسِمَ عَلَيها الزِرّ — نُقطَتُه تُمَرِّرُها `from:` (‏2026-10-24، تَدقيقُ الإطلاق brief-P0-6؛ ‏ADR-036 §١٣). *@
                         <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/advance")"
                               style="display:flex;gap:8px;flex:1;min-width:200px;">
+                            <input type="hidden" name="from" value="@deal.Stage" />
                             <input class="st-input" name="note" placeholder="@L["studio.deal.note_placeholder"]" />
                             <button type="submit" class="st-btn st-btn-primary" style="white-space:nowrap;">
                                 → @DealsPolicy.LabelAr(next)
@@ -94,9 +138,50 @@
                     <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/cancel")"
                           style="display:flex;gap:8px;flex:1;min-width:200px;">
                         <input class="st-input" name="reason" placeholder="@L["studio.deal.cancel_placeholder"]" />
-                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.cancel")@((MarkupString)"\n                        ")
+                        @* وصَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ مُشتَرَكَة لا تُلغى وَحدَها — الإلغاءُ لِلطَلَبِ كُلِّه (‏2026-10-13، G5 M4). *@
+                        @if (cancelShared)
+                        {
+                            <input type="hidden" name="scope" value="order" />
+                        }
+                        <button type="submit" class="st-btn st-btn-ghost" style="white-space:nowrap;">@((MarkupString)"\n                            ")@L.Markup(cancelShared ? "studio.deal.cancel_order" : "studio.deal.cancel")@((MarkupString)"\n                        ")
                         </button>
                     </form>
+                </div>
+            }
+
+            @* حَسمُ النِزاع — بِجِوارِ بابِ فَتحِه (‏2026-10-29، قَرارُ المالِك د38): «صاحب المتجر» يَختارُ أَحَدَ البَديلَين — إلغاءٌ بِأَثَرِ الإلغاءِ الماليِّ القائِم
+               أَو استِئنافٌ مِن المَرحَلَةِ نَفسِها — والطَرَفانِ يُخبَرانِ بِالنَتيجَة. يُرسَمُ لِصَفقَةٍ في «نِزاع» وَحدَها، والنُقطَةُ تَسأَلُ البَوّابَةَ نَفسَها
+               (`DealDisputeResolution`) قَبلَ أَيِّ كِتابَة. كانَت «نِزاع» بِلا مَخرَج (تَوصيفُه `DealDisputeDeadEndTests`). *@
+            @if (deal.Status == DealStatus.Disputed)
+            {
+                <div class="st-section-title">@L.Markup("studio.deal.resolve_title")</div>
+                <div class="st-card">
+                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">@L.Markup("studio.deal.resolve_hint")</p>
+                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/resolve")"
+                          style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <input class="st-input" name="note" placeholder="@L["studio.deal.resolve_note_placeholder"]" style="flex:1;min-width:200px;" />
+                        <button type="submit" name="outcome" value="@DealDisputeResolution.Resume" class="st-btn st-btn-primary" style="white-space:nowrap;">
+                            @L.Format("studio.deal.resolve_resume", DealsPolicy.LabelAr(deal.Stage))
+                        </button>
+                        @* وبَديلُ الإلغاءِ لا يُرسَمُ لِمُتَنازَعٍ عَلَيها تَدفَعُ فاتورَتُها المَفتوحَةُ لِأُختٍ قائِمَة — الدالَّةُ نَفسُها الَّتي يَرُدُّ بِها الكاتِبُ قَبلَ أَيِّ كِتابَة
+                           (‏2026-10-29، مُراجَعَةُ تَيّارِ S5 الأولى؛ القاعِدَة ١٢)، ومَكانَه الطَريقُ الَّذي يُفضي: الاستِئنافُ ثُمَّ إلغاءُ الطَلَبِ كُلِّه، أَو الإلغاءُ بَعدَ الدَفع. *@
+                        @if (!resolveShared)
+                        {
+                            @if (!resolveWaybill) {
+                            <button type="submit" name="outcome" value="@DealDisputeResolution.Cancel" class="st-btn st-btn-ghost" style="white-space:nowrap;color:var(--st-danger);">
+                                @L.Markup("studio.deal.resolve_cancel")
+                            </button>
+                            }
+                        }
+                    </form>
+                    @if (resolveShared)
+                    {
+                        <p style="margin:12px 0 0;font-size:14px;color:var(--st-muted);">@L.Markup("studio.deal.resolve_cancel_shared")</p>
+                    }
+                    else if (resolveWaybill)
+                    {
+                        <p style="margin:12px 0 0;font-size:14px;color:var(--st-muted);">@L.Markup("studio.deal.resolve_cancel_waybill")</p>
+                    }
                 </div>
             }
 
@@ -112,7 +197,7 @@
                         <div class="studio-list-body">
                             <strong>@FormatEvent(e)</strong>
                             <span>
-                                @(e.ActorName ?? "—") · @e.At.ToString("yyyy-MM-dd HH:mm:ss")
+                                @(DealEvent.IsByPlatform(e) ? L["deals.detail.actor_platform"] : e.ActorName ?? "—") · @Culture.FormatTime(e.At, "yyyy-MM-dd HH:mm:ss")
                                 @if (!string.IsNullOrEmpty(e.Note)) { <text> · @e.Note</text> }
                             </span>
                         </div>
@@ -120,43 +205,10 @@
                 }
             </div>
 
-            @* التَّقييم المُتَبادَل (يَظهَر في Reviewed أَو Delivered) *@
-            @if (deal.Stage is DealStage.Reviewed or DealStage.Delivered or DealStage.Received
-                 && deal.CounterpartyId is not null)
-            {
-                <div class="st-section-title"><AcIcon Name="star" Size="16" /> @L.Markup("studio.deal.review")</div>
-                <div class="st-card">
-                    <p style="margin:0 0 12px;font-size:14px;color:var(--st-muted);">@((MarkupString)"\n                        ")@L.Markup("studio.deal.review_hint")@((MarkupString)"\n                    ")
-                    </p>
-                    <form method="post" action="@($"/studio/apps/{Slug}/deals/{deal.Id}/review")"
-                          style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                        <div class="st-field" style="margin:0;">
-                            <label class="st-label">@L.Markup("studio.deal.reviewer")</label>
-                            <select class="st-input" name="target">
-                                <option value="counterparty">@deal.InitiatorName @L.Markup("studio.deal.reviews_verb") @deal.CounterpartyName</option>
-                                <option value="initiator">@deal.CounterpartyName @L.Markup("studio.deal.reviews_verb") @deal.InitiatorName</option>
-                            </select>
-                        </div>
-                        <div class="st-field" style="margin:0;">
-                            <label class="st-label">@L.Markup("studio.deal.stars")</label>
-                            <select class="st-input" name="rating">
-                                <option value="5">@L.Markup("deals.detail.rating_5")</option>
-                                <option value="4">@L.Markup("deals.detail.rating_4")</option>
-                                <option value="3">@L.Markup("deals.detail.rating_3")</option>
-                                <option value="2">@L.Markup("deals.detail.rating_2")</option>
-                                <option value="1">@L.Markup("deals.detail.rating_1")</option>
-                            </select>
-                        </div>
-                        <div class="st-field" style="margin:0;grid-column:1/-1;">
-                            <label class="st-label">@L.Markup("studio.deal.comment")</label>
-                            <textarea class="st-textarea" name="body" rows="3" required
-                                      placeholder="@L["studio.deal.review_placeholder"]"></textarea>
-                        </div>
-                        <button type="submit" class="st-btn st-btn-primary" style="grid-column:1/-1;">@((MarkupString)"\n                            ")@L.Markup("studio.deal.review_submit")@((MarkupString)"\n                        ")
-                        </button>
-                    </form>
-                </div>
-            }
+            @* لا «تَقييمَ نِيابَةً» هُنا (‏2026-10-29، قَرارُ المالِك د39 «ب»: «يُحذف الباب: لا يكتب التقييم إلا صاحبه بعد اكتمال صفقته»): كانَت هُنا
+               استِمارَةٌ تَكتُبُ بِاسمِ أَيِّ الطَرَفَينِ تَقييماً «مَوثوقاً» عِندَ «تَسليم» أَو «استِلام» أَو «تَقييم» بِلا بَوّابَةِ التَقييم (تَوصيفُها
+               `DealStudioProxyReviewTests`). والتَقييمُ يَكتُبُه صاحِبُه مِن صَفحَةِ صَفقَتِه بِـ`DealReviews` وَحدَها؛ والبَديلُ الصادِقُ بِوَسمِ «مِن إدارَةِ
+               المَتجَر» يُبنى عِندَ أَوَّلِ مَتجَرٍ يَطلُبُه (القاعِدَة ١). *@
 
             @* المَراجِع (PaymentId، ShipmentId، …) *@
             @if (deal.Refs.Count > 0)
@@ -179,8 +231,16 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public Guid Id { get; set; }
+    /// <summary>رَمزُ رَفضِ نُقطَةِ المَسارِ الإداريّ — يُحَلُّ نَصّاً بِـ<see cref="DealRefusalTexts.StudioKeyFor"/>، ولا يُرسَمُ لِرَمزٍ لا نَصَّ لَه.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Deal? deal;
     List<DealStage> stages = new();
+    bool cancelShared;
+    bool resolveShared;
+    /// <summary>أَخَواتُ الصَفقَةِ في طَلَبِها عِندَ OTO، وما يَسيرُ مِنها مَعَها في شُحنَةٍ لَم تُسَلَّم (‏2026-10-30، تَدقيقُ الموجَة ١١ F1).</summary>
+    IReadOnlyList<Deal> waybill = Array.Empty<Deal>();
+    IReadOnlyList<Deal> waybillLive = Array.Empty<Deal>();
+    bool resolveWaybill;
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,23 +249,47 @@
         var t = await Tenants.FindAsync(Slug);
         if (t is null || t.OwnerUserId != Auth.UserId!.Value) return;
         deal = await Deals.LoadAsync(Slug, Id);
-        if (deal is not null) stages = DealsPolicy.StagesFor(deal.Pattern).ToList();
+        // صَفقَةٌ عَلى فاتورَةِ بَوّابَةٍ مَفتوحَةٍ تَدفَعُ لِأَخَواتٍ قائِمَة — بابُها إلغاءُ الطَلَبِ كُلِّه (‏2026-10-13، G5 M4).
+        if (deal is not null) cancelShared = !GatewayInvoiceShare.IsValid(deal, await Deals.InvoiceSiblingsAsync(Slug, deal));
+        // ومُتَنازَعٌ عَلَيها عَلى فاتورَةٍ كَهذِه لا يُحسَمُ نِزاعُها بِإلغائِها وَحدَها (‏2026-10-29، مُراجَعَةُ تَيّارِ S5 الأولى).
+        if (deal is { Status: DealStatus.Disputed }) resolveShared = !GatewayInvoiceShare.IsValidDisputed(deal, await Deals.InvoiceSiblingsAsync(Slug, deal));
+        // وصَفقَةٌ في شُحنَةٍ سائِرَةٍ عِندَ OTO مَعَ أُختٍ لَم تُسَلَّم لا تُلغى وَحدَها — بابُها الطَلَبُ كُلُّه، وحَسمُ نِزاعِها بِالاستِئنافِ ثُمَّ ذلك (‏2026-10-30، F1).
+        if (deal is not null)
+        {
+            waybill = await Deals.WaybillSiblingsAsync(Slug, deal);
+            waybillLive = DealCancelAuthorization.LiveOnWaybill(deal, waybill);
+            if (!DealCancelAuthorization.IsWaybillAllowed(deal, waybill))
+            {
+                if (deal.Status == DealStatus.Active) cancelShared = true;
+                else if (deal.Status == DealStatus.Disputed) resolveWaybill = true;
+            }
+        }
+        // بِوَعيِ طَريقَةِ الدَفع (‏ADR-033 §٦): صَفقَةُ النَقدِ لا تَرسُمُ خُطوَةَ «دَفع».
+        if (deal is not null) stages = DealsPolicy.StagesFor(deal).ToList();
     }
 
     static string ActionIcon(string action) => action switch
     {
         "created" => "sparkle", "assigned" => "people", "advanced" => "arrow-right",
         "cancelled" => "x", "disputed" => "alert-circle", "note" => "edit",
-        "refund" => "refresh", _ => "tag"
+        "refund" => "refresh", DealEvent.DisputeResumed => "refresh", _ => "tag"
     };
 
     string FormatEvent(DealEvent e) => e.Action switch
     {
         "created"   => L["studio.deal.event_created"],
         "assigned"  => L["studio.deal.event_assigned"],
+        DealEvent.BoundAtBirth   => L["studio.deal.event_bound"],
+        DealEvent.CashOnDelivery => L["studio.deal.event_cash_on_delivery"],
+        DealEvent.GatewayPaid      => L["studio.deal.event_gateway_paid"],
+        DealEvent.GatewayRefundDue => L["studio.deal.event_gateway_refund_due"],
+        DealEvent.GatewayInvoiceLeftOpen => L["studio.deal.event_gateway_invoice_left_open"],   // ‏2026-10-29، قَرارُ المالِك د3
+        DealEvent.CashRefundDue => L["studio.deal.event_cash_refund_due"],   // ‏2026-10-29، قَرارُ المالِك د38 (٢)
         "advanced"  => $"{DealsPolicy.LabelAr(e.StageBefore)} ← {DealsPolicy.LabelAr(e.StageAfter)}",
         "cancelled" => L["studio.deal.event_cancelled"],
         "disputed"  => L["studio.deal.event_disputed"],
+        DealEvent.DisputeResumed => L["studio.deal.event_dispute_resumed"],   // ‏2026-10-29، قَرارُ المالِك د38
+        DealEvent.ReturnRequested => L[DealNotices.ReturnEventKey(deal!, studio: true)],   // ‏2026-10-29، قَرارُ المالِك د30؛ ‏2026-11-04 G1 · ٤: بِمَن أُخبِر
         "note"      => L["studio.deal.event_note"],
         _ => e.Action
     };

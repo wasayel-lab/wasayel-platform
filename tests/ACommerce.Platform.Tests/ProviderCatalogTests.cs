@@ -24,6 +24,24 @@ public class ProviderCatalogTests
         // حَلَّ مَحَلَّ القُرصِ الزائِلِ خارِجَ التَطوير (‏ADR-017).
         // ونَوعُ اعتِمادِه `platform_key` كَجارَيه في الفَوتَرَة، فَلا
         // يُعرَض على مُستَأجِرٍ ولا يَملَأُ لَه حَقلاً.
+        //
+        // **تِسعَةٌ لا ثَمانِيَة مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَتانِ 5 و6)**:
+        // أُضيفَ `moyasar_api` — مِفتاحُ البَوّابَةِ السِرِّيُّ بِنَوعِ
+        // `secret_key`، في الكوميتِ نَفسِه الَّذي أَدخَلَ النَوعَ المَعجَم،
+        // وبَعدَ أَن بُنِيَت خِزانَتُه (‏`ProviderVault`). والثَمانِيَةُ مَقيسَةٌ
+        // قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `b0b4b85`.
+        //
+        // **ثَمانِيَةٌ لا تِسعَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: حُذِفَ `mock_delivery` في
+        // كوميتِ أَوَّلِ مُستَهلِكٍ لِلشَحن — عَميلِ OTO — كَما شَرَطَ `PROVIDER-STUB-DEBT.md`. وصَفُّ
+        // الـADR كَتَبَ «‏8→7» يَومَ كُتِب، ثُمَّ أَضافَت خُطوَةُ ‏ADR-032 السادِسَةُ `moyasar_api` قَبلَه
+        // فَصارَ ‏9→8 — والتِسعَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `a5155d0`.
+        //
+        // **تِسعَةٌ لا ثَمانِيَة مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8)**: أُضيفَ تَعريفُ حِسابِ الشَحنِ
+        // عِندَ OTO — `platform_key` بِحَقلَي بائِعٍ (`secret_key`، `issued_secret`) — في الكوميتِ الَّذي أَدخَلَ
+        // `issued_secret` المَعجَم. والثَمانِيَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `8e7330d`.
+        //
+        // **ثَمانِيَةٌ لا تِسعَة مُنذُ ‏2026-10-29 (قَرارُ المالِك د35)**: حُذِفَ `mock_maps` مَعَ مُحاكيه وواجِهَتِه — صِفرُ
+        // مُستَهلِكٍ في وَقتِ التَشغيل (‏ADR-018). والتِسعَةُ مَقيسَةٌ قَبلَه بِهذا الفَحصِ نَفسِه أَخضَرَ عِندَ `2a7c0ce`.
         var defs = ProviderCatalog.Definitions;
         Assert.True(defs.Count == 8,
             $"أَداة عَمياء: حُمِّلَ {defs.Count} تَعريفاً — والمَقيس ٨.");
@@ -101,15 +119,13 @@ public class ProviderCatalogTests
             "AddSingleton<IPaymentProvider, MockPaymentProvider>",
             "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
 
-        new("mock_maps",
-            "libs/kits/Maps/ACommerce.Kit.Maps.Core/MockMapsProvider.cs",
-            "AddSingleton<IMapsProvider, MockMapsProvider>",
-            "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
+        // ‏`mock_maps` حُذِفَ ‏2026-10-29 مَعَ مِرساتِه (قَرارُ المالِك د35): مِرساتُه كانَت سَطرَ
+        // `AddSingleton<IMapsProvider, MockMapsProvider>` — مُحاكٍ يُسَجَّلُ عارِياً ولا يَحقِنُه مِلَفٌّ واحِد.
 
-        new("mock_delivery",
-            "libs/kits/Delivery/ACommerce.Kit.Delivery.Core/MockDeliveryProvider.cs",
-            "AddSingleton<IDeliveryProvider, MockDeliveryProvider>",
-            "التَنفيذُ القائِمُ المُسَجَّلُ بِلا شَرطٍ في Program.cs."),
+        // ‏`mock_delivery` حُذِفَ ‏2026-10-12 مَعَ مِرساتِه (‏ADR-033 الخُطوَة 3): مِرساتُه كانَت سَطرَ
+        // `AddSingleton<IDeliveryProvider, MockDeliveryProvider>` — مُحاكٍ بِصِفرِ مُستَهلِكٍ يُسَجَّلُ عارِياً،
+        // وحَلَّ مَحَلَّه عَميلُ OTO الَّذي لا يُنَفِّذُ الواجِهَة. وتَعريفُ OTO نَفسُه خُطوَةُ ‏ADR-033 السادِسَة
+        // — ومِرساتُه يَومَئِذٍ سَطرُ تَسجيلِ العَميل.
 
         new("local_files",
             "libs/kits/Files/ACommerce.Kit.Files.Core/LocalFileStorage.cs",
@@ -133,6 +149,38 @@ public class ProviderCatalogTests
             "apps/V1.App/Program.cs",
             "AddPaddleBilling",
             "مُزَوِّدُ فَوتَرَةٍ ثانٍ بِجِوارِ الأَوَّلِ — قائِمٌ ومَقيس."),
+
+        // ‏2026-10-12 (‏ADR-032 الخُطوَة 6): المِرساةُ كانَت سَطرَ الخِزانَةِ الَّذي
+        // يُعلِنُ أَنّها تَختِمُ `secret_key` (‏`ProviderVault.Seals`). وصارَت في
+        // الخُطوَة 7 — حينَ بَلَغَت الخِزانَةُ سَطحَ الرَبط — **سَطرَ تَسجيلِها
+        // في القالِب**: هُوَ ما يَجعَلُ حَقلَ هذا التَعريفِ حَيّاً وَقتَ التَشغيل
+        // (يُختَمُ في نُقطَةِ الرَبطِ ويُخَزَّنُ ويُعرَضُ ذَيلُه). **والعَميلُ الَّذي
+        // يَطلُبُ بِالمِفتاحِ لَم يُكتَب** (‏ADR-032 الخُطوَة 8) — فَالمِرساةُ
+        // تَقولُ «يُختَم»، لا «يَقبِض».
+        //
+        // **وانتَقَلَت ‏2026-10-12 (‏ADR-032 الخُطوَة 8، تَيّارُ S9) إلى سَطرِ تَسجيلِ عَميلِ البَوّابَةِ** في القالِبِ نَفسِه، بِجِوارِ
+        // الخِزانَة — كَما نَصَّت مُلاحَظَةُ صَفِّ الخُطوَة 8: العَميلُ هُوَ ما يَطلُبُ بِالمِفتاحِ (يُنشِئُ الفاتورَةَ المُستَضافَةَ
+        // ويَجلِبُها لِلبُرهان)، فَصارَت المِرساةُ تَقولُ «يُطلَبُ بِه» لا «يُختَمُ» وَحدَه. والعَدَدُ ثَمانٍ كَما كان.
+        new("moyasar_api",
+            "libs/templates/ACommerce.Templates.Customer.Marketplace/MarketplaceTemplateExtensions.cs",
+            "ACommerce.Kit.Payments.MoyasarClientExtensions.AddMoyasarGateway(services);",
+            "مِفتاحُ البَوّابَةِ السِرِّيّ: حَقلُه الوَحيدُ تَختِمُه الخِزانَةُ عِندَ الرَبط، "
+            + "وعَميلُ البَوّابَةِ المُسَجَّلُ بِهذا السَطرِ هُوَ ما يَطلُبُ بِه — يُنشِئُ الفاتورَةَ "
+            + "المُستَضافَةَ لِلمُشتَري ويَجلِبُها لِيُتَحَقَّقَ مِن الدَفعِ مِن الخادِم؛ والمِفتاحُ "
+            + "يُفَكُّ لِكُلِّ نِداءٍ ولا يُخَزَّنُ صَريحاً ولا يُعرَضُ مِنه إلّا ذَيلُه."),
+
+        // ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8): مِرساةُ حِسابِ الشَحنِ عِندَ OTO سَطرُ تَسجيلِ عَميلِه
+        // في المُضيف — العَميلُ الَّذي يَطلُبُ بِرَمزِ تَحديثِ البائِعِ (حَقلِ التَعريفِ الأَوَّل) ويُنشِئُ البوليصَة.
+        // **وحَقلا البائِعِ لا كاتِبَ لَهُما بَعد**: سَطحُ البائِعِ الخُطوَة 7 — والمِرساةُ تَقولُ «يُنادى»، لا «يُلصَق».
+        // (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (vi) — ولا يُعادُ حَرفٌ فَوقَه: **وصارَ لَهُما كاتِبان** — اللَصقُ (`VendorShippingService.SaveTokenAsync`،
+        // الخُطوَة 7) والتَسجيلُ (`RegisterAsync`، الخُطوَة 8)، كِلاهُما عَبرَ `ConnectAsync` ← `TenantProviderService.BindVendorAsync`. والمِرساةُ بِحالِها:
+        // سَطرُ تَسجيلِ العَميلِ ما زالَ ما يَطلُبُ بِالرَمز، ونَصُّ الدَعوى «يُكتَبانِ مِن سَطحِه في الخُطوَة 7» صادِق.)
+        new("oto_vendor_account",
+            "apps/V1.App/Program.cs",
+            "builder.Services.AddOtoShipping(builder.Configuration);",
+            "عَميلُ OTO المُسَجَّلُ بِهذا السَطرِ يَطلُبُ بِرَمزِ تَحديثِ حِسابِ البائِعِ ويُنشِئُ بوليصَةَ صَفقَتِه "
+            + "ويَسأَلُ عَن حالِ طَلَبِها — ونُقطَةُ الوارِدِ الَّتي يُعلِنُها التَعريفُ قائِمَةٌ بِمَسارِها الحَرفِيّ. "
+            + "وحَقلا البائِعِ يُكتَبانِ مِن سَطحِه في الخُطوَة 7، لا قَبلَها."),
 
         // ← الوَحيدُ بِلا مِرساةِ كود، وذلكَ **هُوَ** الدَعوى.
         new("moyasar_hosted",
@@ -175,6 +223,23 @@ public class ProviderCatalogTests
         // `s3_object_storage` سَطرُ `AddSingleton<IFileStorage, S3FileStorage>`
         // في مَشروعٍ **مُحالٍ إلَيه مِن `V1.App.csproj`** — فَالتَعريفُ
         // يَصِف شَيئاً يَبلُغ الـSpace، لا اسماً في مِلَفّ.
+        //
+        // **ثَمانٍ لا سَبع مُنذُ ‏2026-10-12 (‏ADR-032 الخُطوَة 6)**: مِرساةُ
+        // `moyasar_api` سَطرُ `ProviderVault.Seals` في مَشروعٍ يُحيلُه القالِب،
+        // ثُمَّ سَطرُ تَسجيلِ الخِزانَةِ في القالِبِ نَفسِه (الخُطوَة 7) — والعَدَدُ
+        // ثَمانٍ في الحالَين؛ والسَبعُ مَقيسَةٌ قَبلَها أَخضَرَ عِندَ `b0b4b85`.
+        //
+        // **سَبعٌ لا ثَمانٍ مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 3)**: سَقَطَت مِرساةُ `mock_delivery`
+        // مَعَ تَعريفِها ومُحاكيها — وصَفُّ الـADR كَتَبَ «‏7→6» قَبلَ أَن تُضيفَ خُطوَةُ ‏ADR-032
+        // السادِسَةُ مِرساةَ `moyasar_api`. والثَمانُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `a5155d0`.
+        //
+        // **ثَمانٍ لا سَبع مُنذُ ‏2026-10-12 (‏ADR-033 الخُطوَة 6، تَيّارُ S8)**: مِرساةُ تَعريفِ حِسابِ الشَحنِ عِندَ OTO
+        // سَطرُ `AddOtoShipping` في `Program.cs`. والسَبعُ مَقيسَةٌ قَبلَه أَخضَرَ عِندَ `8e7330d`.
+        //
+        // **وثَمانٍ كَما كانَت (‏2026-10-12، ‏ADR-032 الخُطوَة 8، تَيّارُ S9)**: انتَقَلَت مِرساةُ `moyasar_api` مِن سَطرِ تَسجيلِ الخِزانَةِ
+        // إلى سَطرِ تَسجيلِ عَميلِ البَوّابَةِ في المِلَفِّ نَفسِه — نَقلُ مِرساةٍ لا إضافَتُها.
+        //
+        // **سَبعٌ لا ثَمانٍ مُنذُ ‏2026-10-29 (د35)**: سَقَطَت مِرساةُ `mock_maps` مَعَ تَعريفِها ومُحاكيها. والثَمانُ مَقيسَةٌ قَبلَه عِندَ `2a7c0ce`.
         Assert.True(checkedAnchors == 7,
             $"أَداة عَمياء: فُحِصَت {checkedAnchors} مِرساة — والمَقيس ٧.");
         Assert.True(breaches.Count == 0,
@@ -199,8 +264,12 @@ public class ProviderCatalogTests
         var bindable = ProviderCatalog.BindableCapabilities;
         Assert.Equal(new[] { ProviderCapabilities.Payments }, bindable);
 
+        // **اثنانِ لا واحِد مُنذُ ‏2026-10-12**: الكاتالوجُ يَقولُ «يَملَؤُه
+        // مُستَأجِر» لِمِفتاحِ البَوّابَةِ أَيضاً. وما تَرسُمُه الشاشَةُ مِنهُما
+        // سُؤالُ السَطحِ لا البَيانات (‏`ProviderBindSurface.Offered`) — مُقاسٌ
+        // في `ProviderBindSurfaceTests`.
         var offered = ProviderCatalog.TenantBindable(ProviderCapabilities.Payments);
-        Assert.Equal(new[] { "moyasar_hosted" }, offered.Select(d => d.Slug).ToArray());
+        Assert.Equal(new[] { "moyasar_hosted", "moyasar_api" }, offered.Select(d => d.Slug).ToArray());
 
         // وقُدرَةٌ بِلا مُزَوِّدٍ مُتاحٍ لا تُرسَم إطلاقاً — ولا «قَريباً».
         foreach (var c in ProviderCapabilities.All.Where(c => c != ProviderCapabilities.Payments))
@@ -227,6 +296,223 @@ public class ProviderCatalogTests
         Assert.True(field.IsRequired);
         Assert.Null(d.Webhook);
         Assert.Equal("مُيَسِّر — رابِط دَفع", ProviderText.Get(d.Label, "ar"));
+    }
+
+    /// <summary><b>مِفتاحُ البَوّابَةِ السِرِّيّ</b> (‏ADR-032 الخُطوَة 6 بِحَرفِها):
+    /// نَوعُ رَبطٍ <c>secret_key</c>، وحَقلٌ واحِدٌ بِنَمَطِ <c>^sk_(live|test)_</c>،
+    /// و<c>hostAllowlist: []</c>، و<c>webhook: null</c>. والسِياجُ الفارِغُ لَيسَ
+    /// سَهواً: المُصادِقُ يَرُدُّ سِرّاً يَحمِلُ مُضيفين.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> (‏2026-10-29، قَرارُ المالِك د5 (٢) «ج»؛ تَوصيفُه هذا الصَفُّ و<c>8cff16b</c> — كانَ
+    /// <c>The_secret_key_provider_declares_one_sealed_field_no_fence_and_no_webhook</c>): ومَعَ المِفتاحِ حَقلُ سِرِّ إشعارٍ تُصدِرُه وَسايِل (<c>issued_secret</c>، غَيرُ
+    /// إلزامِيٍّ ولا يَملَؤُه صاحِبُ المَتجَر) ووارِدٌ يَتَحَقَّقُ بِه في مَسارِ <c>GatewayPayments.NoticePath</c> حَرفاً. وحَقلُ المِفتاحِ وفُحوصُه بِحَرفِها.</remarks>
+    [Fact]
+    public void The_secret_key_provider_declares_its_sealed_key_no_fence_and_an_issued_notice_secret_behind_its_webhook()
+    {
+        var d = ProviderCatalog.Find("moyasar_api");
+        Assert.NotNull(d);
+        Assert.Equal(ProviderCapabilities.Payments, d!.Capability);
+        Assert.Equal(CredentialKinds.SecretKey, d.Credential.Kind);
+        Assert.True(d.IsTenantBindable);
+        Assert.NotNull(d.Webhook);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Deals.GatewayPayments.NoticePath, d.Webhook!.Path);
+        Assert.Equal(2, d.Credential.Fields.Count);
+        var notice = Assert.Single(d.Credential.Fields, f => f.Code == d.Webhook.Verify);
+        Assert.Equal(CredentialKinds.IssuedSecret, notice.Kind);
+        Assert.False(notice.IsRequired);
+        Assert.Empty(notice.HostAllowlist);
+        Assert.True(ProviderVault.Seals(notice.Kind));
+        Assert.Empty(ProviderDefinitionValidator.Validate(d));
+
+        var field = Assert.Single(d.Credential.Fields, f => f.Kind == CredentialKinds.SecretKey);
+        Assert.Equal("secret_key", field.Code);
+        Assert.Equal(CredentialKinds.SecretKey, field.Kind);
+        Assert.True(field.IsRequired);
+        Assert.Equal("^sk_(live|test)_", field.Pattern);
+        Assert.Empty(field.HostAllowlist);
+        Assert.True(ProviderVault.Seals(field.Kind));
+
+        // النَمَطُ يُفحَصُ عِندَ الكِتابَة بِالدالَّةِ الَّتي تُناديها النُقطَة.
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_test_abc123"));
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_live_abc123"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch,
+            ProviderValueValidator.Refuse(field, "pk_live_abc123"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch,
+            ProviderValueValidator.Refuse(field, "sk_prod_abc123"));
+        Assert.Equal(ProviderValueValidator.Required,
+            ProviderValueValidator.Refuse(field, "  "));
+
+        // والسِياجُ الفارِغُ مَفروض: سِرٌّ بِمُضيفٍ يُرَدُّ بِرَمزِه.
+        var fenced = d with
+        {
+            Credential = d.Credential with
+            {
+                Fields = new[] { field with { HostAllowlist = new[] { "moyasar.com" } } },
+            },
+        };
+        Assert.Contains("host_allowlist_forbidden_for_secret",
+            ProviderDefinitionValidator.Validate(fenced).Select(v => v.Code));
+
+        // ونَوعُ الرَبطِ لا يَنزِلُ تَحتَ حَقلِه.
+        Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
+    }
+
+    /// <summary><b>نَصّا مِفتاحِ مُيَسِّر مِن صَفحَتِه العامَّةِ لِلمَفاتيح</b> (‏2026-10-29، قَرارُ المالِك د7 (٢) «أ»؛ <c>docsUrl</c> نَفسُه
+    /// <c>docs.moyasar.com/api/authentication</c>، مَقروءاً ‏2026-10-29): البادِئَتان «sk_test_» و«sk_live_» (و«pk_» لِلقابِلِ لِلنَشرِ لا لِهذا الحَقل)؛
+    /// و«New keys are shown only once» مَعَ «secret keys are now only partially visible in the dashboard» — فَلا يُنسَخُ المِفتاحُ مِن اللَوحَةِ مَتى شِئت؛
+    /// و«regenerate their API keys through the settings page» لِلضائِعِ والمُتَسَرِّب. <b>ولا يُقالُ ما لا تَقولُه الصَفحَة</b>: لا مَسارَ قائِمَةٍ لِعَرضِ
+    /// المَفاتيح، ولا «إبطالٌ» مُنفَصِلٌ عَن إعادَةِ التَوليد — فَنَصُّ السَحبِ يَنقُلُ نَصيحَتَها بِلَفظِها. و«آخِرُ أَربَعَة مَحارِف» تَصدُقُ
+    /// <see cref="ProviderSecrecy.TailLength"/>؛ و<c>physicalGoodsOnly</c> لا يُمَسّ (الشِقُّ (١) مِن القَرار).</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه</b> — كانَ <c>Today_the_secret_key_provider_texts_say_copy_from_the_dashboard_and_revoke_there_without_naming_the_page</c>
+    /// (‏<c>6ea9642</c>): الوَصفُ «تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا» بِلا بادِئَةٍ ولا صَفحَة، والسَحبُ «إبطالُه أَو تَبديلُه مِن لَوحَة مُيَسِّر نَفسِها».</remarks>
+    [Fact]
+    public void The_secret_key_provider_texts_follow_moyasars_public_authentication_page()
+    {
+        var d = ProviderCatalog.Find("moyasar_api");
+        Assert.NotNull(d);
+        Assert.Equal("https://docs.moyasar.com/api/authentication", d!.DocsUrl);
+        var description = ProviderText.Get(d.Description, "ar");
+        var revocation = ProviderText.Get(d.Revocation, "ar");
+
+        Assert.DoesNotContain("تَلصَق مِفتاحَك السِرِّيَّ مِن لَوحَة مُيَسِّر هُنا", description, StringComparison.Ordinal);
+        Assert.Contains("sk_test_", description, StringComparison.Ordinal);
+        Assert.Contains("sk_live_", description, StringComparison.Ordinal);
+        Assert.Contains("إلّا مَرَّةً حينَ يُوَلَّد", description, StringComparison.Ordinal);
+        Assert.Contains("صَفحَة «الإعدادات»", description, StringComparison.Ordinal);
+        Assert.Contains("آخِرُ أَربَعَة مَحارِف", description, StringComparison.Ordinal);
+        Assert.Equal(4, ProviderSecrecy.TailLength);
+
+        Assert.DoesNotContain("مِن لَوحَة مُيَسِّر نَفسِها", revocation, StringComparison.Ordinal);
+        Assert.Contains("ولا يُبطِل ذلكَ المِفتاحَ عِندَ مُيَسِّر", revocation, StringComparison.Ordinal);
+        Assert.Contains("بِإعادَةِ تَوليدِ مَفاتيحِك فَوراً مِن صَفحَة «الإعدادات»", revocation, StringComparison.Ordinal);
+
+        // والبادِئَتانِ في النَصِّ هُما ما يَقبَلُه حَقلُ المِفتاحِ لا غَيرُهُما.
+        var field = Assert.Single(d.Credential.Fields, f => f.Kind == CredentialKinds.SecretKey);
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_test_x"));
+        Assert.Null(ProviderValueValidator.Refuse(field, "sk_live_x"));
+        Assert.Equal(ProviderValueValidator.PatternMismatch, ProviderValueValidator.Refuse(field, "pk_test_x"));
+        Assert.True(d.PhysicalGoodsOnly);
+        Assert.Empty(ProviderDefinitionValidator.Validate(d));
+    }
+
+    /// <summary><b>حِسابُ الشَحنِ عِندَ OTO</b> (‏ADR-033 الخُطوَة 6 بِحَرفِها و§٢‑ج‑١): قُدرَةُ <c>delivery</c>، ونَوعُ رَبطٍ
+    /// <c>platform_key</c> (الاعتِمادُ السوقِيُّ سِرُّنا)، وحَقلا <b>بائِعٍ</b> سِرِّيّانِ تَختِمُهُما الخِزانَة — رَمزُ تَحديثِه
+    /// (<c>secret_key</c>) ورَمزُ وارِدِه (<c>issued_secret</c>) — بِلا سياج؛ و<c>webhook</c> مُعلَنٌ بِمَسارِ الوارِدِ الحَرفِيِّ
+    /// نَفسِه وبِحَقلِ <c>issued_secret</c> (القاعِدَة ٦)؛ <b>ولا صَفَّ لَه في الاستوديو</b> (لا يَربِطُه مُستَأجِر). والمُصادِقُ يَرُدُّه
+    /// إن نَزَلَ حَقلٌ تَحتَ السِرِّيّ (السالِب).</summary>
+    [Fact]
+    public void The_vendor_shipping_definition_declares_two_sealed_vendor_fields_a_verified_webhook_and_no_studio_row()
+    {
+        var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+        Assert.Equal("oto_vendor_account", d.Slug);
+        Assert.Equal(CredentialKinds.PlatformKey, d.Credential.Kind);
+        Assert.False(d.IsTenantBindable);
+        Assert.Empty(ProviderCatalog.TenantBindable(ProviderCapabilities.Delivery));
+        Assert.Equal(new[] { ProviderCapabilities.Payments }, ProviderCatalog.BindableCapabilities);
+        Assert.True(ProviderDefinitionValidator.IsValid(d));
+        // و`binding_kind_below_field_kind` لا يُمَسّ: أَعلى الحَقلَينِ `secret_key` (‏6) تَحتَ `platform_key` (‏8).
+        Assert.Equal(CredentialKinds.SecretKey, d.HighestFieldKind);
+        Assert.True(CredentialKinds.Rank(d.Credential.Kind) > CredentialKinds.Rank(d.HighestFieldKind));
+
+        Assert.Equal(new[] { ("refresh_token", CredentialKinds.SecretKey), ("webhook_secret", CredentialKinds.IssuedSecret) },
+            d.Credential.Fields.Select(f => (f.Code, f.Kind)).ToArray());
+        foreach (var f in d.Credential.Fields)
+        {
+            Assert.True(f.IsRequired);
+            Assert.Empty(f.HostAllowlist);
+            Assert.True(CredentialKinds.IsSecretLike(f.Kind));
+            Assert.True(ProviderVault.Seals(f.Kind), $"«{f.Code}» مِن نَوعٍ لا تَختِمُه الخِزانَة.");
+            Assert.True(ProviderText.HasArabic(f.Label));
+        }
+
+        Assert.NotNull(d.Webhook);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Shipping.OtoShippingEndpoints.OrderStatusPath, d.Webhook!.Path);
+        Assert.Equal("webhook_secret", d.Webhook.Verify);
+        Assert.True(CredentialKinds.CanVerifyWebhook(d.Credential.Fields.Single(f => f.Code == d.Webhook.Verify).Kind));
+        Assert.Equal("https://apis.tryoto.com/", d.DocsUrl);
+
+        // السالِب: حَقلٌ رابِطٌ تَحتَ الاعتِمادِ السوقِيّ يُرَدُّ بِرَمزِه — الشَرطُ المُعَدَّلُ نَفسُه.
+        var widened = d with
+        {
+            Credential = d.Credential with
+            {
+                Fields = d.Credential.Fields.Append(new ProviderFieldDefinition
+                {
+                    Code = "pay_link", Kind = CredentialKinds.HostedLink,
+                    Label = new Dictionary<string, string?> { ["ar"] = "رابِط" }, HostAllowlist = new[] { "tryoto.com" },
+                }).ToArray(),
+            },
+        };
+        Assert.Equal(new[] { "platform_key_requires_owner_grant" },
+            ProviderDefinitionValidator.Validate(widened).Select(v => v.Code).ToArray());
+    }
+
+    /// <summary>
+    /// <para><b>«ولا حِصَّة» في وَصفِ التَعريفِ كَما أَمَرَ بِه ‏ADR-033</b> (الرَأسُ: «ولا حصّةَ على الرمزِ السوقيّ — ما يُنفَقُ من محفظةِ البائعِ لا يُعَدُّ
+    /// على وسايل — ويُقالُ ذلك في وصفِ تعريفِ OTO (الخطوة 6)»؛ مُراجَعَةُ تَيّارِ S8، الجَولَة 1، ‏2026-10-12): الصَفُّ عُلِّمَ «نُفِّذ» والوَصفُ لا يَقولُها.
+    /// فَالوَصفُ يَقولُها الآن، <b>والكودُ يَصدُقُها</b>: لا مَسارَ شَحنٍ — اللَصقُ والتَسجيلُ والبوليصَةُ والوارِدُ والعَميل — يَمَسُّ الاستِحقاقات؛
+    /// فاحِصٌ نَصِّيٌّ يَعُدُّ ما قَرَأَ ويَفشَلُ عَلى الصِفر (يَمُدُّ <c>VendorShippingTests.The_vendor_shipping_paths_consume_no_quota</c> مِن مِلَفَّينِ إلى خَمسَة).</para>
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (xi) — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: <b>كانَ اسمُه
+    /// <c>The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_and_no_shipping_path_consumes_quota</c></b>. والوَصفُ رُدَّ
+    /// إلى كَلِماتِ الـADR: حُذِفَ «ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر» — دَعوى عَلى باقَةِ المُستَأجِرِ لا تُقَرِّرُها
+    /// وَثيقَة (القاعِدَة ١٦؛ سِجِلُّ المالِكِ «ب» S11b·٢٩) — فَصارَ الصَفُّ يَقرَأُ جُملَةَ الـADR ويَحمَرُّ إن عادَت الدَعوى؛ والفاحِصُ النَصِّيُّ المُكَرَّرُ هُنا
+    /// انتَقَلَ بِمِلَفّاتِه الخَمسَةِ إلى صَفِّ <c>VendorShippingTests</c> نَفسِه — صَفٌّ واحِدٌ يَقيسُ الكود.)</para>
+    /// <para><b>وقُلِبَ بِاسمِه عَمداً</b> (‏2026-10-29، قَرارُ المالِك د17 «أ»: «الشحن خارج حصص الباقات دائمًا: لا تُعدّ على باقة صاحب المتجر بوليصة ولا تسجيل ولا إشعار»؛
+    /// كانَ <c>The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel</c> ويَحمَرُّ إن عادَت دَعوى الباقَة): الدَعوى صارَت قَراراً فَعادَت جُملَتُها
+    /// بِحَرفِها إلى الوَصف — «ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر» — والفاحِصُ الَّذي يَحرُسُها
+    /// <c>VendorShippingTests.The_vendor_shipping_paths_consume_no_quota</c>: لا مَسارَ شَحنٍ يَمَسُّ الاستِحقاقات. سِجِلُّ المالِكِ «ب» S11b·٢٩ أُجيب.</para>
+    /// </summary>
+    [Fact]
+    public void The_vendor_shipping_definition_says_its_spending_is_not_counted_against_wasayel_nor_against_the_tenants_plan()
+    {
+        var d = Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+        var ar = ProviderText.Get(d.Description, "ar");
+        Assert.Contains("ولا حِصَّةَ عَلى الاعتِمادِ السّوقِيّ", ar, StringComparison.Ordinal);
+        Assert.Contains("ما يُنفَقُ مِن مَحفَظَةِ البائِعِ عِندَ OTO لا يُعَدُّ عَلى وَسايِل", ar, StringComparison.Ordinal);
+        Assert.Contains("ولا يَستَهلِكُ لَصقٌ ولا تَسجيلٌ ولا بوليصَةٌ ولا إشعارٌ حِصَّةً مِن باقَةِ المُستَأجِر.", ar, StringComparison.Ordinal);
+        Assert.True(ar.EndsWith("حِصَّةً مِن باقَةِ المُستَأجِر.", StringComparison.Ordinal), "جُملَةُ الباقَةِ آخِرُ الوَصفِ كَما قُرِّرَت.");
+    }
+
+    /// <summary><b>غِيابُ الاعتِمادِ السوقِيِّ لا يُسقِطُ التَعريف</b> (‏ADR-033 الخُطوَة 6: «غيابُ الرمزِ السوقيِّ بالبيئةِ يُخفي
+    /// مسارَ <c>register</c> ولا يُسقِطُ التعريف»): القارِئُ لا يَقرَأُ تَهيئَةً أَصلاً (لا <c>IConfiguration</c> في مَشروعِه)،
+    /// فَالتَعريفُ في الكاتالوجِ بِلا مُتَغَيِّرِ شَحنٍ واحِد.</summary>
+    /// <remarks><b>قُلِبَ بِاسمِه ‏2026-10-12 (‏ADR-033 الخُطوَة 8، تَيّارُ S8)</b> — كانَ
+    /// <c>The_vendor_shipping_definition_needs_no_configuration_and_no_register_path_exists_yet</c> (‏<c>2e3cdac</c>): «صِفرُ نُقطَةٍ تُناديه
+    /// وصِفرُ مَسارٍ يَحمِلُه في نُقاطِ الشَحن». <b>والآن</b>: العَميلُ يَعرِفُ «Register»، ونُقطَتُه في مِلَفِّ سَطحِ البائِعِ لا في نُقاطِ
+    /// الصَفقَةِ والوارِد، ولا يُرسَمُ مَدخَلُه إلّا بِالرَمزِ السوقِيّ — والقارِئُ بِلا تَهيئَةٍ كَما كان.</remarks>
+    [Fact]
+    public void The_vendor_shipping_definition_needs_no_configuration_and_the_register_path_lives_behind_the_marketplace_token()
+    {
+        var providersDir = Path.Combine(RepoRoot, "libs", "core", "ACommerce.Platform.Providers");
+        var scanned = 0;
+        foreach (var f in Directory.EnumerateFiles(providersDir, "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Replace('\\', '/').Contains("/obj/") && !f.Replace('\\', '/').Contains("/bin/")))
+        {
+            scanned++;
+            Assert.DoesNotContain("IConfiguration", File.ReadAllText(f), StringComparison.Ordinal);
+        }
+        Assert.True(scanned >= 5, $"أَداةٌ عَمياء: مُسِحَ {scanned} مِلَفّاً.");
+        Assert.DoesNotContain("Microsoft.Extensions.Configuration",
+            File.ReadAllText(Path.Combine(providersDir, "ACommerce.Platform.Providers.csproj")), StringComparison.Ordinal);
+        Assert.Single(ProviderCatalog.ForCapability(ProviderCapabilities.Delivery));
+
+        var endpoints = File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "OtoShippingEndpoints.cs"));
+        var client = File.ReadAllText(Path.Combine(RepoRoot, "libs", "kits", "Delivery",
+            "ACommerce.Kit.Delivery.Core", "OtoClient.cs"));
+        Assert.True(endpoints.Length > 1000 && client.Length > 1000, "أَداةٌ عَمياء: مِلَفّا الشَحنِ لَم يُقرَآ.");
+        Assert.Contains("RegisterPath           = \"/rest/v2/register\"", client, StringComparison.Ordinal);
+        Assert.DoesNotContain("register", endpoints, StringComparison.OrdinalIgnoreCase);
+        var vendorEndpoints = File.ReadAllText(Path.Combine(RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Shipping", "VendorShippingEndpoints.cs"));
+        Assert.Contains("app.MapPost(\"/{slug}/me/shipping/oto/register\"", vendorEndpoints, StringComparison.Ordinal);
+
+        var vault = ProviderVault.FromKek(Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+        var open = new ACommerce.Kit.Delivery.OtoOptions { Environment = ACommerce.Kit.Delivery.OtoEnvironment.Staging };
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Paste,
+            ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface.InputFor(open, vault));
+        open.MarketplaceToken = "MKT-token";
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingInput.Register,
+            ACommerce.Templates.Customer.Marketplace.Services.Shipping.VendorShippingSurface.InputFor(open, vault));
     }
 
     [Fact]

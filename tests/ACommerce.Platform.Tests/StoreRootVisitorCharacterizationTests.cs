@@ -1,0 +1,220 @@
+using System.Text.RegularExpressions;
+using ACommerce.Kit.Roles;
+using Xunit;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ تَوصيفُ ما يَراه الزائِرُ عَلى جَذرِ المَتجَرِ `/{slug}` — قَبلَ «البِضاعَةُ أَوَّلاً» (قَرارُ المالِك د34) ═══
+//
+// **المَقيس**: اللَقَطاتُ الحَيَّةُ المودَعَةُ في `tests/characterization/appearance/i18n-baseline/` — التِقاطُ
+// `scripts/capture-appearance.sh` بِـ`curl` عَلى قاعِدَةٍ مَحَلِّيَّة (‏ADR-035 §٢‑٥) — لا نَصُّ المَصدَر: ما يُصَيَّرُ فِعلاً
+// لِلزائِرِ غَيرِ المُسَجَّل. و`ashare` مَتجَرٌ تَجريبِيٌّ كَغَيرِه (قَرارُ المالِك ‏2026-10-28)، أَدوارُه `customer` و`host` و`vendor`
+// (`TestDataSeeder.cs:29`) — فَفيهِ دَورُ مُشتَرٍ، وهُوَ المَقيسُ هُنا لا المُستَثنى.
+//
+// **ما يُقلَبُ في كوميتِ التَبديلِ ويُقالُ في جِسمِه**: الصَفُّ الأَوَّلُ وَحدَه (`Today_…`) — البَوّابَةُ وَحدَها بِلا بِضاعَةٍ ولا شَريطٍ
+// عَلى جَذرِ مَتجَرٍ فيه دَورُ مُشتَرٍ؛ فَهُوَ ما قَرَّرَ المالِكُ تَبديلَه. (‏2026-10-29 — قُلِبَ بِاسمِه إلى `The_visitor_of_a_store_with_a_buyer_role_sees_the_buyer_home_first_…`.) **وما يَبقى بِحَرفِه**: الصُفوفُ بَعدَه — مَن يَفتَحُ تَطبيقَ دَورٍ
+// مُباشَرَةً (`/{slug}/r/{role}`) يَرى البَوّابَةَ بِشَريطِها، ومَتجَرٌ بِلا أَدوارٍ يَرى رَئيسِيَّةَ المُشتَري بِشَريطِها، والكاتالوجُ فيه
+// دَورُ عُضوٍ واحِدٌ رَئيسِيَّتُه رَئيسِيَّةُ المُشتَري ويَتَصَفَّح: `customer`.
+
+public class StoreRootVisitorCharacterizationTests
+{
+    private static string RepoRoot => ThemeZeroEquivalenceTests.RepoRoot;
+
+    internal static string Snapshot(string page)
+    {
+        var path = Path.Combine(RepoRoot, "tests", "characterization", "appearance", "i18n-baseline", page + ".html");
+        Assert.True(File.Exists(path), $"لَقطَةٌ مَفقودَة: {path} — الأَداةُ عَمياءُ بِلا طَرَفٍ مَقروء.");
+        var html = File.ReadAllText(path);
+        Assert.True(html.Length > 20_000, $"أَداةٌ عَمياء: {page} طولُها {html.Length} مِحرَفاً — لَم تُقرَأ.");
+        return html;
+    }
+
+    internal static int Count(string haystack, string needle)
+        => Regex.Matches(haystack, Regex.Escape(needle)).Count;
+
+    /// <summary>عَلاماتُ ما يُرسَم — كُلٌّ صَنفٌ يُصَيِّرُه مُكَوِّنٌ واحِد: الشَريطُ (`MainLayout`)، والهيرو والإجراءاتُ (فَرعُ
+    /// `TenantHome` الافتِراضِيّ)، والبَوّابَةُ (`RoleLanding`).</summary>
+    internal const string MobileNav = "class=\"acm-mobile-nav\"";
+    internal const string TopNav    = "class=\"ac-topnav ";
+    internal const string Hero      = "class=\"ac-hero ";
+    internal const string Actions   = "class=\"acm-home-actions\"";
+    internal const string Gateway   = "<div class=\"acs-page acm-role-landing\">";
+    internal const string Card      = "class=\"acm-role-landing-card\"";
+
+    // ─── (١) ما يُقلَب: جَذرُ مَتجَرٍ فيه دَورُ مُشتَرٍ ─────────────────────────────
+
+    /// <summary>
+    /// <para><b>قُلِبَ ‏2026-10-29 (قَرارُ المالِك د34، ‏ADR-048)</b> — وكانَ <c>Today_the_visitor_of_a_store_with_a_buyer_role_sees_the_role_gateway_and_no_goods_on_the_store_root</c>:
+    /// البَوّابَةُ وَحدَها بِلا هيرو ولا إجراءاتٍ ولا شَريط. <b>والآن</b> زائِرُ <c>/ashare</c> يَرى رَئيسِيَّةَ المُشتَري بِشَريطِها — الهيرو والإجراءات —
+    /// <b>ثُمَّ</b> قِسمَ البِطاقاتِ الثَلاثِ وسَطرَ «لَدَيكَ حِساب» إلى <c>/ashare/login</c> تَحتَ الإجراءات، بِلا رَأسِ البَوّابَةِ ولا رابِطِ «تَصَفَّح دونَ تَسجيل».
+    /// اللَقطَةُ أُعيدَ تَثبيتُها بِالفَرقِ المَقيسِ وَحدَه (‏ADR-048 §٣).</para>
+    /// </summary>
+    [Fact]
+    public void The_visitor_of_a_store_with_a_buyer_role_sees_the_buyer_home_first_with_the_chrome_and_the_role_cards_below()
+    {
+        var html = Snapshot("ashare-portal");
+
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
+        Assert.Equal(3, Count(html, Card));
+        foreach (var role in new[] { "customer", "host", "vendor" })
+            Assert.Equal(1, Count(html, $"href=\"/ashare/r/{role}/login\""));
+        Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">"));
+        Assert.Equal(0, Count(html, RoleLandingBrowseLinkTests.BrowseText));
+
+        // البِضاعَةُ أَوَّلاً: الهيرو قَبلَ الإجراءات، والإجراءاتُ قَبلَ قِسمِ البِطاقات، والقِسمُ قَبلَ سَطرِ الدُخول.
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        var login = html.IndexOf("<div class=\"acm-role-landing-foot\"><a href=\"/ashare/login\">", StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions && login > cards,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}، الدُخول {login}.");
+    }
+
+    // ─── (٢) ما يَبقى بِحَرفِه ───────────────────────────────────────────────
+
+    /// <summary>
+    /// <para><b>مَن يَفتَحُ تَطبيقَ دَورِ بائِعٍ مُباشَرَةً</b> (<c>/ashare/r/{host|vendor}</c>) بِلا جَلسَةٍ يَرى البَوّابَةَ — والشَريطُ ظاهِرٌ لِأَنّ المَسارَ
+    /// لَيسَ الجَذرَ العاري. والسُؤالُ «ماذا يَرى الزائِرُ عَلى صَفحَةِ المَتجَر» لا يَمَسُّه: الدَورُ مُختارٌ في الرابِطِ نَفسِه.</para>
+    /// <para><b>مَقلوبٌ بِاسمِه ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — وكانَ <c>A_visitor_who_opens_a_role_app_directly_sees_the_role_gateway_with_the_chrome</c>
+    /// بِالأَدوارِ الثَلاثَة: خَرَجَ مِنه تَطبيقُ دَورِ المُشتَري (<c>customer</c>) إلى الصَفِّ بَعدَه، وجِسمُ الحَلقَةِ بِحَرفِه لِلاثنَينِ الباقِيَين.</para>
+    /// </summary>
+    [Fact]
+    public void A_visitor_who_opens_a_seller_role_app_directly_sees_the_role_gateway_with_the_chrome()
+    {
+        foreach (var role in new[] { "host", "vendor" })
+        {
+            var html = Snapshot($"ashare-role-{role}");
+
+            Assert.Equal(1, Count(html, Gateway));
+            Assert.Equal(3, Count(html, Card));
+            Assert.Equal(1, Count(html, $"<div class=\"acm-role-landing-foot\"><a href=\"/ashare/r/{role}/login\">"));
+            Assert.Equal(0, Count(html, Hero));
+            Assert.Equal(0, Count(html, Actions));
+            Assert.Equal(1, Count(html, MobileNav));
+            Assert.Equal(1, Count(html, TopNav));
+        }
+    }
+
+    /// <summary>
+    /// <para><b>‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — <b>تَطبيقُ دَورِ المُشتَري مَفتوحاً بِلا جَلسَة</b> (<c>/ashare/r/customer</c>، وهو <c>start_url</c>
+    /// تَطبيقِ المُشتَري المُثَبَّت) يَرى ما يَراه زائِرُ الجَذر: رَئيسِيَّةَ المُشتَري بِشَريطِها ثُمَّ قِسمَ البِطاقاتِ الثَلاث، بِلا رَأسِ البَوّابَةِ ولا رابِطِ
+    /// «تَصَفَّح دونَ تَسجيل»، وسَطرُ «لَدَيكَ حِساب» يَحمِلُ الدَورَ (<c>/ashare/r/customer/login</c>). اللَقطَةُ أُعيدَ تَثبيتُها بِالفَرقِ المَقيسِ وَحدَه.</para>
+    /// </summary>
+    [Fact]
+    public void A_visitor_who_opens_the_buyer_role_app_directly_sees_the_buyer_home_first_with_the_role_cards_below()
+    {
+        var html = Snapshot("ashare-role-customer");
+
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
+        Assert.Equal(3, Count(html, Card));
+        Assert.Equal(0, Count(html, RoleLandingBrowseLinkTests.BrowseText));
+        Assert.Equal(1, Count(html, "<div class=\"acm-role-landing-foot\"><a href=\"/ashare/r/customer/login\">"));
+
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}.");
+    }
+
+    // ─── (٣) جَذرُ المَتجَرِ لِلمُسَجَّل (‏2026-10-30، تَدقيقُ الموجَة ١١ CO5 — التَوصيفُ قَبلَ التَبديل) ──────────
+    //
+    // لَقطَتانِ جَديدَتانِ بِالأَداةِ نَفسِها (`capture-appearance.sh`، مِلَفُّ `roleless` الجَديدُ ومِلَفُّ `member2`) عَلى قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَة.
+    // **ما يُقلَبُ في كوميتِ التَبديل**: صَفُّ `Today_…` لِلمُسَجَّلِ بِلا دَورٍ فَعّال، وصَفُّ تَطبيقِ دَورِ المُشتَري (`customer`) مِن صَفِّ
+    // تَطبيقاتِ الأَدوارِ أَعلاه. **وما يَبقى بِحَرفِه**: صاحِبُ دَورِ البائِعِ عَلى الجَذرِ يَرى رَئيسِيَّةَ البائِع.
+
+    /// <summary>
+    /// <para><b>مَقلوبٌ بِاسمِه ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5)</b> — وكانَ <c>Today_a_signed_in_member_without_an_active_role_sees_the_role_gateway_on_the_store_root</c>
+    /// (‏<c>d453ac4</c>): البَوّابَةُ صَفحَةً كامِلَةً بِرَأسِها وبِطاقاتِها الخَمسِ وسَطرِ «لَدَيكَ حِساب»، بِلا هيرو ولا إجراءات. <b>والآن</b> عُضوٌ مُسَجَّلٌ بِلا دَورٍ
+    /// فَعّالٍ (<c>owner-test</c>، فيه دَورُ مُشتَرٍ) يَرى رَئيسِيَّةَ المُشتَري ثُمَّ البِطاقاتِ الخَمسَ قِسماً تَحتَها، **بِلا سَطرِ «لَدَيكَ حِساب»** (هُوَ مُسَجَّل —
+    /// القاعِدَة ١٢) وبِلا رابِطِ «دونَ تَسجيل».</para>
+    /// </summary>
+    [Fact]
+    public void A_signed_in_member_without_an_active_role_sees_the_buyer_home_first_with_the_role_cards_below()
+    {
+        var html = Snapshot("roleless-store-root");
+
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+        Assert.Equal(1, Count(html, Gateway));
+        Assert.Equal(0, Count(html, "acm-role-landing-head"));
+        Assert.Equal(5, Count(html, Card));
+        Assert.Equal(0, Count(html, "acm-role-landing-foot"));
+
+        var hero = html.IndexOf(Hero, StringComparison.Ordinal);
+        var actions = html.IndexOf(Actions, StringComparison.Ordinal);
+        var cards = html.IndexOf(Gateway, StringComparison.Ordinal);
+        Assert.True(hero > 0 && actions > hero && cards > actions,
+            $"تَرتيبٌ غَيرُ المَقصود: الهيرو {hero}، الإجراءات {actions}، البِطاقات {cards}.");
+    }
+
+    /// <summary>
+    /// <para><b>ويَبقى</b>: صاحِبُ دَورِ البائِعِ (<c>member2</c> بِدَورِ <c>host</c> في <c>ejar</c>) يَرى عَلى الجَذرِ رَئيسِيَّةَ البائِعِ بِشَريطِها —
+    /// لا بَوّابَةَ ولا رَئيسِيَّةَ المُشتَري. دَورُه الفَعّالُ يَحكُمُ ما يَراه.</para>
+    /// </summary>
+    [Fact]
+    public void A_signed_in_member_with_a_seller_role_sees_the_seller_home_on_the_store_root()
+    {
+        var html = Snapshot("member2-store-root");
+
+        Assert.Equal(1, Count(html, "class=\"acm-role-home acm-role-home-seller\""));
+        Assert.Equal(0, Count(html, Gateway));
+        Assert.Equal(0, Count(html, Card));
+        Assert.Equal(0, Count(html, Hero));
+        Assert.Equal(0, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+    }
+
+    /// <summary>
+    /// <para><b>ومَتجَرٌ بِلا أَدوار</b> (<c>theme-demo</c>) يَرى زائِرُه رَئيسِيَّةَ المُشتَري: الهيرو والإجراءات، بِالشَريطِ — ولا بَوّابَة.
+    /// <b>وهذِه بِعَينِها «رَئيسِيَّةُ المُشتَري»</b> الَّتي يَعنيها القَرار: الفَرعُ الافتِراضِيُّ في <c>TenantHome</c>.</para>
+    /// </summary>
+    [Fact]
+    public void A_store_without_roles_shows_its_visitor_the_buyer_home_with_the_chrome()
+    {
+        var html = Snapshot("theme-demo-portal");
+
+        Assert.Equal(1, Count(html, Hero));
+        Assert.Equal(1, Count(html, Actions));
+        Assert.Equal(1, Count(html, MobileNav));
+        Assert.Equal(1, Count(html, TopNav));
+        Assert.Equal(0, Count(html, Gateway));
+        Assert.Equal(0, Count(html, Card));
+    }
+
+    /// <summary>
+    /// <para><b>دَورُ المُشتَري في الكاتالوج</b>: مِن أَدوارِ الأَعضاءِ (كُلُّ ما سِوى <c>tenant_admin</c>، وهُوَ ما تَرسُمُه البَوّابَةُ بِطاقات)
+    /// دَورٌ واحِدٌ تَركيبُ رَئيسِيَّتِه <c>defaultHome</c> — رَئيسِيَّةُ المُشتَري — ويَحمِلُ <c>listing.browse</c>: <c>customer</c>. والباقونَ
+    /// رَئيسِيّاتُهُم لِلبائِعِ أَو السائِقِ أَو الراكِب. فَمَتجَرٌ أَدوارُه <c>rider</c> و<c>driver</c> (‏<c>injez</c>، ‏<c>TestDataSeeder.cs:32</c>) بِلا دَورِ مُشتَرٍ.</para>
+    /// </summary>
+    [Fact]
+    public void The_catalog_has_one_member_role_whose_home_is_the_buyer_home_and_it_browses_customer()
+    {
+        Assert.True(RoleCatalog.Definitions.Count >= 10, $"أَداةٌ عَمياء: {RoleCatalog.Definitions.Count} تَعريفاً فَقَط.");
+
+        var buyerHomes = RoleCatalog.Definitions
+            .Where(d => d.Slug != "tenant_admin")
+            .Where(d => d.Composition.Home == RoleComponents.DefaultHome && d.Permissions.Contains("listing.browse"))
+            .Select(d => d.Slug)
+            .ToArray();
+        Assert.Equal(new[] { "customer" }, buyerHomes);
+
+        foreach (var slug in new[] { "host", "vendor", "rider", "driver" })
+            Assert.NotEqual(RoleComponents.DefaultHome, TenantRoleSet.Platform.ResolveComposition(slug).Home);
+        Assert.Equal(RoleComponents.DefaultHome, TenantRoleSet.Platform.ResolveComposition("customer").Home);
+    }
+}

@@ -365,9 +365,12 @@ public class PayPalBillingPolicyTests
     }
 
     /// <summary>ومَن أَلغى ثُمَّ عادَ فَدَفَع، عادَ تَجديدُه — وإلّا
-    /// قالَت الشاشَةُ «التَجديدُ مُوقَف» لِمَن يَدفَع.</summary>
+    /// قالَت الشاشَةُ «التَجديدُ مُوقَف» لِمَن يَدفَع.
+    /// <para><b>مَقلوبٌ بِاسمِه</b> (‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ تَوصيفُه <c>d356a3f</c>؛ كانَ <c>APaymentAfterACancellation_ClearsTheCancellationMark</c>
+    /// والدَفعَةُ لِلاشتِراكِ المُلغى نَفسِه): الإلغاءُ عِندَ PayPal نِهائِيّ، فَمَن «عادَ فَدَفَع» عادَ بِاشتِراكٍ جَديدٍ — ودَفعَتُه تَمحو العَلامَة؛ ودَفعَةُ
+    /// المُلغى نَفسِه مُتَأَخِّرَةٌ تُمَدِّدُ ولا تَمحو، وإلّا عادَ «قائِماً» يُمسِكُ الحِفظَ ولا تَعودُ رِسالَةُ إلغائِه.</para></summary>
     [Fact]
-    public void APaymentAfterACancellation_ClearsTheCancellationMark()
+    public void APaymentFromANewSubscriptionAfterACancellation_ClearsTheCancellationMark_AndALatePaymentOfTheCancelledOneDoesNot()
     {
         var plan = MonthlyPlan();
         var cancel = Event(type: PayPalEventTypes.SubscriptionCancelled, id: "WH-C");
@@ -375,11 +378,19 @@ public class PayPalBillingPolicyTests
             PayPalBillingPolicy.Decide(cancel, plan, false, Now), Now);
         Assert.NotNull(plan.RenewalCancelledAt);
 
-        var paid = Event(type: PayPalEventTypes.PaymentSaleCompleted, id: "WH-P");
+        var late = Event(type: PayPalEventTypes.PaymentSaleCompleted, id: "WH-P");
+        var lateDecision = PayPalBillingPolicy.Decide(late, plan, false, Now);
+        PayPalBillingPolicy.Apply(plan, late, lateDecision, Now);
+        Assert.Equal(PayPalBillingAction.Extend, lateDecision.Action);
+        Assert.NotNull(plan.RenewalCancelledAt);
+        Assert.False(TenantPlanPolicy.HoldsLiveSubscription(plan));
+
+        var paid = Event(type: PayPalEventTypes.PaymentSaleCompleted, id: "WH-P2", sub: "I-SUB2");
         PayPalBillingPolicy.Apply(plan, paid,
             PayPalBillingPolicy.Decide(paid, plan, false, Now), Now);
 
         Assert.Null(plan.RenewalCancelledAt);
+        Assert.Equal("I-SUB2", plan.PayPalSubscriptionId);
     }
 
     /// <summary><b>وإيقافُ المُشرِفِ اليَدَوِيُّ فَوقَ كُلِّ دَفعَة</b>:

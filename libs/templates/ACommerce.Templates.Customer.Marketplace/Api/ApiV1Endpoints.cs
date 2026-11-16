@@ -76,13 +76,29 @@ public static class ApiV1Endpoints
         // ─── تَحريكُ مَرحَلَة — قَلبُ قيمَةِ الناقِل ─────────────────
         // التَخويلُ يَبقى في الخِدمَة: هي تَفحَص أَنّ الفاعِلَ
         // مُخَوَّلٌ بِالمَرحَلَة الحاليَّة، وهذا يُغَلَّف ولا يُكرَّر.
+        // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (xii)؛ ولا يُعادُ حَرفٌ فَوقَه: «بِالمَرحَلَةِ الحالِيَّة» قِراءَةُ ما قَبلَ ‏ADR-033 §٦‑ط —
+        // الخِدمَةُ تَسأَلُ مُنذُ ‏2026-10-11 فاعِلَ المَرحَلَةِ **التالِيَة** (`DealsPolicy.RequiredActorToLeave`، مَن يَدخُلُها)؛ والتَخويلُ في
+        // الخِدمَةِ لا هُنا كَما قالَ السَطرُ — وهو ما يَعرِضُه `actor_for_current_stage` و`required_actor` في عَقدِ الـAPI.)
+        //
+        // (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (iii)؛ ‏ADR-036 §١٢‑٣ — ولا يُعادُ حَرفٌ فَوقَه: وتَقَدُّمٌ يُخرِجُ `Offered` قَبولٌ بِغَيرِ `/accept`
+        // — فَيُخبَرُ المُشتَري كَما يُخبَرُ مِن بابِ العُضو، بِالأُنبوبِ نَفسِه؛ وكانَ الـAPI لا يُخبِرُ أَحَداً — تَوصيفُه `DealNoticeDoorsTests`.)
         app.MapPost("/api/v1/deals/{id:guid}/advance", async (
-            Guid id, HttpContext http, DealsService deals, ApiIdempotencyService idem) =>
+            Guid id, HttpContext http, DealsService deals, ApiIdempotencyService idem,
+            DealNotices notices, ACommerce.Platform.I18n.L l) =>
             await ApiWrite.OnceAsync(http, idem, "deals.advance", async p =>
             {
                 var body = await ApiBody.ReadAsync<AdvanceDealRequest>(http);
+                // والعُضوِيَّةُ قَبلَ الخِدمَة (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ١؛ تَوصيفُه `e716f46`؛ ‏ADR-036 §١٣‑٨؛ القاعِدَة ٦): كانَ غَيرُ الطَرَفِ يَبلُغُ
+                // رَفضَ الفاعِلِ في الخِدمَة فَيَسمَعُ ‏403 بِمَرحَلَةِ صَفقَةِ غَيرِه وحالِها، أَو ‏409 بِحالِ المُلغاة — وبابُ القِراءَةِ والإلغاءُ يُجيبانِه ‏404. فَصارَ ‏404 قَبلَ أَيِّ سُؤال،
+                // بِنَسَقِ `/cancel` أَدناه؛ والخِدمَةُ تَبقى تَسأَلُ الفاعِلَ لِلطَرَف — حارِسانِ لِسُؤالَين (`DealApi.IsParty`).
+                var found = await deals.LoadAsync(p.TenantSlug, id, http.RequestAborted);
+                if (found is null || !DealApi.IsParty(found, p.ActorUserId))
+                    return ApiOutcome.Error(ApiErrorCatalog.NotFound);
+                // و`expected_stage` اختِيارِيٌّ: المَرحَلَةُ الَّتي قَرَأَها العَميلُ فَقَرَّرَ عَلَيها — غَيرُها ‏409 `deal_changed_meanwhile` (‏2026-10-24، تَدقيقُ الإطلاق
+                // brief-P0-6؛ ‏ADR-036 §١٣)؛ وغِيابُه كَما كان. نَسَقُ حَقلِ استِمارَتَي العُضوِ والاستوديو.
                 var res = await deals.AdvanceAsync(
-                    p.TenantSlug, id, p.ActorUserId, p.ActorName, body?.note, http.RequestAborted);
+                    p.TenantSlug, id, p.ActorUserId, p.ActorName, body?.note, http.RequestAborted, from: DealsService.ExpectedStage(body?.expected_stage));
+                if (DealNotices.IsAcceptance(res)) await notices.NotifyAcceptedAsync(p.TenantSlug, res.Deal!, p.ActorName, l, http.RequestAborted);
                 return DealApi.FromAdvance(res);
             })
         ).RequireApiKey(ApiScopeCatalog.DealsWrite);
@@ -90,21 +106,30 @@ public static class ApiV1Endpoints
         // ─── الإلغاء ───────────────────────────────────────────────
         // العُضوِيَّة تُفحَص هُنا لِأَنّ CancelAsync لا تَفحَصُ
         // الفاعِلَ إطلاقاً — مَنطِقٌ غائِبٌ لا مُكَرَّر (DealApi.IsParty).
+        //
+        // (‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَه: «لِأَنّ CancelAsync لا تَفحَصُ الفاعِلَ إطلاقاً» أَعلاه لَم يَعُد يَصدُق — تَفحَصُه
+        // `DealCancelAuthorization` مُنذُ ‏§١١٫٦، والعُضوِيَّةُ هُنا تُبقي ‏404 لِغَيرِ الطَرَفِ لا ‏403. ومُنذُ اليَوم: والمُشتَري يُخبَرُ بِإلغاءِ
+        // غَيرِه كَما يُخبَرُ مِن بابِ العُضو — `NotifyCancelledAsync` بِاسمِ المِفتاح؛ G4 (iii)، ‏ADR-036 §١٢‑٣.)
         app.MapPost("/api/v1/deals/{id:guid}/cancel", async (
-            Guid id, HttpContext http, DealsService deals, ApiIdempotencyService idem) =>
+            Guid id, HttpContext http, DealsService deals, ApiIdempotencyService idem,
+            DealNotices notices, ACommerce.Platform.I18n.L l) =>
             await ApiWrite.OnceAsync(http, idem, "deals.cancel", async p =>
             {
                 var body = await ApiBody.ReadAsync<CancelDealRequest>(http);
-                var reason = DealApi.NormalizeCancelReason(body?.reason);
-                if (reason is null)
-                    return ApiOutcome.Error(ApiErrorCatalog.ValidationFailed, new { field = "reason" });
-
+                // التَخويلُ يَسبِقُ تَحَقُّقَ الحُقول (القاعِدَة ٦؛ ‏2026-10-24، تَدقيقُ الإطلاق lens-security-10): كانَ السَبَبُ يُرَدُّ ‏400 قَبلَ `IsParty`
+                // فَيَسمَعُ غَيرُ الطَرَفِ «حَقلٌ ناقِص» عَن صَفقَةِ غَيرِه قَبلَ «لا شَيءَ هُنا» (تَوصيفُه `da36bc4`).
                 var found = await deals.LoadAsync(p.TenantSlug, id, http.RequestAborted);
                 if (found is null || !DealApi.IsParty(found, p.ActorUserId))
                     return ApiOutcome.Error(ApiErrorCatalog.NotFound);
 
-                return DealApi.FromCancel(await deals.CancelAsync(p.TenantSlug, id,
-                    new DealCanceller(p.ActorUserId, p.ActorName, IsStoreAdmin: false), reason, http.RequestAborted));
+                var reason = DealApi.NormalizeCancelReason(body?.reason);
+                if (reason is null)
+                    return ApiOutcome.Error(ApiErrorCatalog.ValidationFailed, new { field = "reason" });
+
+                var res = await deals.CancelAsync(p.TenantSlug, id,
+                    new DealCanceller(p.ActorUserId, p.ActorName, IsStoreAdmin: false), reason, http.RequestAborted);
+                if (res.Ok) await notices.NotifyCancelledAsync(p.TenantSlug, res.Deal!, p.ActorUserId, p.ActorName, l, http.RequestAborted);
+                return DealApi.FromCancel(res);
             })
         ).RequireApiKey(ApiScopeCatalog.DealsWrite);
 

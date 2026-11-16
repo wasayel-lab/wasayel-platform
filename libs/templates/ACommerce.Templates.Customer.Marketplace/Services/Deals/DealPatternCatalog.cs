@@ -35,7 +35,11 @@ public static class DealPatternCatalog
     /// يُنسَخ في كُلّ صَفّ داخِل التَّعريف
     /// (<see cref="DealStageRule.Actor"/>) لِيَبقى التَّعريف مُكتَفِياً
     /// بِذاتِه حينَ يُخَزَّن — ولِيُصبِح اختِلاف الفاعِل بَينَ نَمَطَين
-    /// مُمكِناً بِلا تَغيير شَكل.</summary>
+    /// مُمكِناً بِلا تَغيير شَكل.
+    /// <para><b>و«المُخَوَّلُ لِمَرحَلَة» = مَن يُؤَدّيها، أَي يُدخِلُ الصَفقَةَ إلَيها</b> (‏ADR-033 §٦‑ط،
+    /// ‏2026-10-11): <c>Booked</c> البائِعُ يَقبَل، <c>Paid</c> المُشتَري يَدفَع، <c>Shipping</c> البائِعُ
+    /// يَشحَن — كَما تَقرَؤُه تَعليقاتُ الأَنماطِ أَدناه. والخُروجُ مِن مَرحَلَةٍ يَسأَلُ فاعِلَ تاليها
+    /// (<see cref="DealsPolicy.RequiredActorToLeave(Deal)"/>)؛ والجَدوَلُ نَفسُه لَم يُمَسّ حَرفاً.</para></summary>
     public static readonly IReadOnlyDictionary<DealStage, string> DefaultActors =
         new Dictionary<DealStage, string>
         {

@@ -53,17 +53,40 @@ public static class ProviderSecrecy
         return Mask;
     }
 
-    /// <summary><b>لَقطَةُ الرَبطِ كَما تُكتَب في التَدقيق</b> —
-    /// مُعَتَّمَةً بِالبِناء لا بِالنِيَّة: الدالَّةُ لا تَقبَل نَصّاً
-    /// صَريحاً إلّا مِن نَوعٍ يُعرَض.</summary>
+    /// <summary>
+    /// <para><b>الذَيلُ الَّذي يُحفَظُ عِندَ الخَتم</b> (‏<c>StoredValue.Tail4</c>) —
+    /// بِقاعِدَةِ <see cref="Censor"/> حَرفاً: نَوعٌ يُعرَضُ مِنه ذَيل، وسِرٌّ
+    /// أَطوَلُ مِن الذَيل. فَما تَعرِضُه القيمَةُ المَختومَةُ هُوَ ما كانَت
+    /// تَعرِضُه صَريحَةً، بِلا فَكّ.</para>
+    /// </summary>
+    public static string? TailOf(string kind, string? value)
+        => ShowsTail(kind) && value is not null && value.Length > TailLength
+            ? value[^TailLength..]
+            : null;
+
+    /// <summary><b>صورَةُ القيمَةِ المَختومَة</b> — لا نَصَّ صَريحاً هُنا أَصلاً:
+    /// الذَيلُ المَحفوظُ بَعدَ القِناع، أَو القِناعُ وَحدَه. و<c>none</c> لا شَيءَ
+    /// لَه.</summary>
+    public static string CensorSealed(string kind, string? tail)
+    {
+        if (kind == CredentialKinds.None) return "";
+        if (ShowsTail(kind) && tail is { Length: TailLength }) return Mask + tail;
+        return Mask;
+    }
+
+    /// <summary><b>لَقطَةُ الرَبطِ كَما تُكتَب في التَدقيق — مِن قيَمِه المُخَزَّنَة</b>:
+    /// كُلُّ قيمَةٍ بِصورَتِها هي (<c>StoredValue.Censored</c>) — الصَريحَةُ بِـ<see cref="Censor"/>
+    /// والمَختومَةُ بِذَيلِها المَحفوظ — ولا نَصَّ صَريحاً يُمَرَّرُ إلَيها أَصلاً: مُعَتَّمَةً
+    /// بِالبِناء لا بِالنِيَّة. (‏2026-10-12: كانَ بِجِوارِها حِملٌ يَأخُذُ النَصَّ الصَريحَ بِدالَّة،
+    /// ومُستَهلِكُه الوَحيدُ <c>ProviderBindSurface.AuditLine</c> انتَقَلَ إلى هذِه — فَحُذِفَ
+    /// ونُقِلَ صَفّا اختِبارِه إلَيها بِتَوَقُّعاتِهِما حَرفاً؛ القاعِدَة ١.)</summary>
     public static string ForAudit(
         string? providerSlug, string status,
-        IEnumerable<KeyValuePair<string, string>> kindsByField,
-        Func<string, string?> rawOf)
+        IEnumerable<KeyValuePair<string, StoredValue>> values)
     {
-        var parts = kindsByField
+        var parts = values
             .OrderBy(p => p.Key, StringComparer.Ordinal)
-            .Select(p => $"{p.Key}={Censor(p.Value, rawOf(p.Key))}");
+            .Select(p => $"{p.Key}={p.Value.Censored}");
 
         return $"provider={providerSlug ?? "-"}; status={status}; " +
                string.Join("; ", parts);

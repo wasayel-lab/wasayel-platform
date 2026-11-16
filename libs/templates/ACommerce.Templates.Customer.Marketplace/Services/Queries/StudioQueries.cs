@@ -37,6 +37,23 @@ public sealed class StudioQueries
 
     public StudioQueries(IDocumentStore store) => _store = store;
 
+    /// <summary>اسمُ مُستَخدِمِ الاستوديو مِن وَثيقَتِه وَقتَ الكِتابَة (‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) — لا مِن كوكي
+    /// <c>.acommerce.studio.name</c>؛ و<c>null</c> لِغائِبِ الجَلسَة. القاعِدَةُ في <see cref="ActorName.Of"/>.</summary>
+    public async Task<string?> ActorNameAsync(Guid? userId, CancellationToken ct = default)
+    {
+        if (userId is not Guid id) return null;
+        await using var s = _store.QuerySession(StudioAuth.Tenant);
+        return ActorName.Of((await s.LoadAsync<StudioUser>(id, ct))?.FullName);
+    }
+
+    /// <summary>‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049 §٢) دِراسَةٌ قَديمَةٌ بِمُعَرِّفِها — قِراءَةٌ لِصَفحَتَي الدِراسَةِ والطِباعَة، فَلا تَحقِنانِ خِدمَةَ
+    /// التَحليلِ (وهي تَبلُغُ نَموذَجَ لُغَة). والمِلكِيَّةُ يَحكُمُ بِها المُنادي كَما كان.</summary>
+    public async Task<IncubatorSession?> LoadStudyAsync(Guid id, CancellationToken ct = default)
+    {
+        await using var s = _store.QuerySession(FeasibilityAnalysisService.IncubatorTenant);
+        return await s.LoadAsync<IncubatorSession>(id, ct);
+    }
+
     /// <summary>هَل وَقَّعَ صاحِبُ الاستوديو على هذِه النُسخَة مِن
     /// الشُروط؟ — <c>ConsentRecord</c> في مُستَأجِر الاستوديو.</summary>
     public async Task<bool> HasConsentedAsync(
@@ -44,7 +61,7 @@ public sealed class StudioQueries
     {
         await using var s = _store.QuerySession(StudioAuth.Tenant);
         var existing = await s.Query<ConsentRecord>()
-            .Where(c => c.UserId == userId && c.Version == version)
+            .Where(ConsentPolicy.AcceptedBy(userId, version))
             .ToListAsync(ct);
         return existing.Count > 0;
     }

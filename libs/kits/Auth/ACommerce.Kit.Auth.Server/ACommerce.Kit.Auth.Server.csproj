@@ -6,5 +6,8 @@
     <PackageReference Include="WolverineFx.Http" />
     <ProjectReference Include="..\ACommerce.Kit.Auth.Core\ACommerce.Kit.Auth.Core.csproj" />
     <ProjectReference Include="..\..\..\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+    <!-- ‏2026-10-24 (تَيّارُ S15 البَند D؛ القاعِدَة ١١): اسمُ الحِسابِ الجَديدِ مِن القامُوس لا حَرفِيّاً — والمَشروعُ وَرَقيٌّ
+         (صِفرُ `ProjectReference`)، وأَخَواتُ هذِه العُدَّة (`Auth.Providers.Smtp` و`Brevo`) تُرجِعُ إلَيه سَلَفاً. -->
+    <ProjectReference Include="..\..\..\core\ACommerce.Platform.I18n\ACommerce.Platform.I18n.csproj" />
   </ItemGroup>
 </Project>

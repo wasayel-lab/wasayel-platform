@@ -1,4 +1,3 @@
-using ACommerce.Kit.Maps;
 using Xunit;
 
 namespace ACommerce.Platform.Tests;
@@ -16,7 +15,8 @@ namespace ACommerce.Platform.Tests;
 // وبَقِيَ في المُستَودَع مَوضِعان يَفعَلانِ ما نَهَت عَنه:
 //   · `AcAvatar` — لَونُ صورَةِ الشَخص. والتَعليقُ فَوقَه كانَ يَعِد
 //     «نَفس الاسم ⇒ نَفس اللون دائماً»، والكودُ يَنقُضُه.
-//   · `MockMapsProvider` — إحداثِيّاتُ عُنوانٍ غَير مَعروف.
+//   · `MockMapsProvider` — إحداثِيّاتُ عُنوانٍ غَير مَعروف. (‏حُذِفَ ‏2026-10-29 بِقَرارِ المالِك د35،
+//     وانتَقَلَت بَصمَتُه المُثَبَّتَةُ إلى `AcAvatar` — آخِرَ المِلَفّ.)
 //
 // **وكَشَفَه القِياسُ لا القِراءَة**: لَقطَتانِ لِنَفس الصَفحَة، قَبلَ
 // إعادَة تَشغيل الخادِم وبَعدَها، اختَلَفَتا في سَطرٍ واحِد — سَطرِ
@@ -96,35 +96,51 @@ public class StableHashTests
             string.Join("\n  ", offenders));
     }
 
-    /// <summary><b>بَصمَةٌ مُثَبَّتَة لِلمُزَوِّد الوَهميّ</b> — نَفسُ
-    /// العُنوان يُعطي نَفسَ الإحداثِيَّة في كُلّ عَمَلِيَّة. ولَو رَجَعَت
-    /// تَجزِئَةُ الإطار لَما طابَقَ هذا الرَقَمُ إلّا بِالصُدفَة.</summary>
-    [Fact]
-    public async Task MockGeocoder_IsPinnedAcrossProcesses()
+    // ─── ‏2026-10-29 (قَرارُ المالِك د35): البَصمَةُ انتَقَلَت إلى مُستَعمِلٍ حَيّ ─────────────────
+    // كانَ هُنا اختِباران يُثَبِّتانِ بَصمَةَ `MockMapsProvider` (‏`MockGeocoder_IsPinnedAcrossProcesses` —
+    // ‏24.7074/46.7036 لِعُنوانٍ مَجهول — و`MockGeocoder_KnownCityBypassesTheHash`). حُذِفَ المُحاكي بِصِفرِ
+    // مُستَهلِك، فَانتَقَلَ الاختِبارانِ بِشَكلِهِما نَفسِه إلى **المُستَعمِلِ الحَيِّ الوَحيدِ بِلا بَصمَةٍ مُثَبَّتَة**:
+    // `AcAvatar` — لَونُ صورَةِ الشَخصِ الَّذي يَعِدُ تَعليقُه «نَفسُ الاسمِ ⇒ نَفسُ اللونِ دائِماً»، والَّذي كَشَفَ
+    // القِياسُ تَقَلُّبَه أَوَّلَ مَرَّة. (‏`NafathNames` بَصمَتُها مُثَبَّتَةٌ سَلَفاً في `NafathNamesTests`.)
+
+    private static async Task<string> RenderAvatarAsync(string? name, string? imageUrl = null)
     {
-        var p = new MockMapsProvider();
-        var a = await p.GeocodeAsync("حَيّ لا يَعرِفُه المُزَوِّد");
-        var b = await p.GeocodeAsync("حَيّ لا يَعرِفُه المُزَوِّد");
-
-        Assert.NotNull(a);
-        Assert.NotNull(b);
-        Assert.Equal(a!.Location.Lat, b!.Location.Lat);
-        Assert.Equal(a.Location.Lng, b.Location.Lng);
-
-        // القيمَةُ نَفسُها مُثَبَّتَة — لا الحَتمِيَّةُ داخِلَ العَمَلِيَّة
-        // وَحدَها (وتِلكَ كانَت تَمُرّ قَبلَ الإصلاح أَيضاً).
-        Assert.Equal(24.7074, Math.Round(a.Location.Lat, 4));
-        Assert.Equal(46.7036, Math.Round(a.Location.Lng, 4));
+        await using var services = Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions
+            .BuildServiceProvider(new Microsoft.Extensions.DependencyInjection.ServiceCollection());
+        await using var renderer = new Microsoft.AspNetCore.Components.Web.HtmlRenderer(
+            services, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<ACommerce.Widgets.AcAvatar>(
+                Microsoft.AspNetCore.Components.ParameterView.FromDictionary(new Dictionary<string, object?>
+                {
+                    [nameof(ACommerce.Widgets.AcAvatar.Name)] = name,
+                    [nameof(ACommerce.Widgets.AcAvatar.ImageUrl)] = imageUrl,
+                }))).ToHtmlString());
     }
 
-    /// <summary>المُدُنُ المَعروفَة لا تَمُرّ بِالتَجزِئَة أَصلاً — ضابِطٌ
-    /// يَمنَع أَن يُقاس الفَرعُ الخاطِئ.</summary>
+    /// <summary><b>بَصمَةٌ مُثَبَّتَة لِلَونِ الصورَة</b> — نَفسُ الاسمِ يُعطي نَفسَ الزَوجِ في كُلِّ عَمَلِيَّة.
+    /// والزَوجُ مَحسوبٌ خارِجَ الإطارِ بِـFNV-1a فَوقَ UTF-8 («سارة العتيبي» ← ‏3453698774 ‏mod 8 = ‏6)؛ ولَو رَجَعَت
+    /// تَجزِئَةُ الإطارِ لَما طابَقَ إلّا بِالصُدفَة.</summary>
     [Fact]
-    public async Task MockGeocoder_KnownCityBypassesTheHash()
+    public async Task Avatar_colour_is_pinned_across_processes()
     {
-        var r = await new MockMapsProvider().GeocodeAsync("شارِع في الرياض");
-        Assert.NotNull(r);
-        Assert.Equal(24.7136, r!.Location.Lat);
-        Assert.Equal(46.6753, r.Location.Lng);
+        var a = await RenderAvatarAsync("سارة العتيبي");
+        var b = await RenderAvatarAsync("سارة العتيبي");
+
+        Assert.Equal(a, b);
+        Assert.Contains("background-color:#886805;", a, StringComparison.Ordinal);
+        Assert.Contains("linear-gradient(135deg, #886805, #90430d)", a, StringComparison.Ordinal);
+    }
+
+    /// <summary>الصورَةُ المَرفوعَةُ لا تَمُرُّ بِالتَجزِئَةِ أَصلاً — ضابِطٌ يَمنَعُ أَن يُقاسَ الفَرعُ الخاطِئ
+    /// (نَظيرُ «المُدُنُ المَعروفَةُ لا تَمُرُّ بِالتَجزِئَة» في الاختِبارِ الَّذي حَلَّ هذا مَحَلَّه).</summary>
+    [Fact]
+    public async Task Avatar_with_an_image_bypasses_the_hash()
+    {
+        var html = await RenderAvatarAsync("سارة العتيبي", "/uploads/a.png");
+
+        Assert.Contains("<img class=\"ac-avatar-img\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("background-color:", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("linear-gradient", html, StringComparison.Ordinal);
     }
 }

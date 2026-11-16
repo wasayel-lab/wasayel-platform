@@ -19,6 +19,7 @@ namespace ACommerce.Platform.Tests;
 // «[استِنتاج] — لَم أُشَغِّلُه». الاستِنتاج غَير المُشَغَّل دَعوى، وهذا
 // المِلَفّ يُشَغِّلُه: إمّا يُثبِتُه أَو يَكسِرُه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveQuotaRaceProofTests
 {
     private const string TenantSlug = "hissa-demo";

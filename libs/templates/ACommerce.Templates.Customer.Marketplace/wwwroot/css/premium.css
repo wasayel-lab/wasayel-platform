@@ -1357,6 +1357,35 @@ a.ac-stat:hover, a.acm-role-cta-pill:hover {
     margin-bottom: 0;
 }
 
+/* ─── بِطاقَة الإعلان: شاراتُ الثِقَة («مُوَثَّق» / «مُمَيَّز») ─────────────
+   (‏2026-10-30، تَدقيقُ الموجَة ١١ CO6؛ THEME-DEBT D-1) — `AcSpaceCard` يَرسُمُ `ac-space-trust` وشاراتِه، وقَواعِدُها
+   الأَربَعُ كانَت في نُسخَةِ widgets.css المَيِّتَةِ وَحدَها (`git show 4af36fba^:…/widgets.css` ‏1060-1090) فَتُرسَمُ بِلا نَمَط.
+   أُعيدَت بِحَرفِها مُسقَطاً عَنها الحَرفِيّاتُ الاحتِياطِيَّةُ (`#198754`/`#0d6efd`/`999px`): الأَلوانُ والانحِناءُ مِن الرُموزِ القائِمَةِ
+   وَحدَها — `--ac-success` و`--ac-primary` المَملوكُ لِلمُستَأجِر و`--ac-radius-pill`. هادِئَةٌ بِقَصد: خَلفِيَّةٌ مَمزوجَةٌ بِـ12% فَقَط. */
+.ac-space-trust {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+.ac-space-trust-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: var(--ac-radius-pill);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+.ac-space-trust-chip.is-verified {
+    color: var(--ac-success);
+    background: color-mix(in srgb, var(--ac-success) 12%, transparent);
+}
+.ac-space-trust-chip.is-featured {
+    color: var(--ac-primary);
+    background: color-mix(in srgb, var(--ac-primary) 12%, transparent);
+}
+
 /* ─── بِطاقَة الإعلان: مَكثَّفَة (صَفّ أُفُقيّ) ───────────────────────── */
 .ac-space--compact .ac-space-link {
     flex-direction: row;

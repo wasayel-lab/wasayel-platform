@@ -7,6 +7,10 @@ namespace ACommerce.Platform.Tests;
 
 // ─── بُرهانُ ذَرِّيَّةِ حَجزِ التَحليل — الجانِبُ الَّذي يَلزَمُه Postgres ──
 //
+// ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) أُعيدَ بِحَرفِه مِن `b03b375` بَعدَ أَن حَذَفَه `5ba4cac`: الحَجزُ
+// (`FeasibilityAnalysisService.TryClaimAnalysisAsync`) ما زالَ يَحرُسُ بابَ المُشرِفِ الباقي `/admin/incubator/{id}/analyze`، والباقي بَعدَ الحَذفِ فَحصُ
+// شَكلٍ وَحدَه (حِفظٌ واحِد، والإدراجُ قَبلَه). وبَراهينُ الإنشاءِ اليَدَوِيِّ الَّتي قالَ ADR-049 §٩ إنّها «حَلَّت مَحَلَّه» تَقيسُ حَدّاً آخَر.
+//
 // هذا **لَيسَ اختِبارَ وَحدَة**، ولا يَعمَلُ في التَشغيلِ العاديّ:
 // يَتَخَطّى نَفسَه ما لَم تُضبَط WASAYEL_LIVE_PROOF=1 و
 // ConnectionStrings__Postgres. نَفسُ عَقدِ LiveQuotaRaceProofTests حَرفاً.
@@ -21,6 +25,7 @@ namespace ACommerce.Platform.Tests;
 // تَحجُزُ قَبلَ أَن تُطلِق فَمَقيسٌ بُنيَوِيّاً في
 // LanguageModelQuotaGateTests — وهُوَ سُؤالٌ آخَر.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveAnalysisClaimRaceProofTests
 {
     private static bool Enabled =>

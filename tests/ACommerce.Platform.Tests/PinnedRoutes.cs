@@ -139,15 +139,18 @@ internal static class PinnedRoutes
         // خِدمَةٍ تَأخُذُ الجَلسَةَ — **مَوجَةٌ تَمَسُّ ثَلاثَ نِقاطٍ
         // مَعاً**، ولا تُخلَط بِإصلاحِ عَطبٍ حَيّ. فَالسَطرُ دَينٌ
         // يُتَّخَذ لا يَنزَلِق، ويُرفَع مَعَ أُختَيهِ في مَوجَتِهِنّ.
-        "/studio/begin",
-        "/studio/s/{id:guid}/feedback",
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) سَطرا `/studio/begin` و`/studio/s/{id:guid}/feedback` رُفِعا — النُقطَتانِ
+        // خَرَجَتا مَعَ التَحليلِ مِن رِحلَةِ رائِدِ الأَعمال، فَالدَينُ المَوصوفُ أَعلاه سُدِّدَ بِالحَذفِ لا بِالتَرحيل.
         "/studio/billing/select",
         "/{slug}/listings/{id:guid}/cart/add",
         "/{slug}/cart/{listingId:guid}/qty",
         "/{slug}/cart/clear",
         "/{slug}/checkout/submit",
+        // ‏2026-10-28 (قَرارُ المالِك د60): خُطوَتا الإتمامِ تَحفَظانِ بَياناتِ المُشتَري في سَلَّتِه — شَكلُ أَخَواتِها في السَلَّةِ بِحَرفِه (`Cart`
+        // مُتَعَدِّدَةُ الإيجار، وجَلسَةُ Minimal API المَحقونَةُ تَحمِلُ `*DEFAULT*`)، ويُرفَعُ مَعَهُنَّ يَومَ يُرَحَّلنَ إلى Wolverine.Http.
+        "/{slug}/checkout/details",
         "/{slug}/vendor/{vendorId:guid}/chat",
-        "/studio/apps/{slug}/deals/{id:guid}/review",
+        // (‏`/studio/apps/{slug}/deals/{id:guid}/review` رُفِعَ ‏2026-10-29 — حُذِفَت النُقطَةُ نَفسُها بِقَرارِ المالِك د39 «ب»: لا «تَقييمَ نِيابَةً».)
         "/studio/apps/{slug}/listings/{id:guid}/moderate",
         "/studio/apps/{slug}/tickets/{id:guid}/reply",
         "/studio/apps/{slug}/tickets/{id:guid}/close",
@@ -155,12 +158,16 @@ internal static class PinnedRoutes
         "/{slug}/deals/{id:guid}/accept",
         "/{slug}/deals/{id:guid}/advance",
         "/{slug}/deals/{id:guid}/cancel",
-        "/{slug}/deals/{id:guid}/review",
+        // (‏`/{slug}/deals/{id:guid}/review` رُفِعَ ‏2026-10-12 — سُدِّدَ دَينُه: صارَ جِسمُه نِداءً واحِداً لِـ
+        // `DealReviews` في ‏ADR-033 §٦‑ح وبَقِيَ `IDocumentStore` في تَوقيعِه حَقناً مَيِّتاً بِلا استِعمال، فَأُسقِط.)
         "/admin/tenants/{slug}/suspend",
-        "/studio/apps/{slug}/deals/seed",
+        // (‏`/studio/apps/{slug}/deals/seed` رُفِعَ ‏2026-10-29 — حُذِفَت النُقطَةُ نَفسُها بِقَرارِ المالِك د32 «٢»: «العَمَلِيَّة التَجريبِيَّة» لا تَتَحَرَّك.)
         "/studio/apps/{slug}/deals/{id:guid}/advance",
         "/studio/apps/{slug}/deals/{id:guid}/cancel",
         "/studio/apps/{slug}/deals/{id:guid}/dispute",
+        // ‏2026-10-29 (قَرارُ المالِك د38): بابُ حَسمِ النِزاعِ بِجِوارِ بابِ فَتحِه — شَكلُ أَخَواتِه الثَلاثِ بِحَرفِه: `StudioOwnsAsync(store, …)` حارِسُ مِلكِيَّةِ
+        // المَتجَرِ في الاستوديو يَقرَأُ وَثيقَةَ `Tenant` العامَّة، والكِتابَةُ في `DealsService.ResolveDisputeAsync`؛ ويُرفَعُ مَعَهُنَّ يَومَ يُرَحَّلنَ إلى Wolverine.Http.
+        "/studio/apps/{slug}/deals/{id:guid}/resolve",
         "/studio/apps/{slug}/branding/save",
         "/studio/apps/{slug}/categories/save",
         "/studio/apps/{slug}/roles/save",
@@ -250,5 +257,22 @@ internal static class PinnedRoutes
         // تِكرارَ العَطَبِ مَفروضٌ بِفَحصٍ لا بِنِيَّة:
         // `No_minimal_api_endpoint_reads_a_tenanted_document_from_an_injected_session`.
         "/{slug}/me/delete/confirm",
+
+        // ─── ‏2026-10-28 (قَرارُ المالِك د28): «اخرج من كل الأجهزة» — لِلسَبَبِ نَفسِه ──
+        // يَرفَعُ `User.SessionVersion` (مُتَعَدِّدُ الإيجار) في جَلسَةِ مُستَأجِرِ المَسار، و`StudioUser.SessionVersion` في `_studio` — والجَلسَةُ
+        // المَحقونَةُ في Minimal API تَحمِلُ `*DEFAULT*` فَتَرُدُّ `null` صامِتَة. الجَلسَةُ تُفتَحُ بِالسلاجِ في `SessionVersionGate.Revoke*Async`.
+        "/{slug}/me/sessions/revoke",
+        "/studio/me/sessions/revoke",
+
+        // ─── ‏2026-10-28 (قَرارُ المالِك د27): «أَضِف بَريدَك/جَوّالَك» — لِلسَبَبِ نَفسِه ──
+        // يَقرَأُ `User` ويَكتُبُه (مُتَعَدِّدُ الإيجار) ويَبحَثُ عَمَّن يَحمِلُ الوَسيلَةَ في جَلسَةِ مُستَأجِرِ المَسار — والجَلسَةُ تُفتَحُ بِالسلاجِ في
+        // `AccountContacts.StartAsync`/`VerifyAsync`.
+        "/{slug}/me/contact/start",
+        "/{slug}/me/contact/verify",
+
+        // ─── ‏2026-10-29 (تَدقيقُ الموجَة ١١ A3): «احذِف الوَسيلَةَ المُضافَة» — لِلسَبَبِ نَفسِه ──
+        // يَقرَأُ `User` ويَكتُبُه في جَلسَةِ مُستَأجِرِ المَسار — والجَلسَةُ تُفتَحُ بِالسلاجِ في `AccountContacts.StartRemoveAsync`/`VerifyRemoveAsync`.
+        "/{slug}/me/contact/remove/start",
+        "/{slug}/me/contact/remove/verify",
     };
 }

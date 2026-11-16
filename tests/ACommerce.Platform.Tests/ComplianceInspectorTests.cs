@@ -41,7 +41,10 @@ public class ComplianceInspectorTests
 
     private static readonly Lazy<IReadOnlySet<string>> RepoRoutesLazy = new(ScanRoutes);
 
-    private static IReadOnlySet<string> RepoRoutes => RepoRoutesLazy.Value;
+    /// <summary><c>internal</c> لا <c>private</c> مُنذُ ‏2026-10-11: يَقرَؤُه
+    /// <c>ReturnsPolicyTextTests</c> أَيضاً — ماسِحٌ واحِدٌ لِلمَساراتِ لا
+    /// ماسِحانِ يَنجَرِفان (القاعِدَة ٨).</summary>
+    internal static IReadOnlySet<string> RepoRoutes => RepoRoutesLazy.Value;
 
     private static readonly Regex PageDirective =
         new(@"^@page\s+""(?<p>[^""]+)""", RegexOptions.Multiline | RegexOptions.Compiled);

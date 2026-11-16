@@ -46,8 +46,11 @@ public static class PayPalOrderSurface
     /// يَفتَحُه المُشرِفُ فِعلاً، <b>ورابِطُ عَودَةٍ إلى مُضيفٍ خاطِئٍ
     /// يَترُك الدافِعَ على صَفحَةِ عَطَبٍ بَعدَ أَن يَدفَع</b>.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمُخَطَّطُ مِن {http, https}</b> (<see cref="ACommerce.Kit.Tenants.AbsoluteScheme"/>):
+    /// كانَ <c>Request.Scheme</c> بِحَرفِه — فَبِـ<c>X-Forwarded-Proto: javascript</c> يَصيرُ رابِطُ عَودَةِ PayPal و<c>StoreUrl.PlatformOrigin</c> بِلا نِطاقٍ (أَصلُ
+    /// خَطّافَي Moyasar وOTO) <c>javascript://…</c>. وhttp وhttps بِحَرفِهِما.</remarks>
     public static string OriginFrom(HttpRequest req)
-        => $"{req.Scheme}://{req.Host.Value}";
+        => $"{ACommerce.Kit.Tenants.AbsoluteScheme.Of(req.Scheme)}://{req.Host.Value}";
 
     /// <summary>حُقولُ نَموذَجِ رابِطِ الدَفع — <b>والمَتجَرُ والباقَةُ
     /// ومُمَيِّزُ الدَورَةِ مِن الخادِمِ لا مِن النَموذَج</b>. ولَو

@@ -31,31 +31,84 @@ public static class TenantPlanAdminService
     ///
     /// <para>يُرجِع قائِمَةَ الخُروق — فارِغَةٌ تَعني أَنّ الوَثيقَةَ
     /// خُزِّنَت في الجَلسَة. <b>ولا يُخَزَّن شَيءٌ عِندَ أَيّ خَرق.</b></para>
+    ///
+    /// <para><b>وما لا تَكتُبُه الاستِمارَةُ يُحمَلُ مِن المَحفوظ</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ F-SDC-1؛ تَوصيفُه
+    /// <c>TenantPlanSetCharacterizationTests</c> عِندَ <c>24d5fb1</c>): مُعَرِّفُ اشتِراكِ PayPal، ورابِطُ المُوافَقَةِ الَّذي يَراه صاحِبُ
+    /// المَتجَرِ في الاستوديو، وعَلامَةُ «لَن يُجَدَّد تِلقائِيّاً» — يَكتُبُها غَيرُ هذا البابِ (المُشرِفُ مِن بِطاقَةِ PayPal، ورَسائِلُ PayPal)،
+    /// وكانَ التَعيينُ يَبني وَثيقَةً جَديدَةً فَيُسقِطُها. <b>والحالَةُ <c>Active</c> عِندَ التَعيينِ كَما صُمِّمَت</b>: «مَن أَوقَفَ بِالخَطَأ
+    /// يُعيدُها بِتَعيينٍ واحِد» (<see cref="Stop"/>). والتَحميلُ هُنا لا في النُقطَة: نُقطَةٌ تَنسى التَحميلَ تُعيدُ العَطَبَ صامِتَة.</para>
+    ///
+    /// <para><b>ورابِطُ الدَفعِ يُحمَلُ ما دامَت الباقَةُ نَفسَها</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١) — <see cref="KeepsPayLink"/>.</para>
+    ///
+    /// <para><b>واشتِراكُ PayPal القائِمُ يَرُدُّ تَغييرَ الباقَةِ والسِعرِ والتاريخَين</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه
+    /// <c>PayPalArrangementChangeCharacterizationTests</c> عِندَ <c>c7b49a7</c>) — <see cref="TenantPlanPolicy.ValidateChange"/> بِرَمزِ
+    /// <see cref="TenantPlanPolicy.PayPalSubscriptionLive"/>، ولا يُخَزَّنُ شَيء.</para>
     /// </summary>
-    public static IReadOnlyList<TenantPlanViolation> Set(
+    public static async Task<IReadOnlyList<TenantPlanViolation>> SetAsync(
         IDocumentSession session, string tenantSlug, string planId,
         DateTime startsAt, DateTime expiresAt, int graceDays, decimal price,
         string setBy, DateTime at)
     {
+        var stored = await session.LoadAsync<TenantPlan>(tenantSlug);
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه `98c312f`) خُطَّةُ PayPal الَّتي تُحَلُّ لِلباقَةِ اليَوم — تُسأَلُ حينَ يوجَدُ رابِطٌ يُحمَلُ فَقَط.
+        var resolved = stored is { PayPalApproveUrl.Length: > 0 } && string.Equals(stored.PlanId, planId, StringComparison.Ordinal)
+            ? PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(planId), await session.LoadAsync<PlatformPlanPayPal>(planId))
+            : null;
+        var keepsLink = KeepsPayLink(stored, planId, resolved);
+        // ‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-1؛ تَوصيفُه `3a9a358`) **واشتِراكٌ قائِمٌ يَملِكُ لَحظَتَيه**: الاستِمارَةُ تَحمِلُ يَوماً، فَيَومُ المَحفوظِ
+        // يُكتَبُ بِساعَتِه (مَوعِدُ PayPal 10:00Z لا آخِرُ اليَوم) — وكانَ حِفظُ أَيّامِ السَماحِ وَحدَها يُرَدُّ بِرَمزِ الاشتِراكِ القائِم.
+        var holds = TenantPlanPolicy.HoldsLiveSubscription(stored);
         var plan = new TenantPlan
         {
             Id        = tenantSlug,
             PlanId    = planId,
             Status    = PlatformPlanStatuses.Active,
-            StartsAt  = startsAt,
-            ExpiresAt = expiresAt,
+            StartsAt  = holds ? TenantPlanPolicy.KeepStoredInstant(stored!.StartsAt, startsAt) : startsAt,
+            ExpiresAt = holds ? TenantPlanPolicy.KeepStoredInstant(stored!.ExpiresAt, expiresAt) : expiresAt,
             GraceDays = graceDays,
             Price     = price,
             SetBy     = setBy,
             SetAt     = at,
+            PayPalSubscriptionId = stored?.PayPalSubscriptionId,
+            PayPalApproveUrl     = keepsLink ? stored!.PayPalApproveUrl : null,
+            PayPalApprovePlanId  = keepsLink ? stored!.PayPalApprovePlanId : null,
+            RenewalCancelledAt   = stored?.RenewalCancelledAt,
+            // ‏(‏2026-11-05، G4R1-2) وعَلامَةُ التَعليقِ تُحمَلُ كَأُختِها — حِفظٌ يُسقِطُها يَفُكُّ إمساكَ اشتِراكٍ مُعَلَّقٍ يُعادُ تَفعيلُه.
+            PayPalSuspendedAt    = stored?.PayPalSuspendedAt,
         };
 
-        var violations = TenantPlanPolicy.Validate(plan);
+        // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1) **واشتِراكُ PayPal القائِمُ يُمسِكُ التَرتيبَ أَوَّلاً**: حالَةٌ مَخزونَةٌ تَرُدُّ قَبلَ حُقولِ الاستِمارَة،
+        // فَلا يُصلِحُ المُشرِفُ حَقلاً ثُمَّ يُقالُ لَه إنّ الحِفظَ كُلَّه مُمسَك.
+        var violations = TenantPlanPolicy.ValidateChange(stored, plan).Concat(TenantPlanPolicy.Validate(plan)).ToList();
         if (violations.Count > 0) return violations;
 
         session.Store(plan);
         return Array.Empty<TenantPlanViolation>();
     }
+
+    /// <summary>
+    /// <para><b>أَيُحمَلُ رابِطُ الدَفعِ المَحفوظُ إلى التَعيين؟ ما دامَت الباقَةُ نَفسَها</b> (‏2026-10-30، مُراجَعَةُ تَيّارِ F4 الجَولَة ١؛ تَوصيفُه
+    /// الصَفُّ (٥) في <c>TenantPlanSetCharacterizationTests</c> عِندَ <c>e908295</c>). الرابِطُ يُنشَأُ مِن خُطَّةِ PayPal لِلباقَةِ لَحظَتَها
+    /// (<c>/admin/tenants/{slug}/plan/paypal-link</c> ← <c>PlatformPlanPayPalBinding.Resolve(PlatformPlanCatalog.Find(plan.PlanId), …)</c>)، فَهو
+    /// عَرضُ دَفعٍ لِتِلكَ الباقَة: تَغييرُها يَترُكُ في استوديو صاحِبِ المَتجَرِ زِرَّ دَفعٍ لِخُطَّةٍ غَيرِ باقَتِه (<c>StudioHome.PayPalUrl</c>)، وبِطاقَةُ
+    /// PayPal لا تُرسَمُ لِلمُشرِفِ إن لَم تَكُن لِلباقَةِ الجَديدَةِ خُطَّة فَلا يَراه ولا يُبدِلُه. فَيَسقُطُ الرابِطُ عِندَ التَغيير ويُنشِئُ المُشرِفُ
+    /// رابِطَ الباقَةِ الجَديدَة. والمُقارَنَةُ <c>Ordinal</c> كَما يَقرَأُ الكاتالوجُ (<see cref="PlatformPlanCatalog.Find"/>) ووَثيقَةُ الرِباطِ المُعَرِّف.</para>
+    ///
+    /// <para><b>ومُعَرِّفُ الاشتِراكِ وعَلامَةُ إلغاءِ التَجديدِ يُحمَلانِ عَلى كُلِّ حال</b>: يَصِفانِ اشتِراكاً قائِماً عِندَ PayPal لا عَرضاً. يَبقى
+    /// الاشتِراكُ بَعدَ تَغييرِ الباقَةِ ويُمَدِّدُ بِـ<c>custom_id</c> لا بِالمُعَرِّفِ المَحفوظ (النُقطَةُ تُحَمِّلُ الباقَةَ بِـ<c>e.TenantSlug</c> قَبلَ
+    /// <c>PayPalBillingPolicy.Decide</c>)، ولا تَقرَأُ المُعَرِّفَ شاشَة — فَمَحوُه لا يُوقِفُ دَفعاً ولا يُخفي زِرّاً، ويَمحو المَرجِعَ الوَحيدَ
+    /// عِندَنا لِاشتِراكٍ قَد يُلغيه المُشرِفُ مِن لَوحَةِ PayPal. ورابِطٌ جَديدٌ يَكتُبُ فَوقَه (<c>SaveApproveLink</c>)، وكَذلِكَ أَوَّلُ رِسالَة.
+    /// <b>‏(‏2026-11-05، E-1) والرابِطُ لا يَكتُبُه بَعدَ اليَوم</b> — تَكتُبُه الرِسالَةُ المُوَثَّقَةُ وَحدَها، ورابِطٌ جَديدٌ يُرَدُّ ما دامَ اشتِراكٌ قائِماً.</para>
+    /// </summary>
+    ///
+    /// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه <c>98c312f</c>) وما دامَت خُطَّةُ PayPal نَفسَها</b>: الرِباطُ مِفتاحُه سلاجُ الباقَة،
+    /// فَخُطَّةٌ أُعيدَ إنشاؤُها (‏$10 ← $25) مِن صَفحَةِ أَيِّ مَتجَرٍ تَترُكُ رابِطَ الأَمسِ يَعرِضُ السِعرَ القَديم. فَيُقارَنُ ما سَجَّلَه الرابِطُ
+    /// (<see cref="TenantPlan.PayPalApprovePlanId"/>) بِما يُحَلُّ اليَوم (<paramref name="payPalPlanId"/>) <c>Ordinal</c>؛ و<c>null</c> مَعَ <c>null</c>
+    /// سَواءٌ — رابِطٌ كُتِبَ قَبلَ الحَقلِ ولا خُطَّةَ تُحَلُّ اليَوم يَبقى كَما كان.</para>
+    public static bool KeepsPayLink(TenantPlan? stored, string planId, string? payPalPlanId = null)
+        => stored is not null
+           && string.Equals(stored.PlanId, planId, StringComparison.Ordinal)
+           && string.Equals(stored.PayPalApprovePlanId, payPalPlanId, StringComparison.Ordinal);
 
     /// <summary>
     /// <para><b>إيقافٌ يَدَوِيّ</b> — يُخفي المَتجَرَ مِن لَحظَتِه ولا
@@ -103,5 +156,48 @@ public static class TenantPlanAdminService
         settings.UpdatedBy            = savedBy;
         settings.UpdatedAt            = at;
         session.Store(settings);
+    }
+}
+
+/// <summary>
+/// <para><b>تَرميمُ باقاتٍ حُفِظَت قَبلَ د51 — يَومُها يَنتَهي آخِرَه بِتَوقيتِ المَنَصَّةِ لا مُنتَصَفَ لَيلِه UTC</b> (‏2026-10-30، تَدقيقُ الموجَة ١١
+/// F-SDC-1؛ ‏ADR-039 مُلحَق د51). القَرارُ هُنا دالَّةً نَقِيَّة، والسكربتُ <c>scripts/repair-plan-day-end.cs</c> يَعرِضُ ثُمَّ يُنَفِّذُ بِعَدَدٍ يُؤَكَّد.</para>
+///
+/// <para><b>ولِماذا سكربتٌ لا «أَعِد الحِفظ»</b>: <c>e3c8b2d</c> غَيَّرَ قِراءَةَ التاريخِ لَحظَةَ الحِفظ، فَبَقِيَت الباقاتُ المَحفوظَةُ قَبلَه عَلى
+/// مُنتَصَفِ لَيلِ UTC (الثالِثَةَ فَجراً بِتَوقيتِ الرِياض)، وكانَ فِعلُ المالِكِ إعادَةَ حِفظِ كُلٍّ مِنها — والحِفظُ يُعيدُ الحالَةَ سارِيَةً
+/// (يُظهِرُ مَتجَراً أَوقَفَه المُشرِف) وكانَ يُسقِطُ رَبطَ PayPal (<c>24d5fb1</c>). فَالسكربتُ يَكتُبُ التاريخَينِ وَحدَهُما.</para>
+///
+/// <para><b>المُرَشَّحُ باقَةٌ انتِهاؤُها مُنتَصَفُ لَيلٍ UTC بِالضَبط</b> — وهو ما يَقرَؤُه <see cref="TenantPlanPolicy.Derive"/>، وما يَعُدُّه أَمرُ
+/// «ج» د51 (<c>like '%T00:00:00Z'</c>). ويُكتَبُ البَدءُ مَعَه إن كانَ مُنتَصَفَ لَيلٍ أَيضاً، فَيَبقى طولُ المُدَّةِ أَيّاماً كامِلَةً كَما يَكتُبُه
+/// الحِفظُ اليَوم (‏«أ» S6·٢). <b>وبَدءٌ وَحدَه عَلى مُنتَصَفِ اللَيلِ لا يُمَسّ</b>: <c>Derive</c> لا يَقرَؤُه، ونَقلُه وَحدَه يُقَصِّرُ المُدَّةَ
+/// الَّتي يُضيفُها تَمديدُ PayPal. وما سِوى التاريخَينِ — الحالَةُ وPayPal وعَلامَةُ إلغاءِ التَجديدِ ومَن ضَبَطَ ومَتى — لا يُمَسّ.</para>
+/// </summary>
+public static class TenantPlanDayEndRepair
+{
+    /// <summary>سَطرُ التَدقيقِ لِكُلِّ باقَةٍ تُرَمَّم — <c>before</c>/<c>after</c> تاريخُ الانتِهاءِ قَبلُ وبَعدُ.</summary>
+    public const string AuditAction = "platform.tenant_plan_day_end_repair";
+
+    /// <summary>لَحظَةٌ عَلى مُنتَصَفِ لَيلٍ UTC بِالضَبط (ولا تُعَدُّ <see cref="DateTime.MinValue"/> تاريخاً).</summary>
+    public static bool IsMidnightUtc(DateTime at) => at != DateTime.MinValue && at.TimeOfDay == TimeSpan.Zero;
+
+    /// <summary>أَتُرَمَّمُ هذه الباقَة؟ انتِهاؤُها عَلى مُنتَصَفِ لَيلٍ UTC.</summary>
+    public static bool IsCandidate(TenantPlan plan) => IsMidnightUtc(plan.ExpiresAt);
+
+    /// <summary>آخِرُ اليَومِ (بِتاريخِ UTC المُخَزَّن) بِتَوقيتِ المَنَصَّة — الدالَّةُ الَّتي يَقرَأُ بِها الحِفظُ اليَومَ المَكتوب.</summary>
+    public static DateTime DayEnd(DateTime midnightUtc)
+        => ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(DateOnly.FromDateTime(midnightUtc));
+
+    /// <summary>يَكتُبُ التاريخَينِ وَحدَهُما ويُرجِعُ عَدَدَ ما تَغَيَّرَ مِنهُما (صِفرٌ لِغَيرِ المُرَشَّح، فَإعادَةُ التَشغيلِ لا تَجِدُ شَيئاً).</summary>
+    public static int Apply(TenantPlan plan)
+    {
+        if (!IsCandidate(plan)) return 0;
+        var changed = 1;
+        if (IsMidnightUtc(plan.StartsAt))
+        {
+            plan.StartsAt = DayEnd(plan.StartsAt);
+            changed++;
+        }
+        plan.ExpiresAt = DayEnd(plan.ExpiresAt);
+        return changed;
     }
 }

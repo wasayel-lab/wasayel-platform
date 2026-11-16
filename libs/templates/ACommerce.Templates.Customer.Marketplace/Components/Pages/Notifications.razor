@@ -6,6 +6,7 @@
     تَسجيل، خِلاف ذلِك المُحتَوى.
 *@
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject L L
@@ -57,7 +58,7 @@
             {
                 <AcListRow Title="@n.Title"
                            Preview="@n.Body"
-                           Time="@n.At.ToString("HH:mm")"
+                           Time="@Culture.FormatTime(n.At, "HH:mm")"
                            IconName="@NotifIcon(n.Type)"
                            Href="@(string.IsNullOrEmpty(n.RelatedUrl) ? null : n.RelatedUrl)"
                            Unread="@(!n.IsRead)" />
@@ -78,7 +79,9 @@
         "saved_search_match" => "search",
         "offer_received" or "offer_accepted" or "offer_rejected" => "tag",
         "chat" or "message" => "message-square",
-        "deal" or "deal_advanced" => "shopping-bag",
+        // ‏`deal_cancelled` ثالِثُها (‏2026-10-11): إلغاءُ غَيرِ المُشتَري طَلَبَه — `DealNotices.CancelledType`.
+        // و`deal_paid` رابِعُها (‏2026-10-12، ‏ADR-032 الخُطوَة 10): ثَبَتَ دَفعُ الطَلَبِ عِندَ بَوّابَةِ المَتجَر — `DealNotices.PaidType`.
+        "deal" or "deal_advanced" or "deal_cancelled" or "deal_paid" => "shopping-bag",
         "ticket" => "alert-circle",
         _ => "bell"
     };

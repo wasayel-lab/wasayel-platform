@@ -15,28 +15,32 @@
       "to": "Pending",
       "actor": "counterparty",
       "label": { "ar": "قَدِّم عَرضاً", "en": "Submit offer" },
-      "effects": []
+      "effects": [],
+      "meter": "offer.submit"
     },
     {
       "from": "Pending",
       "to": "Accepted",
       "actor": "initiator",
       "label": { "ar": "اِقبَل العَرض", "en": "Accept" },
-      "effects": ["close_sibling_offers"]
+      "effects": ["close_sibling_offers"],
+      "meter": "none"
     },
     {
       "from": "Pending",
       "to": "Rejected",
       "actor": "initiator",
       "label": { "ar": "اِرفُض العَرض", "en": "Reject" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Pending",
       "to": "Withdrawn",
       "actor": "counterparty",
       "label": { "ar": "اِسحَب عَرضي", "en": "Withdraw" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     }
   ]
 }

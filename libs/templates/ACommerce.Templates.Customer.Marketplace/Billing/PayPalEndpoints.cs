@@ -1,10 +1,12 @@
 using ACommerce.Kit.Payments.Providers.PayPal;
 using ACommerce.Kit.Subscriptions;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using ACommerce.Templates.Customer.Marketplace.Gates;
 
 namespace ACommerce.Templates.Customer.Marketplace.Billing;
 
@@ -71,11 +73,13 @@ public static class PayPalEndpoints
             HttpContext http, IDocumentSession session, PayPalGateway paypal,
             Services.Audit.AuditWriter audit, ILogger<Log> log) =>
         {
+            // (‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) والفاعِلُ هُنا المُزَوِّدُ نَفسُه: دَورُ الحامِلِ `_provider` (لا مَتجَرَ في المَسار) — يَحمِلُه نِداءُ التَحَقُّقِ وما يَليه.
+            MeterScope.Current?.FillPlatformRole(MeterSentinels.Provider);
             var raw = await new StreamReader(http.Request.Body).ReadToEndAsync(http.RequestAborted);
             var headers = PayPalSurface.HeadersFrom(http.Request);
 
             var verified = paypal.CanVerifyWebhooks
-                && await paypal.VerifyWebhookSignatureAsync(headers, raw, http.RequestAborted);
+                && await paypal.VerifyWebhookSignatureAsync(PayPalSurface.VerifyCall(headers), headers, raw, http.RequestAborted);
             var gate = PayPalBillingPolicy.Gate(paypal.Options, headers, verified);
             if (gate != PayPalWebhookGate.Accepted)
                 return PayPalSurface.Rejected(log, gate);
@@ -128,11 +132,13 @@ public static class PayPalEndpoints
                 : await session.LoadAsync<PlatformPlanPayPal>(plan!.PlanId, http.RequestAborted);
             var payPalPlanId = PlatformPlanPayPalBinding.Resolve(
                 PlatformPlanCatalog.Find(plan?.PlanId), bound);
-            if (plan is null || !paypal.IsConfigured || string.IsNullOrWhiteSpace(payPalPlanId))
-                return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkUnavailable);
+            // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-1؛ تَوصيفُه `c7b49a7`) **واشتِراكٌ قائِمٌ يَرُدُّ رابِطاً جَديداً قَبلَ نِداءِ PayPal** — في
+            // `PayPalSurface.LinkRefusal` مَعَ «غَيرُ مُتاح»، فَلا يَزيدُ مَنطِقُ الجِسم (`EndpointBodyBleedTests`).
+            if (PayPalSurface.LinkRefusal(plan, paypal.IsConfigured, payPalPlanId) is { } refusal)
+                return PayPalSurface.LinkFailed(slug, refusal);
 
             var by = admin.User is { } u ? $"studio · {u.Id}" : "platform-admin";
-            var result = await paypal.CreateSubscriptionAsync(
+            var result = await paypal.CreateSubscriptionAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalLinkCreate, slug, PayPalSurface.LinkKey(slug, payPalPlanId!)),
                 payPalPlanId!, slug, PayPalSurface.LinkKey(slug, payPalPlanId!), http.RequestAborted);
 
             // ─── فَشَلُ PayPal يُسَمّى، ولا يُخفى خَلفَ «تَعَذَّرَ» ───
@@ -152,7 +158,7 @@ public static class PayPalEndpoints
                 return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(result.FailureReason));
 
             if (!Services.Subscriptions.PayPalBillingService.SaveApproveLink(
-                    session, plan, result, by, DateTime.UtcNow))
+                    session, plan, result, by, DateTime.UtcNow, payPalPlanId))
                 return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkRefused);
 
             await session.SaveChangesAsync(http.RequestAborted);
@@ -198,19 +204,20 @@ public static class PayPalEndpoints
             // الإنشاء» وَحدَها تُرسِل المالِكَ يُخَمِّن.
             // ونَفسُ التَصنيفِ الَّذي يَقرَؤُه مَسارُ رابِطِ الدَفع —
             // خَطَأُ الاستِحقاقِ يُعطي رَمزَه، وما عَداهُ نَصَّ PayPal.
-            try { created = await paypal.CreateCatalogPlanAsync(draft, ct); }
+            try { created = await paypal.CreateCatalogPlanAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalPlanCreate, MeterSentinels.Platform, ProviderCall.FreshRequestId()), draft, ct); }
             catch (Exception ex) { return PayPalSurface.LinkFailed(slug, PayPalFailure.ScreenCode(ex.Message)); }
 
             if (!Services.Subscriptions.PayPalBillingService.BindCatalogPlan(
                     session, PayPalCatalogPolicy.BindingFor(draft, created, by, DateTime.UtcNow)))
                 return PayPalSurface.LinkFailed(slug, PayPalSurface.LinkRefused);
 
+            // ‏(‏2026-11-05، الموجَة ١٢ G4 · E-6؛ تَوصيفُه `98c312f`) **وروابِطُ الخُطَّةِ الَّتي حَلَّ مَحَلَّها تُسقَطُ لِكُلِّ مَتجَرٍ عَلى الباقَة**
+            // في الجَلسَةِ نَفسِها، وسَطرُ تَدقيقٍ لِكُلٍّ مِنها بَعدَ الإيداع (`PayPalSurface.AuditCatalogPlanAsync`).
+            var dropped = await Services.Subscriptions.PayPalBillingService.DropStaleLinksAsync(session, draft.PlanSlug, created.PlanId, ct);
             await session.SaveChangesAsync(ct);
-            await audit.WriteAsync(slug, admin.User?.Id, by,
-                Services.Subscriptions.PayPalBillingService.CatalogPlanAuditAction,
-                "PlatformPlan", draft.PlanSlug, note: created.PlanId);
+            await PayPalSurface.AuditCatalogPlanAsync(audit, slug, admin.User?.Id, by, draft.PlanSlug, created.PlanId, dropped);
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── رابِطُ دَفعٍ مَرِن: المَبلَغُ والمُدَّةُ لَحظَةَ الطَلَب ──
         //
@@ -258,7 +265,7 @@ public static class PayPalEndpoints
                     await session.LoadAsync<PayPalOrderRecord>(reference, ct)))
                 return PayPalOrderSurface.Failed(slug, PayPalOrderSurface.OrderSettled);
 
-            var result = await paypal.CreateOrderAsync(
+            var result = await paypal.CreateOrderAsync(ProviderCall.ForChannel(OutboundUnits.BillingPayPalOrderCreate, slug, PayPalOrderPolicy.OrderRequestId(draft)),
                 draft, reference, PayPalOrderSurface.OriginFrom(req),
                 PayPalOrderPolicy.OrderRequestId(draft), ct);
 
@@ -276,7 +283,7 @@ public static class PayPalEndpoints
                 Services.Subscriptions.PayPalBillingService.OrderAuditAction,
                 "TenantPlan", slug, note: $"{reference} · {result.OrderId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         // ─── «التَقِط الآن» — المَخرَجُ اليَدَويُّ الَّذي يُبلَغ
         //     بِالنَقر (القاعِدَة ١٢) ──────────────────────────────────
@@ -329,7 +336,7 @@ public static class PayPalEndpoints
                 Services.Subscriptions.PayPalBillingService.CaptureAuditAction,
                 "TenantPlan", slug, note: $"{order.Id} · {result.CaptureId}");
             return Results.Redirect($"/admin/tenants/{slug}/plan?saved=1");
-        }).DisableAntiforgery();
+        }).RequireFormBody().DisableAntiforgery();
 
         return app;
     }

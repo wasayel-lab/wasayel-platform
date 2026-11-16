@@ -60,9 +60,39 @@ public static class DealCancelAuthorization
     /// يُلغى.</summary>
     public const string DealNotActive = "deal_not_active";
 
-    /// <summary>المَعجَمُ المُغلَق — ثَلاثَةٌ لا رابِعَ لَها.</summary>
+    /// <summary>
+    /// <para><b>الصَفقَةُ بَلَغَت مَرحَلَةً لا يُلغيها فيها طَرَف</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4؛ ‏ADR-033 §٦‑ج مُلحَقاً):
+    /// مَرحَلَتُها خارِجَ <see cref="PartyCancelStages"/> — «شَحن» فَما بَعدَه — والفاعِلُ طَرَفٌ لا مُشرِفُ المَتجَر. كانَ طَرَفٌ يُلغي صَفقَةً
+    /// شُحِنَت أَو سُلِّمَت: بَيعُ نَقدٍ قُبِضَ ثَمَنُه يَصيرُ «مُلغاة»، وشُحنَةُ OTO حَيَّة، و«استِرجاعُه مُستَحَقّ» عَلى بِضاعَةٍ سُلِّمَت
+    /// (تَوصيفُه <c>818ae9e</c>). <b>افتِراضٌ قابِلٌ لِلقَلبِ</b> حَتّى يُقَرِّرَ المالِكُ المَراحِل (سِجِلُّ «ب» W8-1·٢).</para>
+    /// </summary>
+    public const string DealPastCancelStage = "deal_past_cancel_stage";
+
+    /// <summary>
+    /// <para><b>الصَفقَةُ في طَلَبِ شَحنٍ واحِدٍ حَيٍّ عِندَ OTO مَعَ أُختٍ لَم تُسَلَّم</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ F1؛ تَوصيفُه <c>8029031</c>): الطَلَبُ يُنشَأُ
+    /// لِصَفَقاتِ بائِعٍ مِن سَلَّةٍ واحِدَةٍ بِمَبلَغِ تَحصيلٍ هُوَ مَجموعُها (د13 «ب»)، والشُحنَةُ المُسَلَّمَةُ لِلمَندوبِ وَحدَةٌ واحِدَة — فَإلغاءُ إحداها وَحدَها يَترُكُ
+    /// المَندوبَ يُحَصِّلُ ثَمَنَها، أَو يُميتُ شُحنَةَ أُختِها إن أَلغى البائِعُ الطَلَب. يَرُدُّه <see cref="ValidateWaybill"/> قَبلَ أَيِّ كِتابَة، والطَريقُ الَّذي يُفضي
+    /// «إلغاءُ الطَلَبِ كامِلاً» (<c>DealsService.CancelWholeInvoiceAsync</c>) أَو الإلغاءُ بَعدَ التَسليم (فَيُكتَبُ <see cref="DealEvent.CashRefundDue"/>).</para>
+    /// </summary>
+    public const string DealInSharedWaybill = "deal_in_shared_waybill";
+
+    /// <summary>
+    /// <para><b>المَراحِلُ الَّتي يُلغي فيها طَرَفٌ صَفقَتَه — افتِراضُ ‏2026-10-24 لا قَرارُ مُنتَج</b> (سِجِلُّ «ب» W8-1·٢): ما قَبلَ أَن
+    /// تَخرُجَ البِضاعَةُ أَو الخِدمَةُ مِن يَدِ البائِع — عَرض، حَجز، تَأكيد، دَفع. وما بَعدَها («شَحن»، «تَسليم»، «استِلام»، «تَقييم») يُلغيه
+    /// صاحِبُ المَتجَرِ وَحدَه مِن الاستوديو (<see cref="DealCanceller.IsStoreAdmin"/>) — المَخرَجُ اليَدَوِيُّ لِلمُرتَجَعِ والنِزاع.</para>
+    /// <para><b>ويُقلَبُ بِسَطر</b>: إضافَةُ مَرحَلَةٍ هُنا أَو حَذفُها؛ والصَفحَةُ تَتبَعُه بِلا لَمس (تَرسُمُ بِـ<see cref="IsAllowed"/>).</para>
+    /// <para>(‏2026-10-29، قَرارُ المالِك د37 «أ» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): <b>صارَ قَراراً لا افتِراضاً</b> — «تبقى المراحل كما هي، وهذا هو الافتراض
+    /// الذي تشحنه المنصّة»، ومَعَه: صَفقَةٌ لَها طَلَبٌ قائِمٌ عِندَ OTO (<see cref="DealShipping.HoldsLiveOrder"/>) تُعامَلُ كَالمَشحونَة. ولا إعدادَ لِلمَتجَرِ الآن (القاعِدَة ١):
+    /// يَومَ يَطلُبُ أَوَّلُ مَتجَرٍ سِياسَةً أُخرى تَصيرُ المَراحِلُ اختِياراً مِن قائِمَةٍ مُغلَقَةٍ بِمُصادِقٍ ورُموزِ خَرق (القاعِدَة ٤)، وهذِه قيمَتُها الأولى.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<DealStage> PartyCancelStages =
+        new HashSet<DealStage> { DealStage.Offered, DealStage.Booked, DealStage.Confirmed, DealStage.Paid };
+
+    /// <summary>المَعجَمُ المُغلَق — ثَلاثَةٌ لا رابِعَ لَها.
+    /// (‏2026-10-24، تَدقيقُ الإطلاق lens-money-integrity-4 — ولا يُعادُ حَرفٌ فَوقَه: ورابِعُها <see cref="DealPastCancelStage"/>.)</summary>
+    /// <remarks>(‏2026-10-30، تَدقيقُ الموجَة ١١ F1 — ولا يُعادُ حَرفٌ فَوقَه: وخامِسُها <see cref="DealInSharedWaybill"/>.)</remarks>
     public static readonly IReadOnlyList<string> All =
-        new[] { DealNotFound, ActorNotParty, DealNotActive };
+        new[] { DealNotFound, ActorNotParty, DealNotActive, DealPastCancelStage, DealInSharedWaybill };
 
     public static bool Contains(string code) => All.Contains(code, StringComparer.Ordinal);
 
@@ -79,15 +109,24 @@ public static class DealCancelAuthorization
     }
 
     /// <summary><c>null</c> يَعني مُخَوَّل. والتَرتيبُ مَقصود:
-    /// الغِياب، ثُمَّ التَخويل، ثُمَّ الحالَة.</summary>
+    /// الغِياب، ثُمَّ التَخويل، ثُمَّ الحالَة.
+    /// (‏2026-10-24 — ولا يُعادُ حَرفٌ فَوقَه: ثُمَّ المَرحَلَةُ لِلطَرَف — <see cref="DealPastCancelStage"/> — بَعدَ الحالَة، فَلا تَتَسَرَّبُ مَرحَلَةٌ
+    /// لِغَيرِ الطَرَف.)</summary>
     public static DealCancelViolation? Validate(Deal? deal, DealCanceller by)
     {
         if (deal is null)
             return new(DealNotFound, "لا صَفقَةَ بِهذا المُعَرِّف.");
 
+        // (‏2026-10-29، قَرارُ المالِك د31 «١» — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): **ومالِكُ الإعلانِ يَرفُضُ العَرضَ عَلَيه ما دامَ في «عَرض»** — «يُسمح لصاحب
+        // الإعلان أن يرفض العرض ما دام في مرحلة «عرض»، فيظهر له زرّ الرفض تلقائيًّا، ويُخبَر المشتري». في مَسارِ العَرضِ لا رَبطَ عِندَ الوِلادَة، فَالمالِكُ
+        // (`DealAcceptAuthorization.OwnerIdOf`) لَيسَ طَرَفاً حَتّى يَقبَل — وكانَ رَفضُه يُرَدُّ بِـ`actor_not_party` (تَوصيفُه
+        // `DealVendorCancelTests.Today_an_unbound_listing_owner_cannot_cancel_an_offer_on_his_listing`). وتَعريفُ تَدَفُّقِ العَرضِ يُعلِنُ «Pending→Rejected»
+        // بِفاعِلِه. وبَعدَ «عَرض» لا يَملِكُ إلّا ما يَملِكُه الطَرَف — والصَفحَةُ تَتبَعُ هذِه الدالَّةَ بِلا لَمس، والمُشتَري يُخبَرُ بِالأُنبوبِ القائِم.
+        var rejectsOffer = deal.Stage == DealStage.Offered && DealAcceptAuthorization.OwnerIdOf(deal) == by.ActorId;
         if (!by.IsStoreAdmin &&
             deal.InitiatorId != by.ActorId &&
-            deal.CounterpartyId != by.ActorId)
+            deal.CounterpartyId != by.ActorId &&
+            !rejectsOffer)
             return new(ActorNotParty,
                 "الفاعِلُ لَيسَ طَرَفاً في هذِه الصَفقَة ولا مُشرِفَ المَتجَر — " +
                 "والإلغاءُ يَستَرِدُّ المالَ، فَلا يَملِكُه غَيرُ أَطرافِها.");
@@ -96,11 +135,82 @@ public static class DealCancelAuthorization
             return new(DealNotActive,
                 $"الصَفقَةُ في حالَة {deal.Status} — لا شَيءَ يُلغى.");
 
+        // (‏2026-10-29، قَرارُ المالِك د37 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): **وطَلَبٌ عِندَ OTO كَالشَحن** — «متى كان للصفقة طلب شحن
+        // عند OTO تُعامَل كأنها شُحنت: لا يلغيها المشتري ولا البائع من صفحتها، ويلغيها صاحب المتجر من الاستوديو». يُقرَأُ مِن الصَفقَةِ نَفسِها
+        // (`DealShipping.HoldsLiveOrder` عَلى `Refs`) فَتَبقى الدالَّةُ بِلا قاعِدَة؛ والشُحنَةُ يُلغيها البائِعُ مِن حِسابِه في OTO (لا نِداءَ إلغاءٍ لَدَيها)،
+        // وطَلَبٌ كَتَبَت OTO أَنّها أَغلَقَته (`ClosedAtOto`) لا شُحنَةَ سائِرَةً لَه فَيَعودُ الحُكمُ إلى المَرحَلَة.
+        // **والرِسالَةُ عامَّةٌ تَصدُقُ في كُلِّ نَمَط** (د37 (٣) «ب»): كانَت «بَعدَ الشَحنِ أَو التَسليمِ» — ولا «شَحنَ» في الرِحلَةِ والخِدمَةِ والإيجار.
+        if (!by.IsStoreAdmin && (!PartyCancelStages.Contains(deal.Stage) || DealShipping.HoldsLiveOrder(deal)))
+            return new(DealPastCancelStage,
+                $"الصَفقَةُ عِندَ «{deal.Stage}»{(DealShipping.HoldsLiveOrder(deal) ? " ولَها طَلَبُ شَحنٍ قائِمٌ عِندَ OTO" : "")} — " +
+                "تَجاوَزَت مَرحَلَةَ الإلغاءِ مِن صَفحَتِها؛ يُلغيها صاحِبُ المَتجَرِ وَحدَه مِن الاستوديو.");
+
         return null;
     }
 
     public static bool IsAllowed(Deal? deal, DealCanceller by) => Validate(deal, by) is null;
+
+    // ─── الطَلَبُ الواحِدُ عِندَ OTO وَحدَةٌ واحِدَة (‏2026-10-30، تَدقيقُ الموجَة ١١ F1؛ قَرارُ «أ» F3·٢ بِأَفضَلِ المُمارَسات) ─────────────────────
+
+    /// <summary>
+    /// <para><b>أَتَسيرُ الصَفقَةُ في شُحنَةٍ لَم تُسَلَّم؟ — دالَّةٌ نَقِيَّة</b>: لَها طَلَبٌ قائِمٌ عِندَ OTO (<see cref="DealShipping.HoldsLiveOrder"/>) ولَم تَبلُغ «تَسليم».
+    /// فَبَعدَ التَسليمِ قَبَضَ المَندوبُ وانتَهَت الشُحنَة — والإلغاءُ يَكتُبُ رَدَّ الثَمَنِ مُستَحَقّاً كَما كان.</para>
+    /// </summary>
+    public static bool OnLiveWaybill(Deal deal)
+        => DealShipping.HoldsLiveOrder(deal) && !OtoOrderStatusGate.Reached(deal, DealStage.Delivered);
+
+    /// <summary>
+    /// <para><b>أَخَواتُ الصَفقَةِ في شُحنَتِها السائِرَة</b>: مِن <paramref name="orderSiblings"/> (صَفَقاتُ طَلَبِها كَما سَمَّتها أولاها) ما مَرجِعُ طَلَبِه طَلَبُها، وهي فَعّالَةٌ
+    /// أَو في «نِزاع» (قَد تُستَأنَف — د38)، وتَسيرُ في الشُحنَةِ بَعد (<see cref="OnLiveWaybill"/>). وفارِغَةٌ لِصَفقَةٍ لا تَسيرُ في شُحنَة. دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<Deal> LiveOnWaybill(Deal deal, IReadOnlyList<Deal> orderSiblings)
+    {
+        if (!OnLiveWaybill(deal)) return Array.Empty<Deal>();
+        var order = DealShipping.OrderIdOf(deal);
+        return orderSiblings.Where(s => s.Id != deal.Id
+                && string.Equals(s.Refs.GetValueOrDefault(DealShipping.OrderRef), order, StringComparison.Ordinal)
+                && s.Status is DealStatus.Active or DealStatus.Disputed
+                && OnLiveWaybill(s))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// <para><b>بَوّابَةُ إلغاءِ صَفقَةٍ وَحدَها مِن شُحنَةٍ مُشتَرَكَة — دالَّةٌ نَقِيَّة</b> بِشَكلِ أُختِها (<c>GatewayInvoiceShare.Validate</c>): <see cref="DealInSharedWaybill"/>
+    /// حينَ تَسيرُ الصَفقَةُ في شُحنَةٍ مَعَها أُختٌ واحِدَةٌ عَلى الأَقَلّ (<see cref="LiveOnWaybill"/>)، و<c>null</c> لِما سِواه. يَسأَلُها كاتِبُ الإلغاءِ لِلصَفقَةِ الواحِدَة
+    /// (صاحِبُ المَتجَرِ وحَسمُ النِزاع — الطَرَفانِ مَردودانِ قَبلَها بِـ<see cref="DealPastCancelStage"/>)، وصَفحَةُ الاستوديو فَتَرسُمُ «إلغاء الطَّلَب كامِلاً» مَكانَ «إلغاء».</para>
+    /// </summary>
+    public static DealCancelViolation? ValidateWaybill(Deal deal, IReadOnlyList<Deal> orderSiblings)
+        => LiveOnWaybill(deal, orderSiblings).Count > 0
+            ? new(DealInSharedWaybill,
+                "الصَفقَةُ في طَلَبِ شَحنٍ واحِدٍ عِندَ OTO مَعَ صَفَقاتٍ لَم تُسَلَّم، والمَندوبُ يُحَصِّلُ مَبلَغَها جَميعاً — لا تُلغى وَحدَها: " +
+                "يُلغى الطَلَبُ كُلُّه، أَو تُلغى بَعدَ التَسليم.")
+            : null;
+
+    public static bool IsWaybillAllowed(Deal deal, IReadOnlyList<Deal> orderSiblings) => ValidateWaybill(deal, orderSiblings) is null;
+
+    /// <summary>عَناوينُ الصَفَقاتِ كَما تُسَمّيها شَريحَةُ الشُحنَةِ في الاستوديو — «…»، «…» — مَحفوظَةً بِحَرفِها مِن السَلَّة.</summary>
+    public static string TitlesOf(IEnumerable<Deal> deals) => string.Join("، ", deals.Select(d => $"«{d.ListingTitle}»"));
+
+    /// <summary>
+    /// <para><b>أَيُّ شَريحَةِ OTO تُرسَمُ فَوقَ بابِ الإلغاءِ في صَفحَةِ صَفقَةِ الاستوديو — دالَّةٌ نَقِيَّة</b> (‏2026-11-05، الموجَة ١٢ G3 · ٦ — D-4؛ تَوصيفُه <c>2be2464</c>): الشَريحَةُ
+    /// العامَّةُ كانَت بِشَرطِ <see cref="DealShipping.HoldsLiveOrder"/> — و«delivered» لَيسَ نِهائِيّاً عِندَ OTO فَيَبقى صادِقاً بَعدَ التَسليم — فَتَقولُ «طَلَبُ شَحنٍ قائِمٌ … يُلغي البائِعُ
+    /// الشُّحنَة» عَن شُحنَةٍ انتَهَت. والآن: نَقدٌ قُبِضَ عَلى طَلَبٍ عِندَ OTO (<see cref="DealsPolicy.CollectedInCash"/>، ومِنه ما سُلِّمَ أَثناءَ النِزاع) وهي قائِمَةٌ أَو في «نِزاع» ⇐
+    /// <see cref="StudioOtoChip.DeliveredCash"/> (إلغاؤها يَكتُبُ رَدَّ ثَمَنِها مُستَحَقّاً عَلى البائِع)؛ وإلّا ما دامَت تَسيرُ في شُحنَة (<see cref="OnLiveWaybill"/>) — وبَعدَ إلغائِها
+    /// أَيضاً (الشُحنَةُ عَلى حِسابِ البائِع) — <see cref="StudioOtoChip.Live"/> أَو <see cref="StudioOtoChip.LiveGroup"/> بِأَخَواتِها السائِرَة؛ وإلّا لا شَيء.</para>
+    /// </summary>
+    public static StudioOtoChip StudioOtoChipOf(Deal deal, int liveSiblings)
+    {
+        if (DealShipping.IsPlaced(deal) && DealsPolicy.CollectedInCash(deal) && deal.Status is DealStatus.Active or DealStatus.Disputed)
+            return StudioOtoChip.DeliveredCash;
+        if (!OnLiveWaybill(deal) || deal.Status is not (DealStatus.Active or DealStatus.Cancelled or DealStatus.Disputed))
+            return StudioOtoChip.None;
+        return liveSiblings == 0 ? StudioOtoChip.Live : StudioOtoChip.LiveGroup;
+    }
 }
+
+/// <summary>شَريحَةُ OTO في صَفحَةِ صَفقَةِ الاستوديو — مَعجَمٌ مُغلَقٌ يُجيبُ بِه <see cref="DealCancelAuthorization.StudioOtoChipOf"/>، ولِكُلٍّ نَصُّه في القامُوس
+/// (<c>studio.deal.oto_order_live</c>، <c>…_group</c>، <c>…_delivered</c>) يَرسُمُه فَرعُه في الصَفحَة.</summary>
+public enum StudioOtoChip { None, Live, LiveGroup, DeliveredCash }
 
 /// <summary>
 /// <para>ناتِجُ الإلغاء. <b>ولِماذا لا <c>Deal?</c> كَما كانَ</b>:
@@ -116,3 +226,9 @@ public sealed record DealCancelResult(bool Ok, Deal? Deal, DealCancelViolation? 
 
     public static DealCancelResult Cancelled(Deal deal) => new(true, deal, null);
 }
+
+/// <summary>
+/// <para>ناتِجُ إلغاءِ الطَلَبِ كُلِّه (<c>DealsService.CancelWholeInvoiceAsync</c>، ‏2026-10-13، G5 M4): نَتيجَةُ الصَفقَةِ المَطلوبَة — أَو أَوَّلُ رَدٍّ
+/// أَوقَفَ الإلغاء — و<see cref="Cancelled"/> كُلُّ صَفقَةٍ أُلغِيَت فِعلاً، لِيُخبَرَ طَرَفُ كُلٍّ مِنها.</para>
+/// </summary>
+public sealed record DealOrderCancelResult(DealCancelResult Result, IReadOnlyList<Deal> Cancelled);

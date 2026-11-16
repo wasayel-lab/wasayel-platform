@@ -34,12 +34,12 @@ public sealed class AuthSession
         RoleScope = ExtractRoleFromPath(http.Request.Path);
         var name = ResolveCookieBase(http.Request, requiredTenantSlug);
         if (name is null) { Clear(); return; }
-        var token = http.Request.Cookies[name];
+        var token = CookieValue(http.Request, name);
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null) { Clear(); return; }
         var (uid, slug, _) = parsed.Value;
         UserId = uid; TenantSlug = slug; Token = token;
-        UserName = http.Request.Cookies[name + ".name"] ?? "—";
+        UserName = CookieValue(http.Request, name + ".name") ?? "—";
         Changed?.Invoke();
     }
 
@@ -54,6 +54,55 @@ public sealed class AuthSession
         => string.IsNullOrEmpty(role)
             ? CookieName(tenantSlug)
             : $".acommerce.auth.{tenantSlug}.{role}";
+
+    /// <summary><b>اسمُ كوكيِّ الجَلسَةِ كَما يُكتَبُ ويُقرَأُ — عَلى طَلَبٍ آمِنٍ أَو غَيرِه</b> (‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2): القَرارُ الواحِدُ
+    /// الَّذي يَسأَلُه كُلُّ كاتِبٍ وقارِئٍ لِكوكيِّ المَتجَر (<see cref="ResolveCookieBase"/> و<see cref="WriteCookie"/> و<see cref="UpdateNameCookie"/>
+    /// و<see cref="ClearCookie"/> و<c>EffectiveRole.OwnsRole</c>) — فَلا يَختَلِفُ الكاتِبُ والقارِئُ في اسم. ومَعَه
+    /// <c>StudioAuth.CookieNameFor</c> لِكوكيِّ الاستوديو.</summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>وعَلى طَلَبٍ آمِنٍ بِالبادِئَةِ <see cref="HostPrefix"/></b>: يَفرِضُ
+    /// المُتَصَفِّحُ عَلى <c>__Host-</c> أَن يَكونَ <c>Secure</c> بِـ<c>Path=/</c> وبِلا <c>Domain</c> — فَلا يَستَطيعُ مُضيفٌ شَقيقٌ تَحتَ النِطاقِ (مَتجَرٌ آخَر، أَو سِجِلٌّ
+    /// لِطَرَفٍ ثالِث) زَرعَ كوكيِّ جَلسَةٍ بِـ<c>Domain=R</c> يَقرَؤُه هذا المُضيف (تَثبيتُ جَلسَة). والتَطويرُ عَلى HTTP بِالأَسماءِ القائِمَة. والقارِئُ لا يَقرَأُ
+    /// الاسمَ القَديمَ عَلى HTTPS — فَالجَلَساتُ القائِمَةُ تَخرُجُ مَرَّةً واحِدَةً بِالنَشر (ADR-050 §١٥).</remarks>
+    public static string CookieNameFor(bool secure, string tenantSlug, string? role = null)
+        => secure ? HostPrefix + CookieName(tenantSlug, role) : CookieName(tenantSlug, role);
+
+    /// <summary>بادِئَةُ كوكيِّ المُضيفِ (RFC 6265bis §4.1.3.2): <c>Secure</c> و<c>Path=/</c> وبِلا <c>Domain</c> — يَفرِضُها المُتَصَفِّح.</summary>
+    public const string HostPrefix = "__Host-";
+
+    /// <summary>
+    /// <para><b>قيمَةُ كوكيٍّ بِاسمِه — والاسمُ بِالبادِئَةِ يُقرَأُ بِحالَةِ أَحرُفِه مِن رَأسِ الطَلَبِ نَفسِه</b> (‏2026-11-07، W13-4·C2c·2): <c>Request.Cookies</c> يَبحَثُ
+    /// بِلا حالَةِ أَحرُفٍ ويُبقي آخِرَ المُكَرَّر — ومُتَصَفِّحٌ يَفحَصُ البادِئَةَ بِحالَتِها يَقبَلُ <c>__HOST-…; Domain=R</c> مِن مُضيفٍ شَقيق، فَيَغلِبُ في القامُوسِ
+    /// كوكيَّ المُضيفِ الحَقيقيّ. فَالاسمُ <c>__Host-…</c> لا يُقرَأُ إلّا بِحُروفِه، والأَوَّلُ في الرَأس؛ وما سِواه كَما كان.</para>
+    /// </summary>
+    public static string? CookieValue(HttpRequest req, string name)
+    {
+        if (!name.StartsWith(HostPrefix, StringComparison.Ordinal)) return req.Cookies[name];
+        foreach (var (n, v) in HeaderCookies(req))
+            if (string.Equals(n, name, StringComparison.Ordinal)) return v;
+        return null;
+    }
+
+    /// <summary>أَزواجُ رَأسِ <c>Cookie</c> بِتَرتيبِها وحالَةِ أَحرُفِها — القيمَةُ مَفكوكَةُ التَرميزِ كَما يَفُكُّها <c>Request.Cookies</c>.</summary>
+    /// <remarks>‏(‏2026-11-07، مُراجَعَةُ C2c الجَولَةُ الأُولى · SEC-C2c-1 وC2c-P-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>«كَما يَفُكُّها» لَم تَصدُق، والبَوّابَةُ لَم تَكُن تَرى
+    /// ما يُقرَأُ مِن هُنا</b>: كانَ يَنزِعُ عَلامَتَي التَنصيصِ والقامُوسُ يُبقيهِما (مَقيس: <c>__Host-x="QUJD"</c> ⇒ القامُوسُ <c>"QUJD"</c>)، و<c>SessionVersionGate</c>
+    /// تَحكُمُ بِالقامُوسِ وَحدَه (آخِرُ المُكَرَّرِ بِلا حالَةِ أَحرُف) و<see cref="CookieValue"/> يَقرَأُ أَوَّلَ زَوجٍ مِن هُنا — فَرَمزٌ أَسقَطَه «اخرج من كل الأجهزة» أَو حَذفُ الحِسابِ
+    /// كانَ يُفتَحُ عَلى HTTPS بِمُكَرَّرٍ تالِفٍ بَعدَه أَو بَينَ عَلامَتَين. <b>والآن</b>: الفَكُّ فَكُّ القامُوسِ بِحَرفِه (<see cref="Uri.UnescapeDataString"/> وَحدَه، والتَنصيصُ يَبقى
+    /// فَلا يُقرَأُ رَمزاً — والكاتِبُ لا يَكتُبُه: <c>Append</c> يُرَمِّزُ <c>"</c>)، و<c>internal</c> لِتَحكُمَ البَوّابَةُ عَلى كُلِّ زَوجٍ مِنه (<c>SessionVersionGate.ReadablePairs</c>)
+    /// — فَما يَقرَؤُه قارِئٌ قيمَةُ زَوجٍ حُكِمَ عَلَيه، بِالبِناء. مَحروسٌ في <c>SessionGateReadsWhatTheReaderReadsTests</c>.</remarks>
+    internal static IEnumerable<(string Name, string Value)> HeaderCookies(HttpRequest req)
+    {
+        foreach (var header in req.Headers.Cookie)
+            foreach (var part in (header ?? "").Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var eq = part.IndexOf('=');
+                if (eq <= 0) continue;
+                yield return (part[..eq].Trim(), Uri.UnescapeDataString(part[(eq + 1)..].Trim()));
+            }
+    }
+
+    /// <summary>الاسمُ عَلى هذا الطَلَب — <see cref="CookieNameFor"/> بِقَرارِ <see cref="SecureFor"/> نَفسِه الَّذي يَضبِطُ <c>Secure</c>.</summary>
+    public static string CookieNameOn(HttpRequest? request, string tenantSlug, string? role = null)
+        => CookieNameFor(SecureFor(request), tenantSlug, role);
 
     // ─── حَلّ الجَلسَة: القاعِدَة الواحِدَة ───────────────────────────────
     //
@@ -90,36 +139,47 @@ public sealed class AuthSession
         var role = ExtractRoleFromPath(req.Path);
         if (role is not null)
         {
-            var scoped = CookieName(tenantSlug, role);
-            return IsValidFor(req.Cookies[scoped], tenantSlug) ? scoped : null;
+            var scoped = CookieNameOn(req, tenantSlug, role);
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1؛ تَوصيفُه `cf0f9bc`) دَورٌ اسمُه `name` (أَو يَنتَهي بِـ`.name`) يُسَمّي كوكيَّ اسمِ العَرض —
+            // كانَ يُقرَأُ جَلسَةً وتَتَخَطّاه البَوّابَة، فَرَمزٌ ساقِطٌ فيه يَفتَحُ صَفَحاتِ `/r/name/`. القَرارُ الواحِدُ `IsNameCookie`.
+            if (IsNameCookie(scoped)) return null;
+            return IsValidFor(CookieValue(req, scoped), tenantSlug) ? scoped : null;
         }
 
-        var generic = CookieName(tenantSlug);
-        if (IsValidFor(req.Cookies[generic], tenantSlug)) return generic;
+        var generic = CookieNameOn(req, tenantSlug);
+        if (IsValidFor(CookieValue(req, generic), tenantSlug)) return generic;
 
         var prefix = generic + ".";
-        foreach (var (cookieName, value) in req.Cookies)
+        // ‏(‏2026-11-07، W13-4·C2c·2) وبِالبادِئَةِ مِن الرَأسِ بِحُروفِه (`CookieValue`) — القامُوسُ بِلا حالَةِ أَحرُفٍ يُبقي آخِرَ المُكَرَّر.
+        var cookies = generic.StartsWith(HostPrefix, StringComparison.Ordinal)
+            ? HeaderCookies(req)
+            : req.Cookies.Select(c => (c.Key, c.Value));
+        foreach (var (cookieName, value) in cookies)
         {
             if (!cookieName.StartsWith(prefix, StringComparison.Ordinal)) continue;
-            if (cookieName.EndsWith(".name", StringComparison.Ordinal)) continue;
+            if (IsNameCookie(cookieName)) continue;
             if (IsValidFor(value, tenantSlug)) return cookieName;
         }
         return null;
     }
 
+    /// <summary><b>كوكيُّ اسمِ العَرضِ لا كوكيُّ جَلسَة</b> (‏2026-10-29، تَدقيقُ الموجَة ١١ I-SEC-1) — الاسمُ يَنتَهي بِـ<c>.name</c>. نَقِيَّة،
+    /// ويَسأَلُها الحَلُّ هُنا (لا يُقرَأُ جَلسَةً عَلى مَسارٍ ولا في السُقوط) و<c>SessionVersionGate.SessionCookieNames</c> — فَلا يَختَلِفانِ أَبَداً
+    /// في أَيِّ الأَسماءِ جَلسَة.</summary>
+    /// <remarks>‏(‏2026-10-30، مُراجَعَةُ الموجَة ١١ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه؛ تَوصيفُه <c>4ef835a</c>) «لا يَختَلِفانِ أَبَداً» لَم تَصدُق: القارِئُ يَبحَثُ
+    /// بِـ<c>Request.Cookies</c> بِلا حالَةِ أَحرُف (<c>Cookies[name + ".name"]</c> يُجيبُ <c>.NAME</c>) والقَرارُ كانَ بِحالَتِها. صارَ بِمُقارَنَةِ القارِئِ
+    /// (<c>OrdinalIgnoreCase</c>)، والبَوّابَةُ لا تَتَّكِلُ عَلَيه وَحدَه: تَفحَصُ كُلَّ كوكيٍّ يَحمِلُ رَمزاً أَيّاً كانَ اسمُه (<c>SessionVersionGate.CheckedCookieNames</c>).</remarks>
+    public static bool IsNameCookie(string cookieName) => cookieName.EndsWith(".name", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>الـ token الصالِح لِهذا الطَّلَب، أَو <c>null</c>.</summary>
     public static string? ResolveToken(HttpRequest req, string tenantSlug)
     {
         var name = ResolveCookieBase(req, tenantSlug);
-        return name is null ? null : req.Cookies[name];
+        return name is null ? null : CookieValue(req, name);
     }
 
-    /// <summary>اسم صاحِب الجَلسَة المَحلولَة — مِن نَفس عائِلَة الـ token.</summary>
-    public static string? ResolveUserName(HttpRequest req, string tenantSlug)
-    {
-        var name = ResolveCookieBase(req, tenantSlug);
-        return name is null ? null : req.Cookies[name + ".name"];
-    }
+    // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) كانَ هُنا `ResolveUserName` — يَقرَأُ `{cookie}.name` خارِجَ رَمزِ HMAC فَتَكتُبُه
+    // أَربَعَ عَشرَةَ نُقطَةً اسماً لِلفاعِل. صارَ الاسمُ مِن الوَثيقَة (`AccountQueries.ActorNameAsync`) فَحُذِفَت بِصِفرِ مُنادٍ.
 
     private static bool IsValidFor(string? token, string tenantSlug)
     {
@@ -140,45 +200,49 @@ public sealed class AuthSession
         return null;
     }
 
-    /// <summary>يُكتَب مِن SSR endpoint بَعد نَجاح المُصادَقَة. حِنَّ يُعطَى
-    /// <paramref name="role"/>، يُكتَب cookie role-scoped؛ بِلا role يُكتَب
-    /// الـ cookie القَديم (لِـ ashare/ejar).</summary>
     /// <summary>الـ HttpContext الحاليّ — يُستَخدَم لِكَشف هَل الطَّلَب على
     /// HTTPS فَنَضَع Secure تِلقائيّاً. يُحقَن مَرَّةً في Program عَبر
     /// IHttpContextAccessor.</summary>
     public static IHttpContextAccessor? HttpAccessor { get; set; }
 
-    /// <summary>هَل نَضَع الـ Secure flag؟ القاعِدَة الذَّكِيَّة: نَعَم فَقَط
+    /// <remarks>هَل نَضَع الـ Secure flag؟ القاعِدَة الذَّكِيَّة: نَعَم فَقَط
     /// لَو الطَّلَب الحاليّ HTTPS فِعليّاً. هكذا يَعمَل HTTP المَحَلّيّ
     /// (تَطوير) تِلقائيّاً بِلا ENV، ويَبقى آمِناً خَلف HTTPS (إنتاج).
     /// كانَ الافتِراضيّ Secure=true دائِماً، فَكَسَرَ تَسجيل الدُّخول على
     /// HTTP المَحَلّيّ صامِتاً (المُتَصَفِّح يَرفُض cookie آمِناً على http).
-    /// مِفتاح <c>ACOMMERCE_FORCE_INSECURE_COOKIES=1</c> يُجبِر الإطفاء.</summary>
-    private static bool ShouldUseSecure
+    /// مِفتاح <c>ACOMMERCE_FORCE_INSECURE_COOKIES=1</c> يُجبِر الإطفاء.
+    /// ‏(‏2026-11-07، W13-4·C2c·2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) كانَ هذا شَرحَ <c>ShouldUseSecure</c> (القَرارُ بِطَلَبِ الوَصّالِ الساكِن)، وصارَ الكاتِبُ
+    /// والماحي يَسأَلانِ <see cref="SecureFor"/> بِطَلَبِ رَدِّهِما — الطَلَبُ نَفسُه الَّذي يُقَرِّرُ الاسمَ (<see cref="CookieNameOn"/>)، فَلا يُكتَبُ <c>__Host-</c>
+    /// بِلا <c>Secure</c> فَيَرُدَّه المُتَصَفِّح. فَحُذِفَت بِصِفرِ مُنادٍ.</remarks>
+
+    /// <summary><b>القَرارُ نَفسُه لِطَلَبٍ بِعَينِه</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-6): كوكي الاستوديو — هُوِيَّةُ مُشرِفِ المَنَصَّة —
+    /// كانَ يُصدَرُ بِلا <c>Secure</c> لِأَنّ كاتِبَه لا يَسأَلُ هذا القَرار. صارَ يَسأَلُه بِطَلَبِ رَدِّه (<c>StudioAuth.WriteCookie</c>)، وكوكي
+    /// المَتجَرِ بِالطَلَبِ الحاليّ كَما كان. مَوضِعٌ واحِدٌ لِلقاعِدَة: HTTPS فِعلاً، إلّا بِـ<c>ACOMMERCE_FORCE_INSECURE_COOKIES=1</c>.</summary>
+    public static bool SecureFor(HttpRequest? request)
     {
-        get
-        {
-            if (Environment.GetEnvironmentVariable("ACOMMERCE_FORCE_INSECURE_COOKIES") == "1")
-                return false;
-            return HttpAccessor?.HttpContext?.Request.IsHttps ?? false;
-        }
+        if (Environment.GetEnvironmentVariable("ACOMMERCE_FORCE_INSECURE_COOKIES") == "1")
+            return false;
+        return request?.IsHttps ?? false;
     }
 
-    private static CookieOptions BuildOpts() => new()
+    private static CookieOptions BuildOpts(HttpResponse res) => new()
     {
         HttpOnly    = true,
         IsEssential = true,
         Expires     = DateTimeOffset.UtcNow.AddDays(30),
         SameSite    = SameSiteMode.Lax,
-        Secure      = ShouldUseSecure,
+        Secure      = SecureFor(res.HttpContext.Request),
         Path        = "/"
     };
 
+    /// <summary>يُكتَب مِن SSR endpoint بَعد نَجاح المُصادَقَة. حِنَّ يُعطَى
+    /// <paramref name="role"/>، يُكتَب cookie role-scoped؛ بِلا role يُكتَب
+    /// الـ cookie القَديم (لِـ ashare/ejar).</summary>
     public static void WriteCookie(HttpResponse res, string tenantSlug, AuthResult auth,
                                     string? role = null)
     {
-        var opts = BuildOpts();
-        var name = CookieName(tenantSlug, role);
+        var opts = BuildOpts(res);
+        var name = CookieNameOn(res.HttpContext.Request, tenantSlug, role);
         res.Cookies.Append(name, auth.Token, opts);
         res.Cookies.Append(name + ".name", auth.FullName, opts);
 
@@ -190,7 +254,7 @@ public sealed class AuthSession
         // وَ ClearAllCookiesForTenant يَمسَح العامّ وَكُلّ الأَدوار مَعاً.
         if (!string.IsNullOrEmpty(role))
         {
-            var generic = CookieName(tenantSlug);
+            var generic = CookieNameOn(res.HttpContext.Request, tenantSlug);
             res.Cookies.Append(generic, auth.Token, opts);
             res.Cookies.Append(generic + ".name", auth.FullName, opts);
         }
@@ -199,18 +263,27 @@ public sealed class AuthSession
     public static void UpdateNameCookie(HttpResponse res, string tenantSlug, string newName,
                                          string? role = null)
     {
-        var opts = BuildOpts();
-        res.Cookies.Append(CookieName(tenantSlug, role) + ".name", newName, opts);
+        var opts = BuildOpts(res);
+        res.Cookies.Append(CookieNameOn(res.HttpContext.Request, tenantSlug, role) + ".name", newName, opts);
         if (!string.IsNullOrEmpty(role))
-            res.Cookies.Append(CookieName(tenantSlug) + ".name", newName, opts);
+            res.Cookies.Append(CookieNameOn(res.HttpContext.Request, tenantSlug) + ".name", newName, opts);
     }
 
     public static void ClearCookie(HttpResponse res, string tenantSlug, string? role = null)
     {
-        var opts = new CookieOptions { Path = "/", Secure = ShouldUseSecure };
-        var name = CookieName(tenantSlug, role);
+        var opts = new CookieOptions { Path = "/", Secure = SecureFor(res.HttpContext.Request) };
+        var name = CookieNameOn(res.HttpContext.Request, tenantSlug, role);
         res.Cookies.Delete(name, opts);
         res.Cookies.Delete(name + ".name", opts);
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2c-P2-02 وSEC-C2c-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **وعَلى HTTPS يُمحى الاسمُ القَديمُ مَعَه**: كَعكَةُ ما قَبلَ
+        // `__Host-` تَحمِلُ رَمزاً صالِحاً ثَلاثينَ يَوماً بِإصدارِ الجَلسَةِ نَفسِه، ولا يَقرَؤُها هذا البِناءُ عَلى HTTPS — ويَقرَؤُها البِناءُ السابِقُ إن تُراجِعَ إلَيه،
+        // فَمَن خَرَجَ عَلى جِهازٍ مُشتَرَكٍ يَعودُ داخِلاً. مَحوُه آمِنٌ: الاسمُ لا يُقرَأُ عَلى HTTPS. وعَلى HTTP القائِمَةُ بِحُروفِها.
+        if (opts.Secure)
+        {
+            var legacy = CookieNameFor(false, tenantSlug, role);
+            res.Cookies.Delete(legacy, opts);
+            res.Cookies.Delete(legacy + ".name", opts);
+        }
     }
 
     /// <summary>يَمسَح كُلّ cookies المُستَخدِم لِكُلّ الأَدوار المُحتَمَلَة في
@@ -223,12 +296,26 @@ public sealed class AuthSession
         foreach (var r in roleSlugs) ClearCookie(res, tenantSlug, r);
     }
 
-    /// <summary>يَبني URL مُنبَثِق مِن tenant slug + role اختياريّ.</summary>
-    public static string LinkFor(string tenantSlug, string? role, string path)
+    /// <summary><b>أَدوارُ المَتجَرِ الَّتي يَحمِلُ هذا المُتَصَفِّحُ كوكيَّها</b> — نَقِيَّة (‏2026-11-05، الموجَة ١٢ G2 · ٢): كُلُّ اسمٍ بَعدَ <c>{CookieName(slug)}.</c>،
+    /// بِلا لاحِقَةِ كوكيِّ الاسمِ (<see cref="IsNameCookie"/>) وبِلا حالَةِ أَحرُفٍ كَما يَبحَثُ القارِئ. يَسأَلُها بابُ الخُروجِ حينَ لا تُقرَأُ أَدوارُ المَتجَرِ
+    /// مِن القاعِدَة، فَيُمحى ما يَحمِلُه المُتَصَفِّحُ فِعلاً بِـ<see cref="ClearAllCookiesForTenant"/>.</summary>
+    public static IReadOnlyList<string> RoleCookiesIn(IEnumerable<string> cookieNames, string tenantSlug)
     {
-        path = path.TrimStart('/');
-        return string.IsNullOrEmpty(role)
-            ? $"/{tenantSlug}/{path}".TrimEnd('/')
-            : $"/{tenantSlug}/r/{role}/{path}".TrimEnd('/');
+        var prefix = CookieName(tenantSlug) + ".";
+        return cookieNames
+            .Select(n => n.StartsWith(HostPrefix, StringComparison.Ordinal) ? n[HostPrefix.Length..] : n)   // ‏(‏2026-11-07، W13-4·C2c·2) والاسمُ بِالبادِئَة
+            .Select(n => IsNameCookie(n) ? n[..^".name".Length] : n)
+            .Where(n => n.Length > prefix.Length && n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(n => n[prefix.Length..])
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
+
+    /// <summary>يَبني URL مُنبَثِق مِن tenant slug + role اختياريّ.
+    /// <para>‏(‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>عارِفٌ بِمُضيفِ المَتجَرِ عَبرَ <see cref="HttpAccessor"/></b>:
+    /// عَلى <c>{slug}.R</c> نَظيف (<c>/explore</c>، <c>/r/{role}/…</c>)، وما سِواه بِشَكلِ المَسارِ بِحَرفِه — الجِسمُ القَديمُ هُوَ
+    /// <c>Services.Ux.StoreUrl.PathForm</c> نَفسُه، وتَوصيفُه <c>StoreLinkCharacterizationTests</c>. مِلَفٌّ واحِدٌ يَتَغَيَّرُ ومَواضِعُ استِدعائِه تَتبَعُه.</para></summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٤ المَرحَلَةُ الثالِثَة · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>ورابِطُ تَطبيقٍ آخَرَ مِن المَتجَرِ نَفسِه</b> (دَورٌ
+    /// غَيرُ دَورِ المُضيف) يُسَمّي مُضيفَ ذلكَ التَطبيقِ مُطلَقاً — <c>Services.Ux.StoreUrl.Link</c>؛ وفي وَضعِ المَسارِ بِحَرفِه.</remarks>
+    public static string LinkFor(string tenantSlug, string? role, string path)
+        => Services.Ux.StoreUrl.Link(Services.Ux.StoreUrl.ViewOf(HttpAccessor?.HttpContext), tenantSlug, role, path);
 }

@@ -115,15 +115,16 @@ public class ProviderSecrecyTests
     [Fact]
     public void The_audit_snapshot_carries_the_censored_shape_only()
     {
-        var kinds = new Dictionary<string, string>(StringComparer.Ordinal)
+        // القيَمُ كَما تُخَزَّن — والسِرُّ مَكتوبٌ صَريحاً بِالالتِفافِ عَلى المَصنَع (‏`Explicit`
+        // تَرميه)، فَالسَطرُ يُعَتِّمُه بِالبِناءِ لا لِأَنّ أَحَداً لَم يُمَرِّره.
+        var values = new Dictionary<string, StoredValue>(StringComparer.Ordinal)
         {
-            ["invoice_url"] = CredentialKinds.HostedLink,
-            ["webhook_secret"] = CredentialKinds.SharedSecret,
+            ["invoice_url"] = StoredValue.Explicit(CredentialKinds.HostedLink, "https://moyasar.com/i/inv_1"),
+            ["webhook_secret"] = new StoredValue { Kind = CredentialKinds.SharedSecret, Plain = Raw },
         };
 
         var line = ProviderSecrecy.ForAudit(
-            "moyasar_hosted", TenantProviderBinding.StatusActive, kinds,
-            code => code == "invoice_url" ? "https://moyasar.com/i/inv_1" : Raw);
+            "moyasar_hosted", TenantProviderBinding.StatusActive, values);
 
         Assert.Contains("provider=moyasar_hosted", line, StringComparison.Ordinal);
         Assert.Contains("status=active", line, StringComparison.Ordinal);
@@ -140,7 +141,7 @@ public class ProviderSecrecyTests
     {
         var line = ProviderSecrecy.ForAudit(
             null, TenantProviderBinding.StatusRevoked,
-            Array.Empty<KeyValuePair<string, string>>(), _ => null);
+            Array.Empty<KeyValuePair<string, StoredValue>>());
 
         Assert.Contains("provider=-", line, StringComparison.Ordinal);
         Assert.Contains("status=revoked", line, StringComparison.Ordinal);

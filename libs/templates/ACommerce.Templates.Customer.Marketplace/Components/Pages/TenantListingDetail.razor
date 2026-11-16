@@ -1,10 +1,13 @@
 @page "/{slug}/listings/{id:guid}"
 @page "/{slug}/r/{role}/listings/{id:guid}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
 @inject AuthSession Auth
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Kit.Reviews.ReviewsService Reviews
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
 @inject L L
 
 @*
@@ -67,7 +70,7 @@ else
                 @if (Auth.IsAuthenticated && !isOwner && !isOfferBased)
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/favorite")" style="margin:0;">
-                        <input type="hidden" name="return" value="@($"/{Slug}/listings/{Id}")" />
+                        <input type="hidden" name="return" value="@AuthSession.LinkFor(Slug, null, $"listings/{Id}")" />
                         <button type="submit" class="acm-details-circle-btn @(IsFav ? "is-fav" : "")"
                                 aria-label="@(IsFav ? L["listings.detail.fav_remove"] : L["listings.detail.fav_add"])">
                             <AcIcon Name="heart" Filled="@IsFav" Size="18" />
@@ -195,6 +198,59 @@ else
     {
         <AcAlert Variant="danger" Message="@L["listings.detail.err_self_offer"]" />
     }
+    else if (Err == "forbidden")
+    {
+        @* `forbidden` — رَدُّ نُقطَةِ العَرضِ حينَ لا يَحمِلُ الدَورُ `offer.submit` (‏2026-10-25، W8-7 — lens-dead-doors-7): كانَت تُحَوِّلُ إلى هُنا
+           والصَفحَةُ لا تَقرَؤُه. والاستِمارَةُ صارَت لا تُرسَمُ لِذلكَ الدَور، فَلا يَبلُغُه إلّا طَلَبٌ مَصنوعٌ أَو دَورٌ تَبَدَّلَ بَينَ الفَتحِ والإرسال. *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_forbidden"]" />
+    }
+    else if (Err == "self")
+    {
+        @* `self` — رَمزُ بابَي الطَلَبِ عَلى الإعلانِ (العَرضُ والإضافَةُ إلى السَلَّة) حينَ يَكونُ الطالِبُ
+           مالِكَه: كانَ مَسارُ العَرضِ يَرتَدُّ بِه إلى هُنا والصَفحَةُ لا تَقرَؤُه (‏ADR-033 §٦‑ب‑١ مُلحَقاً). *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_self"]" />
+    }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.OffererGoneCode)
+    {
+        @* `offer_gone` — رَدُّ نُقطَةِ القَبولِ حينَ حَذَفَ صاحِبُ العَرضِ حِسابَه (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢): الحَذفُ يَسحَبُ عُروضَه المُعَلَّقَة،
+           فَلا يَبلُغُه إلّا عَرضٌ سَبَقَ حَذفُه ذلك — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_gone"]" />
+    }
+    else if (Err == ACommerce.Kit.Offers.OfferExpiry.Code)
+    {
+        @* ‏(‏2026-10-30، تَدقيقُ الموجَة ١١ CO8) بابُ القَبولِ رَدَّ عَرضاً انتَهَت مُدَّتُه بَينَ رَسمِ الصَفحَةِ والنَقر. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_expired"]" />
+    }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGoneCode)
+    {
+        @* `owner_gone` — رَدُّ بابَي السَلَّةِ والعَرضِ حينَ أَغلَقَ مالِكُ الإعلانِ حِسابَه (‏2026-10-30، تَدقيقُ الموجَة ١١ B-PRIV-1): الحَذفُ يَسحَبُ إعلاناتِه،
+           فَلا يَبلُغُه إلّا إعلانُ حِسابٍ حُذِفَ قَبلَ ذلك — والاستِمارَةُ لا تُرسَمُ لَه (`ownerGone`) — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_offer_owner_gone"]" />
+    }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.ChatStartReturn.PartnerMissing)
+    {
+        @* `partner_missing` — رَدُّ بابِ المُحادَثَةِ عَلى الإعلانِ حينَ لا مالِكَ لَه أَو أَغلَقَ مالِكُه حِسابَه (‏2026-10-30، الموجَة ١٢ F2 · ٥): الزِرُّ لا يُرسَمُ
+           لَه (`chatOpens`)، فَلا يَبلُغُه إلّا نَقرٌ عَلى صَفحَةٍ رُسِمَت قَبلَ ذلك — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_partner_missing"]" />
+    }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.ClosedCode)
+    {
+        @* `cart_closed` — رَمزُ `cart/add` عَلى مَتجَرٍ لا يَستَعمِلُ نَمَطُه السَلَّة (`CartDoor`، تَيّارُ S15 البَند L): الصَفحَةُ لا تَرسُمُ
+           الاستِمارَةَ هُنا، فَلا يَبلُغُه إلّا طَلَبٌ مَصنوع — ويُقالُ ولا يُبتلَع. *@
+        <AcAlert Variant="danger" Message="@L["listings.detail.err_cart_closed"]" />
+    }
+    else if (Err == ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartModes.OtherVendorCode)
+    {
+        @* `cart_other_vendor` — رَدُّ `cart/add` في مَتجَرٍ نَمَطُ سَلَّتِه «لِكُلِّ بائِعٍ سَلَّة» (‏2026-10-29، قَرارُ المالِك د2): في السَلَّةِ بائِعٌ آخَر، فَيُعرَضُ
+           الطَريقانِ — إكمالُ السَلَّةِ القائِمَةِ أَو إفراغُها — بِبابَيهِما القائِمَين (صَفحَةُ السَلَّةِ و`cart/clear`). *@
+        <AcAlert Variant="warning" Message="@L["listings.detail.err_cart_other_vendor"]" />
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px;">
+            <a class="ac-btn ac-btn-primary ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "cart")">@L.Markup("listings.detail.cart_other_vendor_complete")</a>
+            <form method="post" action="@($"/{Slug}/cart/clear")" style="margin:0;">
+                <button type="submit" class="ac-btn ac-btn-ghost ac-btn-sm">@L.Markup("listings.detail.cart_other_vendor_empty")</button>
+            </form>
+        </div>
+    }
 
     @if (Trip == "completed") { <AcAlert Variant="success" Message="@L["listings.detail.trip_completed"]" /> }
     @if (Trip == "aborted")   { <AcAlert Variant="warning" Message="@L["listings.detail.trip_aborted"]" /> }
@@ -286,7 +342,7 @@ else
                         @if (hasArrived)
                         {
                             <p style="margin:8px 0 0;font-size:12px;color:var(--ac-text-muted);">
-                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.driver_arrived") @listingMatch.ArrivedAt!.Value.ToString("HH:mm")
+                                <AcIcon Name="check" Size="14" /> @L.Markup("listings.detail.driver_arrived") @Culture.FormatTime(listingMatch.ArrivedAt!.Value, "HH:mm")
                             </p>
                         }
 
@@ -327,7 +383,17 @@ else
             {
                 @* صاحِب الإعلان: يُرى عُروض الآخَرين مَع أَزرار قَبول/رَفض.
                    غَير صاحِب الإعلان: يَرى نَموذَج تَقديم عَرض. *@
-                @if (Auth.IsAuthenticated && !isOwner)
+                @* (‏2026-10-25، W8-7 — lens-dead-doors-7): الاستِمارَةُ لِدَورٍ يَحمِلُ `offer.submit` وَحدَه — بابُ النُقطَةِ نَفسُه (`PermissionDoor.Opens`
+                   عَلى الأَدوارِ المُجَسَّدَةِ الَّتي تَقرَؤُها `HasPermissionAsync`)؛ ولِسِواه سَطرٌ يَقولُ لِماذا، ورابِطُ `me/role` حينَ تَعرِضُ صَفحَةُ الأَدوارِ
+                   دَوراً يُقَدِّم. كانَت تُرسَمُ لِكُلِّ صاحِبِ جَلسَةٍ فَيُرَدُّ المُضيفُ والبائِعُ والراكِبُ بِلا كَلِمَة. *@
+                @if (ownerGone)
+                {
+                    @* (‏2026-10-30، B-PRIV-1) مالِكُه أَغلَقَ حِسابَه — بابُ العَرضِ يَرُدُّ بِـ`owner_gone`، فَلا تُرسَمُ استِمارَةٌ يَرُدُّها (القاعِدَة ١٢). *@
+                    <div class="acm-role-empty" style="margin:0 0 16px;">
+                        <p>@L.Markup("listings.detail.err_offer_owner_gone")</p>
+                    </div>
+                }
+                else if (Auth.IsAuthenticated && !isOwner && canOffer)
                 {
                     @* نَموذَج مُبَسَّط: السِعر فَقَط ظاهِراً. الـ ttl ثابِت
                        ١٥ دَقيقَة. المَوقِع يُلتَقَط تِلقائيّاً عَبر
@@ -361,6 +427,16 @@ else
                         <p style="text-align:center;font-size:11px;color:var(--ac-text-muted);margin:0;">@((MarkupString)"\n                            ")@L.Markup("listings.detail.geo_note")@((MarkupString)"\n                        ")
                         </p>
                     </form>
+                }
+                else if (Auth.IsAuthenticated && !isOwner)
+                {
+                    <div class="acm-role-empty" style="margin:0 0 16px;">
+                        <p>@L.Markup("listings.detail.err_forbidden")</p>
+                        @if (canSwitchToOffer)
+                        {
+                            <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@AuthSession.LinkFor(Slug, Role, "me/role")">@L.Markup("listings.detail.offer_switch_role")</a>
+                        }
+                    </div>
                 }
                 else if (!Auth.IsAuthenticated)
                 {
@@ -398,10 +474,10 @@ else
                                         }
                                     </div>
                                 }
-                                <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @o.ExpiresAt.ToString("HH:mm")
+                                <span style="font-size:11px;color:var(--ac-text-muted);">@((MarkupString)"\n                                    ")@L.Markup("listings.detail.valid_until") @Culture.FormatTime(o.ExpiresAt, "HH:mm")
                                 </span>
-                                @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. *@
-                                @if (isOwner)
+                                @* أَزرار القَبول/الرَفض لِصاحِب الإعلان فَقَط. ‏(‏2026-10-30، CO8) ولِعَرضٍ لَم تَنتَهِ مُدَّتُه — سُؤالُ بابِ القَبولِ نَفسُه. *@
+                                @if (isOwner && !ACommerce.Kit.Offers.OfferExpiry.ExpiredAt(o, now))
                                 {
                                     <div style="display:flex;gap:6px;margin-top:8px;">
                                         <form method="post" action="@($"/{Slug}/offers/{o.Id}/accept")" style="margin:0;">
@@ -432,12 +508,19 @@ else
     {
         <section class="acm-details-section">
             <h2 class="acm-details-section-title">@(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_deal"])</h2>
-            @if (Auth.IsAuthenticated)
+            @if (Auth.IsAuthenticated && ownerGone)
+            {
+                @* (‏2026-10-30، الموجَة ١٢ F2 · ٨) مالِكُه أَغلَقَ حِسابَه — أَبوابُ السَلَّةِ والعَرضِ والمُحادَثَةِ تَرُدُّه بِالسُؤالِ نَفسِه، فَلا تُرسَمُ استِماراتٌ تَرُدُّها. *@
+                <div class="acm-role-empty" style="margin:0 0 16px;">
+                    <p>@L.Markup("listings.detail.err_offer_owner_gone")</p>
+                </div>
+            }
+            else if (Auth.IsAuthenticated)
             {
                 @* السَّلَّة فَقَط لِلأَنماط الَّتي تَدعَمُها (مَتجَر/خَدَمات).
                    إيجار/سَكَن مُشتَرَك/مَشاوير لا تَملِك سَلَّة — CTA يَتَحَوَّل
                    لِلعَرض أَو التَّواصُل المُباشَر. *@
-                @if (profile?.UsesCart == true)
+                @if (ACommerce.Templates.Customer.Marketplace.Services.Patterns.CartDoor.Opens(profile))
                 {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/cart/add")" style="margin:0 0 10px;">
                         <input type="hidden" name="qty" value="1" />
@@ -446,21 +529,27 @@ else
                             @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_cart"]) · @((MarkupString)Money.Format(listing.Price))
                         </button>
                     </form>
+                    @if (chatOpens)
+                    {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0;">
                         <button type="submit" class="ac-btn ac-btn-ghost ac-btn-block">
                             <AcIcon Name="message" Size="18" /> @L.Markup("listings.detail.ask_seller")@((MarkupString)"\n                        ")
                         </button>
                     </form>
+                    }
                 }
                 else
                 {
                     @* أَنماط بِلا سَلَّة (إيجار/سَكَن/مَشاوير): تَواصُل + عَرض. *@
+                    @if (chatOpens)
+                    {
                     <form method="post" action="@($"/{Slug}/listings/{Id}/chat")" style="margin:0 0 10px;">
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                             <AcIcon Name="@(profile?.PrimaryCtaIcon ?? "message")" Size="18" />
                             @(profile?.PrimaryCtaLabel ?? L["listings.detail.cta_contact"])
                         </button>
                     </form>
+                    }
                     @* تَفاوُض اختياريّ — يَفتَح نَموذَج العَرض كَ <details>. *@
                     <details>
                         <summary class="ac-btn ac-btn-ghost ac-btn-block" style="text-align:start;cursor:pointer;">
@@ -537,7 +626,7 @@ else
         </div>
     </details>
 
-    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">@((MarkupString)"\n        ")@L.Markup("listings.detail.published") @listing.CreatedAt.ToString("yyyy-MM-dd")
+    <p class="ac-muted" style="font-size:12px;margin-top:16px;text-align:center;">@((MarkupString)"\n        ")@L.Markup("listings.detail.published") @Culture.FormatTime(listing.CreatedAt, "yyyy-MM-dd")
     </p>
 
     @* ── عَدّادُ المُشاهَدَة — أَثَرٌ جانِبيّ بَعدَ التَصيير ─────────────
@@ -619,10 +708,22 @@ else
     bool IsFav;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.ResolvedAttr>? resolvedAttrs;
     List<ACommerce.Kit.Offers.Offer> offers = new();
+    /// <summary>لَحظَةُ القِراءَة — يُرَشِّحُ بِها الاستِعلامُ العُروضَ القائِمَة، ويَسأَلُ بِها زِرُّ «قبول» (<c>OfferExpiry.ExpiredAt</c>، ‏CO8).</summary>
+    DateTime now;
     ACommerce.Kit.Offers.ListingMatch? listingMatch;
     bool showOffers;
     bool isOwner;
     bool isOfferBased;   // accepts_offers=true → نَموذَج تَفاوُض، لا دَردَشَة مُباشَرَة
+    /// <summary>بابُ نُقطَةِ العَرضِ بِحَرفِه — <c>PermissionDoor.Opens(…, "offer.submit")</c> عَلى الأَدوارِ المُجَسَّدَةِ والدَورِ المُخَزَّنِ اللَّذَينِ
+    /// تَقرَؤُهُما <c>HasPermissionAsync</c> (‏2026-10-25، W8-7). مَتجَرٌ بِلا أَدوارٍ مَفتوح.</summary>
+    bool canOffer;
+    /// <summary>صَفحَةُ «اِختَر دَورَك» تَعرِضُ دَوراً يُقَدِّمُ عُروضاً (‏<c>PermissionDoor.SwitchOpens</c>) — شَرطُ رابِطِ <c>me/role</c> مَكانَ الاستِمارَة.</summary>
+    bool canSwitchToOffer;
+    /// <summary>مالِكُ الإعلانِ أَغلَقَ حِسابَه (‏2026-10-30، B-PRIV-1) — <c>CheckoutCart.OwnerGone</c> سُؤالُ بابِ العَرضِ بِعَينِه، فَلا تُرسَمُ استِمارَتُه.</summary>
+    bool ownerGone;
+    /// <summary>‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) لِلإعلانِ مالِكٌ قائِمٌ يُراسَل — سُؤالُ بابِ <c>listings/{id}/chat</c> بِعَينِه (<c>CheckoutCart.OwnerOf</c> ثُمَّ
+    /// <c>AccountErasure.PartnerGone</c>)، فَلا يُرسَمُ زِرُّ مُحادَثَةٍ يَرُدُّه البابُ بِـ<c>partner_missing</c>.</summary>
+    bool chatOpens;
     double? pickupLat, pickupLng, dropoffLat, dropoffLng;
     /// <summary>نَمَط تَدَفُّق الصَّفقَة لِهذا المُستَأجِر — نَفس الدالَّة
     /// الَّتي يَستَخدِمُها endpoint بَدء الصَّفقَة، لا اشتِقاق مُوازٍ.</summary>
@@ -653,8 +754,9 @@ else
         dealPattern = MarketplaceTemplateExtensions.PatternFromTenant(tenant);
         if (tenant is null) return;
 
+        now = DateTime.UtcNow;
         var detail = await Storefront.ListingDetailAsync(
-            Slug, Id, Auth.IsAuthenticated ? Auth.UserId : null, DateTime.UtcNow);
+            Slug, Id, Auth.IsAuthenticated ? Auth.UserId : null, now);
         listing = detail.Listing;
         if (listing is null || listing.IsDeleted) return;
 
@@ -674,6 +776,16 @@ else
         isOfferBased = string.Equals(acceptsOffers, "true", StringComparison.OrdinalIgnoreCase);
         showOffers   = isOfferBased || listingMatch is not null;
 
+        // بابُ الاستِمارَةِ بِقِراءَتَي النُقطَةِ نَفسَيهِما — ولا يُقرَأُ إلّا حَيثُ تُرسَمُ: قِسمُ العُروضِ لِصاحِبِ جَلسَة.
+        if (showOffers && Auth.IsAuthenticated && Auth.UserId.HasValue)
+        {
+            var roles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+            var storedRole = await Accounts.ActiveRoleAsync(Slug, Auth.UserId.Value);
+            canOffer = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(roles, Role, storedRole, "offer.submit");
+            canSwitchToOffer = !canOffer
+                && ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.SwitchOpens(roles, Role, "offer.submit");
+        }
+
         // مالِك الإعلان — يُقرَأ دائِماً (لا فَقَط لِلمُسَجَّلين) لِأَنّ
         // سُمعَتَه مُؤَشِّر ثِقَة يَراه الزائِر أَيضاً.
         if (listing.Attributes.TryGetValue("owner_id", out var oid))
@@ -687,6 +799,15 @@ else
 
         if (ownerId is { } owner)
             ownerReviews = await Reviews.SummaryAsync(Slug, owner);
+        // ولا يُقرَأُ حِسابُ المالِكِ إلّا حَيثُ تُرسَمُ استِمارَةُ العَرض.
+        // وحِسابُه يُقرَأُ مَرَّةً حَيثُ يُرسَمُ ما يَسأَلُه: قِسمُ العُروض، وقِسمُ التَواصُلِ لِصاحِبِ جَلسَةٍ غَيرِ المالِك (زِرُّ المُحادَثَة، ‏F2 · ٥؛ واستِمارَتا
+        // السَلَّةِ والصَفقَة، ‏F2 · ٨ — سُؤالُ أَبوابِها بِعَينِه).
+        var contact = Auth.IsAuthenticated && !isOwner && !isOfferBased;
+        var ownerAccount = ownerId is { } seller && (showOffers || contact) ? await Accounts.ProfileAsync(Slug, seller) : null;
+        if ((showOffers || contact) && ownerId is not null)
+            ownerGone = ACommerce.Templates.Customer.Marketplace.Services.Deals.CheckoutCart.OwnerGone(listing, ownerAccount);
+        if (contact && ownerId is not null)
+            chatOpens = !ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(ownerAccount);
 
         // اِستَخرِج إحداثيّات pickup/dropoff إن وُجِدَت في الخَصائِص.
         pickupLat  = ParseDouble(listing.Attributes, "pickup_lat");

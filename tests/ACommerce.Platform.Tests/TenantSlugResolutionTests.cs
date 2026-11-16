@@ -332,7 +332,9 @@ public class ReservedTenantSlugTests
     [InlineData(TenantFromAnalysisFactory.SlugReserved)]
     public void Every_slug_violation_code_has_an_arabic_message(string code)
     {
-        var key = $"studio.study.err_{code}";
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الرِسالَةُ انتَقَلَت مَعَ بابِها: استِمارَةُ البِناءِ (`studio.study.err_*`)
+        // خَرَجَت، واستِمارَةُ الإنشاءِ تَرسُمُ `StudioStoreCreate.MessageKey(code)` — والنُصوصُ نَفسُها بِحَرفِها.
+        var key = ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioStoreCreate.MessageKey(code);
         var text = ACommerce.Platform.I18n.LocaleCatalog.Find(
             ACommerce.Platform.I18n.LocaleCatalog.Arabic, key);
 

@@ -111,8 +111,11 @@ public class TenantAdminGuardTests
         Assert.False(TenantAdminGuard.HasTenantManage(tenant, UserWith("ghost")));
     }
 
+    /// <summary><b>قُلِبَ بِاسمِه (‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62)</b> — كانَ <c>TenantWithNoRoles_GrantsEveryMember_LegacyMode</c>:
+    /// <c>Assert.True</c>. والتَعليقُ أَدناه بِحَرفِه شاهِدٌ عَلى ما كان؛ و«حَذفُه قَرارٌ مُنتَجِيّ» اتَّخَذَه المالِكُ: مَتجَرٌ بِلا أَدوارٍ لا يُعطي
+    /// <c>tenant.manage</c> لِأَحَد، ومالِكُه يُديرُه مِن الاستوديو (<see cref="StudioOwner_IsAllowed"/>).</summary>
     [Fact]
-    public void TenantWithNoRoles_GrantsEveryMember_LegacyMode()
+    public void TenantWithNoRoles_GrantsNoMemberTheAdministration()
     {
         // تَوصيف لا استِحسان: RolePermissions.Has تَمنَح كُلّ الصَلاحِيّات
         // لِمَتجَر بِلا أَدوار (نَمَط user-فَرد القَديم). فَأَيّ مُستَخدِم
@@ -138,6 +141,7 @@ public class TenantAdminGuardTests
         // `Roles = new()` لِلَقطَةِ المَظهَر)، وحَذفُهُ قَرارٌ مُنتَجِيٌّ
         // مَوقوفٌ لِصاحِبِ المَشروع.
         var tenant = TenantWith(Guid.NewGuid());
-        Assert.True(TenantAdminGuard.HasTenantManage(tenant, UserWith("")));
+        Assert.False(TenantAdminGuard.HasTenantManage(tenant, UserWith("")));
+        Assert.False(TenantAdminGuard.HasTenantManage(tenant, UserWith("tenant_admin")));
     }
 }

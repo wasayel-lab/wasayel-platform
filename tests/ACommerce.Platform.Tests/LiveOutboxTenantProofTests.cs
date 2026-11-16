@@ -95,6 +95,7 @@ public static class ProbeTenantEndpoint
 
 // ─── البُرهان ─────────────────────────────────────────────────────────
 
+[Collection(LiveProofCollection.Name)]
 public class LiveOutboxTenantProofTests
 {
     private const string RouteTenant = "zz-proof-route";

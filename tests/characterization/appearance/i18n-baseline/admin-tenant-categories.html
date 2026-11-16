@@ -18,12 +18,11 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8;"><main><div class="acs-page acm-admin"><div class="acm-admin-head"><div style="display:flex;align-items:center;gap:8px;"><a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/tenants/owner-test"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
                 <h1 class="acm-wizard-title" style="margin:0;">فِئات &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631; &#x627;&#x644;&#x645;&#x650;&#x644;&#x643;&#x650;&#x64A;&#x64E;&#x651;&#x629;</h1></div></div><div class="ac-card  "><div class="ac-card-body"><h3 style="margin-top:0;">المَعروض حاليّاً (1 فِئَة)</h3><div class="acm-cat-list"><div class="acm-cat-row"><span style="font-size:24px;"><svg class="ac-icon " width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1Z"/></svg></span>
                                 <div style="flex:1;"><strong>&#x639;&#x627;&#x645;</strong>
-                                    <span style="color:var(--ac-text-muted);font-size:12px;&#xD;&#xA;                                                 display:block;direction:ltr;">general</span></div></div></div></div></div><form method="post" action="/admin/tenants/owner-test/categories/save" id="cats-form"><div class="ac-card  "><div class="ac-card-body"><h3 style="margin-top:0;">تَحديث الفِئات</h3>
+                                    <span style="color:var(--ac-text-muted);font-size:12px;&#xA;                                                 display:block;direction:ltr;">general</span></div></div></div></div></div><form method="post" action="/admin/tenants/owner-test/categories/save" id="cats-form"><div class="ac-card  "><div class="ac-card-body"><h3 style="margin-top:0;">تَحديث الفِئات</h3>
                     <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 14px;">
                         بِطاقَة لِكُلّ فِئَة. التَّرتيب = تَرتيب العَرض.
                         <strong>تَحذير</strong>: حَذف فِئَة مَوجودَة يَترُك إعلاناتِها بِلا فِئَة.
@@ -35,14 +34,7 @@
                                 <div class="ac-editor-grid2"><div><span class="ac-chip-input-label">المُعَرِّف (slug)</span>
                                         <input class="ac-input ac-cat-slug" placeholder="apartments" value="general" style="direction:ltr;" /></div>
                                     <div><span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
-                                        <input class="ac-input ac-cat-kind" placeholder="residential" value="" list="kind-list" style="direction:ltr;" /></div></div></div></div>
-
-                    <datalist id="kind-list"><option value="residential"></option>
-                        <option value="commercial"></option>
-                        <option value="roommate"></option>
-                        <option value="vehicles"></option>
-                        <option value="events"></option>
-                        <option value="leisure"></option></datalist>
+                                        <select class="ac-input ac-cat-kind" aria-label="&#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62C;&#x645;&#x64A;&#x639;"><option value="" selected>&#x628;&#x650;&#x644;&#x627; &#x62A;&#x64E;&#x62C;&#x645;&#x64A;&#x639; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="menu">&#x642;&#x627;&#x626;&#x650;&#x645;&#x64E;&#x629; &#x637;&#x64E;&#x639;&#x627;&#x645; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="residential">&#x633;&#x64E;&#x643;&#x64E;&#x646;&#x64A;&#x651; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x625;&#x64A;&#x62C;&#x627;&#x631;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="commercial">&#x62A;&#x650;&#x62C;&#x627;&#x631;&#x64A;&#x651; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x625;&#x64A;&#x62C;&#x627;&#x631;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="roommate">&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x633;&#x64E;&#x643;&#x64E;&#x646;&#x627;&#x64B; &#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="fnb">&#x623;&#x64E;&#x637;&#x639;&#x650;&#x645;&#x64E;&#x629; &#x648;&#x645;&#x64E;&#x634;&#x631;&#x648;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="services">&#x62E;&#x64E;&#x62F;&#x64E;&#x645;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="transport">&#x646;&#x64E;&#x642;&#x644; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="events">&#x645;&#x64F;&#x646;&#x627;&#x633;&#x64E;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="vehicles">&#x645;&#x64E;&#x631;&#x643;&#x64E;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="leisure">&#x62A;&#x64E;&#x631;&#x641;&#x64A;&#x647; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option></select></div></div></div></div>
 
                     <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg> إضافَة فِئَة
                     </button>
@@ -57,7 +49,7 @@
                 <div class="ac-editor-grid2"><div><span class="ac-chip-input-label">المُعَرِّف (slug)</span>
                         <input class="ac-input ac-cat-slug" placeholder="apartments" style="direction:ltr;"></div>
                     <div><span class="ac-chip-input-label">التَّجميع (اختياريّ)</span>
-                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;"></div></div></div></template></div>
+                        <select class="ac-input ac-cat-kind" aria-label="&#x627;&#x644;&#x62A;&#x64E;&#x651;&#x62C;&#x645;&#x64A;&#x639;"><option value="" selected>&#x628;&#x650;&#x644;&#x627; &#x62A;&#x64E;&#x62C;&#x645;&#x64A;&#x639; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="menu">&#x642;&#x627;&#x626;&#x650;&#x645;&#x64E;&#x629; &#x637;&#x64E;&#x639;&#x627;&#x645; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="residential">&#x633;&#x64E;&#x643;&#x64E;&#x646;&#x64A;&#x651; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x625;&#x64A;&#x62C;&#x627;&#x631;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="commercial">&#x62A;&#x650;&#x62C;&#x627;&#x631;&#x64A;&#x651; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x625;&#x64A;&#x62C;&#x627;&#x631;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="roommate">&#x627;&#x644;&#x633;&#x64E;&#x643;&#x64E;&#x646; &#x627;&#x644;&#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643; — &#x64A;&#x64E;&#x62C;&#x639;&#x64E;&#x644;&#x64F; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x64E;&#x643;&#x64E; &#x633;&#x64E;&#x643;&#x64E;&#x646;&#x627;&#x64B; &#x645;&#x64F;&#x634;&#x62A;&#x64E;&#x631;&#x64E;&#x643;&#x627;&#x64B; &#x628;&#x650;&#x644;&#x627; &#x633;&#x64E;&#x644;&#x64E;&#x651;&#x629;</option><option value="fnb">&#x623;&#x64E;&#x637;&#x639;&#x650;&#x645;&#x64E;&#x629; &#x648;&#x645;&#x64E;&#x634;&#x631;&#x648;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="services">&#x62E;&#x64E;&#x62F;&#x64E;&#x645;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="transport">&#x646;&#x64E;&#x642;&#x644; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="events">&#x645;&#x64F;&#x646;&#x627;&#x633;&#x64E;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="vehicles">&#x645;&#x64E;&#x631;&#x643;&#x64E;&#x628;&#x627;&#x62A; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option><option value="leisure">&#x62A;&#x64E;&#x631;&#x641;&#x64A;&#x647; — &#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x646;&#x64E;&#x645;&#x64E;&#x637;&#x64E; &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;&#x650;&#x643;</option></select></div></div></div></template></div>
             <footer class="wsl-foot"><nav class="wsl-foot-links" aria-label="&#x631;&#x648;&#x627;&#x628;&#x650;&#x637;&#x64F; &#x627;&#x644;&#x645;&#x64E;&#x646;&#x64E;&#x635;&#x64E;&#x651;&#x629;"><a class="wsl-foot-link" href="/terms">الشُروطُ والأَحكام</a>
         <a class="wsl-foot-link" href="/privacy">سِياسَةُ الخُصوصِيَّة</a>
         <a class="wsl-foot-link" href="/refunds">سِياسَةُ الاستِرداد</a>
@@ -94,13 +86,13 @@
             );
         };
 
+        window.acTenant = {"slug":"","role":"","hostMode":false,"home":false,"base":""};
+
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
         (function () {
-            var match = location.pathname.match(/^\/([^\/]+)/);
-            if (!match) return;
-            var slug = match[1];
-            if (slug === 'admin' || slug === 'api') return;
+            var slug = (window.acTenant || {}).slug;
+            if (!slug) return;
 
             async function refresh() {
                 try {
@@ -123,10 +115,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });
@@ -150,16 +142,66 @@
         // /{slug}/r/{role}/. تَجاهَل مَسارات /admin و /api.
         (function () {
             if (!('serviceWorker' in navigator)) return;
-            var path = location.pathname;
-            if (path.startsWith('/admin') || path.startsWith('/api')) return;
-            var seg = path.split('/').filter(Boolean);
-            if (seg.length === 0) return;   // home page — no PWA
-            var slug = seg[0];
-            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ لِـ legacy.
-            var scope = '/' + slug + '/';
-            if (seg.length >= 3 && seg[1] === 'r') {
-                scope = '/' + slug + '/r/' + seg[2] + '/';
-            }
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة — لا PWA
+            var slug = t.slug;
+            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
+            var store = t.hostMode ? '' : '/' + slug;
+            var scope = t.base + (t.role ? '/r/' + t.role : '') + '/';
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var esc = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var logoutPath = new RegExp('^' + (t.hostMode ? '(?:/' + esc + ')?' : '/' + esc) + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf(store + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);
@@ -276,13 +318,14 @@
             // launcher بِلا /r/. لَو السيرفر رَكَّب pwaPath = null لَن
             // يَكون عُنصُر #ac-install-banner مَوجوداً — هذا فَحص ثانوي
             // لِلسَلامَة.
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة
             var p = location.pathname;
             var isTransient = /\/(login|verify|terms|logout|auth)(\/|$|\?)/.test(p)
                            || p.startsWith('/admin');
             if (isTransient) return;
-            var segs = p.split('/').filter(Boolean);
-            var hasRole = segs.length >= 3 && segs[1] === 'r';
-            if (segs.length <= 1 && !hasRole) return;   // launcher أَو جَذر
+            var hasRole = !!t.role;
+            if (t.home && !hasRole) return;   // launcher أَو جَذر
 
             // Chrome لا يَعرِض «تَثبيت» إلّا عَلى https أَو localhost.
             var isLocalhost = /^(localhost|127\.|\[::1\])/.test(location.hostname)
@@ -299,8 +342,7 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = hasRole ? '/' + segs[0] + '/r/' + segs[2] + '/'
-                                   : '/' + segs[0] + '/';
+            var scopeKey = t.base + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }

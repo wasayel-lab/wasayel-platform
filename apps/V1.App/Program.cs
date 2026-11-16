@@ -11,7 +11,6 @@ using ACommerce.Kit.Culture;
 using ACommerce.Kit.Delivery;
 using ACommerce.Kit.Files;
 using ACommerce.Kit.Files.Providers.S3;
-using ACommerce.Kit.Maps;
 using ACommerce.Kit.Payments;
 using ACommerce.Kit.Payments.Providers.Paddle;
 using ACommerce.Kit.Payments.Providers.PayPal;
@@ -19,6 +18,7 @@ using ACommerce.Kit.Realtime.Server;
 using ACommerce.Kit.Versions;
 using ACommerce.Platform.Hosting;
 using ACommerce.Templates.Customer.Marketplace;
+using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Components;
 using ACommerce.V1.App.Seed;
 using System.Reflection;
@@ -127,10 +127,22 @@ switch (AuthChannelSelection.Decide(AuthChannelKind.Email,
         break;
 }
 
-// مُزَوِّدو البِنيَة (mock — استَبدِلهم لاحِقاً بِـ Moyasar/Saee/Google Maps).
-// **وحُكمُهُما مَقيسٌ ومَكتوبٌ لا مَظنون**: ‏`docs/PROVIDER-STUB-DEBT.md`.
-builder.Services.AddMockMaps();
-builder.Services.AddMockDelivery();
+// ─── مُحاكي الخَرائِطِ — حُذِفَ (‏2026-10-29، قَرارُ المالِك د35) ─────────────
+// كانَ هُنا `AddMockMaps()` آخِرَ سَطرِ تَسجيلٍ عارٍ لِمُحاكٍ: لا يَحقِنُ `IMapsProvider`
+// مِلَفُّ `.cs` ولا `.razor` واحِد، ومُستَهلِكُه الوَحيدُ (مُحاكي التَوصيل) حُذِفَ في
+// `ec807a6`. فَحُذِفَ السَطرُ والمُحاكي والواجِهَةُ وتَعريفُه في الكاتالوج (القاعِدَة ١،
+// ‏ADR-018)، ويُبنى مِن جَديدٍ يَومَ تُطلَبُ ميزَةٌ تَحتاجُه (خَريطَةُ عُنوانِ التَسليمِ مَثَلاً).
+// وبَقِيَ `Location` في عُدَّةِ الخَرائِطِ لِأَنّ عُدَّةَ التَوصيلِ تَقرَؤُه. ‏`docs/PROVIDER-STUB-DEBT.md` §٣.
+
+// ─── الشَحن — عَميلُ OTO في مَوضِعِ المُحاكي (‏ADR-033 الخُطوَة 3) ──────────
+// كانَ هُنا `AddMockDelivery()` سَطراً عارِياً بِصِفرِ مُستَهلِك، ومُحاكيه يَعرِضُ
+// هاتِفَ مَندوبٍ عَشوائِيّاً — «رَقمُ إنسانٍ قَد يَرِنّ». حُذِفَ في كوميتِ أَوَّلِ
+// مُستَهلِكٍ كَما شَرَطَ `PROVIDER-STUB-DEBT.md`، وحَلَّ مَحَلَّه عَميلٌ واحِدٌ بِلا
+// واجِهَة. **ولا يُنادى OTO** إلّا بِـ`Shipping__Oto__Environment=staging` ورَمزِ
+// تَحديثِ بائِع؛ وقيمَةُ بيئَةٍ خارِجَ المَعجَمِ تُفشِلُ الإقلاعَ هُنا كَما تُفشِلُه
+// عِندَ Paddle. والمُتَغَيِّرانِ وعُنوانُ الوارِدِ وما يَقَعُ بِغِيابِهِما في `docs/DEPLOY.md` §٢·ط
+// (‏2026-10-12؛ `OtoDeployDocTests` يَحمَرُّ إن افتَرَقَت الوَثيقَةُ عَن الكود).
+builder.Services.AddOtoShipping(builder.Configuration);
 
 // ─── مُزَوِّدُ الدَفع — بِالبيئَة، وفَشَلٌ مُغلَقٌ في الإنتاج ─────────
 // كانَ `AddMockPayments()` سَطراً عارِياً هُنا، والمُحاكي يَقول «نَجَحَ
@@ -220,6 +232,12 @@ switch (FileStorageSelection.Decide(isDev, s3Files))
 // القالَب — يُسَجِّل AuthSession + HttpContextAccessor
 builder.Services.AddCustomerMarketplaceTemplate();
 
+// ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §8) **لَقطَةُ الحُضورِ اليَومِيَّةُ رِسالَةٌ في مُجَدوِلِ Wolverine المَتين** — المُستَهلِكُ الثاني بَعدَ
+// مُهلَةِ الفاتورَة (‏ADR-046): مُعالِجُها يُكتَشَفُ بِنَوعِه وطابورُها بِصُندوقٍ مُستَديم، بِسَطرَي `PresenceSnapshot.Configure` اللَّذَينِ يُناديهِما البُرهانُ الحَيُّ نَفسُهُما.
+// هُنا لا في القالِب: التَطبيقُ وَحدَه يُجَدوِلُها (`ApplicationStarted` أَدناه)، وتَركيبُ القالِبِ يَحمِلُ رِسالَةَ المُهلَةِ وَحدَها (`GatewayInvoiceExpiryTests`).
+Wolverine.HostBuilderExtensions.ConfigureWolverine(builder.Services,
+    ACommerce.Templates.Customer.Marketplace.Services.Metering.PresenceSnapshot.Configure);
+
 var app = builder.Build();
 
 // ─── حارِسُ الإقلاع: لا مُحاكِيَ خارِجَ التَطوير ─────────────────────
@@ -235,6 +253,18 @@ AuthChannelSelection.AssertNoStubsOutsideDevelopment(
         Describe(AuthChannelKind.Email,  app.Services.GetService<IEmailOtpChannel>()),
         Describe(AuthChannelKind.Nafath, app.Services.GetService<INafathChannel>())
     }.OfType<RegisteredAuthChannel>());
+
+// ─── وحارِسٌ عَلى سِرِّ تَوقيعِ الجَلسَة: لا حَرفِيَّةَ عَلَنِيَّةً خارِجَ التَطوير ─
+// **نَفسُ الشَكلِ حَرفاً ولا أُنبوبَ رابِع** (القاعِدَة ٨): دالَّةٌ نَقِيَّةٌ
+// تُقاسُ بِجَدوَل (‏`AuthTokenSecretPolicy.Validate`)، ورَميٌ هُنا قَبلَ أَوَّلِ
+// طَلَب. والعِلَّةُ أُختُ ما فَوقَها: `AuthHandlers.TokenSecret` يَرتَدُّ عِندَ
+// غِيابِ `ACOMMERCE_AUTH_SECRET` إلى حَرفِيَّةٍ مَكتوبَةٍ في الكود، فَيَصيرُ كُلُّ
+// كوكي — وجَلسَةُ مُشرِفِ المَنَصَّةِ ذاتُها، فَهي بِالدالَّةِ نَفسِها — قابِلاً
+// لِلتَزوير بِمَعرِفَةِ `userId` و`slug` (‏2026-10-11، P0-2). **والمَفحوصُ القيمَةُ
+// الفِعلِيَّةُ الَّتي تُوَقِّع** لا المُتَغَيِّرُ وَحدَه؛ وفي Development صامِتٌ
+// فَلا يَتَغَيَّرُ `dotnet run` بِلا مُتَغَيِّر.
+AuthTokenSecretPolicy.AssertSafeOutsideDevelopment(
+    app.Environment.IsDevelopment(), AuthHandlers.TokenSecret);
 
 // ─── وحارِسٌ ثانٍ بِنَفسِ الآلِيَّة: لا مُزَوِّدَ دَفعٍ مُحاكٍ ────────
 // **ولا أُنبوبَ رابِع** (القاعِدَة ٨): نَفسُ الشَكلِ حَرفاً — عَلامَةٌ
@@ -280,6 +310,14 @@ FileStorageSelection.AssertNoStubsOutsideDevelopment(
     new[] { FileStorageSelection.Describe(app.Services.GetService<IFileStorage>()) }
         .OfType<RegisteredFileStorage>());
 
+// ─── وحارِسٌ رابِعٌ بِنَفسِ الشَكل: بيئَةُ OTO التَجريبِيَّةُ لا تُقلِعُ خارِجَ التَطوير ─
+// (قَرارُ المالِك د44 «ج»، ‏2026-10-29): كانَت الحِمايَةُ دَليلَ النَشرِ وسَطرَ ⚠ في بَوّابَةِ الإقلاع، و`staging` في الـSpace يَفتَحُ
+// قِسمَ الشَحنِ لِكُلِّ بائِعٍ في كُلِّ مَتجَرٍ عَلى بيئَةِ الاختِبار. فَيَرمي هُنا قَبلَ البَذرِ وأَوَّلِ طَلَب، عَلى `OtoOptions.Environment`
+// الَّذي يَقرَؤُه العَميل؛ وبَوّابَةُ الإقلاعِ تَقرَأُ رَمزَه 3 بِاسمِه (‏`boot_verdict`). والتَجرِبَةُ في وَضعِ التَطوير (‏DEPLOY.md §٢·ط).
+OtoBootPolicy.AssertSafeOutsideDevelopment(
+    app.Environment.IsDevelopment(),
+    app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OtoOptions>>().Value.Environment);
+
 static RegisteredAuthChannel? Describe(AuthChannelKind kind, object? channel) => channel switch
 {
     null => null,
@@ -296,8 +334,17 @@ ACommerce.Templates.Customer.Marketplace.AuthSession.HttpAccessor =
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·٣ — ADR-051 §١١) **دَفتَرُ العَدِّ قَبلَ البَذرِ وقَبلَ أَن يَستَمِعَ الخادِم**: جَداوِلُ `meter.*`، والجيل، ونافِذَةُ كُلِّ
+    // وَحدَة — فَكُلُّ كِتابَةٍ مَعدودَةٍ بَعدَه تَجِدُها، ومُعجَمٌ فاسِدٌ يُفشِلُ الإقلاعَ هُنا بِرُموزِه. والسَطرُ `[meter] boot …` يُقرَأُ في سِجِلِّ الإقلاع.
+    var meterBoot = await ACommerce.Templates.Customer.Marketplace.Services.Metering.MeterBoot.EnsureAsync(
+        scope.ServiceProvider.GetRequiredService<Marten.IDocumentStore>());
+    app.Logger.LogInformation("{MeterBoot}", meterBoot.Line);
+    // **والبَذرُ كُلُّه تَحتَ حامِلِ البَذر** (RULES-06): ما تَكتُبُه البَذّاراتُ مِن وَحدَةٍ مَعدودَةٍ دَورُه ورائِدُ أَعمالِه `_seed` لِكُلِّ مَتجَر — لا `_unresolved`.
+    // ويُعادُ ما قَبلَه عِندَ نِهايَةِ الكُتلَة، فَلا يَرِثُه ما يَبدَأُ بَعدَها (خِدماتُ الخَلفِيَّةِ وطَلَباتُ الخادِم).
+    using var meterSeedScope = ACommerce.Platform.Shared.Metering.MeterScope.Seed();
     await PlatformSeed.RunAsync(scope.ServiceProvider);
     // اِربِط المَتاجِر القَديمَة بِأَوَّل مُستَخدِم studio (إن وُجِد).
+    // ‏(‏2026-10-25، W8-3 — lens-security-14) بِأَقدَمِ مُشرِفِ مَنَصَّةٍ — لا أَيِّ مُستَخدِم — وهُنا وَحدَه لا عِندَ كُلِّ دُخول.
     var docStore = scope.ServiceProvider.GetRequiredService<Marten.IDocumentStore>();
     await ACommerce.Templates.Customer.Marketplace.Services.Incubator
         .StudioOwnershipSeeder.RunAsync(docStore);
@@ -307,27 +354,12 @@ await using (var scope = app.Services.CreateAsyncScope())
     if (Environment.GetEnvironmentVariable("TEST_DATA_SEED") == "1")
         await TestDataSeeder.RunAsync(scope.ServiceProvider);
 
-    // جَلسَةُ حاضِنَة **عَيِّنَةَ بِنيَة** — تَفتَح شاشات الدِراسَة الثَلاث
-    // بِلا مُزَوِّد LLM ولا مِفتاح API. نَفسُ اصطِلاح البَذرَة أَعلاه:
-    // ‏ENV INCUBATOR_SAMPLE_SEED=1، وإلّا لا تَعمَل. التَفصيلُ وسَبَبُ
-    // كَونِ القيَم مُعَلَّمَةً في `IncubatorSampleSeeder`.
-    if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
-        await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
-
     // سَلَّةُ **عَيِّنَةِ بِنيَة** — تَفتَح جِسمَ مُعالِج الشِراء الثُلاثيّ
     // الَّذي لا يُصَيَّر بِلا سَلَّة، وكانَ في القاعِدَة صِفرُ سَلَّة.
     // نَفسُ الاصطِلاح: ‏ENV CART_SAMPLE_SEED=1، وإلّا صِفرُ قِراءَةٍ
     // وصِفرُ كِتابَة. التَفصيلُ في `CartSampleSeeder`.
     if (Environment.GetEnvironmentVariable("CART_SAMPLE_SEED") == "1")
         await CartSampleSeeder.RunAsync(scope.ServiceProvider);
-
-    // مُستَأجِرا **لَقطَة المَظهَر** — `theme-demo` و`owner-test`. ‏32
-    // صَفحَةً في `i18n-baseline` تَفتَرِضُهُما، ولا وُجودَ لَهُما في
-    // الإنتاج، فَكانَت البَوّابَةُ تَحمَرّ بِالبَيانات لا بِالكود.
-    // ‏ENV APPEARANCE_BASELINE_SEED=1، و**تَرفُض خارِجَ التَطوير**
-    // صَراحَةً لا صامِتَةً. التَفصيلُ في `AppearanceBaselineSeeder`.
-    if (Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar) == "1")
-        await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment);
 
     // مَنح صَلاحِيَّة مُشرِف المَنصَّة صَراحَةً — ENV PLATFORM_ADMIN_PHONE
     // و/أَو PLATFORM_ADMIN_EMAIL، وخارِج التَطوير يَلزَم
@@ -348,11 +380,32 @@ await using (var scope = app.Services.CreateAsyncScope())
         app.Logger.LogWarning(
             "[platform-admin] {Var} صيغَتُه غَير صالِحَة — لا مَنحَ بِالبَريد",
             PlatformAdminSeeder.EmailVar);
+
+    // ‏**بَذّارا التَطويرِ بَعدَ مَنحِ المُشرِف** (‏2026-10-24، تَيّارُ S15 البَند E؛ RELEASE-READINESS §١ البَند ٨): كِلاهُما يَحتاجُ مُستَخدِمَ
+    // استوديو — المُشرِفَ نَفسَه — وكانا قَبلَ مَنحِه، فَعَلى قاعِدَةٍ بارِدَةٍ يَطبَعانِ «لا مُستَخدِمَ استوديو» ويُتِمُّ الإقلاعُ الثاني ما فاتَ.
+    // نُقِلا وَحدَهُما بِحُرّاسِهِما وتَعليقَيهِما حَرفاً؛ وبِلا مُتَغَيِّرَيهِما (الإنتاج) لا يَعمَلانِ في أَيِّ مَوضِع، فَبَذرُ الإنتاجِ بِتَرتيبِه —
+    // مَقيسٌ بِمُقارَنَةِ سِجِلِّ إقلاعَينِ بارِدَينِ عَلى قاعِدَتَينِ جَديدَتَين (`BootSeederOrderTests`).
+
+    // جَلسَةُ حاضِنَة **عَيِّنَةَ بِنيَة** — تَفتَح شاشات الدِراسَة الثَلاث
+    // بِلا مُزَوِّد LLM ولا مِفتاح API. نَفسُ اصطِلاح البَذرَة أَعلاه:
+    // ‏ENV INCUBATOR_SAMPLE_SEED=1، وإلّا لا تَعمَل. التَفصيلُ وسَبَبُ
+    // كَونِ القيَم مُعَلَّمَةً في `IncubatorSampleSeeder`.
+    if (Environment.GetEnvironmentVariable("INCUBATOR_SAMPLE_SEED") == "1")
+        await IncubatorSampleSeeder.RunAsync(scope.ServiceProvider);
+
+    // مُستَأجِرا **لَقطَة المَظهَر** — `theme-demo` و`owner-test`. ‏32
+    // صَفحَةً في `i18n-baseline` تَفتَرِضُهُما، ولا وُجودَ لَهُما في
+    // الإنتاج، فَكانَت البَوّابَةُ تَحمَرّ بِالبَيانات لا بِالكود.
+    // ‏ENV APPEARANCE_BASELINE_SEED=1، و**تَرفُض خارِجَ التَطوير**
+    // صَراحَةً لا صامِتَةً. التَفصيلُ في `AppearanceBaselineSeeder`.
+    if (Environment.GetEnvironmentVariable(AppearanceBaselineSeeder.EnvVar) == "1")
+        await AppearanceBaselineSeeder.RunAsync(scope.ServiceProvider, app.Environment);
 }
 
 // يَجِب أَن يُطَبَّق ForwardedHeaders قَبل أَيّ middleware يَقرَأ
 // Request.IsHttps / Scheme (الـ HTTPS redirect والكوكي والـ Auth).
-app.UseForwardedHeaders();
+// ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-2) بِاسمِ تَركيبِه (`HostHeaderGuard.UsePlatformForwardedHeaders`) — يَقيسُه تَوصيفُه بِالاسم.
+app.UsePlatformForwardedHeaders(forwardedHeaders);
 
 // **وحالَةُ المُضيف تُقال بِاسمِها عِندَ الإقلاع**: قائِمَةٌ مَكتوبَةٌ
 // خَطَأً (‏`*` أَو مِفتاحٌ مُخطِئ) تَسقُط صامِتَةً، فَيَظُنّ المُهَيِّئ
@@ -361,6 +414,15 @@ app.Logger.LogInformation("[forwarded-headers] X-Forwarded-Host: {Hosts}",
     forwardedHeaders.TrustsForwardedHost
         ? string.Join(", ", forwardedHeaders.AllowedHosts)
         : "غَير مَقروء — لا قائِمَة مُهَيَّأَة (ForwardedHeaders:AllowedHosts)");
+
+// ═══ صَفحَةُ خَطَإٍ واحِدَة — بَعدَ الرُؤوسِ المُمَرَّرَةِ وقَبلَ الأُنبوبِ كُلِّه (‏2026-10-12، P3-4) ══
+// كانَ مَسارٌ بِلا صَفحَةٍ يُرَدُّ ‏404 بِـ‏0 بايت، وانقِطاعُ القاعِدَةِ ‏500 بِـ‏0 بايت (مَقيسٌ بِوَضعِ Production) — صَفحَةٌ
+// بَيضاءُ لا تَقولُ لِلزائِرِ شَيئاً ولا لِلمُشَخِّصِ أَيَّ بِناءٍ رَدَّها. والصَفحَةُ تُكتَبُ مِن القامُوسِ بِلا Razor لِأَنّ
+// `App.razor` يَقرَأُ القاعِدَة، وخارِجَ Development وَحدَه، ولِطَلَبٍ يَقرَأُ HTML وَحدَه — والتَعليلُ في `ErrorPages.cs`.
+// والسِلسِلَةُ تُقرَأُ مَرَّةً وتُمَرَّرُ إلى هُنا وإلى `/health`، فَالبِناءُ في الصَفحَةِ هُوَ البِناءُ في النُقطَة.
+var buildVersion = typeof(Program).Assembly
+    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+app.UsePlatformErrorPages(buildVersion);
 
 // ═══ الوَكيلُ يُعلِنُ وِجهَتَه عِندَ الإقلاع ═══════════════════════════
 // **العِلَّةُ المَقيسَة (‏2026-08-31)**: رِحلَةُ عَميلٍ حَيَّةٍ تَوَقَّفَت عِندَ
@@ -395,6 +457,16 @@ try
             agentBackends.ModelFor(agentName),
             string.IsNullOrWhiteSpace(profile.ApiKey) ? "غَير مَضبوط" : "مَضبوط");
     }
+
+    // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049) خَرَجَ مِن هُنا سَطرُ `[studio] analysis_door=` — التَحليلُ لَيسَ في رِحلَةِ رائِدِ الأَعمال،
+    // والمَتجَرُ يُنشَأُ بِلا مِفتاح؛ وسَطرُ `[agent] Analysis:` أَعلاه يَقولُ حالَ مِفتاحِ حاضِنَةِ المُشرِف.
+    // ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) وحالُ وَكيلِ التَصميمِ بِرَمزِه: `hidden` (المِفتاحُ `Studio:Agent:Enabled` مُطفَأ — الافتِراض)، أَو
+    // `open`، أَو `agent_unavailable` (مُضاءٌ بِلا خَلفِيَّة). القَرارُ نَفسُه الَّذي تَسأَلُه الصَفَحات، وتَقرَؤُه بَوّابَةُ الإقلاعِ إعلاماً (الكُتلَة `agent_door`).
+    app.Logger.LogInformation(
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.BootLogPrefix + "{Door}",
+        ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.BootLogValue(
+            app.Services.GetRequiredService<ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch>().Enabled,
+            agentBackends.For(ACommerce.Templates.Customer.Marketplace.Services.AgentNames.Studio).IsConfigured));
 }
 catch (Exception ex)
 {
@@ -404,6 +476,13 @@ catch (Exception ex)
     app.Logger.LogWarning(
         "[agent] تَعَذَّرَ حَلُّ مِلَفّاتِ الوُكَلاء عِندَ الإقلاع: {Reason}", ex.Message);
 }
+
+// ‏**وبيئَةُ OTO بِقَرارِ الكودِ نَفسِه** (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-6 الجَولَة ٢): `OtoEnvironment.IsOpen` عَلى `OtoOptions.Environment` كَما
+// يَقرَؤُه العَميلُ والسَطحُ — لا تَطبيعٌ ثانٍ في bash. ورَمزُ السَطرِ تَقرَؤُه بَوّابَةُ الإقلاعِ (الكُتلَة `oto_environment`) فَتُنَبِّهُ عَلى staging.
+app.Logger.LogInformation(
+    OtoEnvironment.BootLogPrefix + "{Oto}",
+    OtoEnvironment.BootLogValue(
+        app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<OtoOptions>>().Value.Environment));
 
 app.UsePlatformHost();
 
@@ -424,10 +503,15 @@ else
 app.UseCultureContext();
 app.UseVersionGate();
 
+// ‏**بَوّابَةُ إصدارِ الجَلسَة** (‏2026-10-28، قَرارُ المالِك د28): قَبلَ نِقاطِ القالِبِ وصَفَحاتِه، فَرَمزٌ أَسقَطَه «اخرج من كل الأجهزة» أَو حَذفُ
+// الحِسابِ يُنزَعُ مِن الطَلَبِ قَبلَ أَن يَقرَأَه أَحَد. التَعليلُ في `SessionVersionGate.cs`.
+app.UseSessionVersionGate();
+
 // القالَب — يُسَجِّل form endpoints (auth/login/logout/chat send/favorite/...)
 app.MapCustomerMarketplaceTemplate();
 
-app.MapHub<RealtimeHub>("/realtime");
+// ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الأُولى · SEC-C2z-R1-1) المَركَزانِ الحَيّانِ بِاسمِ تَركيبِهِما في `LiveConnections` — يَقيسُه تَوصيفُه بِالاسم.
+app.MapPlatformHub<RealtimeHub>("/realtime");
 
 // ═══ الثُنائِيُّ يَحمِلُ إيداعَه (‏ADR-019) ══════════════════════════
 // نُقطَةُ `/health` تُجيبُ «أَيُّ إيداعٍ يَخدِمُ الآن؟» مِن العَمَلِيَّةِ
@@ -435,12 +519,19 @@ app.MapHub<RealtimeHub>("/realtime");
 // (`-p:SourceRevisionId=` في الـ`Dockerfile`)، فَلا تَستَطيعُ حاوِيَةٌ
 // قَديمَةٌ أَن تَدَّعِيَ إيداعاً جَديداً. والتَعليلُ كامِلاً في
 // `BuildIdentity.cs` وفي `docs/ADR-019-…`.
-app.MapBuildIdentity(
-    typeof(Program).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
-    processStartedAt);
+app.MapBuildIdentity(buildVersion, processStartedAt);
+
+// ═══ وجاهِزِيَّةٌ تَسأَلُ القاعِدَة — مَسارٌ آخَرُ لا جَوابٌ آخَرُ لِـ`/health` (‏2026-10-12، P3-4) ══
+// ‏`/health` يَبقى ‏200 دائِماً (‏ADR-019 §٥) ووَظيفَةُ النَشرِ تَستَطلِعُه كَما هُوَ. و`/health/ready` يَرُدُّ ‏503 مَعَ
+// `Retry-After` حينَ لا تُجيبُ القاعِدَة — والتَعليلُ وسَبَبُ المَسارِ في `Readiness.cs`.
+app.MapReadiness();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+    .AddPlatformInteractiveServer();
+
+// ‏(‏2026-11-13، الموجَة ١٣ W13-6·١٩ — ADR-051 §٢٣؛ التَصميم §8) **وعِندَ الإقلاع**: اليَومُ إن لَم تَكتَمِل مُطالَبَتُه، والغَدُ عِندَ بِدايَتِه بِتَوقيتِ الرِياض —
+// والمُكَرَّرُ يَنطَوي عَلى المُطالَبَة. بَعدَ أَن تَبدَأَ خِدماتُ المُضيف (Wolverine) لا قَبلَه، وتَعَذُّرُه سَطرُ `[meter] presence-boot-failed` لا عُطلُ إقلاع.
+app.Lifetime.ApplicationStarted.Register(() =>
+    _ = ACommerce.Templates.Customer.Marketplace.Services.Metering.PresenceSnapshot.ScheduleAtBootAsync(app.Services));
 
 app.Run();

@@ -2,9 +2,13 @@
 @page "/{slug}/r/{role}/me"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Accounts
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService Providers
 @inject ITenantContext Tenant
 @inject AuthSession Auth
 @inject NavigationManager Nav
+@inject IServiceProvider Sp
 @inject L L
 
 @*
@@ -47,6 +51,93 @@
                 </div>
             </ChildContent>
         </AcCard>
+
+        @* ‏(‏2026-10-28، قَرارُ المالِك د27 «ج») «وَسائِلُ الدُخول» — أَضِف بَريدَك / أَضِف جَوّالَك: وَسيلَةٌ ثانِيَةٌ تُثبَتُ بِرَمزٍ يَصِلُها فَتُربَطُ
+           بِهذا الحِسابِ نَفسِه، ولا دَمجَ تِلقائِيّ. تُرسَمُ الاستِمارَةُ لِنَوعٍ لا وَسيلَةَ مِنه في الحِسابِ وقَناتُه مُسَجَّلَة (القاعِدَة ١٢: لا بابَ لا يُرسِل)،
+           والرابِطُ يَحمِلُ مُعَرِّفَ المُحاوَلَةِ لا الوَسيلَة — والصَفحَةُ تَقرَؤُها مِن المُحاوَلَةِ الحَيَّة (`AccountContacts.Pending`). *@
+        @if (contactShown)
+        {
+            <AcCard>
+                <ChildContent>
+                    <h3 style="margin-top:0;">@L.Markup("me.contact.title")</h3>
+                    @if (ContactErrKey is { } errKey)
+                    {
+                        <AcAlert Variant="warning" Message="@L[errKey]" />
+                    }
+                    @if (Contact == "linked")
+                    {
+                        <AcAlert Variant="success" Message="@L["me.contact.linked"]" />
+                    }
+                    @if (Contact == "removed")
+                    {
+                        <AcAlert Variant="success" Message="@L["me.contact.removed"]" />
+                    }
+                    @* ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A3) وَسائِلُ الحِسابِ ظاهِرَة، والمُضافَةُ مِنها تُحذَفُ بِرَمزٍ إلى الباقِيَة — كانَت تُضافُ ولا تُرى ولا تُحذَف،
+                       فَمَن زَرَعَ بَريدَه بِجَلسَةٍ مُستَعارَةٍ يَعودُ بِه بَعدَ «اخرج من كل الأجهزة». الزِرُّ لِما يَقبَلُه البابُ وَحدَه (`ContactLink.IsUnlinkAllowed`). *@
+                    @foreach (var row in contactRows)
+                    {
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;">
+                            <span style="font-size:13px;"><strong>@(row.Kind == ACommerce.Kit.Auth.ContactLink.Email ? L["auth.channel.email_full"] : L["auth.channel.phone_full"])</strong>
+                                <span dir="ltr" style="color:var(--ac-text-muted);">@row.Value</span></span>
+                            @if (row.Removable && removal is null)
+                            {
+                                <form method="post" action="@($"/{Slug}/me/contact/remove/start")" style="margin:0;">
+                                    <input type="hidden" name="kind" value="@row.Kind" />
+                                    <AcButton Type="submit" Variant="ghost" Size="sm" Text="@L["me.contact.remove"]" />
+                                </form>
+                            }
+                        </div>
+                    }
+                    @if (contactRows.Any(r => r.Removable) && removal is null)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:12px;margin:0 0 12px;">@L.Markup("me.contact.remove_hint")</p>
+                    }
+                    @if (removal is { } removing && me is not null && ACommerce.Kit.Auth.ContactLink.Contact(me, ACommerce.Kit.Auth.ContactLink.Other(removing)) is { } remaining)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:13px;">@L.Format("me.contact.remove_code_sent", ACommerce.Kit.Auth.ContactLink.Mask(ACommerce.Kit.Auth.ContactLink.Other(removing), remaining))</p>
+                        <form method="post" action="@($"/{Slug}/me/contact/remove/verify")">
+                            <input type="hidden" name="attempt" value="@Attempt" />
+                            <AcField Label="@L["me.contact.code_label"]" Required="true">
+                                <input name="code" required class="ac-input" dir="ltr" inputmode="numeric" autocomplete="one-time-code" />
+                            </AcField>
+                            <AcButton Type="submit" Variant="danger" Block="true" Text="@L["me.contact.remove_confirm"]" />
+                        </form>
+                    }
+                    @if (pending is { } p)
+                    {
+                        <p style="color:var(--ac-text-muted);font-size:13px;">@L.Format("me.contact.code_sent", p.Value)</p>
+                        <form method="post" action="@($"/{Slug}/me/contact/verify")">
+                            <input type="hidden" name="attempt" value="@Attempt" />
+                            <AcField Label="@L["me.contact.code_label"]" Required="true">
+                                <input name="code" required class="ac-input" dir="ltr" inputmode="numeric" autocomplete="one-time-code" />
+                            </AcField>
+                            <AcButton Type="submit" Variant="primary" Block="true" Text="@L["me.contact.confirm"]" />
+                        </form>
+                    }
+                    else
+                    {
+                        @if (offerEmail)
+                        {
+                            <form method="post" action="@($"/{Slug}/me/contact/start")" style="margin-bottom:12px;">
+                                <input type="hidden" name="kind" value="@ACommerce.Kit.Auth.ContactLink.Email" />
+                                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 6px;">@L.Markup("me.contact.email_hint")</p>
+                                <input name="value" type="email" required class="ac-input" dir="ltr" autocomplete="email" />
+                                <AcButton Type="submit" Variant="outline-primary" Block="true" Text="@L["me.contact.add_email"]" />
+                            </form>
+                        }
+                        @if (offerPhone)
+                        {
+                            <form method="post" action="@($"/{Slug}/me/contact/start")">
+                                <input type="hidden" name="kind" value="@ACommerce.Kit.Auth.ContactLink.Phone" />
+                                <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 6px;">@L.Markup("me.contact.phone_hint")</p>
+                                <input name="value" type="tel" required class="ac-input" dir="ltr" autocomplete="tel" />
+                                <AcButton Type="submit" Variant="outline-primary" Block="true" Text="@L["me.contact.add_phone"]" />
+                            </form>
+                        }
+                    }
+                </ChildContent>
+            </AcCard>
+        }
 
         @* بِطاقَة الدَور النَّشِط — تَظهَر فَقَط في النَّمَط القَديم (بِلا /r/).
            داخِل PWA دَور مُحَدَّد، الدَور هو التَّطبيق نَفسه فَلا يُعرَض
@@ -102,15 +193,29 @@
                وشاشَةُ تَحريرِها كودًا حَيّاً لا يَبلُغُه أَحَد في
                نِصف المُستَأجِرين. وصَفحَةُ «حِسابي» هي **المَوضِع
                المُعلَن** لِلزائِد عَن خَمسَة تَبويبات
-               (‏`MainLayout` §الشَريط السُفليّ). *@
-            <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
-            <AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
-            <AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
+               (‏`MainLayout` §الشَريط السُفليّ).
+               (‏2026-10-28، قَرارُ المالِك د41 «أ») ولِمَن يَستَطيعُ النَشرَ أَو لَه إعلانٌ وَحدَه (‏`showMyListings`): دَورٌ لا يَنشُرُ ولا إعلانَ لِصاحِبِه كانَت
+               تَفتَحُ لَه صَفحَةً فارِغَةً بِلا إجراء. والمَتجَرُ بِلا أَدوارٍ يَنشُرُ فيه الجَميعُ فَتَبقى. وبِلا فَراغٍ مُصَرَّحٍ قَبلَها: كانَت تَلي فَتحَ
+               `acm-home-actions` بِلا فَراغٍ حينَ لا تُرسَمُ «إدارَةُ المَتجَر» (مَقيسٌ بايتاً بِالشَجَرَتَين). *@
+            @if (showMyListings)
+            {
+                <AcActionCard Label="@(L["me.action.my_listings"])" IconName="package"      Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/listings")" />
+            }
+            @* «الباقات» حينَ يَعرِضُ رَفُّها شَيئاً (‏2026-10-25، W8-7 — lens-dead-doors-5): كانَت تُرسَمُ في كُلِّ مَتجَر، ومَتجَرُ الاستوديو
+               يولَدُ بِلا باقَةٍ فَتَفتَحُ عَلى «لا توجَد باقات بَعد». الشَرطُ `PlanShelf.ShownAsync` — ما تَرسُمُه الصَفحَةُ بِعَينِه. والفَراغانِ
+               المُصَرَّحُ بِهِما يُعيدانِ ما كانَ بَينَ البِطاقاتِ بايتاً (حُدودُ كُتلَةِ `@if` تُسقِطُ فَراغَ النَصِّ حَولَها). *@
+            @if (plansShown)
+            {
+            @((MarkupString)"\n            ")<AcActionCard Label="@(L["me.action.plans"])"      IconName="package"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"plans")" />
+            }
+            @((MarkupString)"\n            ")<AcActionCard Label="@(L["me.action.favorites"])" IconName="heart"         Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"favorites")" />
             <AcActionCard Label="@(L["me.action.chats"])"   IconName="message"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"chats")" />
             <AcActionCard Label="@(L["me.action.notifications"])"     IconName="bell"          Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"notifications")" />
             <AcActionCard Label="@(L["me.action.deals"])"        IconName="receipt"       Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"deals")" />
             <AcActionCard Label="@(L["me.action.support"])" IconName="alert-circle"  Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"support")" />
             <AcActionCard Label="@(L["me.action.legal"])" IconName="info"     Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"legal")" />
+            @* ‏(‏2026-10-29، قَرارُ المالِك د53) «بَياناتي»: حَقُّ الاطِّلاعِ والتَنزيلِ بِبابٍ يَفتَحُه صاحِبُ الحِساب — المَدخَلُ شَرطُ وُجودِ الصَفحَة (القاعِدَة ١٢). *@
+            <AcActionCard Label="@(L["me.action.my_data"])" IconName="download" Variant="surface" Href="@AuthSession.LinkFor(Slug, Role, $"me/data")" />
         </div>
 
         @* المَدخَلُ نِصفُ الميزَة لا مُهِمَّةٌ تالِيَة (القاعِدَة ١٢):
@@ -134,6 +239,17 @@
             </form>
         </div>
 
+        @* ‏(‏2026-10-28، قَرارُ المالِك د28) «اخرج من كل الأجهزة» — يَرفَعُ إصدارَ الجَلسَةِ فَيَسقُطُ كُلُّ رَمزٍ صَدَرَ لِهذا الحِساب، وزِرُّ الخُروجِ
+           أَعلاه يَبقى لِهذا الجِهازِ وَحدَه. *@
+        <div style="margin-top:8px;">
+            <form method="post" action="@($"/{Slug}/me/sessions/revoke")" style="margin:0;">
+                <button type="submit" class="ac-btn ac-btn-ghost" style="width:100%;">
+                    <AcIcon Name="log-out" Size="18" /> @L.Markup("auth.action.logout_everywhere")
+                </button>
+            </form>
+            <p style="margin:4px 0 0;text-align:center;color:var(--ac-text-muted);font-size:12px;">@L.Markup("auth.logout_everywhere.hint")</p>
+        </div>
+
         <div style="margin-top:24px;text-align:center;color:var(--ac-text-muted);font-size:12px;">
             @(loadedTenant?.Name) · platform-v1
         </div>
@@ -143,6 +259,22 @@
 @code {
     [Parameter] public string Slug { get; set; } = "";
     [Parameter] public string? Role { get; set; }
+    [SupplyParameterFromQuery(Name = "contact")] public string? Contact { get; set; }
+    [SupplyParameterFromQuery(Name = "attempt")] public string? Attempt { get; set; }
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    // ‏(د27) وَسائِلُ الدُخول — مَن تُعرَضُ لَه الاستِمارَة، والمُحاوَلَةُ الحَيَّة، ورَمزُ الرَدِّ مِن المَعجَمِ المُغلَقِ وَحدَه (رَمزٌ مَجهولٌ لا يُطبَعُ خاماً).
+    bool offerEmail;
+    bool offerPhone;
+    (ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind Kind, string Subject, string Value)? pending;
+    string? ContactErrKey => Err is { } code && ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Codes.Contains(code)
+        ? $"me.contact.err_{code}" : null;
+    bool contactShown => pending is not null || offerEmail || offerPhone || ContactErrKey is not null || Contact == "linked"
+                         || Contact == "removed" || removal is not null || contactRows.Count > 0;
+    /// <summary>‏(‏2026-10-29، A3) وَسائِلُ الحِسابِ الَّتي تَستَقبِلُ رِسالَة (لا <c>NID-…</c>)، والمُضافَةُ مِنها تُحذَف.</summary>
+    List<(string Kind, string Value, bool Removable)> contactRows = new();
+    /// <summary>‏(A3) مُحاوَلَةُ حَذفٍ حَيَّة — النَوعُ المَحذوف.</summary>
+    string? removal;
 
     Tenant? loadedTenant;
     User? me;
@@ -152,6 +284,12 @@
     ACommerce.Kit.Roles.Role? activeRole;
     List<ACommerce.Kit.Roles.Role> tenantRoles = new();
     bool canManage;
+    /// <summary>صَفحَةُ الباقاتِ تَعرِضُ باقَةً واحِدَةً عَلى الأَقَلّ (‏<c>PlanShelf.ShownAsync</c>) — شَرطُ بِطاقَتِها (‏2026-10-25، W8-7).</summary>
+    bool plansShown;
+    /// <summary>بِطاقَةُ «إعلاناتي» (‏2026-10-28، قَرارُ المالِك د41 «أ»): الدَورُ يَستَطيعُ النَشرَ — <c>PermissionDoor.Opens(…, "listing.create")</c> عَلى
+    /// قِراءَةِ صَفحَةِ النَشرِ نَفسِها (<c>TenantRoleService.LoadAsync</c>، المُجَسَّدَةِ بِالأَدوارِ المُؤَلَّفَةِ بَعدَ د42) — أَو لِصاحِبِه إعلانٌ واحِدٌ عَلى
+    /// الأَقَلّ (<c>AccountQueries.MyListingsAsync</c> نَفسُها الَّتي تَرسُمُ «إعلاناتي»، ولا تُسأَلُ إلّا إن أُغلِقَ الباب).</summary>
+    bool showMyListings;
 
 
     protected override async Task OnParametersSetAsync()
@@ -168,13 +306,36 @@
         favoritesCount       = summary.Favorites;
         conversationsCount   = summary.Conversations;
         notificationsCount   = summary.UnreadNotifications;
+        plansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;
+        if (me is not null && me.DeletedAt is null)
+        {
+            // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ A2) «أَضِف» لِنَوعٍ تَعرِضُه صَفحَةُ دُخولِ هذا المَتجَرِ وَحدَه (`LoginChannels`) — فَنَصُّ «فَتَدخُلُ بَعدَها بِه»
+            // صادِقٌ بِالبِناء؛ ومَتجَرُ نَفاذٍ لا يَعرِضُ غَيرَه فَلا قِسمَ فيه (القاعِدَة ١٢).
+            var signIn = ACommerce.Templates.Customer.Marketplace.Services.LoginChannels.OfferedIn(Tenant.AuthChannel, Sp);
+            offerEmail = string.IsNullOrEmpty(me.Email) && signIn.Contains(ACommerce.Kit.Auth.ContactLink.Email)
+                         && Sp.GetService(typeof(ACommerce.Kit.Auth.IEmailOtpChannel)) is not null;
+            offerPhone = string.IsNullOrEmpty(me.Phone) && signIn.Contains(ACommerce.Kit.Auth.ContactLink.Phone)
+                         && Sp.GetService(typeof(ACommerce.Kit.Auth.IOtpChannel)) is not null;
+        }
+        if (Contact == "verify")
+            pending = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.Pending(Slug, Attempt, Auth.UserId.Value);
+        if (Contact == "remove")
+            removal = ACommerce.Templates.Customer.Marketplace.Services.AccountContacts.PendingRemoval(Slug, Attempt, Auth.UserId.Value);
+        if (me is not null && me.DeletedAt is null)
+            foreach (var kind in new[] { ACommerce.Kit.Auth.ContactLink.Phone, ACommerce.Kit.Auth.ContactLink.Email })
+                if (ACommerce.Kit.Auth.ContactLink.Contact(me, kind) is { } value)
+                    contactRows.Add((kind, value, ACommerce.Kit.Auth.ContactLink.IsUnlinkAllowed(me, kind)));
+
+        var publishRoles = (await Roles.LoadAsync(Slug)).Tenant?.Roles ?? new List<ACommerce.Kit.Roles.Role>();
+        showMyListings = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(publishRoles, Role, me?.ActiveRole, "listing.create")
+            || (await Accounts.MyListingsAsync(Slug, Auth.UserId.Value)).Count > 0;
 
         if (tenantRoles.Count > 0)
         {
             if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
-                activeRole = tenantRoles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
-            canManage = ACommerce.Kit.Roles.RolePermissions.Has(
-                tenantRoles, Role ?? me?.ActiveRole, "tenant.manage");
+                activeRole = tenantRoles.FirstOrDefault(r => r.Slug == (ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, me.ActiveRole) ?? me.ActiveRole));   // ‏2026-11-11، SEC-C2b-R3-2
+            canManage = ACommerce.Kit.Roles.RolePermissions.Has(   // ‏W13-4·C2b·4 — G7: الدَورُ الفَعّالُ مِن `EffectiveRole.Resolve`
+                tenantRoles, ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, me?.ActiveRole), "tenant.manage");
         }
     }
 }

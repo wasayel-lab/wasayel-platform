@@ -38,7 +38,13 @@
                         @L.Markup("platform.pricing.grace_label"):
                         @L.Markup("platform.pricing.grace_days", p.DefaultGraceDays)
                     </p>
-                    <a class="wsl-price-cta" href="/contact">@L.Markup("platform.pricing.contact_cta")</a>
+                    @* البابُ إلى `/contact` يُرسَمُ حينَ يُملَأُ بَريدُها لا قَبلَه (‏2026-10-25، تَدقيقُ الإطلاق lens-dead-doors-4؛ القاعِدَة ١٢):
+                       كانَت النَقرَةُ تُفضي إلى قِسمِ بَريدٍ نائِبٍ بِلا `mailto`. و`L.IsPlaceholder` نَفسُ قَرارِ `LegalHub` وعَدّادِ `/admin`
+                       (`PlatformDocFields`) — فَحينَ يَملَؤُه المالِكُ يَعودُ البابُ بِلا سَطرِ كود. *@
+                    @if (!L.IsPlaceholder("platform.doc.contact_email"))
+                    {
+                        <a class="wsl-price-cta" href="/contact">@L.Markup("platform.pricing.contact_cta")</a>
+                    }
                 </div>
             }
         </div>

@@ -29,6 +29,10 @@ namespace ACommerce.Platform.Tests;
 // تَقولُه R2 عَنه يُعرَف مِن أَوَّلِ رَفعٍ حَقيقيّ (`docs/ADR-017` §٦).
 public class FileStorageSelectionTests
 {
+    /// <summary>‏(‏2026-11-12، W13-6·١٣) النِداءُ المَعدودُ الَّذي صارَ أَوَّلَ وُسَطاءِ الرَفع — وفي هذا المِلَفِّ لا كاتِبَ يُسَجِّل.</summary>
+    private static readonly ACommerce.Platform.Shared.Metering.ProviderCall Upload = ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(
+        ACommerce.Platform.Shared.Metering.OutboundUnits.FileUpload, "ejar", "upload-test");
+
     private static S3StorageSettings Complete => new(
         "https://acct.r2.cloudflarestorage.com", "wasayel", "AKIA_TEST", "SECRET_TEST",
         "https://files.wasayel.test");
@@ -166,7 +170,7 @@ public class FileStorageSelectionTests
         using var body = new MemoryStream(Encoding.UTF8.GetBytes("x"));
 
         var ex = await Assert.ThrowsAsync<FileStorageException>(
-            () => storage.UploadAsync("tenants/t/listings/1/0.jpg", body, "image/jpeg"));
+            () => storage.UploadAsync(Upload, "tenants/t/listings/1/0.jpg", body, "image/jpeg"));
         Assert.Equal(UnavailableFileStorage.Reason, ex.Message);
 
         // والقِراءَةُ تَهدَأ — ما لَم يُكتَب لا يُقرَأ، والانفِجارُ عِندَ
@@ -229,7 +233,7 @@ public class FileStorageSelectionTests
             LoggerFactory.Create(b => { }).CreateLogger<S3FileStorage>());
 
         using var body = new MemoryStream(Encoding.UTF8.GetBytes("fake-jpeg-bytes"));
-        var stored = await storage.UploadAsync(
+        var stored = await storage.UploadAsync(Upload,
             "tenants/ejar/listings/7/0.jpg", body, "image/jpeg");
 
         await pump.WaitAsync(TimeSpan.FromSeconds(20));

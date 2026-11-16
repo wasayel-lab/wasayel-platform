@@ -2,4 +2,10 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+
+  <!-- مُعجَمُ وَحَداتِ العَدّ (‏ADR-051): مِلَفٌّ ظاهِرٌ في المُستَودَعِ ومَضمونٌ في التَجميع — فَلا مَسارَ أَساسٍ يَختَلِفُ بَينَ التَطبيقِ
+       والمُجَمِّعِ ومُشَغِّلِ الاختِبارات. المُبَرِّرُ في MeterUnitCatalog. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Metering\Definitions\*.json" />
+  </ItemGroup>
 </Project>

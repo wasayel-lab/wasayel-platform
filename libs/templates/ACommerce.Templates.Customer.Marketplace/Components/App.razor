@@ -22,9 +22,16 @@
        مَرَّة واحِدَة، هُنا. *@
     @{
         var seoReq       = HttpCtx.HttpContext?.Request;
-        var seoBase      = seoReq is null ? "" : $"{seoReq.Scheme}://{seoReq.Host}";
+        // ‏(‏2026-11-11، W13-4·C2f·2 — يُلحَقُ) المُخَطَّطُ مِن {http, https} (`AbsoluteScheme`): كانَ `X-Forwarded-Proto: javascript` يَكتُبُ canonical وog:url
+        // وog:image وtwitter:image بِـ`javascript://` في الوَضعَين. وhttp وhttps بايتاً كَما كانا.
+        var seoBase      = seoReq is null ? "" : $"{ACommerce.Kit.Tenants.AbsoluteScheme.Of(seoReq.Scheme)}://{seoReq.Host}";
         var seoPath      = seoReq?.Path.Value ?? "/";
-        var seoCanonical = seoBase.Length > 0 ? seoBase + seoPath : null;
+        // ‏(‏2026-11-07، ADR-050 · W13-4·C2a·6) الـcanonical وog:url مِن العُنوانِ الظاهِر: عَلى مُضيفِ المَتجَرِ كانا `https://ashare.R/ashare/…`
+        // (المَسارُ بَعدَ الحَقن). وبِلا نِطاقٍ مُهَيَّإٍ المَسارُ الظاهِرُ هُوَ مَسارُ الطَلَبِ بِحَرفِه. والرَئيسيَّةُ تُقرَأُ مِن مَسارِ الطَلَبِ كَما كانَت.
+        var seoHostSlug  = ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.HostSlug(HttpCtx.HttpContext);
+        var seoVisible   = ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.CanonicalPath(
+                               ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.VisiblePath(HttpCtx.HttpContext), seoHostSlug);
+        var seoCanonical = seoBase.Length > 0 ? seoBase + seoVisible : null;
         var seoSegments  = seoPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         // الرَئيسيَّة = /{slug} أَو /{slug}/r/{role} — وَحدَها تَحمِل JSON-LD.
@@ -253,11 +260,13 @@
             Auth.Load(ctx2, Tenant.Slug);
         }
     }
-    @if (Auth.IsAuthenticated && !string.IsNullOrEmpty(Auth.Token))
+    @* ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-4) لا رَمزَ جَلسَةٍ في الصَفحَة: كانَ `window.acRealtimeToken = '@Auth.Token'` يَطبَعُ ما
+       يَحمِلُه كوكي HttpOnly لِأَيِّ سِكربتٍ فيها، ويُرسِلُه في `/realtime?token=` فَيَكتُبُه سِجِلُّ الإنتاج. الهُبُّ يَقرَأُ الكوكي نَفسَه
+       (`RealtimeHub`)، والمَتجَرُ وَحدَه في الرابِط. مَحروسٌ في `RealtimeSessionTokenTests`. *@
+    @if (Auth.IsAuthenticated)
     {
         <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@@8.0.7/dist/browser/signalr.min.js"></script>
         <script>
-            window.acRealtimeToken = '@Auth.Token';
             window.acRealtimeSlug  = '@Tenant.Slug';
         </script>
         <script src="_content/ACommerce.Templates.Customer.Marketplace/realtime-nav.js" defer></script>
@@ -290,13 +299,21 @@
             );
         };
 
+        @* ‏(‏2026-11-07، ADR-050 · W13-4·C2a·6) سِياقُ المُستَأجِرِ مِن الخادِم — المَتجَرُ والدَورُ ووَضعُ المُضيفِ والجَذر. كانَت الكُتَلُ الثَلاثُ أَدناه
+           و`realtime-nav.js` تَستَخرِجُ السلاجَ مِن `location.pathname`، فَعَلى `ashare.R/listings` يَصيرُ `listings` مَتجَراً. ولا مَتجَرَ عَلى صَفَحاتِ
+           المَنَصَّة. والتَعليقُ تَعليقُ Razor لا JS — فَلا يُشحَنُ في كُلِّ صَفحَة. *@
+        window.acTenant = @((MarkupString)ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.ClientContextJson(
+            Tenant.IsResolved ? Tenant.Slug : "",
+            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null ? roleForPwa : null,
+            seoHostSlug is not null,
+            HttpCtx.HttpContext?.Items[ACommerce.Kit.Tenants.StoreHostItems.Role] is null && seoIsHome,
+            ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreHostPage.VisibleBase(HttpCtx.HttpContext, Tenant.IsResolved ? Tenant.Slug : "")));
+
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
         (function () {
-            var match = location.pathname.match(/^\/([^\/]+)/);
-            if (!match) return;
-            var slug = match[1];
-            if (slug === 'admin' || slug === 'api') return;
+            var slug = (window.acTenant || {}).slug;
+            if (!slug) return;
 
             async function refresh() {
                 try {
@@ -319,10 +336,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });
@@ -346,16 +363,68 @@
         // /{slug}/r/{role}/. تَجاهَل مَسارات /admin و /api.
         (function () {
             if (!('serviceWorker' in navigator)) return;
-            var path = location.pathname;
-            if (path.startsWith('/admin') || path.startsWith('/api')) return;
-            var seg = path.split('/').filter(Boolean);
-            if (seg.length === 0) return;   // home page — no PWA
-            var slug = seg[0];
-            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ لِـ legacy.
-            var scope = '/' + slug + '/';
-            if (seg.length >= 3 && seg[1] === 'r') {
-                scope = '/' + slug + '/r/' + seg[2] + '/';
-            }
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة — لا PWA
+            var slug = t.slug;
+            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
+            var store = t.hostMode ? '' : '/' + slug;
+            @* ‏(‏2026-11-11، W13-4·C2z·1 — C2a-P3-01) النِطاقُ مِن بادِئَةِ العُنوانِ الظاهِرِ كَما يُرسِلُها الخادِم (`t.base`) لا مِن `hostMode`: صَفحَةُ دَورٍ بِشَكلِ
+               المَسارِ عَلى المُضيفِ كانَت تُسَجِّلُ `/r/{role}/` فَلا يَحكُمُها عامِلُها. و`store` يَبقى لِمُرَشِّحِ اشتِراكاتِ الخُروج: كُلُّ تَسجيلٍ عَلى أَصلِ المُضيفِ لِلمَتجَر. *@
+            var scope = t.base + (t.role ? '/r/' + t.role : '') + '/';
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var esc = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var logoutPath = new RegExp('^' + (t.hostMode ? '(?:/' + esc + ')?' : '/' + esc) + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf(store + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);
@@ -472,13 +541,14 @@
             // launcher بِلا /r/. لَو السيرفر رَكَّب pwaPath = null لَن
             // يَكون عُنصُر #ac-install-banner مَوجوداً — هذا فَحص ثانوي
             // لِلسَلامَة.
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة
             var p = location.pathname;
             var isTransient = /\/(login|verify|terms|logout|auth)(\/|$|\?)/.test(p)
                            || p.startsWith('/admin');
             if (isTransient) return;
-            var segs = p.split('/').filter(Boolean);
-            var hasRole = segs.length >= 3 && segs[1] === 'r';
-            if (segs.length <= 1 && !hasRole) return;   // launcher أَو جَذر
+            var hasRole = !!t.role;
+            if (t.home && !hasRole) return;   // launcher أَو جَذر
 
             // Chrome لا يَعرِض «تَثبيت» إلّا عَلى https أَو localhost.
             var isLocalhost = /^(localhost|127\.|\[::1\])/.test(location.hostname)
@@ -495,8 +565,8 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = hasRole ? '/' + segs[0] + '/r/' + segs[2] + '/'
-                                   : '/' + segs[0] + '/';
+            @* ‏(‏2026-11-11، W13-4·C2z·1) ومِفتاحُ التَثبيتِ هُوَ نِطاقُ العامِلِ نَفسُه — مِن `t.base`. *@
+            var scopeKey = t.base + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }

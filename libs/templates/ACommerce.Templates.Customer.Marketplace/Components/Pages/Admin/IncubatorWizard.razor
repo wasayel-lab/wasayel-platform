@@ -139,7 +139,7 @@
     IncubatorSession? session;
 
     protected override async Task OnInitializedAsync()
-        => session = await Incubator.LoadAsync(Id);
+        => session = await Incubator.LoadPlatformAsync(Id);   // ‏(‏2026-11-07، W13-1·DD-3) جَلسَةُ المَنَصَّةِ وَحدَها — دِراسَةُ العَميلِ «لا توجَد» هُنا
 
     static int AnsweredCount(IncubatorSession s)
     {

@@ -26,10 +26,18 @@ namespace ACommerce.Platform.Tests;
 // وما **لا** يَفعَلُه عَمداً: لا يَعتَمِد ولا يَرفُض. الاعتِماد قَرار
 // بَشَريّ يَمُرّ مِن نُقطَة الموافَقَة خَلف بَوّابَة مُشرِف المَنصَّة، وهو
 // ما يَجعَل «قَبل/بَعد» عَلى نَفس الخادِم بُرهاناً لا تَرتيباً.
+//
+// ‏**(‏2026-10-24، تَيّارُ S15 البَند G — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) ويُنشِئُ ما يَقرَؤُه**: كانَ يَطلُبُ المُستَأجِرَ `adwar-demo` وهو في
+// Neon وَحدَه — فَعَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ مَبذورَةٍ يَحمَرُّ بِـ«المَتجَر «adwar-demo» غَير مَوجود.» (مَقيس، RELEASE-READINESS §٤)، وعَلى
+// Neon بَعدَ أَن يَعتَمِدَ المُشرِفُ «khayyat» عَبرَ HTTP يَحمَرُّ في الجَولَةِ التالِيَة (`ProposeAsync` يَرُدُّ المُعتَمَد) ويَجِدُ «المُؤَلَّفَ» غَيرَ فارِغ.
+// فَصارَ مُستَأجِرُه **لِكُلِّ جَولَةٍ** (`live-roles-<8>`) يُنشِئُه قَبلَ النِداءِ — كَأَخَواتِه الَّتي تَكتُبُ ما تَقرَأ — ويُطبَعُ سلاجُه في الأَدِلَّة
+// ويَبقى بَعدَها، فَاعتِمادُ «khayyat» عَبرَ `/admin/tenants/{slug}/roles` بِجَلسَةِ المُشرِفِ مُمكِنٌ كَما كان. ويَبقى في المَجموعَةِ التَسلسُلِيَّة
+// (`72aa8c2`) بِاسمِه.
 
+[Collection(LiveProofCollection.Name)]
 public class LiveRoleDefinitionProofTests
 {
-    private const string TenantSlug = "adwar-demo";
+    private const string TenantPrefix = "live-roles-";
     private const string RoleSlug   = "khayyat";
     private const string BadSlug    = "sabbagh";
 
@@ -65,6 +73,16 @@ public class LiveRoleDefinitionProofTests
 
         var roles = new TenantRoleService(store);
         var exec  = new AgentToolExecutor(store, roles);
+        var proposers = new List<string?>();
+
+        // ─── ٠. ما يَقرَؤُه يُنشِئُه: مُستَأجِرٌ لِهذِه الجَولَةِ وَحدَها ─────────────
+        var TenantSlug = TenantPrefix + Guid.NewGuid().ToString("N")[..8];
+        await using (var w = store.LightweightSession())
+        {
+            w.Insert(new ACommerce.Kit.Tenants.Tenant { Id = TenantSlug, Name = TenantSlug });
+            await w.SaveChangesAsync();
+        }
+        Log($"[tenant] أُنشِئَ مُستَأجِرُ الجَولَة «{TenantSlug}» — يَبقى لِاعتِمادِ «{RoleSlug}» عَبرَ /admin/tenants/{TenantSlug}/roles");
 
         // ─── ١. المُوجَب: نِداء أَداة مُصطَنَع بِنَفس شَكل ما يُنتِجُه النَموذَج
         var payload = $$"""
@@ -80,7 +98,10 @@ public class LiveRoleDefinitionProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.Equal(TenantRoleStatuses.Pending, doc!.Status);
-            Log($"[doc] slug={doc.Slug} status={doc.Status} by={doc.CreatedBy} at={doc.CreatedAt:O}");
+            // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) المُقتَرِحُ يُحجَبُ قَبلَ النِداء — والخَرجُ يُقاسُ في آخِرِ البُرهان.
+            proposers.Add(doc.CreatedBy);
+            var proposer = LiveProofRedaction.Of(doc.CreatedBy);
+            Log($"[doc] slug={doc.Slug} status={doc.Status} by={proposer} at={doc.CreatedAt:O}");
         }
 
         // اللَقطَة المَقروءَة الآن لا تَحوي الدَور — لِأَنّ المُعَلَّق لا يُقرَأ.
@@ -109,14 +130,24 @@ public class LiveRoleDefinitionProofTests
         }
 
         // ─── ٣. هاتِف مُشرِف المَنصَّة لِإكمال الاعتِماد عَبر HTTP ───────
+        // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) كانَ يَكتُبُ جَوّالَ كُلِّ مُشرِفٍ واسمَه — والجَوّالُ هُوَ ما ضَبَطَه المُشَغِّلُ في `PLATFORM_ADMIN_PHONE`
+        // بِنَفسِه. يُعَدُّ ويُعَرَّفُ بِالمُعَرِّف، والخَرجُ يُقاس.
+        List<StudioUser> admins;
         await using (var s = store.QuerySession(StudioAuth.Tenant))
         {
             var users = await s.Query<StudioUser>().ToListAsync();
-            foreach (var a in users.Where(u => u.IsPlatformAdmin))
-                Log($"[platform-admin] phone={a.Phone} name={a.FullName}");
-            if (!users.Any(u => u.IsPlatformAdmin))
-                Log($"[platform-admin] (لا مُشرِف مَنصَّة — {users.Count} مُستَخدِم studio)");
+            admins = users.Where(u => u.IsPlatformAdmin).ToList();
+            Log($"[platform-admin] العَدَد={admins.Count} مِن {users.Count} مُستَخدِم studio");
+            foreach (var a in admins)
+            {
+                var phone = LiveProofRedaction.Of(a.Phone);
+                var name = LiveProofRedaction.Of(a.FullName);
+                Log($"[platform-admin] id={a.Id:N} phone={phone} name={name}");
+            }
         }
+        var measured = LiveProofRedaction.AssertAbsent(evidence.ToString(),
+            admins.SelectMany(a => new[] { a.Phone, a.Email, a.FullName }).Concat(proposers));
+        Log($"[redaction] قيمَةٌ حَيَّةٌ مَقيسَةٌ غائِبَة عَن الخَرج: {measured}");
 
         var path = Environment.GetEnvironmentVariable("WASAYEL_PROOF_OUT");
         if (!string.IsNullOrEmpty(path))

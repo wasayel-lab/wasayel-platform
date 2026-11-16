@@ -1,0 +1,32 @@
+{
+  "slug": "moyasar_api",
+  "capability": "payments",
+  "label": { "ar": "مُيَسِّر — مِفتاح سِرِّيّ", "en": null },
+  "description": { "ar": "مِفتاحُك السِرِّيُّ مِن لَوحَة مُيَسِّر يَبدَأُ بِـ sk_test_ لِلتَجرِبَة وبِـ sk_live_ لِلدَفعِ الحَيّ — لا المِفتاحُ القابِلُ لِلنَشرِ (pk_). ولا تَعرِضُه اللَوحَةُ كامِلاً إلّا مَرَّةً حينَ يُوَلَّد؛ فَإن لَم تَحفَظه فَوَلِّد مَفاتيحَ جَديدَةً مِن صَفحَة «الإعدادات» في لَوحَة مُيَسِّر. تَلصَقُه هُنا فَيُختَم في خِزانَة وَسايِل، ولا يُعرَض مِنه بَعدَ حِفظِه إلّا آخِرُ أَربَعَة مَحارِف. حِسابُ مُيَسِّر حِسابُك، ووَسايِل لا تَمُرّ بِمالِه.", "en": null },
+  "docsUrl": "https://docs.moyasar.com/api/authentication",
+  "physicalGoodsOnly": true,
+  "credential": {
+    "kind": "secret_key",
+    "fields": [
+      {
+        "code": "secret_key",
+        "kind": "secret_key",
+        "label": { "ar": "المِفتاح السِرِّيّ", "en": null },
+        "isRequired": true,
+        "pattern": "^sk_(live|test)_",
+        "hostAllowlist": []
+      },
+      {
+        "code": "webhook_secret",
+        "kind": "issued_secret",
+        "label": { "ar": "رَمزُ إشعارِ الدَّفعِ الآلِيِّ الَّذي تُصدِرُه وَسايِل وتُسَجِّلُه عِندَ مُيَسِّر", "en": null },
+        "isRequired": false,
+        "pattern": null,
+        "hostAllowlist": []
+      }
+    ]
+  },
+  "webhook": { "path": "/{slug}/payments/notify", "verify": "webhook_secret" },
+  "meter": { "presence": "store_binding" },
+  "revocation": { "ar": "اسحَب الرَبطَ هُنا فَيَتَوَقَّف عِندَنا الآن — ولا يُبطِل ذلكَ المِفتاحَ عِندَ مُيَسِّر. وإن تَسَرَّبَ المِفتاحُ أَو ضاعَ فَمُيَسِّر تَنصَحُ بِإعادَةِ تَوليدِ مَفاتيحِك فَوراً مِن صَفحَة «الإعدادات» في لَوحَتِها، ثُمَّ الصِق الجَديدَ هُنا إن أَرَدتَ أَن يَبقى الرَبط.", "en": null }
+}

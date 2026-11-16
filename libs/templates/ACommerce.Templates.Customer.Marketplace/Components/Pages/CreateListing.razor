@@ -5,6 +5,8 @@
 @inject NavigationManager Nav
 @inject ACommerce.Templates.Customer.Marketplace.Services.DynamicAttributesService DynAttrs
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantPlanService PlanSvc
+@inject ACommerce.Templates.Customer.Marketplace.Services.TenantProviderService Providers
 @inject L L
 
 @*
@@ -13,6 +15,12 @@
       - غَيره  → النَموذَج الكامِل ذو الخَطوَتَين (فِئَة → تَفاصيل)
 *@
 
+@* البابُ قَبلَ النَموذَج (‏2026-10-25، تَدقيقُ الإطلاق W8-7 — lens-dead-doors-3): كانَت الصَفحَةُ تَرسُمُ الفِئَةَ والحُقولَ والصُوَرَ والمَوقِعَ لِكُلِّ
+   صاحِبِ جَلسَة، ونُقطَتُها `.RequirePermission("listing.create")` تَرُدُّ مَن لا يَحمِلُها بِـ‏403 عارٍ بَعدَ أَن يَملَأَ كُلَّ شَيء. صارَ `GatedPage`
+   يَسأَلُ `PermissionDoor.Opens` — الدالَّةَ الَّتي يَسأَلُها كُلُّ رابِطٍ إلى هُنا — ويَرسُمُ لِلمَرفوضِ نَصَّ `listings.create.err_forbidden` ومَخرَجَ
+   «اِختَر دَوراً آخَر» حينَ يوجَد. وصاحِبُ الصَلاحِيَّةِ يَرى ما كانَ يَراه بايتاً: المُكَوِّنُ لا يُضيفُ عُنصُراً حَولَ مُحتَواه. ومَن لا جَلسَةَ لَه يَمُرُّ
+   إلى فَرعِ الدُخولِ أَدناه كَما كان (المُكَوِّنُ لا يَسأَلُ الصَلاحِيَّةَ بِلا مُستَخدِم). *@
+<GatedPage Slug="@Slug" Role="@Role" Permission="listing.create" ForbiddenMessageKey="listings.create.err_forbidden">
 @if (RoleCreateForm() is { } roleCreateForm)
 {
     @roleCreateForm
@@ -44,14 +52,11 @@ else
             <span class="@(!string.IsNullOrEmpty(Category)? "active" : "")">@L.Markup("listings.create.step_location")</span>
         </div>
 
+        @* ‏(‏2026-10-25، W8-7): كانَ هُنا فَرعُ `Err == "forbidden"` بِنَصِّ `listings.create.err_forbidden` — بِلا كاتِب: النُقطَةُ تَرُدُّ ‏403
+           ولا تُحَوِّلُ إلى هُنا (صِفرُ `create-listing?err=forbidden` في الكود). والنَصُّ صارَ نَصَّ رَفضِ `GatedPage` أَعلاه، يُقرَأُ قَبلَ النَموذَجِ لا بَعدَه. *@
         @if (Err == "invalid")
         {
             <AcAlert Variant="danger" Message="@L["listings.create.err_invalid"]" />
-        }
-        else if (Err == "forbidden")
-        {
-            <AcAlert Variant="danger"
-                     Message="@L["listings.create.err_forbidden"]" />
         }
         @* نَفاد الحِصَّة: رِسالَة تَقول ما وَقَعَ وما يُفعَل، ومَعَها
            مَخرَج. نُصوصُها مِن قامُوس المَفاتيح لا حَرفِيَّةً في
@@ -59,9 +64,13 @@ else
         else if (Err == "quota")
         {
             <AcAlert Variant="warning" Message="@L["listings.create.err_quota"]" />
-            <p style="margin:-4px 0 12px;">
+            @* ‏(‏2026-10-25، W8-7 — lens-dead-doors-5): المَخرَجُ إلى صَفحَةِ الباقاتِ حينَ يَعرِضُ رَفُّها شَيئاً (`PlanShelf.ShownAsync`) — وإلّا فَلا رابِط. *@
+            @if (quotaPlansShown)
+            {
+            @((MarkupString)"\n            ")<p style="margin:-4px 0 12px;">
                 <a href="@AuthSession.LinkFor(Slug, Role, "plans")">@L["listings.create.err_quota_action"]</a>
             </p>
+            }
         }
         else if (Err == "busy")
         {
@@ -226,7 +235,7 @@ else
                 </AcCard>
 
                 <div style="display:flex;gap:8px;margin-top:16px;">
-                    <a class="ac-btn ac-btn-ghost" href="@($"/{Slug}")">@L.Markup("listings.create.cancel")</a>
+                    <a class="ac-btn ac-btn-ghost" href="@AuthSession.LinkFor(Slug, null, "")">@L.Markup("listings.create.cancel")</a>
                     <button type="submit" class="ac-btn ac-btn-primary ac-btn-lg ac-btn-block">
                         <AcIcon Name="check" Size="18" /> @L.Markup("listings.create.submit")@((MarkupString)"\n                    ")
                     </button>
@@ -237,6 +246,7 @@ else
 </div>
 
 }
+</GatedPage>
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
@@ -247,6 +257,8 @@ else
     Tenant? tenant;
     IReadOnlyList<ACommerce.Templates.Customer.Marketplace.Services.DynField>? dynFields;
     ACommerce.Kit.Roles.Role? activeRole;
+    /// <summary>رَفُّ الباقاتِ لا يَفرُغ — شَرطُ مَخرَجِ «عَرض الباقات» في رِسالَةِ نَفادِ الحِصَّة، ولا يُقرَأُ إلّا حينَ تُرسَمُ (‏<c>?err=quota</c>).</summary>
+    bool quotaPlansShown;
 
     /// <summary>لَقطَة أَدوار المَتجَر — <b>مَوضِع الالتِقاط في نَموذَج
     /// الإنشاء</b>. بِلا تَأليف هي قاعِدَة المَنصَّة.</summary>
@@ -288,6 +300,9 @@ else
             if (me is not null && !string.IsNullOrEmpty(me.ActiveRole))
                 activeRole = tenant.Roles.FirstOrDefault(r => r.Slug == (Role ?? me.ActiveRole));
         }
+
+        if (Err == "quota")
+            quotaPlansShown = (await ACommerce.Templates.Customer.Marketplace.Services.PlanShelf.ShownAsync(PlanSvc, Providers, Slug)).Count > 0;
 
         if (!string.IsNullOrEmpty(Category))
             dynFields = await DynAttrs.GetForListingCategoryAsync(Slug, Category);

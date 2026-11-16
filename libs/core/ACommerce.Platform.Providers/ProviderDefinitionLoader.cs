@@ -70,7 +70,11 @@ public static class ProviderDefinitionLoader
                 throw new InvalidOperationException(
                     $"المُزَوِّد «{slug}» مُكَرَّرٌ في الفِهرِس.");
 
-            var violations = ProviderDefinitionValidator.Validate(d);
+            // ‏(‏2026-11-13، W13-6·١٦ — ‏ADR-051 §٢٠) **والمِترُ يُسأَلُ هُنا بِدالَّتِه المُنفَصِلَة** (`ProviderMeterValidator`): المُصادِقُ القائِمُ بِرُموزِه
+            // الاثنَي عَشَرَ لا يُمَسّ، وخُروقُ الاثنَينِ تُجمَعُ في رِسالَةٍ واحِدَةٍ تُفشِلُ الإقلاع (‏ADR-038: يُجابُ بِكُلِّ الخُروق).
+            var violations = ProviderDefinitionValidator.Validate(d).Select(x => (x.Code, x.MessageAr))
+                .Concat(ProviderMeterValidator.Validate(d).Select(x => (x.Code, x.MessageAr)))
+                .ToList();
             if (violations.Count > 0)
                 throw new InvalidOperationException(
                     $"تَعريف المُزَوِّد «{slug}» لا يَجتاز المُصادَقَة: " +

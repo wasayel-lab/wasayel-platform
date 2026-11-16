@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ═══ المُجَمِّعُ المُستَقِلّ (‏2026-11-12، الموجَة ١٣ W13-6·٤ — ADR-051 §١٢؛ التَصميم §10.2) ═══
+       عَمَلِيَّةٌ مُنفَصِلَةٌ تَسحَبُ مِن دَفتَرِ العَدِّ ولا يَدفَعُ إلَيها شَيء: لا مُستَمِعَ HTTP ولا مَنفَذ (‏Sdk بِلا Web)، ولا تُشيرُ إلّا إلى
+       `ACommerce.Platform.Shared` (عَقدُ الجَدوَلِ `MeterSql` ومُعجَمُ الوَحَدات) وNpgsql. ولا يُشيرُ إلَيها مَشروعٌ تَحتَ libs/ ولا التَطبيق —
+       يَحرُسُ الثَلاثَ `MeterIndependenceTests` (G10). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>ACommerce.V1.Meter</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\libs\core\ACommerce.Platform.Shared\ACommerce.Platform.Shared.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+</Project>

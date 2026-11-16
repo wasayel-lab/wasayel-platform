@@ -66,7 +66,7 @@ public sealed record EvidenceRequirement
 
     /// <summary>أَينَ يُسَدُّ النَقص — رابِطٌ تَعرِضُه اللَوحَةُ
     /// بِجِوارِ السَطرِ الأَحمَر. <c>null</c> حَيثُ لا شاشَةَ بَعد،
-    /// و<see cref="RemedyAr"/> يَقولُ ماذا يُفعَل.</summary>
+    /// و<see cref="Remedy"/> يَقولُ ماذا يُفعَل.</summary>
     public string? RemedyRoute { get; init; }
 
     /// <summary>ماذا يُفعَلُ حَرفِيّاً لِسَدِّ النَقص. <b>ولا يَحوي

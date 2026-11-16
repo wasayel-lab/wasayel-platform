@@ -57,6 +57,33 @@ public static class LocalRedirect
     /// <b>لا تَرمي ولا تُبَلِّغ خَطَأً</b>: طَلَبٌ بِوِجهَة خارِجِيَّة لا
     /// يَستَحِقّ صَفحَة خَطأ تَشرَح لَه ما فَحَصناه — يَستَحِقّ أَن يَنتَهي
     /// في الصَفحَة الَّتي كانَ سَيَنتَهي فيها لَو لَم يُرسِل شَيئاً.</summary>
+    /// <remarks>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · SEC-C2z-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والمَقبولُ يَخرُجُ بِحُروفٍ يَحمِلُها رَأس</b>
+    /// (<see cref="Ascii"/>): <see cref="IsLocal"/> يَقبَلُ كُلَّ مَحرَفٍ لَيسَ تَحَكُّماً، و<c>Results.Redirect</c> يَكتُبُه في <c>Location</c> بِحَرفِه، وKestrel يَرفُضُ
+    /// ما خارِجَ ASCII — فَـ<c>POST /lang/ar</c> بِـ<c>return=/ashare/مثال</c> كانَ <b>500</b> (<c>Invalid non-ASCII or control character in header: 0x0645</c>
+    /// — مَقيسٌ عِندَ <c>ad0a770</c> عَلى الجَذرِ في الوَضعَين وعَلى مُضيفِ المَتجَر). الآن تَحويلٌ بِوِجهَةٍ مُرَمَّزَة؛ ووِجهَةُ ASCII بِحَرفِها
+    /// (<c>SchemeRobustnessCharacterizationTests</c>).</remarks>
     public static string Resolve(string? candidate, string fallback) =>
-        IsLocal(candidate) ? candidate! : fallback;
+        IsLocal(candidate) ? Ascii(candidate!) : fallback;
+
+    /// <summary>
+    /// <para><b>الوِجهَةُ بِحُروفٍ يَحمِلُها رَأسُ <c>Location</c></b> (‏2026-11-11، W13-4·C2f·2 — SEC-C2z-R3-3): كُلُّ مَحرَفٍ خارِجَ ASCII المَطبوعِ (ومَعَه المَسافَةُ
+    /// ومَحارِفُ التَحَكُّم) يُرَمَّزُ بِبايتاتِه UTF-8 بِنِسبَةٍ مِئَوِيَّة، وما سِواه لا يُمَسّ — فَالمُرَمَّزُ سَلَفاً يَبقى بِحَرفِه، وASCII يَعودُ هُوَ هُوَ. قاعِدَةُ
+    /// <c>TenantResolverMiddleware.AsciiOnly</c> لِلاستِعلامِ في تَحويلِ مَنطِقَةِ المَنَصَّة (‏<c>SEC-C2a-2</c>) — نُسخَتانِ في مَشروعَينِ لا يَرى أَحَدُهُما الآخَر.</para>
+    /// <para>ويَسأَلُه <see cref="Resolve"/> وبُناةُ تَحويلِ ما بَعدَ الدُخولِ وبَيتِ الدَور (<c>MarketplaceTemplateExtensions.Home</c> و<c>RoleHome</c>
+    /// و<c>PostLoginRouteAsync</c>): مَسارُ الدَورِ (<c>HomeRoute</c>) يُؤَلِّفُه المَتجَرُ، والمُصادِقُ يَقبَلُ <c>/مثال</c>.</para>
+    /// </summary>
+    public static string Ascii(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (url.All(c => c is > ' ' and < (char)0x7F)) return url;
+        var sb = new System.Text.StringBuilder(url.Length * 3);
+        Span<byte> bytes = stackalloc byte[4];
+        foreach (var rune in url.EnumerateRunes())
+        {
+            if (rune.Value is > ' ' and < 0x7F) { sb.Append((char)rune.Value); continue; }
+            var n = rune.EncodeToUtf8(bytes);
+            for (var i = 0; i < n; i++) sb.Append('%').Append(bytes[i].ToString("X2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return sb.ToString();
+    }
 }

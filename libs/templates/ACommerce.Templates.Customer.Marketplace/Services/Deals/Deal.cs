@@ -8,7 +8,13 @@ namespace ACommerce.Templates.Customer.Marketplace.Services.Deals;
 ///
 /// <para>الإِنفِراد: لا أَحد يَكتُب الحالَة مُباشَرَةً — كُلّ تَغيير يَمُرّ
 /// عَبر <see cref="DealsService"/> الَّذي يَفحَص الـ state machine ويَكتُب
-/// في الـ Timeline (للـ audit). إِشعار الأَطراف يَخرُج تِلقائيّاً.</para>
+/// في الـ Timeline (للـ audit). <b>ولا إشعارَ يَخرُجُ مِن الخِدمَةِ نَفسِها</b>: إشعارُ
+/// الأَطرافِ يُرَكَّبُ في <see cref="DealNotices"/> عَلى الأُنبوبِ القائِمِ — <b>المُنتِجُ الوَحيدُ
+/// لِإشعاراتِ الصَفَقات</b> (مَقيسٌ في <c>DealNoticesProducerTests</c>)، تُناديه الأَبوابُ الَّتي
+/// تُحَرِّكُ الصَفقَة، ومَن ناداه يَعُدُّه <c>DealNoticeDoorsTests</c> لا هذا التَعليق. وكانَ هذا
+/// التَعليقُ يَقول «يَخرُج تِلقائيّاً» بِصِفرِ مُنتِج (P1-5)؛ ثُمَّ «يُنادى مِن نُقطَتَي
+/// <c>/checkout/submit</c> و<c>/accept</c> وَحدَهُما» — ولَم يَصدُق (‏2026-10-24، تَدقيقُ الإطلاق
+/// brief-P1a-2: تِسعَةُ مَواضِعِ نِداء)، فَسُمِّيَ المُنتِجُ وتُرِكَ العَدُّ لِلفاحِص.</para>
 ///
 /// <para>Marten doc تَحت tenant الـ slug (conjoined).</para>
 /// </summary>
@@ -29,8 +35,14 @@ public sealed class Deal
     public string? CounterpartyName { get; set; }
 
     // ─── المال ──────────────────────────────────────────────────────
+    // ولا حَقلَ عَمولَةٍ لِلمَنصَّة: كانَ هُنا `CommissionSar` يُكتَبُ عِندَ
+    // Paid بِنِسبَةِ ‏2.5% ويُعرَضُ لِلمُشتَري، وأُسقِطَ بِـADR-032 §٢‑ب
+    // (‏2026-10-11) — إيرادُ المَنصَّةِ اشتِراكُ المُستَأجِرِ وَحدَه، ولا
+    // تَمُرُّ بِها أَموالُ الصَفَقات. (الوَثائِقُ القَديمَةُ الَّتي تَحمِلُ
+    // الحَقلَ تُقرَأُ بِلا خَطَأ: الخاصِّيَّةُ المَجهولَةُ تُهمَلُ عِندَ
+    // فَكِّ JSON — مَقيسٌ مُنذُ ‏2026-10-12 في `DealStoredCommissionFieldTests`:
+    // تُحَمَّلُ وتُستَعلَمُ وتُكتَب، ويَزولُ الحَقلُ بِأَوَّلِ كِتابَة؛ DEPLOY.md §٤‑د.)
     public decimal AmountSar { get; set; }
-    public decimal? CommissionSar { get; set; }    // عَلى المَنصَّة
 
     // ─── الحالَة ────────────────────────────────────────────────────
     public DealStage Stage { get; set; } = DealStage.Offered;
@@ -44,6 +56,14 @@ public sealed class Deal
     /// <summary>خَصائِص ديناميكيَّة لِكُلّ نَمَط (تَواريخ الحَجز، عُنوان
     /// التَّسليم، تَفاصيل ضامِنَة، …).</summary>
     public Dictionary<string, string> Attributes { get; set; } = new();
+
+    /// <summary>مِفتاحا عُنوانِ التَوصيلِ وهاتِفِ المُشتَري في <see cref="Attributes"/> —
+    /// يَكتُبُهُما <c>/checkout/submit</c> ويَقرَؤُهُما تَفصيلُ الصَفقَةِ <b>لِلبائِعِ
+    /// وَحدَه</b> (P1-4؛ ‏PDPL في <c>PRODUCTION-PLAN.md:229</c>). ثابِتانِ هُنا لِأَنّ
+    /// الكاتِبَ والقارِئَ يَجِبُ أَن يَقرَآ نَفسَ الحَرف — نَسَقُ
+    /// <c>DealsService.ListingOwnerRef</c>.</summary>
+    public const string DeliveryAddressAttribute = "addr";
+    public const string DeliveryPhoneAttribute = "phone";
 
     /// <summary>سَجلّ الزَّمَن لِكُلّ تَحَوُّل — مَصدَر الحَقيقَة لِلـ audit.</summary>
     public List<DealEvent> Timeline { get; set; } = new();
@@ -76,8 +96,68 @@ public enum DealStatus
 public sealed record DealEvent(
     DealStage StageBefore,
     DealStage StageAfter,
-    string Action,          // advanced | cancelled | disputed | assigned | note | refund
+    string Action,          // created | assigned | bound | advanced | captured | capture_failed | cash_on_delivery | cancelled | refunded | refund_failed | disputed | note | gateway_paid | gateway_refund_due | gateway_invoice_left_open
     Guid? ActorId,
     string? ActorName,
     string? Note,
-    DateTime At);
+    DateTime At)
+{
+    /// <summary>البائِعُ رُبِطَ طَرَفاً مُقابِلاً عِندَ وِلادَةِ صَفقَةِ السَلَّة — لا
+    /// قَبولاً (‏ADR-033 §٦). يُمَيَّزُ عَن <c>assigned</c> لِأَنّ الشاشَةَ تُسَمّي تِلكَ
+    /// «قُبِلَ العَرض»، وهذا لَم يُقبَل بَعد. الثابِتُ هُنا لِأَنّ الكاتِبَ
+    /// (<c>DealsService</c>) والقارِئَ (<c>MyDealDetail</c>) يَقرَآنِ نَفسَ الحَرف.</summary>
+    public const string BoundAtBirth = "bound";
+
+    /// <summary>بُلوغُ <c>Delivered</c> في صَفقَةِ نَقدٍ هُوَ لَحظَةُ القَبضِ عِندَ
+    /// البائِع (‏ADR-033 §٦) — والنَصُّ مِن القامُوسِ عِندَ العَرض، لا هُنا.</summary>
+    public const string CashOnDelivery = "cash_on_delivery";
+
+    /// <summary>دَفعٌ أَثبَتَته بَوّابَةُ المَتجَرِ مِن الخادِمِ وكُتِبَ عَلى الصَفقَة (‏ADR-032 الخُطوَة 10، تَيّارُ S9، ‏2026-10-12) — يَكتُبُه
+    /// <c>DealsService.ConfirmGatewayPaymentAsync</c> وَحدَه، والنَصُّ مِن القامُوسِ عِندَ العَرض؛ و<c>Note</c> مُعَرِّفُ الفاتورَةِ لِلمُراجَعَة.</summary>
+    public const string GatewayPaid = "gateway_paid";
+
+    /// <summary>مالٌ قَبَضَته بَوّابَةُ المَتجَرِ عَن صَفقَةٍ أُلغِيَت — استِرجاعُه مُستَحَقٌّ عِندَ البَوّابَةِ نَفسِها، يَستَرجِعُه صاحِبُ المَتجَرِ
+    /// مِن لَوحَتِها؛ ولا نِداءَ عِندَنا (مُزَوِّدُ النُسخَةِ لا يَعرِفُ المَرجِع). يَكتُبُه الإلغاءُ بَعدَ الدَفع، والتَأكيدُ بَعدَ الإلغاء.</summary>
+    public const string GatewayRefundDue = "gateway_refund_due";
+
+    /// <summary>فاتورَةُ بَوّابَةٍ لِطَلَبٍ أُلغِيَ تَعَذَّرَ إلغاؤها عِندَ البَوّابَة — قَد تَبقى قابِلَةً لِلدَّفع (‏2026-10-29، قَرارُ المالِك د3 «د»): يَكتُبُه الإلغاءُ
+    /// حينَ يَعودُ المُلغي بِرَمزٍ يُبقيها (<c>GatewayInvoiceCloser.LeavesPayable</c>)، و<c>Note</c> الرَمزُ لِلمُراجَعَة؛ والنَصُّ مِن القامُوسِ عِندَ العَرض —
+    /// لِلمُشتَري «لا تَدفَع» ولِصاحِبِ المَتجَرِ «ألغِها مِن لَوحَةِ ميسر».</summary>
+    public const string GatewayInvoiceLeftOpen = "gateway_invoice_left_open";
+
+    /// <summary>ثَمَنٌ قُبِضَ نَقداً عِندَ التَسليمِ عَن صَفقَةٍ أُلغِيَت — رَدُّه إلى المُشتَري مُستَحَقٌّ عَلى البائِعِ الَّذي قَبَضَه (‏2026-10-29، قَرارُ المالِك د38 (٢)
+    /// «إلغاء مع تسجيل استرجاع مستحقّ إن كانت مدفوعة»؛ مُراجَعَةُ تَيّارِ S5 الأولى، تَوصيفُه <c>b7fa68b</c>). يَكتُبُه الإلغاءُ وَحدَه بَعدَ حِفظِه حينَ تَحمِلُ الصَفقَةُ
+    /// سَطرَ <see cref="CashOnDelivery"/> (<c>DealsPolicy.CollectedInCash</c>)، ولا مالَ يَتَحَرَّكُ ولا نِداءَ: المَنصَّةُ لا تَقبِضُ ثَمَنَ النَقدِ ولا تَرُدُّه (‏ق‑٦).
+    /// والنَصُّ مِن القامُوسِ عِندَ العَرض.</summary>
+    public const string CashRefundDue = "cash_refund_due";
+
+    /// <summary>حَسَمَ صاحِبُ المَتجَرِ نِزاعاً بِاستِئنافِ الصَفقَةِ مِن مَرحَلَتِها (‏2026-10-29، قَرارُ المالِك د38 (٢) «ج») — يَكتُبُه
+    /// <c>DealsService.ResolveDisputeAsync</c> وَحدَه بِمَرحَلَةٍ لا تَتَحَرَّك، و<c>Note</c> سَبَبُه كَما كَتَبَه؛ والنَصُّ مِن القامُوسِ عِندَ العَرض. والبَديلُ
+    /// الآخَرُ (الإلغاء) يَكتُبُ سَطرَ <c>cancelled</c> بِكاتِبِ الإلغاءِ القائِمِ نَفسِه.</summary>
+    public const string DisputeResumed = "dispute_resumed";
+
+    /// <summary>طَلَبَ المُشتَري استِرجاعَ سِلعَةٍ سُلِّمَت، خِلالَ سَبعَةِ أَيّامٍ مِن تَسليمِها (‏2026-10-29، قَرارُ المالِك د30 «١») — يَكتُبُه
+    /// <c>DealsService.RequestReturnAsync</c> وَحدَه بِمَرحَلَةٍ لا تَتَحَرَّكُ وبِلا مال، و<c>Note</c> سَبَبُه كَما كَتَبَه؛ والنَصُّ مِن القامُوسِ عِندَ العَرض.</summary>
+    public const string ReturnRequested = "return_requested";
+
+    /// <summary>سَطرُ مَرجِعٍ أُلحِق — يَكتُبُه <c>DealsService.AttachRefAsync</c> وَحدَه بِنَصِّ <c>attach {key}={value}</c>، ويَقرَؤُه
+    /// <c>DealRefLabels</c> لِصَفحَةِ الطَرَفَين (‏2026-10-13، G4 (xxvi)). الثابِتُ هُنا لِأَنّ الكاتِبَ والقارِئَ يَقرَآنِ نَفسَ الحَرف.</summary>
+    public const string RefNote = "note";
+
+    /// <summary><b>سَطرٌ فاعِلُه المَنصَّة</b> (‏2026-10-29، قَرارُ المالِك د4) — بِلا مُعَرِّفِ فاعِلٍ وبِاسمِ <see cref="DealPatternCatalog.PlatformActor"/>، يَكتُبُه
+    /// <c>DealsService.EnterPaidOnRecordAsync</c> وَحدَه؛ وتَقرَؤُه صَفحَتا الصَفقَةِ فَتُسَمّيه مِن القامُوسِ لا بِحَرفِه. دالَّةٌ لا خاصِّيَّة: لا تُخَزَّنُ في الوَثيقَة.</summary>
+    /// <remarks>(‏2026-10-29، قَرارُ المالِك د5 (٤) — ولا يُعادُ حَرفٌ فَوقَه: و«بِلا مُعَرِّفٍ» يَشمَلُ <see cref="Guid.Empty"/> — مُعَرِّفُ مُلغي المَنصَّةِ
+    /// <c>GatewayPayments.ExpiryCanceller</c>، فَسَطرُ الإلغاءِ عِندَ انتِهاءِ المُهلَةِ يُسَمّى كَسَطرِ «دَفع». ولا عُضوَ بِهذا المُعَرِّف.)</remarks>
+    public static bool IsByPlatform(DealEvent e)
+        => (e.ActorId is null || e.ActorId == Guid.Empty)
+           && string.Equals(e.ActorName, DealPatternCatalog.PlatformActor, StringComparison.Ordinal);
+
+    /// <summary>اسمُ فاعِلِ «→ التالي» مِن الاستوديو بِحَرفِ ما يُمَرِّرُه البابُ <c>/studio/apps/{slug}/deals/{id}/advance</c> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO11) —
+    /// والبابُ يَكتُبُه حَرفاً لا بِهذا الثابِت (صَفّانِ قَديمانِ يُثَبِّتانِ نِداءَه بِنَصِّه)، فَيَحرُسُ تَطابُقَهُما <c>DealStudioAdvanceStepTests</c>.</summary>
+    public const string StudioActor = "مالِك التَّطبيق (إداريّ)";
+
+    /// <summary><b>سَطرٌ حَرَّكَه صاحِبُ المَتجَرِ مِن الاستوديو</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO11): البابُ يُحَرِّكُ «بِهُوِيَّةِ جانِبِ المَتجَر» — مُعَرِّفُ الطَرَفِ
+    /// المُقابِلِ إن وُجِد (‏ADR-033 §٦‑ط) — فَمُعَرِّفُ السَطرِ لا يَقولُ مَن نَقَر؛ <b>والاسمُ يَقولُه</b>: <see cref="StudioActor"/>. والاسمُ لا المُعَرِّفُ لِأَنّه مَكتوبٌ عَلى
+    /// كُلِّ سَطرٍ سابِق، فَيَصدُقُ عَلى صَفَقاتٍ قَبلَ هذا الكوميت. دالَّةٌ لا خاصِّيَّة.</summary>
+    public static bool IsByStudio(DealEvent e) => string.Equals(e.ActorName, StudioActor, StringComparison.Ordinal);
+}

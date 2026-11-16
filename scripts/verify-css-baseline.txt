@@ -90,9 +90,16 @@ t
 # the zero-equivalence yardstick page — so it is the owner's call and is
 # written up as item D-1 in docs/THEME-DEBT-DECISIONS.md, together with the
 # `git show` command that brings the 26 lines back verbatim.
-ac-space-trust-chip
-is-featured
-is-verified
+#
+# 2026-10-30 (Wave 11 audit CO6; THEME-DEBT D-1 decided under P1 — a rendered
+# class without a style is a defect): the four rules are back in premium.css
+# beside `.ac-space--compact .ac-space-trust`, with the fallback literals
+# dropped (tokens only: --ac-success, --ac-primary, --ac-radius-pill), so the
+# three names below left this ledger by name.  Group J is now EMPTY (0) —
+# kept as a heading so the history of the false green stays readable.
+#   (was) ac-space-trust-chip
+#   (was) is-featured
+#   (was) is-verified
 
 # ── Group I — known extraction artifact, NOT a real defect (1) ──
 # `category` is a C# argument inside an interpolated expression:

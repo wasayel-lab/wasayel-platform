@@ -76,7 +76,9 @@ public class TenantConfigDecisionTests
     [Theory]
     [InlineData("sale | لِلبَيع")]
     [InlineData("sale | لِلبَيع |")]
-    [InlineData("sale | لِلبَيع |   | rent")]
+    // ‏(‏2026-10-29، قَرارُ المالِك د25) كانَ العَمودُ الرابِعُ «rent» — خارِجَ مَعجَمِ التَجميعِ المُغلَقِ فَيُرَدُّ الآن؛ والصَفُّ يَقيسُ الأَيقونَةَ
+    // لا التَجميع، فَصارَ تَجميعاً مِن المَعجَم («residential») بِلا مَساسٍ بِما يَقيسُه.
+    [InlineData("sale | لِلبَيع |   | residential")]
     public void Categories_default_the_icon_to_the_tag_not_the_house(string raw)
     {
         var (cats, code) = CategoriesSaveService.Parse(raw);
@@ -88,14 +90,15 @@ public class TenantConfigDecisionTests
     [Fact]
     public void Categories_keep_an_explicit_icon_and_normalise_slug_and_kind()
     {
-        var (cats, code) = CategoriesSaveService.Parse("  SALE | لِلبَيع | 🚚 | RENT  \n\n  cars | سَيّارات  ");
+        // ‏(‏2026-10-29، قَرارُ المالِك د25) كانَ «RENT» — خارِجَ مَعجَمِ التَجميعِ فَيُرَدُّ الآن؛ والتَصغيرُ نَفسُه يُقاسُ بِـ«RESIDENTIAL».
+        var (cats, code) = CategoriesSaveService.Parse("  SALE | لِلبَيع | 🚚 | RESIDENTIAL  \n\n  cars | سَيّارات  ");
         Assert.Null(code);
         Assert.Equal(2, cats!.Count);
 
         Assert.Equal("sale", cats[0].Slug);          // مُصَغَّر
         Assert.Equal("لِلبَيع", cats[0].Label);
         Assert.Equal("🚚", cats[0].Icon);            // الصَريحُ يَبقى
-        Assert.Equal("rent", cats[0].Kind);          // مُصَغَّر
+        Assert.Equal("residential", cats[0].Kind);   // مُصَغَّر
         Assert.Equal(0, cats[0].SortOrder);
 
         // التَشذيب: سَطرٌ بِمَسافَةٍ بادِئَة لا يُنتِج slug بِفَراغ.
@@ -159,7 +162,8 @@ public class TenantConfigDecisionTests
 
     /// <summary>ودَورٌ لَم يُختَر يَخرُج — نَفسُ سُلوك المَسارَين
     /// قَبلَ التَوحيد، ولَم يُضَف رَفضٌ لِاختِيارٍ فارِغ لِأَنَّه
-    /// لَم يَكُن.</summary>
+    /// لَم يَكُن. <b>(‏2026-10-28، د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: <c>Compose</c> نَقِيَّةٌ وما زالَت تُخرِجُ صِفراً لِلفارِغ؛ والرَفضُ
+    /// صارَ قَبلَها في <c>RolesSaveService.WhyInvalid</c> (الصُفوفُ الثَلاثَةُ أَدناه).</summary>
     [Fact]
     public void Roles_that_were_not_selected_are_dropped()
     {
@@ -168,6 +172,35 @@ public class TenantConfigDecisionTests
 
         Assert.Empty(RolesSaveService.Compose(existing, Array.Empty<string>(), null));
         Assert.Single(RolesSaveService.Compose(existing, new[] { all[1].Slug }, null));
+    }
+
+    // ─── رَفضُ الاختِيارِ الفارِغ (‏2026-10-28، قَرارُ المالِك د62) — مَوجَبٌ وسالِبٌ لِلرَمز ─────────
+
+    /// <summary>الرَمزُ مَوجَب: لا صُندوقَ مُختار ⇒ <c>roles_empty_selection</c>.</summary>
+    [Fact]
+    public void Roles_save_refuses_an_empty_selection_with_roles_empty_selection()
+    {
+        Assert.Equal("roles_empty_selection", TenantConfigCodes.RolesEmptySelection);
+        Assert.Equal(TenantConfigCodes.RolesEmptySelection,
+            RolesSaveService.WhyInvalid(new RolesSaveRequest(Array.Empty<string>(), null)));
+    }
+
+    /// <summary>والمِعيارُ ما تُخرِجُه <c>Compose</c>: أَسماءٌ لا يَعرِفُها الكاتالوج تُسقَطُ فَيَبقى الاختِيارُ فارِغاً ⇒ الرَمزُ نَفسُه.</summary>
+    [Fact]
+    public void Roles_save_refuses_a_selection_that_names_no_catalog_role()
+    {
+        var r = new RolesSaveRequest(new[] { "ghost", "admin" }, "ghost");
+        Assert.Empty(RolesSaveService.Compose(Array.Empty<ACommerce.Kit.Roles.Role>(), r.SelectedCatalogSlugs, r.DefaultCatalogSlug));
+        Assert.Equal(TenantConfigCodes.RolesEmptySelection, RolesSaveService.WhyInvalid(r));
+    }
+
+    /// <summary>والسالِب: دَورٌ واحِدٌ مِن الكاتالوج — ولو مَعَه اسمٌ مَجهول — يَمُرّ.</summary>
+    [Fact]
+    public void Roles_save_accepts_a_selection_with_one_catalog_role()
+    {
+        var one = ACommerce.Kit.Roles.RoleCatalog.All[0].Slug;
+        Assert.Null(RolesSaveService.WhyInvalid(new RolesSaveRequest(new[] { one }, null)));
+        Assert.Null(RolesSaveService.WhyInvalid(new RolesSaveRequest(new[] { "ghost", one }, one)));
     }
 
     // ─── المَناطِق ─────────────────────────────────────────────────
@@ -274,15 +307,15 @@ public class TenantConfigDecisionTests
     [InlineData("image/gif")]
     [InlineData("text/html")]
     [InlineData("")]
+    [InlineData("image/svg+xml")]   // ‏(‏2026-11-07، SEC-C2a-1) كانَ مَقبولاً: SVG مُستَنَدٌ يَحمِلُ سكربتاً
     public void Pwa_rejects_a_content_type_outside_the_allowed_set(string type) =>
         Assert.Equal(TenantConfigCodes.IconBadType,
             PwaSaveService.WhyIconRejected(Icon(type, 1024)));
 
     [Theory]
     [InlineData("image/png")]
-    [InlineData("image/svg+xml")]
     [InlineData("IMAGE/WEBP")]   // الحالَةُ تُطَبَّع
-    public void Pwa_accepts_the_three_allowed_types(string type) =>
+    public void Pwa_accepts_the_two_allowed_raster_types(string type) =>
         Assert.Null(PwaSaveService.WhyIconRejected(Icon(type, 1024)));
 
     /// <summary>الحَجمُ يُفحَص قَبلَ النَوع — وذلك تَرتيبُ النُقطَتَين

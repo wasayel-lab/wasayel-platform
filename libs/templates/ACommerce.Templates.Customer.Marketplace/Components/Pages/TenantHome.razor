@@ -27,11 +27,13 @@
     {
         <AcLoadingState />
     }
-    else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null))
+    else if (loaded.Roles.Count > 0 && (!Auth.IsAuthenticated || activeRole is null) && !goodsFirst)
     {
         @* مَتجَر بِأَدوار + غَير مُسَجَّل دُخول (أَو بِلا ActiveRole):
            لا يَرى أَيّ مُحتَوى. يَرَى صَفحَة اختِيار التَّطبيق الفَرعيّ.
-           هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة. *@
+           هذا يُحَوِّل /{slug} مِن صَفحَة عامَّة إلى نُقطَة دُخول مُتَفَرِّعَة.
+           (‏2026-10-29، قَرارُ المالِك د34، ‏ADR-048 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) إلّا زائِرَ الجَذرِ في مَتجَرٍ فيه دَورُ مُشتَرٍ
+           (`goodsFirst`): يَسقُطُ إلى الفَرعِ الافتِراضِيِّ أَدناه — رَئيسِيَّةُ المُشتَري — والبِطاقاتُ قِسمٌ في آخِرِه. *@
         <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role"/>
     }
     else if (RoleHome() is { } roleHome)
@@ -131,7 +133,7 @@
                                      ShowFavorite="@Auth.IsAuthenticated"
                                      IsFavorite="@favIds.Contains(l.Id)"
                                      FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                                     FavoriteFormReturn="@($"/{Slug}")"
+                                     FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "")"
                                      AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
                                      RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                     </div>
@@ -159,7 +161,7 @@
                                  ShowFavorite="@Auth.IsAuthenticated"
                                  IsFavorite="@favIds.Contains(l.Id)"
                                  FavoriteFormAction="@($"/{Slug}/listings/{l.Id}/favorite")"
-                                 FavoriteFormReturn="@($"/{Slug}")"
+                                 FavoriteFormReturn="@AuthSession.LinkFor(Slug, null, "")"
                                  AddFavoriteAriaLabel="@(L["listings.card.favorite_add"])"
                                  RemoveFavoriteAriaLabel="@(L["listings.card.favorite_remove"])" />
                 }
@@ -174,7 +176,7 @@
             <AcActionCard Label="@(Auth.IsAuthenticated ? L["shell.nav.account"] : L["auth.action.login"])"
                           IconName="user"
                           Variant="surface"
-                          Href="@(Auth.IsAuthenticated ? $"/{Slug}/me" : $"/{Slug}/login")" />
+                          Href="@(Auth.IsAuthenticated ? AuthSession.LinkFor(Slug, null, "me") : AuthSession.LinkFor(Slug, null, "login"))" />
         </section>
 
         @* فَراغ مُوَجَّه: لا رِسالَة صامِتَة. ثَلاث حالات وَلِكُلٍّ خُطوَة
@@ -206,6 +208,12 @@
                               ActionLabel="@(L["shell.nav.explore"])"
                               ActionHref="@AuthSession.LinkFor(Slug, Role, "explore")" />
             }
+        }
+
+        @* بِطاقاتُ الأَدوارِ وسَطرُ «لَدَيكَ حِساب» — قِسمٌ ثانَوِيٌّ تَحتَ البِضاعَة (‏2026-10-29، د34، ‏ADR-048). *@
+        @if (goodsFirst)
+        {
+            <RoleLanding Slug="@Slug" Tenant="loaded" Role="@Role" BelowGoods="true"/>
         }
     }
 </div>
@@ -266,6 +274,10 @@
 
     ACommerce.Kit.Roles.Role? activeRole;
     bool canCreateListing = true;   // افتراضيّاً true لِمَتاجِر بِلا أَدوار
+
+    /// <summary>زائِرُ الجَذرِ في مَتجَرٍ فيه دَورُ مُشتَرٍ يَرى البِضاعَةَ أَوَّلاً والبِطاقاتِ تَحتَها (‏2026-10-29، د34) —
+    /// <see cref="ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst"/>، وهِيَ ما يَسأَلُه الشِلُّ لِلشَريط.</summary>
+    bool goodsFirst;
 
     /// <summary>لَقطَة أَدوار هذا المَتجَر — الكاتالوج المَضمون وفَوقَه
     /// تَعريفاتُه المُؤَلَّفَة المُعتَمَدَة. <b>مَوضِع الالتِقاط الأَوَّل</b>:
@@ -328,6 +340,11 @@
         reviewCounts = home.ReviewCounts;
         favIds       = home.FavouriteListingIds;
 
+        // ‏(‏2026-10-30، CO5) الدَورُ الفَعّالُ لِلمُسَجَّلِ — المَسارُ وإلّا المُخَزَّن، كَما يَقرَؤُه `activeRole` أَدناه — يَدخُلُ السُؤال، فَبَعدَ القِراءَة.
+        goodsFirst = ACommerce.Templates.Customer.Marketplace.Gates.StoreRootDoor.GoodsFirst(
+            loaded.Roles, roleSet, Auth.IsAuthenticated, Role,
+            !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole);
+
         if (loaded.Roles.Count > 0)
         {
             // مَتجَر بِأَدوار — افتَرِض المَنع حَتَّى نَتَحَقَّق مِن صَلاحِيَّة المُستَخدِم.
@@ -338,13 +355,19 @@
                 // (الـ DB يَحوي حَقل واحِد، لكِنّ المُستَخدِم قَد يَكون مُسَجَّلاً
                 // بِدَورَين في تَبويبَين — كُلّ تَبويب يَجِب أَن يَحتَرِم URLه).
                 // وهذا قَرارُ تَوجيهٍ لا استِعلام، فَمَوضِعُه الصَفحَة.
-                var effectiveRoleSlug = !string.IsNullOrEmpty(Role) ? Role : home.StoredActiveRole;
+                // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-2 وSEC-C2b-R2-5 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) بِقَرارِ `EffectiveRole.Resolve` الَّذي يَسأَلُه
+                // `canManage` و`PermissionDoor`: دَعوى `tenant_admin` (رابِطٌ أَو `{slug}-admin.R`) لِغَيرِ مُديرِها تَرسُمُ دَورَه المُخَزَّنَ لا بَطَلَ الإدارَةِ الَّذي زِرُّه
+                // الوَحيدُ يُرَدّ (القاعِدَة ١٢). وما سِواها بِحَرفِه: الرابِطُ وإلّا المُخَزَّن.
+                var effectiveRoleSlug = ACommerce.Templates.Customer.Marketplace.Gates.EffectiveRole.Resolve(null, false, Role, home.StoredActiveRole);
                 if (!string.IsNullOrEmpty(effectiveRoleSlug))
-                {
                     activeRole = loaded.Roles.FirstOrDefault(r => r.Slug == effectiveRoleSlug);
-                    canCreateListing = ACommerce.Kit.Roles.RolePermissions.Has(
-                        loaded.Roles, effectiveRoleSlug, "listing.create");
-                }
+                // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه — صَفحَةُ النَشرِ (`GatedPage`) و`PermissionFilter`
+                // يَقرَآنِ `Tenant.Roles` المُخَزَّنَة، لا `loaded.Roles` المُجَسَّدَةَ بِالأَدوارِ المُؤَلَّفَة. وكانَ هُنا `RolePermissions.Has(loaded.Roles, …)`:
+                // دَورٌ مُؤَلَّفٌ يَحمِلُ `listing.create` يَرى «أَضِف إعلانك» فَتَرُدُّه صَفحَتُه. والدَورُ المُخَزَّنُ `home.StoredActiveRole` — قِراءَةُ
+                // `AccountQueries.ActiveRoleAsync` نَفسُها (`User.ActiveRole` في جَلسَةِ المُستَأجِر) — و`activeRole` لِلتَركيبِ يَبقى مِن المُجَسَّدَة.
+                // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») وصارَ الحارِسانِ يَقرَآنِ المُجَسَّدَة — فَالبابُ يَقرَؤُها: كانَ هُنا
+                // `var storedRoles = (await Tenants.FindAsync(Slug))?.Roles ?? …` ثُمَّ `Opens(storedRoles, …)`. والقاعِدَةُ هِيَ هِيَ: البابُ يَقرَأُ ما يَقرَؤُه حارِسُ هَدَفِه.
+                canCreateListing = ACommerce.Templates.Customer.Marketplace.Gates.PermissionDoor.Opens(loaded.Roles, Role, home.StoredActiveRole, "listing.create");
             }
         }
     }

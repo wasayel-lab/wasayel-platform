@@ -2,6 +2,7 @@
 @inject Services.Incubator.StudioAuth Auth
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.TenantPlanService Plans
+@inject Services.TenantProviderService Providers
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Kit.Subscriptions
@@ -40,7 +41,9 @@
             @if (Saved == "1") { <div class="st-chip st-chip-success" style="margin-bottom:14px;"><AcIcon Name="check" Size="14" /> @L.Markup("studio.app.saved")</div> }
             @if (ErrorMessage is { } err) { <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@err</div> }
 
-            @if (!tenant.PaymentProviderConfigured)
+            @* **بِالبابِ نَفسِه الَّذي يُخفي الباقات** (‏ADR-032 الخُطوَة 8، ‏2026-10-12): `PlansPayable` لا `PaymentProviderConfigured` —
+               مَتجَرٌ رَبَطَ مِفتاحاً وَحدَه يَقبِضُ بِالبِطاقَةِ ولا يَعرِضُ باقَةً بِسِعر، فَتُقالُ لَه. *@
+            @if (!plansPayable)
             {
                 <div class="st-card" style="margin-bottom:14px;">
                     <p style="margin:0;font-size:13px;">@L.Markup("studio.app_plans.no_collector")</p>
@@ -124,6 +127,8 @@
 
     Tenant? tenant;
     IReadOnlyList<PlanDefinition> authored = Array.Empty<PlanDefinition>();
+    /// <summary>أَتُدفَعُ باقاتُ المَتجَرِ المَدفوعَة؟ — <c>TenantProviderSet.PlansPayable</c>: البابُ الَّذي تَقرَؤُه صَفحَةُ الباقاتِ ونُقطَةُ الاشتِراك.</summary>
+    bool plansPayable;
 
     /// <summary>رَمزُ الخَرقِ يُتَرجَمُ في الشاشَة — <b>ورَمزٌ مَجهولٌ
     /// يُعرَضُ خاماً ولا يُبتلَع</b>: رَفضٌ لا يُرى أَسوَأُ مِن رَفضٍ
@@ -150,5 +155,6 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
         if (tenant is null) return;
         authored = (await Plans.ForAsync(Slug)).Authored;
+        plansPayable = (await Providers.ForAsync(Slug)).PlansPayable;
     }
 }

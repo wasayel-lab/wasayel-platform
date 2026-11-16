@@ -171,6 +171,32 @@ public sealed class TenantRoleSet
         RoleDealPatternAffinity.Resolve(catalogSlugs, FindDefinition);
 
     /// <summary>
+    /// <para><b>مِترُ الدَورِ المُشتَقّ</b> (‏2026-11-13، الموجَة ١٣ W13-6·١٧ — ‏ADR-051 §٢١؛ التَصميم §7 و§3.4): أَيُّ وَحدَةِ حُضورٍ يُعَدُّ بِها دَورٌ
+    /// مُجَسَّدٌ بِسلاجِ كاتالوجِه (<c>Role.CatalogSlug</c>) — <see cref="RoleMeterUnits.PresenceRole"/> أَو <see cref="RoleMeterUnits.None"/>. ثَلاثُ حالاتٍ
+    /// بِلا رابِعَة:</para>
+    /// <list type="number">
+    ///   <item><b>دَورُ كاتالوج</b>: مِترُ مِلَفِّه كَما صادَقَه المُحَمِّلُ عِندَ الإقلاع (فَلا يَكونُ فارِغاً).</item>
+    ///   <item><b>دَورٌ مُؤَلَّفٌ في هذا المَتجَر</b>: <see cref="RoleMeterUnits.Derived"/> — المَنَصَّةُ تُسنِدُه، <b>ولا يُقرَأُ مِترٌ مِن وَثيقَةِ المُستَأجِرِ
+    ///   ولَو حَمَلَته</b> (وَثيقَةٌ كُتِبَت بِاليَدِ أَو سَبَقَت بابَ <c>meter_authored_by_tenant</c>): تَصنيفُ الدَورِ لا يَختارُه مُؤَلِّفُه.</item>
+    ///   <item><b>دَورٌ بِلا تَعريف</b> (سلاجٌ فارِغٌ أَو خارِجَ الكاتالوجِ والوَثائِق — مُخَصَّصٌ أَو مُستَورَد): <see cref="RoleMeterUnits.Derived"/> أَيضاً — دَورٌ
+    ///   مُجَسَّدٌ يُعَدُّ ولا يَسقُطُ صامِتاً.</item>
+    /// </list>
+    /// <para><b>فَالجَوابُ لا يَتَغَيَّرُ بِما أَلَّفَه المَتجَر</b> — وتِلكَ هِيَ الضَمانَة لا عَرَضٌ لَها. ومَوضِعُها هذه اللَقطَةُ لِأَنّ لَقطَ الحُضورِ (البَند ١٩)
+    /// يَقرَأُ الأَدوارَ مِنها. <b>قارِئُها في وَقتِ التَشغيلِ ذلك اللَقطُ وَحدَه، ولَم يُبنَ بَعد</b> — دَينٌ مُعلَنٌ في §٢١ (القاعِدَة ١).</para>
+    /// <para>(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثالِثَة · W13-6·D-R3·١ — M6D-RULES-R3-1؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>والكاتالوجُ مُعطًى يُقرَأُ مِنه
+    /// المِتر</b>: <paramref name="catalogue"/> قائِمَةُ تَعريفاتِ أَدوارِ المَنَصَّةِ الَّتي تُحَلُّ بِها الحالَةُ الأولى — <c>null</c> = <see cref="RoleCatalog.Definitions"/>،
+    /// ولَقطُ الحُضورِ يُمَرِّرُ ما يَحمِلُه مُعطاه (<c>PresenceDefinitions.Roles</c>، مِرآةُ مُزَوِّدِيه). كانَ المُعطى دالَّةً، فَصَفُّ «نُسخَةُ دَورٍ بِمِترٍ none ⇐
+    /// صِفرُ سَطرِ دَور» يَقرَأُ النُسخَةَ بِدالَّتِه هُوَ لا بِهذه، وحَقنُ «الجَوابُ <see cref="RoleMeterUnits.Derived"/> دائِماً» أَخضَر — والمِلَفّاتُ العَشَرَةُ كُلُّها
+    /// <c>presence.role</c> = <see cref="RoleMeterUnits.Derived"/>. فَالآنَ نُسخَةٌ تُعطى تُقرَأُ هُنا، والحالَتانِ الأُخرَيانِ كَما هُما: لا مِترَ مِن وَثيقَةِ المُستَأجِر.</para>
+    /// </summary>
+    public string MeterOf(string? catalogSlug, IReadOnlyList<RoleDefinition>? catalogue = null) =>
+        !string.IsNullOrEmpty(catalogSlug)
+        && (catalogue ?? RoleCatalog.Definitions).FirstOrDefault(d => string.Equals(d.Slug, catalogSlug, StringComparison.Ordinal)) is { } platform
+            // المُحَمِّلُ يَرمي عِندَ الإقلاعِ عَلى مِلَفٍّ بِلا مِتر (meter_missing) — فَما وَصَلَ الكاتالوجَ يَحمِلُه.
+            ? platform.Meter!
+            : RoleMeterUnits.Derived;
+
+    /// <summary>
     /// <para><b>تَجسيد أَدوار المُستَأجِر المُؤَلَّفَة فَوق أَدوارِه
     /// المُخزَّنَة</b> — يُرجِع <c>Tenant.Roles</c> كَما هي، مُلحَقاً بِها
     /// دَور لِكُلّ تَعريف مُعتَمَد ليسَ لَه سلاج مُقابِل فيها. هذا هو
@@ -229,7 +255,10 @@ public sealed class TenantRoleSet
                 continue;
             }
 
-            var violations = RoleDefinitionValidator.ValidateTenantDefinition(parsed);
+            // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **حِزامُ القِراءَةِ بِقَواعِدِه هُوَ** لا بِبابِ
+            // الكِتابَة: كانَ `ValidateTenantDefinition` فَصارَ يُسقِطُ بِـ`slug_shadows_role_host` (‏97ba402) دَوراً اسمُه `admin` اعتُمِدَ قَبلَ القاعِدَة — عِندَ النَشرِ
+            // ولَو بِلا نِطاق، ومَعَه دَورُ أَعضائِه. والقاعِدَةُ تُسأَلُ حَيثُ يُقتَرَحُ الدَورُ ويُعتَمَد (ADR-050 §٣).
+            var violations = RoleDefinitionValidator.ValidateStoredTenantDefinition(parsed);
             if (violations.Count > 0)
             {
                 Console.Error.WriteLine(

@@ -55,4 +55,17 @@ public static class PwaManifestDecision
 
         return $"/api/{tenantSlug}";
     }
+
+    /// <summary>
+    /// <para><b>جَذرُ التَطبيقِ الَّذي يُعلِنُه البَيانُ — بِلا شَرطَةٍ أَخيرَة</b> (‏2026-11-07، ADR-050 §٩ المَرحَلَةُ الثانِيَة · W13-4·C2b·2). مِنه
+    /// <c>id</c> و<c>start_url</c> و<c>scope</c> (الجَذرُ + <c>/</c>) ورَوابِطُ المُختَصَرات. كانَ <c>/{slug}</c> أَو <c>/{slug}/r/{role}</c> دائِماً، فَعَلى
+    /// <c>ashare.R</c> يَصيرُ نِطاقُ التَطبيقِ <c>/ashare/</c> والصَفَحاتُ النَظيفَةُ (<c>/explore</c>) خارِجَه — لا تَثبيتَ ولا فَتحَ في التَطبيق.</para>
+    /// <para><b>والقاعِدَة</b>: <see cref="StoreUrl.For"/> نَفسُه — عَلى مُضيفِ المَتجَرِ <c>""</c> و<c>/r/{role}</c>، وفي ما سِواه بِحَرفِه. فَبَيانٌ لِكُلِّ مُضيفٍ
+    /// مِن الطَلَبِ نَفسِه، وعَلامَةُ <c>&lt;link rel="manifest"&gt;</c> (‏<see cref="Resolve"/>) لا تَتَغَيَّر: مَسارُ API عَلى الأَصلِ نَفسِه.</para>
+    /// </summary>
+    public static string AppBase(HostView view, string slug, string? role)
+    {
+        var at = StoreUrl.For(view, slug, role, "");
+        return at == "/" ? "" : at;
+    }
 }

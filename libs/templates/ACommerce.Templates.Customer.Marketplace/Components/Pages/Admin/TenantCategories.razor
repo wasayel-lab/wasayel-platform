@@ -17,7 +17,8 @@
     }
     else
     {
-        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `lens-dead-doors-6`) كانَ `/{Slug}/r/admin/manage`: لا دَورَ «admin» في كاتالوج، والمَسارُ بِدَورٍ يَقرَأُ كوكي ذلِكَ الدَورِ وَحدَه — فَيَرى المُديرَ مَجهولاً. والمَسارُ بِلا دَورٍ يَقرَأُ أَيَّ جَلسَةٍ لِلمَتجَر (`AuthSession.ResolveCookieBase`).
+        var backHref = From == "tenant" ? AuthSession.LinkFor(Slug, null, "manage") : $"/admin/tenants/{Slug}";
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
@@ -87,22 +88,12 @@
                                     </div>
                                     <div>
                                         <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.kind_label")</span>
-                                        <input class="ac-input ac-cat-kind" placeholder="residential" value="@c.Kind"
-                                               list="kind-list" style="direction:ltr;" />
+                                        <CategoryKindSelect Value="@c.Kind" />
                                     </div>
                                 </div>
                             </div>
                         }
                     </div>
-
-                    <datalist id="kind-list">
-                        <option value="residential"></option>
-                        <option value="commercial"></option>
-                        <option value="roommate"></option>
-                        <option value="vehicles"></option>
-                        <option value="events"></option>
-                        <option value="leisure"></option>
-                    </datalist>
 
                     <button type="button" class="ac-add-row-btn" id="add-cat" style="margin-top:12px;">
                         <AcIcon Name="plus" Size="16" /> @L.Markup("admin.tenant_categories.add_row")@((MarkupString)"\n                    ")
@@ -134,7 +125,7 @@
                     </div>
                     <div>
                         <span class="ac-chip-input-label">@L.Markup("admin.tenant_categories.kind_label")</span>
-                        <input class="ac-input ac-cat-kind" placeholder="residential" list="kind-list" style="direction:ltr;" />
+                        <CategoryKindSelect />
                     </div>
                 </div>
             </div>
@@ -173,6 +164,7 @@
     {
         "empty" => L["admin.tenant_categories.err_empty"],
         "bad_format" => L["admin.tenant_categories.err_format"],
+        Services.Patterns.CategoryKinds.Unknown => L["categories.kind.err_unknown"],   // ‏2026-10-29، قَرارُ المالِك د25
         _ => err
     };
 }

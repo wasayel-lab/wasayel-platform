@@ -1,3 +1,5 @@
+using System.Text.Encodings.Web;
+using System.Text.Unicode;
 using ACommerce.Platform.I18n;
 using Microsoft.AspNetCore.Components;
 
@@ -79,4 +81,18 @@ public sealed class PlatformDocLanguage
     /// <c>&lt; &gt; &amp;</c>، فَتُكتَبُ كَما كانَت تُكتَبُ
     /// الحَرفِيَّة.</summary>
     public MarkupString Markup(string key) => new(this[key]);
+
+    /// <summary>
+    /// <para>النَصُّ بِوُسَطاءَ مُرَمَّزَة — كَما يَفعَلُ <see cref="L.Markup(string, object?[])"/>: كُلُّ وَسيطٍ يُرَمَّزُ قَبلَ الدَمج،
+    /// فَاسمُ مُضيفٍ مَضبوطٍ في الإعدادِ لا يَكتُبُ وَسماً (‏2026-10-29، قَرارُ المالِك د20: أَسماءُ الجِهاتِ في سِياسَةِ الخُصوصِيَّةِ
+    /// تُقرَأُ مِن الإعدادِ الَّذي يَختارُها — <see cref="PrivacyRecipients"/>).</para>
+    /// <para><b>والمُرَمِّزُ يُبقي الحُروفَ كُلَّها ويُرَمِّزُ ما يَكسِرُ الوَسمَ وَحدَه</b> (<c>&lt; &gt; &amp; " '</c>): الأَسماءُ تُجمَعُ
+    /// بِرابِطِ القامُوسِ («{0} و{1}»)، فَمُرَمِّزُ <see cref="L"/> الافتِراضيُّ كانَ سَيَكتُبُ الواوَ كِيانَ <c>&amp;#x648;</c> في وَثيقَةٍ
+    /// يُقرَأُ مَصدَرُها ويُقارَنُ بايتِيّاً (القاعِدَة ١٣) — والحِمايَةُ نَفسُها.</para>
+    /// </summary>
+    public MarkupString Markup(string key, params object?[] args)
+        => new(string.Format(this[key],
+            args.Select(a => (object?)ArgEncoder.Encode(a?.ToString() ?? string.Empty)).ToArray()));
+
+    private static readonly HtmlEncoder ArgEncoder = HtmlEncoder.Create(UnicodeRanges.All);
 }

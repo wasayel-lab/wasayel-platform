@@ -102,6 +102,10 @@ public sealed class ApiKeyDocument
     /// <para>فَالناقِلُ يَأخُذ مِفتاحاً مَربوطاً بِحِسابِه، ويُحَرِّك
     /// الصَفقات الَّتي هُوَ طَرَفٌ فيها — <b>والتَخويلُ يَبقى حَيثُ
     /// هُوَ</b>، في الخِدمَة، بِلا سَطرٍ مُكَرَّر.</para>
+    ///
+    /// <para><b>دِقَّةٌ مُلحَقَةٌ ‏2026-10-13 — ولا يُعادُ حَرفٌ فَوقَها</b> (مُراجَعَةُ المَوجَة 3a — G4 (xii)؛ ‏ADR-033 §٦‑ط): «مُخَوَّلٌ بِالمَرحَلَة»
+    /// أَعلاه هُوَ اليَومَ فاعِلُ المَرحَلَةِ <b>التالِيَة</b> — <c>DealsPolicy.RequiredActorToLeave</c>، مَن يَدخُلُها — لا فاعِلُ الحالِيَّةِ كَما
+    /// كانَت <c>AdvanceAsync</c> تَسأَلُ قَبلَ ‏2026-10-11. والحُجَّةُ باقِيَةٌ بِحَرفِها: لا مَرحَلَةَ في الكاتالوجِ فاعِلُها <c>platform</c>.</para>
     /// </summary>
     public Guid ActorUserId { get; set; }
 
@@ -127,6 +131,17 @@ public sealed class ApiKeyDocument
     public Guid IssuedByStudioUserId { get; set; }
 
     public bool HasScope(string scope) => Scopes.Contains(scope, StringComparer.Ordinal);
+
+    /// <summary>
+    /// <para><b>أَصالِحٌ هذا المِفتاحُ عِندَ هذه اللَحظَة؟</b> (‏2026-11-13، مُراجَعَةُ المَرحَلَةِ د الثانِيَة · W13-6·D-R2·١ — M6D-CNT-R2-1؛ ADR-051 §٢٣): نَشِطٌ
+    /// (<see cref="Status"/> = <see cref="StatusActive"/>) ولَم يَنتَهِ (<see cref="ExpiresAt"/> غائِبٌ أَو بَعدَ <paramref name="at"/>) — دالَّةٌ نَقِيَّةٌ واحِدَةٌ يَرُدُّ بِها
+    /// الاعتِمادُ (<c>ApiKeyService.AuthenticateAsync</c>) ويَعُدُّ بِها قارِئُ الحُضورِ (<c>PresenceReader.ApiKeysOf</c>، وَحدَةُ <c>presence.api_key</c>).</para>
+    /// <para><b>لِماذا دالَّةٌ عَلى الوَثيقَة</b>: لا شَيءَ يَنقُلُ المِفتاحَ المُنتَهِيَ عَن <c>active</c> (كاتِبُ <see cref="StatusRevoked"/> الوَحيدُ الإبطال)، فَكانَ القارِئُ
+    /// يَسأَلُ الحالَ وَحدَها ويَعُدُّ المُنتَهِيَ حاضِراً كُلَّ يَومٍ والمَنَصَّةُ تَرُدُّه. سُؤالانِ في مَوضِعَينِ يَنجَرِفان؛ وسُؤالٌ واحِدٌ يُجيبُ الاثنَين.
+    /// والحَدُّ حَدُّ الاعتِمادِ بِحَرفِه: انتِهاءٌ يُساوي اللَحظَةَ مُنتَهٍ.</para>
+    /// </summary>
+    public bool IsUsableAt(DateTime at)
+        => string.Equals(Status, StatusActive, StringComparison.Ordinal) && (ExpiresAt is not { } expires || expires > at);
 }
 
 /// <summary>

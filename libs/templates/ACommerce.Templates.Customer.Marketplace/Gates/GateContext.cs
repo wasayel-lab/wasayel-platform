@@ -81,10 +81,13 @@ public static class GateAccessors
 }
 
 /// <summary>إصدار الشُروط الحاليّ. بَدّله لِتُجبِر كُلّ المُستَخدِمين عَلى
-/// إعادَة القَبول (مَثَلاً بَعد تَعديل سياسَة الخُصوصِيَّة).</summary>
+/// إعادَة القَبول (مَثَلاً بَعد تَعديل سياسَة الخُصوصِيَّة).
+/// <para><b>‏2 (‏2026-10-29، مُراجَعَةُ تَيّارِ S2 الجَولَة ٢؛ قَرارا المالِك د20 ود18)</b>: بَندُ الخُصوصِيَّةِ (<c>terms.privacy.body</c>) تَبَدَّلَ مِن «لا نُشارِكها
+/// مَع أَطراف ثالِثَة» إلى «ونُشارِكُها مَعَ الجِهاتِ المُسَمّاةِ في سِياسَةِ الخُصوصِيَّةِ فَقَط» (`5c6bede`)، والبَندُ الرابِعُ يَعِدُ بِطَلَبِ القَبولِ لِلإصدارِ الجَديد —
+/// فَكُلُّ عُضوٍ قَبِلَ الإصدارَ 1 يُطلَبُ قَبولُه عِندَ أَوَّلِ كِتابَة، كَما رُفِعَت مُوافَقَةُ الاستوديو لِلجُملَةِ نَفسِها (<c>ConsentPolicy</c> ‏2 ← 3).</para></summary>
 public static class TermsPolicy
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 2;
 
     /// <summary>
     /// <para><b>هَل قَبِلَ هذا المُستَخدِمُ الإصدارَ الحاليّ؟</b> —
@@ -104,4 +107,17 @@ public static class TermsPolicy
         => user is not null
         && user.AcceptedTermsAt is not null
         && user.AcceptedTermsVersion >= CurrentVersion;
+
+    /// <summary>
+    /// <para><b>ما تَغَيَّرَ مُنذُ قَبِلَ</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ CO9؛ تَوصيفُه <c>e36cdb6</c>): الإصداراتُ بَعدَ ما قَبِلَه حَتّى الحاليّ — لِكُلٍّ سَطرٌ في القامُوسِ
+    /// (<see cref="ChangeKey"/>) تَرسُمُه صَفحَةُ الشُروطِ فَوقَ النَصّ، فَيَعرِفُ ما الجَديدُ فيما يُطلَبُ قَبولُه (والبَندُ الرابِعُ يَعِدُه بِذلك). وفارِغَةٌ لِمَن قَبِلَ
+    /// الحاليّ، ولِمَن لَم يَقبَل شَيئاً بَعدُ (لا «تَغَيَّرَ» عِندَ مَن لَم يَرَ إصداراً — الشُروطُ كُلُّها جَديدَةٌ عَلَيه). دالَّةٌ نَقِيَّة.</para>
+    /// </summary>
+    public static IReadOnlyList<int> ChangesSince(ACommerce.Kit.Auth.User? user)
+        => user is null || user.AcceptedTermsAt is null || user.AcceptedTermsVersion < 1 || user.AcceptedTermsVersion >= CurrentVersion
+            ? Array.Empty<int>()
+            : Enumerable.Range(user.AcceptedTermsVersion + 1, CurrentVersion - user.AcceptedTermsVersion).ToList();
+
+    /// <summary>مِفتاحُ سَطرِ «ما تَغَيَّرَ في الإصدارِ N» — ولِكُلِّ إصدارٍ نُشِرَ سَطرُه (<c>TermsChangesTests</c> يَعُدُّها ويَفشَلُ عَلى الناقِص).</summary>
+    public static string ChangeKey(int version) => $"terms.changes.v{version}";
 }

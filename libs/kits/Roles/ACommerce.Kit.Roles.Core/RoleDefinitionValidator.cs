@@ -34,6 +34,14 @@ public static class RoleDefinitionValidator
     private static readonly Regex SlugPattern =
         new("^[a-z][a-z0-9_]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// <para><b>اسمُ دَورٍ مَحجوز: <c>name</c></b> (‏2026-10-30، الموجَة ١٢ F1 البَند ٩؛ تَوصيفُه <c>1a51c96</c>). كوكيُّ جَلسَةِ الدَورِ
+    /// <c>.acommerce.auth.{slug}.{role}</c>، وكوكيُّ اسمِ العَرضِ <c>.acommerce.auth.{slug}.name</c> — ومُنذُ I-SEC-1 (‏ADR-041) لا يُحَلُّ كوكيُّ الاسمِ جَلسَةً
+    /// (<c>AuthSession.IsNameCookie</c> في القالِب)، فَدَورٌ بِهذا الاسمِ لا تُفتَحُ جَلسَتُه عَلى مَسارِه أَبَداً: بابٌ مَيت (القاعِدَة ١٢). العُدَّةُ لا تَعرِفُ
+    /// القالِب، فَالثابِتُ هُنا وصَفٌّ في الاختِباراتِ يُثَبِّتُ أَنّ القالِبَ يَراه كوكيَّ اسمٍ — فَلا يَنحَرِفان.</para>
+    /// </summary>
+    public const string ReservedNameSlug = "name";
+
     /// <summary>القائِمَة فارِغَة تَعني تَعريفاً صالِحاً.</summary>
     public static IReadOnlyList<RoleDefinitionViolation> Validate(RoleDefinition d)
     {
@@ -45,6 +53,9 @@ public static class RoleDefinitionValidator
         else if (!SlugPattern.IsMatch(d.Slug))
             v.Add(new("slug_pattern",
                 $"الـ slug «{d.Slug}» خارِج النَّمَط ^[a-z][a-z0-9_]*$."));
+        else if (d.Slug == ReservedNameSlug)
+            v.Add(new("slug_reserved_name",
+                $"الـ slug «{d.Slug}» مَحجوز — كوكيُّ جَلسَتِه هُوَ كوكيُّ اسمِ العَرض، فَلا تُفتَحُ جَلسَتُه عَلى مَسارِه. اِختَر اسماً آخَر."));
 
         if (string.IsNullOrWhiteSpace(d.Icon))
             v.Add(new("icon_missing", $"الدَور «{d.Slug}» بِلا أَيقونَة."));
@@ -54,7 +65,9 @@ public static class RoleDefinitionValidator
         if (!string.IsNullOrEmpty(d.HomeRoute) &&
             (!d.HomeRoute.StartsWith('/') ||
              d.HomeRoute.Any(char.IsWhiteSpace) ||
-             d.HomeRoute.Contains('?') || d.HomeRoute.Contains('#')))
+             d.HomeRoute.Contains('?') || d.HomeRoute.Contains('#') ||
+             // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R2-3 — يُلحَقُ) ولا مَسارَ يَصيرُ خارِجِيّاً عَلى المُضيف: `\` و`//` في أَوَّلِه ومَحارِفُ التَحَكُّم.
+             d.HomeRoute.StartsWith("//", StringComparison.Ordinal) || d.HomeRoute.Contains('\\') || d.HomeRoute.Any(char.IsControl)))
             v.Add(new("home_route_malformed",
                 $"مَسار الدَور «{d.Slug}» شاذّ: «{d.HomeRoute}»."));
 
@@ -144,7 +157,38 @@ public static class RoleDefinitionValidator
     /// لَرَفَضَ كُلّ دَور كاتالوج نَفسَه. فَصلُ الدالَّتَين يَجعَل
     /// الاختِلاف مُعلَناً في التَّوقيع لا مَخفِيّاً في وَسيط.</para>
     /// </summary>
+    /// <remarks>‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) <b>هذِه بَوّابَةُ الكِتابَة</b>:
+    /// يَسأَلُها اقتِراحُ الوَكيلِ (<c>AgentService.DefineRoleAsync</c>) واعتِمادُ المُشرِف (<c>TenantRoleService.ValidateBeforeApprove</c>)، وهي
+    /// <see cref="ValidateStoredTenantDefinition"/> وزِيادَةُ <see cref="SlugShadowsRoleHost"/>. وحِزامُ القِراءَةِ (<c>TenantRoleSet.FromDocuments</c>) يَسأَلُ تِلكَ
+    /// لا هذِه — كانَ يَسأَلُ هذِه فَيُسقِطُ دَوراً مُؤَلَّفاً اسمُه <c>admin</c> اعتُمِدَ قَبلَ القاعِدَة (‏97ba402) عِندَ النَشرِ ولَو بِلا نِطاق.</remarks>
     public static IReadOnlyList<RoleDefinitionViolation> ValidateTenantDefinition(RoleDefinition d)
+    {
+        var v = new List<RoleDefinitionViolation>(ValidateStoredTenantDefinition(d));
+
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · C2a-P3-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **ولا يُظَلِّلُ اسمَ مُضيفِ دَور**: `RoleHostNames` يُسَمّي `tenant_admin`
+        // بِـ`admin` — فَدَورٌ يُؤَلِّفُه مَتجَرٌ بِاسمِ `admin` كانَ يَجتازُ (لا يُطابِقُ اسمَ كَتالوج) فَيَصيرُ `{slug}-admin.R` اسماً لِدَورَين. وأَدوارُ المُستَأجِرِ تَبقى
+        // بِمَسارِها (`/{slug}/r/{role}`) بِلا مُضيفٍ حَتّى يَمُدَّ قَرارٌ المُعجَم (ADR-050 §٣).
+        if (!string.IsNullOrWhiteSpace(d.Slug) && RoleHostNames.CatalogSlugOf(d.Slug) is { } catalog
+            && !string.Equals(catalog, d.Slug, StringComparison.Ordinal))
+            v.Add(new(SlugShadowsRoleHost,
+                $"الـ slug «{d.Slug}» اسمُ مُضيفِ الدَورِ «{catalog}» في المَنَصَّة — " +
+                "دَورٌ بِه يَجعَلُ المُضيفَ الواحِدَ اسماً لِدَورَين. اِختَر اسماً آخَر."));
+
+        return v;
+    }
+
+    /// <summary>
+    /// <para><b>حِزامُ القِراءَة — ما يَبقى بِه تَعريفٌ مُعتَمَدٌ مُخَزَّنٌ حَيّاً</b> (‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 الجَولَةُ الثانِيَة · C2z-PATHS-R2-01):
+    /// <see cref="Validate"/> بِحَرفِه وظِلُّ الكَتالوجِ (<c>slug_shadows_platform_catalog</c>) — قَواعِدُ <see cref="ValidateTenantDefinition"/> كَما كانَت عِندَ
+    /// <c>7ce945e</c>. يَسأَلُه <c>TenantRoleSet.FromDocuments</c> وَحدَه.</para>
+    /// <para><b>ولِماذا لا <see cref="SlugShadowsRoleHost"/> هُنا</b>: ADR-050 §٣ يَرُدُّه «عِندَ الاعتِماد» — قاعِدَةٌ جَديدَةٌ تُغلِقُ البابَ أَمامَ ما يَأتي ولا تَمحو
+    /// ما اعتُمِدَ قَبلَها؛ والتَصادُمُ الَّذي تَحرُسُه لا يَقَعُ بِدَورٍ قائِم: الدَورُ المُؤَلَّفُ لا مُضيفَ لَه (<c>HoldsRoleHost</c> يَطلُبُ اسمَ الكَتالوجِ وسلاجَه مَعاً،
+    /// ومَفاتيحُ <see cref="RoleHostNames.ByCatalogSlug"/> أَدوارُ الكَتالوج)، فَـ<c>{slug}-admin.R</c> لا يَعني إلّا <c>tenant_admin</c>. وكانَ إسقاطُه عِندَ القِراءَةِ
+    /// يَمحو دَوراً مُعتَمَداً ودَورَ أَعضائِه عِندَ النَشرِ ولَو بِلا نِطاق.</para>
+    /// <para><b>دالَّةٌ مُنفَصِلَةٌ لا عَلَمٌ</b> — بِمَبدَإِ الفَصلِ أَعلاه: الفَرقُ بَينَ البابِ والحِزامِ مُعلَنٌ في التَوقيع. ورَسائِلُها ورُموزُها وتَرتيبُها رَسائِلُ
+    /// <see cref="ValidateTenantDefinition"/> بِحَرفِها (<c>RoleReadBeltTests</c>).</para>
+    /// </summary>
+    public static IReadOnlyList<RoleDefinitionViolation> ValidateStoredTenantDefinition(RoleDefinition d)
     {
         var v = new List<RoleDefinitionViolation>(Validate(d));
 
@@ -155,6 +199,9 @@ public static class RoleDefinitionValidator
 
         return v;
     }
+
+    /// <summary>رَمزُ خَرقِ <see cref="ValidateTenantDefinition"/>: اسمُ دَورٍ مُؤَلَّفٍ هُوَ اسمُ مُضيفِ دَورٍ لِغَيرِه (‏2026-11-11، C2a-P3-06).</summary>
+    public const string SlugShadowsRoleHost = "slug_shadows_role_host";
 
     /// <summary>هَل يَجتاز بَوّابَة المُستَأجِر؟</summary>
     public static bool IsValidTenantDefinition(RoleDefinition d) =>

@@ -18,10 +18,9 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8;"><main><div class="acs-page"><article class="wsl-doc" dir="ltr" lang="en"><h1 class="wsl-doc-title">Privacy Policy</h1>
-        <p class="wsl-doc-meta">Last updated: 2026-08-29</p>
+        <p class="wsl-doc-meta">Last updated: 2026-11-07</p>
 
         <nav class="wsl-doc-nav" aria-label="&#x631;&#x648;&#x627;&#x628;&#x650;&#x637;&#x64F; &#x627;&#x644;&#x645;&#x64E;&#x646;&#x64E;&#x635;&#x64E;&#x651;&#x629;"><a class="wsl-doc-navlink" href="/terms/en">Terms and Conditions</a>
             <a class="wsl-doc-navlink" href="/refunds/en">Refund Policy</a>
@@ -61,18 +60,21 @@
 
         <section class="wsl-doc-section"><h2>5. Who we share it with</h2>
             <p>We do not sell or rent your data. We share only what is necessary with the following parties, each of them measured from the code rather than listed for safety:</p>
-            <ul class="wsl-doc-list"><li>The SMS or email provider — to deliver the sign-in code to you alone.</li>
+            <ul class="wsl-doc-list"><li>The sign-in code SMS and email provider (none configured today) — receives your phone number or email address with the code, to deliver it to you alone. It also carries your account-security notice: when a new sign-in contact is added to your account, a message goes to your other contact with the new one masked. And it carries the store owner's email about what needs doing on the store's orders: the store name, the order title, the amount and its currency, and the path of the order page in the studio — without the buyer's name, phone or address.</li>
                 <li>The Nafath digital identity service — only for those who choose it as a sign-in channel.</li>
-                <li>The payment provider — to carry out the subscription transaction and return its result.</li>
-                <li>The web font service and the web file delivery network — your browser requests the font and the live-connection library from them, so your network address is visible to them.</li>
-                <li>OpenStreetMap — map tiles are requested from it when a screen containing a map is opened.</li>
-                <li>Competent authorities — on a binding legal request.</li></ul></section>
+                <li>The subscription payment provider (PayPal or Paddle) — to carry out the subscription transaction and return its result.</li>
+                <li>The payment gateway the store chooses (Moyasar today) — the order is paid there by card, and you enter your card there directly so it never passes through us; we send it the invoice amount, its description and the deal identifiers.</li>
+                <li>The shipping company OTO — when the seller ships your order through their account there: your name, phone number, delivery address and city, to deliver the order only; and when the seller opens that account from the store: the seller's name, email, mobile number, city and billing address — and, for a seller registered for VAT, the business name, VAT number, commercial registration number and address: district, postal code, building number and street.</li><li>The browser push service (Google, Mozilla, Apple or Microsoft, depending on your browser) — when you turn on notifications: it receives your device's subscription address and an encrypted payload, to deliver the notification to your device.</li>
+                <li>The hosting and database providers (Hugging Face and Neon today) — they hold all of the platform's data, stored to run and keep it.</li><li>The web font service (Google Fonts) and the web file delivery network (jsDelivr) — your browser requests the font and the live-connection library from them, so your network address is visible to them.</li>
+                <li>OpenStreetMap — your browser requests the map from it when a screen containing a map is opened, so your network address and the location shown on it are visible to it.</li>
+                <li>Competent authorities — on a binding legal request.</li></ul>
+            <p>Some of these parties process data outside the Kingdom of Saudi Arabia.</p></section>
 
         <section class="wsl-doc-section"><h2>6. Retention and deletion</h2>
-            <p>We keep your data for as long as your account exists and for as long as legal and accounting requirements demand. You may request deletion of your account and your data by writing to us; the request is carried out within thirty days unless a legal obligation prevents it.</p></section>
+            <p>We keep your data for as long as your account exists and for as long as legal and accounting requirements demand. You can delete your store account and your personal data from inside the app itself: the Account page, then Delete account; deletion takes effect as soon as you confirm, and it is not accepted while you have an open deal or an active trip until you complete or cancel it. On deletion, your name becomes "Deleted account" on your deals, conversations, reviews, offers and support tickets and in the notifications stored for other people, and the delivery address and phone number you entered in your orders are erased; your listings are withdrawn from the store, pending offers on them are rejected, and every order on them you have not yet accepted is cancelled and its buyer told. Transaction and invoice records remain without your name for as long as a legal or accounting obligation requires; your name remains in the internal event log, which is never edited and no screen displays, and in the store's audit log if you worked in the store as a seller or on its management team, where it is hidden when shown. What reached the shipping company or other people's devices in browser notifications before the deletion cannot be recalled. A studio account (for store owners) has no deletion door inside the app today; its deletion is requested at the contact email below.</p></section>
 
         <section class="wsl-doc-section"><h2>7. Your rights</h2>
-            <p>You may access your data, correct it, request its deletion, and withdraw your consent to notifications. All of this is done by writing to us at the contact email below.</p></section>
+            <p>You may access your data and download a copy of it, correct it, request its deletion, and withdraw your consent to notifications. Viewing your store data and downloading a machine-readable copy of it happen on the Account page, then My data, without writing to us. Store account deletion happens inside the app; for anything else, write to us at the contact email below.</p></section>
 
         <section class="wsl-doc-section"><h2>8. Information security</h2>
             <p>All communication with the platform is encrypted over HTTPS, session cookies are protected and cannot be read from page script, and we do not keep the sign-in code in clear text.</p></section>
@@ -119,13 +121,13 @@
             );
         };
 
+        window.acTenant = {"slug":"","role":"","hostMode":false,"home":false,"base":""};
+
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
         (function () {
-            var match = location.pathname.match(/^\/([^\/]+)/);
-            if (!match) return;
-            var slug = match[1];
-            if (slug === 'admin' || slug === 'api') return;
+            var slug = (window.acTenant || {}).slug;
+            if (!slug) return;
 
             async function refresh() {
                 try {
@@ -148,10 +150,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });
@@ -175,16 +177,66 @@
         // /{slug}/r/{role}/. تَجاهَل مَسارات /admin و /api.
         (function () {
             if (!('serviceWorker' in navigator)) return;
-            var path = location.pathname;
-            if (path.startsWith('/admin') || path.startsWith('/api')) return;
-            var seg = path.split('/').filter(Boolean);
-            if (seg.length === 0) return;   // home page — no PWA
-            var slug = seg[0];
-            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ لِـ legacy.
-            var scope = '/' + slug + '/';
-            if (seg.length >= 3 && seg[1] === 'r') {
-                scope = '/' + slug + '/r/' + seg[2] + '/';
-            }
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة — لا PWA
+            var slug = t.slug;
+            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
+            var store = t.hostMode ? '' : '/' + slug;
+            var scope = t.base + (t.role ? '/r/' + t.role : '') + '/';
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var esc = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var logoutPath = new RegExp('^' + (t.hostMode ? '(?:/' + esc + ')?' : '/' + esc) + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf(store + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);
@@ -301,13 +353,14 @@
             // launcher بِلا /r/. لَو السيرفر رَكَّب pwaPath = null لَن
             // يَكون عُنصُر #ac-install-banner مَوجوداً — هذا فَحص ثانوي
             // لِلسَلامَة.
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة
             var p = location.pathname;
             var isTransient = /\/(login|verify|terms|logout|auth)(\/|$|\?)/.test(p)
                            || p.startsWith('/admin');
             if (isTransient) return;
-            var segs = p.split('/').filter(Boolean);
-            var hasRole = segs.length >= 3 && segs[1] === 'r';
-            if (segs.length <= 1 && !hasRole) return;   // launcher أَو جَذر
+            var hasRole = !!t.role;
+            if (t.home && !hasRole) return;   // launcher أَو جَذر
 
             // Chrome لا يَعرِض «تَثبيت» إلّا عَلى https أَو localhost.
             var isLocalhost = /^(localhost|127\.|\[::1\])/.test(location.hostname)
@@ -324,8 +377,7 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = hasRole ? '/' + segs[0] + '/r/' + segs[2] + '/'
-                                   : '/' + segs[0] + '/';
+            var scopeKey = t.base + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }

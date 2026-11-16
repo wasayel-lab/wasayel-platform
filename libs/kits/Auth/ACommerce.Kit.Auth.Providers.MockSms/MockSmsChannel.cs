@@ -28,6 +28,13 @@ public sealed class MockSmsChannel : IOtpChannel, IDevelopmentStubChannel
         _logger.LogInformation("[MockSms] أَرسَلنا الكود {Code} إلى {Phone}", code, phone);
         return Task.CompletedTask;
     }
+
+    /// <summary>‏(‏2026-10-29، A3) الإشعارُ يُكتَبُ في السِجِلِّ كَالرَمز — لا رِسالَةَ حَقيقِيَّةَ في التَطوير.</summary>
+    public Task SendNoticeAsync(string phone, string text, CancellationToken ct)
+    {
+        _logger.LogInformation("[MockSms] إشعارٌ إلى {Phone}: {Text}", phone, text);
+        return Task.CompletedTask;
+    }
 }
 
 public static class MockSmsExtensions

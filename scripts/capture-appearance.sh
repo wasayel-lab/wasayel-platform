@@ -15,15 +15,29 @@
 #  يَفعَلُه هذا المِلَفّ في كوميت مُستَقِلّ سابِق.
 #
 #  الاستِعمال:
-#     scripts/capture-appearance.sh [OUT_DIR] [BASE_URL]
+#     scripts/capture-appearance.sh [--allow-skip] [OUT_DIR] [BASE_URL]
 #  الافتِراضيّ:
 #     OUT_DIR  = tests/characterization/appearance/baseline
 #     BASE_URL = http://localhost:5050
+#  ‏--allow-skip: صَفحَةٌ مَحروسَةٌ مِلَفُّها غَيرُ مُهَيَّأ تُتَخَطّى ولا تُفشِلُ الخِتام (بِلا الوَسمِ يَخرُجُ 1) — يُمَرِّرُه
+#     ‏`compare-appearance.sh` لِأَنَّه يُحمِرُّ بِنَفسِه كُلَّ لَقطَةِ أَساسٍ بِلا نَظير.
 # ═══════════════════════════════════════════════════════════════════════
 set -euo pipefail
 
-OUT_DIR="${1:-tests/characterization/appearance/baseline}"
-BASE_URL="${2:-http://localhost:5050}"
+# ‏(‏2026-11-05، الموجَة ١٢ G4 · E-4) **تَخَطّي صَفحَةٍ مَحروسَةٍ يُفشِلُ الالتِقاطَ ما لَم يُطلَب**: كانَ مِلَفٌّ ناقِصٌ يَطبَعُ تَحذيراً ويَمضي، والخِتامُ
+# لا يَفشَلُ إلّا عَلى صِفرِ صَفحَة — فَإعادَةُ تَثبيتٍ في المُجَلَّدِ نَفسِه تُبقي لَقطَةَ الأَمسِ لِلمُتَخَطّاةِ بِجِوارِ لَقَطاتِ اليَوم: الأَساسُ المَخلوطُ
+# الَّذي أَصلَحَه `76980f5`. فَالمُتَخَطّاةُ **تُحذَفُ لا تَبقى عَتيقَة**، وأَسماؤُها تُطبَع، والمَخرَجُ 1 إلّا بِـ`--allow-skip`.
+ALLOW_SKIP=0
+POSITIONAL=()
+for arg in "$@"; do
+  case "$arg" in
+    --allow-skip) ALLOW_SKIP=1 ;;
+    *) POSITIONAL+=("$arg") ;;
+  esac
+done
+
+OUT_DIR="${POSITIONAL[0]:-tests/characterization/appearance/baseline}"
+BASE_URL="${POSITIONAL[1]:-http://localhost:5050}"
 
 # الصَفَحات المَرجِعِيَّة: بَوّابَة ashare (مِقياس التَّكافُؤ الصِفريّ
 # الحَيّ) ورَئيسِيّات أَدوارِه الثَّلاثَة واستِكشافُه، ثُمَّ بَوّابَة
@@ -100,6 +114,8 @@ PAGES=(
   # ‏15 إعلاناً، **وأَوَّلُها مُوَثَّق ومُمَيَّز بِسِمات كامِلَة** —
   # يَبثُّها `PlatformSeed` عَبر `ListingFlagsSet`. فَما كانَ ناقِصاً
   # بَياناتٍ لَم يَكُن ناقِصاً أَصلاً؛ كانَ ناقِصاً **سُؤالاً**.
+  # ‏(‏2026-10-29 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والسَبَبُ الأَوَّلُ رُفِع: `ashare` مَتجَرٌ تَجريبِيٌّ كَغَيرِه (قَرارُ
+  # المالِك ‏2026-10-28). والهَدَفانِ أَدناه باقِيانِ لِسَبَبِهِما المَقيسِ لا لِاسم: أَوَّلُهُما يُصَيِّرُ أَغلَبَ المِلَفّ.
   #
   # والصَفحَةُ صارَت قِراءَةً خالِصَة بِالمَوجَة السابِعَة (خَرَجَ
   # `ListingViewed` مِن `GET` إلى `POST …/view` بَعدَ التَصيير، ولا
@@ -124,7 +140,11 @@ PAGES=(
   # بِسَطرٍ واحِد. وقَد وَقَعَ ‏2026-08-16 (‏0 ← 4). العِلاجُ إعادَةُ
   # تَثبيتٍ مُعلَنَة بَعدَ حَصر الفَرق، لا تَطبيعُ العَدّاد — فَتَطبيعُه
   # يُخفي انحِداراً حَقيقِيّاً في عَدّادٍ لَه أَربَعَةُ مُستَهلِكين.
-  "ejar-listing:/ejar/listings/45b17b1e-1997-4fcc-b3ce-051ef484fb16"
+  # ‏(‏2026-11-05، الموجَة ١٢ G4 · E-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **مُعَرِّفاتُ Neon صارَت مُعَرِّفاتِ بَذرٍ ثابِتَة**: `45b17b1e…` و`e7862bae…`
+  # و`17497544…` و`8c34e5ee…` و`90e91b8c…` كانَت مِن بَياناتِ Neon، فَتَرسُمُ صَفَحاتُها فَرعَ الغِيابِ عَلى كُلِّ قاعِدَةٍ مَحَلِّيَّة. يَبذُرُها الآنَ
+  # `AppearanceBaselineSeeder` في ejar بِمُعَرِّفاتِ `5a3e1d00-…-0000000e000N` (الإعلانُ نُسخَةُ إعلانِ `PlatformSeed` المُوَثَّق، والصَفقَتانِ والمُحادَثَةُ
+  # بِشَكلِ `TestDataSeeder` بَينَ عُضوَي اللَقطَة)، والعَناوينُ أَدناه بِها.
+  "ejar-listing:/ejar/listings/5a3e1d00-0000-4000-8000-0000000e0002"
   "theme-demo-listing-offers:/theme-demo/listings/94877b94-abb5-4a8b-8494-be8ef678cc59"
 
   # ‏2026-08-16 (‏#22–#32) — المَوجَة التاسِعَة: **فُروعُ «المَجهول» في
@@ -139,7 +159,7 @@ PAGES=(
   # والقِياسُ قَبلَ الإضافَة: هذِه الفُروعُ وَحدَها تَحرُس ‏‎2–3 سَلاسِل
   # لِكُلّ مِلَفّ، وهي السَلاسِلُ الَّتي لا يُصَيِّرُها أَيُّ مِلَفّ
   # جَلسَة مَهما بَلَغ.
-  "ejar-deal-anon:/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "ejar-deal-anon:/ejar/deals/5a3e1d00-0000-4000-8000-0000000e0003"
   "ejar-deals-anon:/ejar/deals"
   "ejar-create-listing-anon:/ejar/create-listing"
   "ejar-checkout-anon:/ejar/checkout"
@@ -190,7 +210,7 @@ PAGES=(
 
   # ‏`VendorProfile` (‏10) — صَفحَةٌ عامَّة بِمُعَرِّف بائِع، والبائِعُ
   # هُنا مُستَخدِمُ `ejar/vendor` الَّذي بَذَرَه `TestDataSeeder`.
-  "ejar-vendor:/ejar/vendor/e7862bae-5f0a-42b7-b071-c973d5a3305b"
+  "ejar-vendor:/ejar/vendor/5a3e1d00-0000-4000-8000-0000000e0001"
   "ejar-vendor-missing:/ejar/vendor/00000000-0000-0000-0000-000000000001"
 
   # فَرعا «المَجهول» في صَفحَتَي الدَور والمَنطِقَة.
@@ -254,6 +274,7 @@ PAGES=(
 #  المُتَغَيِّرات:
 #    WSL_CAPTURE_ADMIN_PHONE   — هاتِف مُشرِف المَنصَّة (= PLATFORM_ADMIN_PHONE)
 #    WSL_CAPTURE_STUDIO_PHONE  — هاتِف صاحِب استوديو عاديّ
+#    WSL_CAPTURE_CONSENTER_PHONE — هاتِف صاحِب استوديو يَقبَلُ الشُروطَ قَبلَ لَقطَتِه (‏2026-11-07 — أَدناه)
 #    WSL_CAPTURE_USER_NID      — هُوِيَّة نَفاذ (‏10 أَرقام)
 #    WSL_CAPTURE_USER_TENANT   — مُستَأجِر التَجرِبَة (افتِراضيّ theme-demo)
 #    WSL_CAPTURE_DEV_CODE      — رَمز OTP التَطويريّ (افتِراضيّ 123456،
@@ -292,12 +313,30 @@ GUARDED_PAGES=(
   "admin-tenant-theme:admin:/admin/tenants/theme-demo/theme"
   "admin-forbidden:studio:/admin"
   "studio-home:studio:/studio"
+  # ‏2026-10-13 — **ومَعَ مَتاجِرِه**. مِلَفُّ `studio` بِصِفرِ تَطبيقٍ عَمداً (أَسفَلَه)، فَشارَةُ نَوعِ المَتجَرِ في صَفِّ كُلِّ
+  # تَطبيقٍ (`studio.home.kind_store` / `kind_multirole`) لا تُرسَمُ في أَيِّ لَقطَة — وقَد بَدَّلَ `00d46af` نَصَّيها ولَم يُقَس
+  # فَرقُه بايتاً (‏ADR-032 §٦‑ج الصَفّ 3(ج)). مِلَفُّ `admin` يَملِكُ مَتاجِرَ بِـ`StudioOwnershipSeeder`، فَيَرسُمُ الصُفوفَ بِشاراتِها.
+  # **وبَياناتُها بيئَتُها**: ما يَملِكُه المِلَفُّ يَختَلِفُ بَينَ فَرعِ Neon والقاعِدَةِ المَحَلِّيَّة، فَلَقطَةُ أَساسِها تُلتَقَطُ
+  # حَيثُ تُقارَن (‏`docs/RELEASE-READINESS.md`).
+  "studio-home-with-apps:admin:/studio"
   "studio-billing:studio:/studio/billing"
-  "studio-new:studio:/studio/new"
+  # ‏2026-11-07 (مُراجَعَةُ عَدَساتِ C1 · W13-1·C1D-1) — **خَرَجَ `studio-new`** (فَرعُ غَيرِ المُوافِق): صارَ تَحويلاً مِن الخادِم (‏302 إلى
+  # `/studio/consent?returnUrl=/studio/new`) لا صَفحَةً بِسكربت — فَلا جِسمَ يُلتَقَط. يَقيسُه `LiveStudioStoreCreateProofTests` (التَصيير)
+  # و`rewalk-launch-journey.sh` (‏302 ووِجهَتُه) و`verify-runtime.cs --click` (النَقرُ في مُتَصَفِّح). والاستِمارَةُ نَفسُها `studio-new-form` أَدناه.
   "studio-consent:studio:/studio/consent"
+  # ‏2026-11-07 (مُراجَعَةُ C1، الموجَة ١٣ W13-1) — **استِمارَةُ الإنشاءِ نَفسُها**: `studio-new` أَعلاه فَرعُ غَيرِ المُوافِق (تَحويلٌ إلى المُوافَقَة)،
+  # فَالصَفحَةُ الوَحيدَةُ الَّتي يولَدُ مِنها مَتجَرُ رائِدِ الأَعمالِ كانَت بِلا لَقطَةٍ بايتِيَّة. مِلَفُّها `consenter` (أَدناه) يَقبَلُ الإصدارَ القائِمَ
+  # في تَحضيرِها (`PREP`)، ولا يَمَسُّ مِلَفَّ `studio` الَّذي تَحتاجُ لَقطَتاه أَعلاه أَلّا يَكونَ قَبِل.
+  "studio-new-form:consenter:/studio/new"
+  # ‏2026-11-07 (مُراجَعَةُ C1 · W13-1·F1) — **صُفوفُ analyze وrefine وexport تُثَبِّتُ غِيابَ اللافِتَة**: أَسبابٌ مُتَقاعِدَةٌ لا تَكتُبُها بَوّابَة
+  # (`StudioUpgradeReason.Drawn`)، فَلَقطَتُها صَفحَةُ /studio بِلا لافِتَةٍ بايتاً — وعَودَةُ لافِتَتِها تُحمِرُّها.
   "studio-upgrade-analyze:studio:/studio?upgrade=analyze"
   "studio-upgrade-refine:studio:/studio?upgrade=refine"
-  "studio-upgrade-stores:studio:/studio?upgrade=stores"
+  # ‏2026-10-25 — **«stores» لَم يَكُن سَبَباً**: `StudioUpgradeReason.Stores` قيمَتُه `"build"`، فَكانَ هذا الصَفُّ (`?upgrade=stores`) يَلتَقِطُ
+  # الافتِراضِيَّ العامَّ بِعَينِه كَـ`feature` (عُنوانُ «تَتَطَلَّب هذه الميزَة تَرقيَة» ورِسالَةٌ فارِغَة)، ونَصّا `upgrade.msg.build`/`upgrade.title.build`
+  # ورِسالَةُ `export` بِلا لَقطَة. صارَ الصَفُّ `?upgrade=build` بِاسمِه، وأُضيفَ `?upgrade=export`؛ و`feature` يَبقى سِجِلَّ الافتِراضِيّ.
+  "studio-upgrade-build:studio:/studio?upgrade=build"
+  "studio-upgrade-export:studio:/studio?upgrade=export"
   "studio-upgrade-feature:studio:/studio?upgrade=feature"
   "user-searches:user:/{tenant}/me/searches"
   "user-notifications:user:/{tenant}/notifications"
@@ -337,7 +376,10 @@ GUARDED_PAGES=(
   # فَرعُ «التَذكِرَة غَير مَوجودَة» — ‏`owner-test` بِلا تَذكِرَة
   # قابِلَة لِلقِراءَة، فَالمُعَرَّفُ ثابِتٌ لا يُطابِق شَيئاً. وهو
   # فَرعٌ **يُصَيَّر فِعلاً** ولا يَبلُغُه غَيرُ المالِك، فَمَكانُه هُنا.
-  "studio-app-ticket-missing:admin:/studio/apps/owner-test/tickets/00000000-0000-0000-0000-000000000001"
+  # ‏(‏2026-11-05، E-2) مُنذُ `c901bde` تَقرَأُ الصَفحَةُ اللَقطَةَ فَكانَت «المَفقودَةُ» تَرسُمُ تَذكِرَةَ `owner-test` المَبذورَة: صارَت عَلى مُعَرِّفٍ لا يُبذَرُ
+  # أَبَداً (`AppearanceBaselineSeeder.AbsentTicketId`) فَتَرسُمُ «غَير مَوجودَة» حَقّاً، والتَذكِرَةُ المَبذورَةُ لَقطَتُها `studio-app-ticket`.
+  "studio-app-ticket-missing:admin:/studio/apps/owner-test/tickets/5a3e1d00-0000-4000-8000-00000000dead"
+  "studio-app-ticket:admin:/studio/apps/owner-test/tickets/00000000-0000-0000-0000-000000000001"
 
   # ‏`TenantListingDetail` بِجَلسَة — فَرعانِ لا يَقَعانِ لِزائِر:
   #   · `user-listing-own`    — الإعلانُ مِلكُ صاحِبِ الجَلسَة
@@ -368,7 +410,7 @@ GUARDED_PAGES=(
   # (فارِغ/مَملوء) يَحرُس الفَرعَين مَعاً بَدَل واحِد.
   "owner-app-listings:owner:/studio/apps/ejar/listings"
   "owner-app-deals:owner:/studio/apps/ejar/deals"
-  "owner-app-deal-detail:owner:/studio/apps/ejar/deals/17497544-0a6a-485d-bc72-f5d738995169"
+  "owner-app-deal-detail:owner:/studio/apps/ejar/deals/5a3e1d00-0000-4000-8000-0000000e0003"
   "owner-app-console:owner:/studio/apps/ejar/console"
   "owner-app-attributes:owner:/studio/apps/ejar/attributes"
   "owner-app-pwa:owner:/studio/apps/ejar/pwa"
@@ -386,19 +428,25 @@ GUARDED_PAGES=(
   #   · مُكتَمِلَة       → «اكتَمَلَت» + نَموذَج التَقييم بِنُجومِه الخَمس
   #   · مُعَرَّفٌ لا يُطابِق → «الصَّفقَة غَير مَوجودَة»
   #   · بِلا جَلسَة      → في `PAGES` أَعلاه
-  "member-deal-active:member:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
-  "member-deal-waiting:member2:/{member}/deals/17497544-0a6a-485d-bc72-f5d738995169"
-  "member-deal-done:member:/{member}/deals/8c34e5ee-1760-4eba-b276-caf3e721f996"
+  "member-deal-active:member:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0003"
+  "member-deal-waiting:member2:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0003"
+  "member-deal-done:member:/{member}/deals/5a3e1d00-0000-4000-8000-0000000e0004"
   "member-deal-missing:member:/{member}/deals/00000000-0000-0000-0000-000000000001"
 
   # ‏**`CreateListing` (‏40)** — أَربَعَةُ فُروع. و`ejar` بِتِسع فِئات
   # على **خَمسَة `Kind`** فَيُصَيَّر فَرعُ الشَجَرَة (`groups.Count > 1`)
   # بِتَسمِياتِه («سَكَنيّ»، «تِجاريّ»…) — وهي فَرعٌ لا يَقَع في
   # `theme-demo` ذي الـ`Kind` الواحِد (مَقيس).
-  "member-create-listing:member:/{member}/create-listing"
-  "member-create-listing-cat:member:/{member}/create-listing?category=apartment"
-  "member-create-listing-invalid:member:/{member}/create-listing?err=invalid"
-  "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden"
+  # ‏(‏2026-11-05، E-2) بِمِلَفِّ `member2` (دَورُ المُضيفِ يَنشُر) لا `member` (المُشتَري): مُنذُ `9ca4e06` كانَت الثَلاثُ صَفحَةَ الرَفضِ نَفسَها،
+  # فَلا يُحرَسُ النَموذَجُ ولا فِئَتُه ولا خَطَأُ حَقلِه. ورَفضُ المُشتَري مَحروسٌ بِصُفوفِ اختِبارِه.
+  "member-create-listing:member2:/{member}/create-listing"
+  "member-create-listing-cat:member2:/{member}/create-listing?category=apartment"
+  "member-create-listing-invalid:member2:/{member}/create-listing?err=invalid"
+  # ‏(‏2026-10-25، W8-7 — lens-dead-doors-3): كانَ هُنا "member-create-listing-forbidden:member:/{member}/create-listing?err=forbidden" —
+  # فَرعٌ لا كاتِبَ لَه حُذِفَ مِن الصَفحَة، فَاللَقطَةُ صارَت نُسخَةً مِن "member-create-listing" بِاسمٍ يَدَّعي غَيرَه. ورَفضُ الصَلاحِيَّةِ
+  # يُرسَمُ اليَومَ مِن `GatedPage` لِعُضوٍ بِلا `listing.create` لا بِمُعامِل — ولا مِلَفَّ لَقطَةٍ بِهذا الدَورِ بَعد.
+  # ‏(‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): ومِلَفُّها `i18n-baseline/member-create-listing-forbidden.html` حُذِفَ — بَقِيَ يَتيماً لا
+  # يُنتِجُه مَدخَلٌ ولا يُقارِنُه شَيء. و`AppearanceBaselineCaptureEntryTests` يَحمَرُّ لِكُلِّ لَقطَةٍ مُودَعَةٍ بِلا مَدخَلٍ حَيٍّ هُنا.
 
   # ‏**`TenantManage` (‏24)** — ثَلاثَةُ فُروع: الإداريّ (‏`user` في
   # `theme-demo` يَملِك `tenant.manage`)، وغَيرُ الإداريّ (‏`member`)،
@@ -420,10 +468,15 @@ GUARDED_PAGES=(
   # واحِدَة (`?step=`)، والثالِثَةُ فَرعان بِـ`pay`. وقيَمُ النَموذَج
   # في العُنوان **لاتينِيَّةٌ مُعَلَّمَةٌ عَيِّنَةً** لِأَنَّها تُطبَع في
   # الصَفحَة فَتَدخُل بايتات الأَساس.
+  #
+  # ‏2026-10-28 (قَرارُ المالِك د60؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «قيَمُ النَموذَجِ في العُنوان» أَعلاه لَم تَعُد — الخُطوَتانِ ١ و٢ تُرسِلانِ بِـPOST
+  # إلى `/{slug}/checkout/details` فَتُحفَظُ البَياناتُ في السَلَّة، والصَفحَةُ تَقرَؤُها مِنها. فَلِكُلِّ صَفحَةٍ مِن الأَربَعِ تَحضيرٌ في `PREP` أَدناه
+  # يُرسِلُ القيَمَ نَفسَها قَبلَ الالتِقاط — وهو **الكِتابَةُ الوَحيدَةُ لِلأَداة**: بَياناتُ إتمامِ سَلَّةِ العَيِّنَة لِمِلَفّ `member`، بِقيَمٍ لاتينِيَّةٍ
+  # مُعَلَّمَة. والخُطوَةُ ١ تُحَضَّرُ أَيضاً فَلا تَرى ما تَرَكَه التِقاطٌ سابِق: تُرسَمُ بِالقيَمِ المَحفوظَة، حَتمِيَّةً بَينَ جَولَةٍ وأُخرى.
   "member-checkout:member:/{member}/checkout"
-  "member-checkout-pay:member:/{member}/checkout?step=2&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
-  "member-checkout-confirm-cash:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=cash"
-  "member-checkout-confirm-card:member:/{member}/checkout?step=3&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS&pay=card"
+  "member-checkout-pay:member:/{member}/checkout?step=2"
+  "member-checkout-confirm-cash:member:/{member}/checkout?step=3"
+  "member-checkout-confirm-card:member:/{member}/checkout?step=3"
   # وفَرعُ «السَّلَّة فارِغَة» لا يَضيع: `member2` بِلا سَلَّة.
   "member2-checkout-empty:member2:/{member}/checkout"
   "member-cart:member:/{member}/cart"
@@ -461,7 +514,7 @@ GUARDED_PAGES=(
 
   # ‏`ChatRoom` (‏10): مُحادَثَةُ `ejar` الوَحيدَة، بَذَرَها
   # `TestDataSeeder` بَين أَوَّلِ مُستَخدِمَين — و`member` أَحَدُهُما.
-  "member-chat:member:/{member}/chats/90e91b8c-330d-483a-8908-869196182fd5"
+  "member-chat:member:/{member}/chats/5a3e1d00-0000-4000-8000-0000000e0005"
 
   # ‏`RoleOnboarding` (‏9) و`DriverArea` (‏11) بِجَلسَة — الطَرَفُ
   # المُقابِل لِفَرعَي «المَجهول» في `PAGES`.
@@ -471,6 +524,11 @@ GUARDED_PAGES=(
   # فَرعُ «تَسجيل الدُخول» في `Login` نَفسِه: صاحِبُ الجَلسَة يُصَيِّر
   # سَطرَ التَحويل («جارٍ التَّحويل…») الَّذي لا يَبلُغُه زائِر أَبَداً.
   "member-login:member:/{member}/login"
+
+  # ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5) — **جَذرُ المَتجَرِ لِلمُسَجَّل**: لا لَقطَةَ قَبلَها لِعُضوٍ مُسَجَّلٍ عَلى `/{slug}` نَفسِه، فَما يَراه
+  # المُسَجَّلُ بِلا دَورٍ فَعّال (`roleless`، مَتجَرٌ فيه دَورُ مُشتَر) وصاحِبُ دَورِ البائِع (`member2` بِدَورِ `host`) لا يَحرُسُه شَيء.
+  "roleless-store-root:roleless:/{roleless}"
+  "member2-store-root:member2:/{member}"
 
   "studio-study:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01"
   "studio-study-print:admin:/studio/s/5a3e1d00-0000-4000-8000-00000000ec01/print"
@@ -495,6 +553,7 @@ SHEETS=(
 DEV_CODE="${WSL_CAPTURE_DEV_CODE:-123456}"
 USER_TENANT="${WSL_CAPTURE_USER_TENANT:-theme-demo}"
 MEMBER_TENANT="${WSL_CAPTURE_MEMBER_TENANT:-ejar}"
+ROLELESS_TENANT="${WSL_CAPTURE_ROLELESS_TENANT:-owner-test}"
 
 JARS="$(mktemp -d)"
 trap 'rm -rf "$JARS"' EXIT
@@ -612,6 +671,20 @@ else
   PROFILES_MISSING="$PROFILES_MISSING studio(WSL_CAPTURE_STUDIO_PHONE)"
 fi
 
+# ‏2026-11-07 (مُراجَعَةُ C1، الموجَة ١٣ W13-1) — مِلَفٌّ ثامِن `consenter`: صاحِبُ استوديو **يَقبَلُ الإصدارَ القائِمَ مِن الشُروط** في تَحضيرِ صَفحَتِه
+# (`PREP[studio-new-form]` — النُقطَةُ نَفسُها الَّتي تُرسِلُ إلَيها صَفحَةُ المُوافَقَة)، فَيَرى استِمارَةَ الإنشاء. ولِماذا لا مِلَفُّ `studio`: لَقطَتا
+# `studio-new` و`studio-consent` تَحتاجانِ صاحِباً لَم يَقبَل. **وكِتابَتُه سَطرُ `ConsentRecord` واحِدٌ في قاعِدَةِ الالتِقاط** — نُسخَةٌ تُرمى في الإجراءِ
+# المَقيس، فَلا يَبلُغُ أَيَّ لَقطَةٍ أُخرى (مَقيس: ‏141 لَقطَةً بايتاً قَبلَه وبَعدَه، README).
+if [ -n "${WSL_CAPTURE_CONSENTER_PHONE:-}" ]; then
+  if studio_login "$JARS/consenter" "$WSL_CAPTURE_CONSENTER_PHONE"; then
+    PROFILE_JAR[consenter]="$JARS/consenter"; PROFILES_READY="$PROFILES_READY consenter"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'consenter' — لا كوكي studio." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING consenter(WSL_CAPTURE_CONSENTER_PHONE)"
+fi
+
 # ‏2026-08-16 — مِلَفٌّ رابِع: صاحِبُ استوديو **يَملِك مُستَأجِراً
 # مَملوءاً**. والحاجَةُ إلَيه مَقيسَة لا مَظنونَة: مِلَفُّ `admin` يَملِك
 # `owner-test` وَحدَه، وهو بِصِفر إعلان وصِفر صَفقَة — فَجِسمُ
@@ -658,6 +731,23 @@ else
   PROFILES_MISSING="$PROFILES_MISSING member2(WSL_CAPTURE_MEMBER2_PHONE)"
 fi
 
+# ‏2026-10-30 (تَدقيقُ الموجَة ١١ CO5) — مِلَفٌّ سابِع: **عُضوٌ مُسَجَّلٌ بِلا دَورٍ فَعّال** في مَتجَرٍ فيه دَورُ مُشتَر. يَبذُرُه
+# `AppearanceBaselineSeeder` بِلا `ActiveRole` في `owner-test` (هُوِيَّةُ نَفاذ `1033333333`)، ويَدخُلُ بِنَفاذِ الوَهمِيِّ كَمِلَفِّ `user`.
+if [ -n "${WSL_CAPTURE_ROLELESS_NID:-}" ]; then
+  if nafath_login "$JARS/roleless" "$ROLELESS_TENANT" "$WSL_CAPTURE_ROLELESS_NID"; then
+    PROFILE_JAR[roleless]="$JARS/roleless"; PROFILES_READY="$PROFILES_READY roleless"
+  else
+    echo "✗ فَشِلَ دُخول مِلَفّ 'roleless' — لا كوكي $ROLELESS_TENANT." >&2; exit 1
+  fi
+else
+  PROFILES_MISSING="$PROFILES_MISSING roleless(WSL_CAPTURE_ROLELESS_NID)"
+fi
+
+# ── عَدّادُ ما كُتِب (‏2026-10-30، تَدقيقُ الموجَة ١١ CO15 — القاعِدَة ١٠) ──────────────────────
+# سَطرُ الخِتامِ كانَ يَطبَعُ **طولَ المَصفوفَةِ** لا ما كُتِب، ويَخرُجُ بِـ0 ولو لَم تُكتَب صَفحَة (مِلَفّاتٌ كُلُّها غَيرُ مُهَيَّأَة
+# ومَصفوفَةٌ عامَّةٌ فارِغَة) — و«اِلتُقِطَت» بِلا عَدّادٍ لا تُمَيَّزُ عَن أَداةٍ عَمياء. فَيُعَدُّ كُلُّ مِلَفٍّ يُكتَب، ويَفشَلُ الخِتامُ عَلى الصِفر.
+captured=0
+
 for entry in "${PAGES[@]}"; do
   name="${entry%%:*}"
   path="${entry#*:}"
@@ -668,6 +758,7 @@ for entry in "${PAGES[@]}"; do
   fi
   normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
   rm -f "$OUT_DIR/$name.raw"
+  captured=$((captured + 1))
   echo "✓ $path → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
 done
 
@@ -680,23 +771,46 @@ done
 # هاتِف خاطِئ) وإمّا أَنّ الصَفحَة **لَيسَت مَحروسَة أَصلاً** فَمَكانُها
 # `PAGES`. وكِلتا الحالَتَين خَطَأ يَجِب أَن يُصرَخ بِه لا أَن يُكتَب
 # مِلَفَّ أَساس.
+# ── تَحضيرُ الحالَةِ قَبلَ صَفحَة (‏2026-10-28، د60) — `POST مَسار|بَيانات` يُرسَلُ بِجَرَّةِ المِلَفّ ويُشتَرَطُ ‏302 ──────────────
+declare -A PREP=(
+  [member-checkout]="/{member}/checkout/details|from=1&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
+  [member-checkout-pay]="/{member}/checkout/details|from=1&name=SAMPLE&phone=0512345678&addr=SAMPLE-ADDRESS"
+  [member-checkout-confirm-cash]="/{member}/checkout/details|from=2&pay=cash"
+  [member-checkout-confirm-card]="/{member}/checkout/details|from=2&pay=card"
+  # ‏2026-11-07 — قَبولُ الإصدارِ القائِمِ ثُمَّ الاستِمارَة (‏302 إلى `/studio/new`).
+  [studio-new-form]="/studio/consent/accept|returnUrl=/studio/new"
+)
+
 guarded_ok=0
 guarded_skipped=0
+skipped_names=""
 for entry in "${GUARDED_PAGES[@]}"; do
   name="${entry%%:*}"; rest="${entry#*:}"
   profile="${rest%%:*}"; path="${rest#*:}"
   path="${path//\{tenant\}/$USER_TENANT}"
   path="${path//\{member\}/$MEMBER_TENANT}"
+  path="${path//\{roleless\}/$ROLELESS_TENANT}"
 
   jar="${PROFILE_JAR[$profile]:-}"
   if [ -z "$jar" ]; then
     # إلى `stderr` عَمداً: `compare-appearance.sh` يَبتَلِع `stdout`
     # الالتِقاط، فَتَحذيرٌ مَكتوب هُناك لا يَراه أَحَد.
     echo "⚠ $path — مِلَفّ '$profile' غَير مُهَيَّأ، تُخُطِّيَت (لا تُكتَب مَجهولَةً)." >&2
+    # لا تَبقى لَقطَةُ الأَمسِ بِاسمِها: غائِبَةٌ تُقالُ «لا نَظير»، وعَتيقَةٌ تُقرَأُ «التُقِطَت».
+    rm -f "$OUT_DIR/$name.html"
     guarded_skipped=$((guarded_skipped + 1))
+    skipped_names="$skipped_names $name"
     continue
   fi
 
+  if [ -n "${PREP[$name]:-}" ]; then
+    prep_path="${PREP[$name]%%|*}"; prep_path="${prep_path//\{member\}/$MEMBER_TENANT}"
+    prep_code=$(curl -s -b "$jar" -o /dev/null -w '%{http_code}' -X POST --data "${PREP[$name]#*|}" "$BASE_URL$prep_path")
+    if [ "$prep_code" != "302" ]; then
+      echo "✗ تَحضيرُ $name ($prep_path) أَعطى $prep_code — الالتِقاط مُتَوَقِّف." >&2
+      exit 1
+    fi
+  fi
   code=$(curl -s -b "$jar" -o "$OUT_DIR/$name.raw" -w '%{http_code}' "$BASE_URL$path")
   if [ "$code" != "200" ]; then
     echo "✗ $path ($profile) أَعطى $code — الالتِقاط مُتَوَقِّف." >&2
@@ -711,6 +825,7 @@ for entry in "${GUARDED_PAGES[@]}"; do
   normalize "$OUT_DIR/$name.raw" "$OUT_DIR/$name.html"
   rm -f "$OUT_DIR/$name.raw"
   guarded_ok=$((guarded_ok + 1))
+  captured=$((captured + 1))
   echo "✓ $path ($profile) → $OUT_DIR/$name.html  ($(wc -c < "$OUT_DIR/$name.html") بايت)"
 done
 
@@ -752,5 +867,15 @@ echo "اِلتُقِطَت ${#PAGES[@]} صَفَحات عامَّة و$guarded_o
 [ -n "$PROFILES_READY" ] && echo "المِلَفّات المُهَيَّأَة:$PROFILES_READY"
 if [ "$guarded_skipped" -gt 0 ]; then
   echo "⚠ تُخُطِّيَت $guarded_skipped صَفحَة مَحروسَة — الناقِص:$PROFILES_MISSING" >&2
+  echo "   المُتَخَطّاة (حُذِفَت مِن $OUT_DIR):$skipped_names" >&2
+fi
+echo "الصَفَحاتُ المُلتَقَطَة: $captured"
+if [ "$captured" -eq 0 ]; then
+  echo "✗ BLIND CAPTURE — صِفرُ صَفحَةٍ كُتِبَت في $OUT_DIR: لا لَقطَةَ أَساسٍ مِن لا شَيء." >&2
+  exit 1
+fi
+if [ "$guarded_skipped" -gt 0 ] && [ "$ALLOW_SKIP" -ne 1 ]; then
+  echo "✗ PARTIAL CAPTURE — $guarded_skipped صَفحَة مَحروسَة لَم تُلتَقَط:$skipped_names — هَيِّئ مِلَفّاتِها (WSL_CAPTURE_*) أَو مَرِّر --allow-skip." >&2
+  exit 1
 fi
 exit 0

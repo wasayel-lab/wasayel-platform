@@ -184,8 +184,9 @@
 ### 4.1 الكيان
 
 `Deal` وثيقة Marten تحت مستأجرها، تجمع: النمط، الطرفين
-(`Initiator`/`Counterparty`)، المبلغ (`AmountSar` + `CommissionSar`
-للمنصة)، المرحلة، الحالة، مراجع الكائنات الخارجية (`Refs`: PaymentId،
+(`Initiator`/`Counterparty`)، المبلغ (`AmountSar` وحده — حقل العمولة
+`CommissionSar` أُسقِط بـADR-032 §٢‑ب، 2026-10-11)، المرحلة، الحالة،
+مراجع الكائنات الخارجية (`Refs`: PaymentId،
 ShipmentId، ReviewId…)، خصائص ديناميكية لكل نمط (`Attributes`)، و**الخط
 الزمني** (`Timeline`).
 
@@ -221,6 +222,13 @@ ShipmentId، ReviewId…)، خصائص ديناميكية لكل نمط (`Attrib
 والفاعل المخوّل ثابت لكل مرحلة: Offered/Paid/Received = initiator؛
 Booked/Shipping/Delivered = counterparty؛ Confirmed/Reviewed = either؛
 عداها = platform.
+
+**أُلحِقَ 2026-10-11 (ADR-033 §٦‑ط) — ولا يُعادُ حرفٌ فوقَه**: «الفاعل المخوّل لكل مرحلة»
+معناه **مَن يؤدّيها — مَن يُدخِلُ الصفقةَ إليها** (البائعُ يقبلُ `Booked`، والمشتري يدفعُ `Paid`،
+والبائعُ يشحنُ `Shipping`)، كما تقرؤُه تعليقاتُ الأنماطِ في الكاتالوج وشرحُ التدفّق. فالخروجُ من
+مرحلةٍ يطلبُ **فاعلَ تاليها**: `DealsPolicy.RequiredActorToLeave` — دالّةٌ واحدةٌ تقرؤُها
+`DealsService` والشاشةُ والـAPI. كانت تُسأَلُ فاعلَ المرحلةِ الحاليّة (إزاحةُ مرحلة)، والجدولُ
+أعلاه بحرفِه.
 
 ### 4.4 الثوابت (Invariants)
 

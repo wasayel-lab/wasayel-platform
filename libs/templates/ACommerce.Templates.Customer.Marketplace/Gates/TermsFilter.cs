@@ -26,13 +26,16 @@ public sealed class TermsFilter : IEndpointFilter
 
         await using var s = store.QuerySession(slug);
         var user = await s.LoadAsync<User>(userId.Value);
+        // ‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · C2b-P-01) التَحويلُ عَلى المُضيفِ الَّذي يَخدِمُ الطَلَب (`StoreUrl.For` — ADR-050 §١٤) لا رابِطُ تَنَقُّل:
+        // كانَ `AuthSession.LinkFor` فَيُرسِلُ كِتابَةً مِن مُضيفِ الدَورِ إلى شُروطِ مُضيفِ المَتجَرِ حَيثُ لا جَلسَة — لا زِرَّ قَبولٍ ولا إعلانَ يُنشَأ.
+        var here = Services.Ux.StoreUrl.ViewOf(http);
         if (user is null)
-            return Results.Redirect(AuthSession.LinkFor(slug, role, "login"));
+            return Results.Redirect(Services.Ux.StoreUrl.For(here, slug, role, "login"));
 
         if (TermsPolicy.IsAccepted(user)) return await next(ctx);
 
         var returnUrl = Uri.EscapeDataString(http.Request.Path + http.Request.QueryString);
-        return Results.Redirect(AuthSession.LinkFor(slug, role,
+        return Results.Redirect(Services.Ux.StoreUrl.For(here, slug, role,
             $"terms?returnUrl={returnUrl}"));
     }
 }

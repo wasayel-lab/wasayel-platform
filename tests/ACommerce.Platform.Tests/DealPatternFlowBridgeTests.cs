@@ -65,6 +65,10 @@ public class DealPatternFlowBridgeTests
         }
     }
 
+    /// <summary><b>قُلِبَ شَطرُ الفاعِل</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ الانتِقالُ الخارِجُ مِن المَرحَلَةِ
+    /// يَملِكُه فاعِلُها هِيَ — «لِأَنّ DealsService يَفحَص فاعِل المَرحَلَة الحاليَّة». وصارَ يَملِكُه فاعِلُ
+    /// المَرحَلَةِ الهَدَف لِأَنّ <c>DealsService</c> يَفحَصُه اليَوم (<c>RequiredActorToLeave</c>) — السَبَبُ
+    /// نَفسُه بِحَرفِه: الجِسرُ يُسقِطُ ما يَفرِضُه المُحَرِّك. والتَسمِيَةُ والعُضوِيَّةُ كَما كانَتا.</summary>
     [Theory]
     [MemberData(nameof(Patterns))]
     public void Actor_and_label_and_membership_survive_the_projection(string pattern)
@@ -83,13 +87,14 @@ public class DealPatternFlowBridgeTests
             // التَسمِيَة
             Assert.Equal(d.LabelFor(stage), f.State(key)!.Label.Ar);
 
-            // الفاعِل — يَملِكُه الانتِقال الخارِج مِن المَرحَلَة، لِأَنّ
-            // DealsService يَفحَص فاعِل المَرحَلَة الحاليَّة لا التالِيَة.
+            // الفاعِل — يَملِكُه الانتِقال الخارِج مِن المَرحَلَة، وهُوَ فاعِلُ
+            // المَرحَلَةِ الَّتي يَدخُلُها: DealsService يَفحَص فاعِلَ التالِيَة لا
+            // الحاليَّة (‏ADR-033 §٦‑ط).
             var outgoing = f.From(key);
-            if (d.Next(stage) is not null)
+            if (d.Next(stage) is { } next)
             {
                 Assert.Single(outgoing);
-                Assert.Equal(d.ActorFor(stage), outgoing[0].Actor);
+                Assert.Equal(d.ActorFor(next), outgoing[0].Actor);
             }
             else
             {
@@ -100,7 +105,10 @@ public class DealPatternFlowBridgeTests
 
     /// <summary>الفاعِل المُخَوَّل يُجيب بِنَفس القَرار مِن
     /// السَطحَين — وهذا هو السُؤال الوَحيد الَّذي يَطرَحُه مَسار
-    /// الكِتابَة فِعلاً.</summary>
+    /// الكِتابَة فِعلاً.
+    /// <para><b>قُلِبَ</b> (‏ADR-033 §٦‑ط، ‏2026-10-11): كانَ «المَطلوب» فاعِلَ المَرحَلَةِ الحالِيَّة
+    /// (<c>d.ActorFor(stage)</c>)؛ وصارَ فاعِلَ التالِيَة — ويُقارَنُ بِدالَّةِ المُحَرِّكِ نَفسِها
+    /// (<c>DealsPolicy.RequiredActorToLeave</c>) لا بِنُسخَةٍ مِنها، فَيَفتَرِقُ الجِسرُ عَن المُحَرِّكِ بِأَحمَر.</para></summary>
     [Theory]
     [MemberData(nameof(Patterns))]
     public void Allows_agrees_with_the_policy_for_every_stage_and_actor(string pattern)
@@ -114,7 +122,8 @@ public class DealPatternFlowBridgeTests
             var next = d.Next(stage);
             if (next is null) continue;
 
-            var required = d.ActorFor(stage)!;
+            var required = d.ActorFor(next.Value)!;
+            Assert.Equal(DealsPolicy.RequiredActorToLeave(d.Pattern, stage, payMethod: null), required);
             var expected = required == actor
                         || (required == "either" && (actor == "initiator" || actor == "counterparty"));
 

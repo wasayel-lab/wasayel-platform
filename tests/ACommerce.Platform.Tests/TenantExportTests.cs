@@ -547,6 +547,37 @@ public class TenantExportTests(ITestOutputHelper output)
         Assert.DoesNotContain("kekVersion", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary><b>والقيمَةُ المَختومَةُ تَخرُجُ بِالوَجهِ الَّذي يَعرِضُه الاستوديو</b> — القِناعُ والذَيلُ المَحفوظ
+    /// (<c>StoredValue.Censored</c>)، مَقروءَينِ مِن عَمودِ <c>tail4</c> بِلا فَكّ. (قُلِبَ ‏2026-10-12 مِن
+    /// <c>Today_a_sealed_value_exports_as_an_empty_value_while_the_studio_shows_its_mask_and_tail</c>: كانَ التَعتيمُ
+    /// يَقرَأُ <c>plain</c> وَحدَه — <c>null</c> لِلمَختوم — فَيَخرُجُ المِفتاحُ المَربوطُ فارِغاً.) ولا عَمودَ ظَرفٍ يَخرُج.</summary>
+    [Fact]
+    public void A_sealed_value_exports_the_mask_and_tail_the_studio_shows()
+    {
+        var vault = ProviderVault.FromKek(Convert.ToBase64String(
+            System.Security.Cryptography.RandomNumberGenerator.GetBytes(ProviderVault.KekBytes)));
+        var key = StoredValue.Sealed(vault, CredentialKinds.SecretKey, "sk_live_9f3b7c2d41aa58e6",
+            ProviderVault.AadOf("ejar", ProviderCapabilities.Payments, "secret_key"));
+        var binding = new TenantProviderBinding
+        {
+            Id = ProviderCapabilities.Payments, Slug = ProviderCapabilities.Payments,
+            TenantSlug = "ejar", ProviderSlug = "moyasar_api",
+            Values = { ["secret_key"] = key },
+        };
+
+        var row = TenantExportRedaction.Apply(
+            "TenantProviderBinding", TenantExportRedaction.ToJson(binding));
+        var exported = row!["values"]!["secret_key"]!["value"]!.GetValue<string>();
+
+        Assert.Equal(ProviderSecrecy.Mask + "58e6", key.Censored);      // ما يَعرِضُه الاستوديو
+        Assert.Equal(key.Censored, exported);                             // هُوَ ما يَخرُجُ في التَصدير
+
+        var text = row.ToJsonString(TenantExportRedaction.Json);
+        Assert.DoesNotContain(key.Cipher!, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(key.Nonce!, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(key.Tag!, text, StringComparison.Ordinal);
+    }
+
     /// <summary><b>وكُلُّ حَقلٍ في قائِمَةِ الحَذفِ يُسَمّي خاصِّيَّةً
     /// قائِمَةً فِعلاً</b> — فَقائِمَةٌ تَحذِفُ اسماً لا وُجودَ لَه
     /// تُطَمئِنُ ولا تَحمي، وهي بِعَينِها الأَداةُ العَمياء.</summary>

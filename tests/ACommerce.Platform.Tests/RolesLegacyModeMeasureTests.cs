@@ -1,0 +1,334 @@
+using System.Text.RegularExpressions;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ حِفظُ الأَدوارِ بِلا اختِيارٍ يُدخِلُ المَتجَرَ «الوَضعَ المَوروث» — يُقاسُ ويُقالُ عَلى الفِعل (‏brief-P0-7، ‏ADR-032 §٦‑د) ═══
+//
+// **تَدقيقُ الإطلاقِ عِندَ `dace7cd`، تَيّارُ W8-3 — `brief-P0-7` (حاجِبَة، قَرارُ مالِك)**: `RolesSaveService.Compose` بِصِفرِ اختِيارٍ تُخرِجُ
+// صِفرَ أَدوارٍ ويَحفَظُها `SaveAsync` بِلا شَرط (مُثَبَّتٌ في `TenantConfigDecisionTests.Roles_that_were_not_selected_are_dropped`)، و
+// `RolePermissions.Has` تَرُدُّ `true` لِكُلِّ صَلاحِيَّةٍ حينَ لا أَدوار (‏`RoleCatalog.cs:133`، مُثَبَّتٌ في `StudioBuildRoleFloorTests`) —
+// فَـ`TenantAdminGuard.HasTenantManage` يُعطي إدارَةَ المَتجَرِ لِكُلِّ مُسَجَّل.
+//
+// **المَقيسُ حَيّاً (‏2026-10-25، الرَأسُ `cb5f69b`، قاعِدَةٌ مَحَلِّيَّة `wasayel_w83a`، Development)**: عُضوٌ سَجَّلَ نَفسَه في واجِهَةِ `order`
+// (يَبذُرُه `PlatformSeed` في كُلِّ بيئَةٍ بِلا أَدوار) بِرَمزِ المُحاكي — لا دَورَ ولا مَنح — فَتَحَ `/admin/tenants/order/users` ‏200 بِجَدوَلِ
+// المُستَخدِمينَ وهَواتِفِهِم؛ وكوكيُّه نَفسُه عَلى `owner-test` (أَربَعَةُ أَدوار) يُرَدُّ إلى الدُخول. **ولا عَدَّ لِلحالِ في الإنتاج**: سكربتُ
+// `count-listing-owners.cs` يَطبَعُ «— وَضعٌ مَوروث» في سَطرِ كُلِّ مَتجَرٍ ولا يَجمَعُه، ولا يَعُدُّ مَن يَحمِلُ `tenant.manage` بِه؛ وصَفحَتا
+// الأَدوارِ (الاستوديو والإدارَة) تَحفَظانِ الفارِغَ بِلا سَطرٍ يَقولُ ما يَفعَلُه.
+//
+// **والقَرارُ لِلمالِك** (رَفضُ الفارِغِ بِرَمزِ خَرقٍ ثابِت، أَو قَلبُ `RoleCatalog.cs:133` بِـADR — ‏ADR-032 §٦‑د و‏ADR-027 §٥ البَند 3) — لا يُتَّخَذُ
+// هُنا. هذا المِلَفُّ يُوَصِّفُ «اليَوم» (القاعِدَة ٣) قَبلَ ما يُنَفَّذُ بِلا قَرار: سَطرُ القياسِ الإجماليّ، والتَحذيرُ عَلى الفِعلِ مِن القامُوس.
+// وصُفوفُ `Today_` تُقلَبُ بِأَسمائِها في كوميتِ التَبديل.
+public class RolesLegacyModeMeasureTests(ITestOutputHelper output)
+{
+    private const string TemplateRoot = "libs/templates/ACommerce.Templates.Customer.Marketplace";
+
+    private static string Read(string relative)
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, relative.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {relative} — الأَداةُ عَمياءُ بِلا طَرَفٍ مَقروء.");
+        return File.ReadAllText(path);
+    }
+
+    /// <summary>صَفحَتا حِفظِ الأَدوارِ وبابُ كُلٍّ مِنهُما — لا ثالِثَةَ تَكتُبُ <c>roles/save</c> (الماسِحُ أَدناه يَعُدُّ).</summary>
+    public static readonly TheoryData<string, string> RolesPages = new()
+    {
+        { $"{TemplateRoot}/Components/Pages/StudioAppRoles.razor", "/studio/apps/{Slug}/roles/save" },
+        { $"{TemplateRoot}/Components/Pages/Admin/TenantRoles.razor", "/admin/tenants/{Slug}/roles/save" },
+    };
+
+    /// <summary>استِمارَةُ <c>roles/save</c> في الصَفحَةِ بِلا تَعليقات — مِن <c>&lt;form</c> إلى <c>&lt;/form&gt;</c>ـها.</summary>
+    private static string Form(string page, string action)
+    {
+        var code = WriteEndpointGuardTests.StripMarkupComments(Read(page));
+        var at = code.IndexOf($"action=\"@($\"{action}\")\"", StringComparison.Ordinal);
+        Assert.True(at > 0, $"{page}: لا استِمارَةَ إلى {action} — القَصُّ أَعمى.");
+        var open = code.LastIndexOf("<form", at, StringComparison.Ordinal);
+        var close = code.IndexOf("</form>", at, StringComparison.Ordinal);
+        Assert.True(open > 0 && close > at, $"{page}: استِمارَةٌ لا تُغلَق.");
+        return code[open..(close + "</form>".Length)];
+    }
+
+    /// <summary>مَفاتيحُ القامُوسِ الَّتي تَرسُمُها الاستِمارَة، بِتَرتيبِ ظُهورِها.</summary>
+    private static List<string> Keys(string form)
+        => Regex.Matches(form, @"L(?:\.Markup\(|\[)""(?<k>[a-z0-9_.]+)""").Select(m => m.Groups["k"].Value).ToList();
+
+    /// <summary>مِفتاحُ السَطرِ الَّذي يَقولُ ما يَفعَلُه الحِفظُ الفارِغ — واحِدٌ لِلصَفحَتَين.</summary>
+    private const string EmptyWarningKey = "roles.save.empty_warning";
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_roles_form_draws_no_line_saying_what_an_empty_save_grants</c> (‏<c>c8f9437</c>): مَفاتيحُ الاستِمارَتَينِ 2 و5 بِلا سَطرٍ عَن الفارِغ.
+    /// والآن كُلُّ استِمارَةٍ تَرسُمُ <c>roles.save.empty_warning</c> مَرَّةً قَبلَ زِرِّ الحِفظِ مُباشَرَةً (القاعِدَة ١٧: عَلى الفِعلِ لا في صَفحَةٍ تَشرَح)،
+    /// وبَقِيَّةُ مَفاتيحِها بِعَينِها وبِتَرتيبِها. <b>(‏2026-10-28، د62)</b>: كانَ الاسمُ <c>…_says_what_an_empty_save_grants_…</c> — والفارِغُ صارَ
+    /// يُرفَض، فَصارَ «ما يَفعَلُه» لا «ما يُعطيه»؛ والمِفتاحُ ومَوضِعُه بِعَينِهِما.</summary>
+    [Theory]
+    [MemberData(nameof(RolesPages))]
+    public void The_roles_form_says_what_an_empty_save_does_just_before_its_submit(string page, string action)
+    {
+        var form = Form(page, action);
+        var keys = Keys(form);
+        output.WriteLine($"{Path.GetFileName(page)}: {keys.Count} مِفتاحاً — {string.Join(" · ", keys)}");
+
+        var expected = page.EndsWith("StudioAppRoles.razor", StringComparison.Ordinal)
+            ? new[] { "studio.app_roles.default", EmptyWarningKey, "studio.app_roles.save" }
+            : new[] { "admin.tenant_roles.signup_fields", "admin.tenant_roles.field_sep", "admin.tenant_roles.default",
+                      EmptyWarningKey, "admin.tenant_roles.cancel", "admin.tenant_roles.save" };
+        Assert.Equal(expected, keys);
+        var warnAt = form.IndexOf(EmptyWarningKey, StringComparison.Ordinal);
+        Assert.True(warnAt > form.LastIndexOf("RoleCatalog.All", StringComparison.Ordinal) && warnAt < form.IndexOf("type=\"submit\"", StringComparison.Ordinal),
+            $"{page}: السَطرُ لَيسَ بَينَ قائِمَةِ الأَدوارِ وزِرِّ الحِفظ.");
+    }
+
+    /// <summary>نَصُّ السَطرِ في القامُوسِ العَرَبيّ (القاعِدَة ١١). <b>(‏2026-10-28، قَرارُ المالِك د62 — قُلِبَ بِاسمِه)</b>: كانَ
+    /// <c>The_empty_save_warning_lives_in_the_arabic_dictionary</c> يَشتَرِطُ «إدارَتُه» و«هَواتِفِ» — ما يُعطيه الفارِغ. والفارِغُ صارَ يُرفَض،
+    /// فَالسَطرُ يَقولُ الرَفضَ ولا يَعِدُ بِما لَم يَعُد يَقَع.</summary>
+    [Fact]
+    public void The_empty_save_line_in_the_arabic_dictionary_says_it_is_refused()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
+        Assert.True(doc.RootElement.TryGetProperty(EmptyWarningKey, out var v), $"مِفتاحٌ غائِبٌ عَن ar.json: {EmptyWarningKey}");
+        var text = v.GetString() ?? "";
+        output.WriteLine($"{EmptyWarningKey} = {text}");
+        Assert.Contains("يُرفَض", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("إدارَتُه", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("كُلَّ الصَلاحِيّات", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>ولا ثالِثَةَ: كُلُّ استِمارَةٍ في المَصادِرِ تُرسِلُ إلى <c>…/roles/save</c> واحِدَةٌ مِن الاثنَتَين (القاعِدَة ١٠: يَعُدُّ ويَفشَلُ عَلى الصِفر).
+    /// <para><b>‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-3 الجَولَة ١، تَيّارُ W8-10)</b>: الماسِحُ صارَ <see cref="RolesSaveFormsIn"/> — دالَّةً تُحقَنُ
+    /// بِعَيِّناتٍ في <see cref="The_roles_save_form_scanner_counts_every_spelling_of_the_action"/>؛ وكانَ يَقبَلُ تَهجِئَةً واحِدَةً
+    /// (<c>action="@($"…/roles/save")"</c>) فَاستِمارَةٌ ثالِثَةٌ بِمَسارٍ حَرفِيٍّ تَمُرُّ بِلا عَدّ.</para></summary>
+    [Fact]
+    public void Exactly_two_forms_post_to_a_roles_save_door()
+    {
+        var found = RolesSaveFormsIn(EntitlementContractTests.SourceFiles()
+            .Where(f => f.File.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)));
+        output.WriteLine($"استِمارَاتُ roles/save: {found.Count} — {string.Join(" · ", found.Select(f => $"{f.File}: {f.Action}"))}");
+        Assert.Equal(2, found.Count);
+    }
+
+    /// <summary>كُلُّ <c>action</c> أَو <c>formaction</c> يُرسِلُ إلى <c>…/roles/save</c> — بِمَسارٍ حَرفِيٍّ بِعَلامَتَي تَنصيصٍ مُزدَوِجَتَين أَو
+    /// مُفرَدَتَين، أَو بِـ<c>@($"…")</c>، وبِمَسافاتٍ حَولَ <c>=</c> أَو بِلا. ولا يَعُدُّ ما في تَعليقِ <c>@* … *@</c>، ولا بابَ <c>roles/saved</c>
+    /// أَو <c>roles/delete</c>. <b>وما لا يَراه — يُقال</b>: مَسارٌ في مُتَغَيِّرٍ (<c>action="@SaveUrl"</c>) — قيمَةُ الوَسمِ لا تَحمِلُ المَسار.</summary>
+    internal static List<(string File, string Action)> RolesSaveFormsIn(IEnumerable<(string File, string Text)> sources) =>
+        sources.SelectMany(f => Regex.Matches(WriteEndpointGuardTests.StripMarkupComments(f.Text),
+                    @"(?<![\w-])(?:form)?action\s*=\s*(?:""(?<a>@\(\$?""[^""]*""\))""|""(?<a>[^""]*)""|'(?<a>[^']*)')")
+                .Where(m => Regex.IsMatch(m.Groups["a"].Value, @"/roles/save(?![\w-])"))
+                .Select(m => (File: Path.GetFileName(f.File), Action: m.Groups["a"].Value)))
+            .ToList();
+
+    /// <summary>القاعِدَة ١٠ — الماسِحُ يُحمِرُّ بِعَيِّنَةٍ مَحقونَة: كُلُّ تَهجِئَةٍ تُعَدُّ، وما لَيسَ استِمارَةَ حِفظٍ لا يُعَدّ.</summary>
+    [Theory]
+    [InlineData("<form method=\"post\" action=\"@($\"/studio/apps/{Slug}/roles/save\")\">", 1)]
+    [InlineData("<form method=\"post\" action=\"/admin/tenants/x/roles/save\">", 1)]
+    [InlineData("<form method='post' action='/admin/tenants/x/roles/save'>", 1)]
+    [InlineData("<form method=\"post\" action = \"/admin/tenants/x/roles/save?back=1\">", 1)]
+    [InlineData("<form method=\"post\" action=\"@(\"/x/roles/save\")\">", 1)]
+    [InlineData("<button type=\"submit\" formaction=\"/x/roles/save\">", 1)]
+    [InlineData("<form action=\"/a/roles/save\"></form><form action=\"@($\"/b/{Id}/roles/save\")\"></form>", 2)]
+    [InlineData("@* <form method=\"post\" action=\"/x/roles/save\"> *@", 0)]
+    [InlineData("<form method=\"post\" action=\"/x/roles/saved\">", 0)]
+    [InlineData("<form method=\"post\" action=\"/x/roles/delete\">", 0)]
+    [InlineData("<form method=\"post\" data-action=\"/x/roles/save\">", 0)]
+    [InlineData("<form method=\"post\" action=\"@SaveUrl\">", 0)]
+    public void The_roles_save_form_scanner_counts_every_spelling_of_the_action(string sample, int expected)
+    {
+        var found = RolesSaveFormsIn(new[] { ("x/Injected.razor", sample) });
+        output.WriteLine($"مَحقونَة: {found.Count} (المُتَوَقَّع {expected}) — {string.Join(" · ", found.Select(f => f.Action))}");
+        Assert.Equal(expected, found.Count);
+    }
+
+    // ─── تَوصيفُ «اليَوم» قَبلَ قَلبِ الوَضعِ المَوروث (‏2026-10-28، قَرارُ المالِك د62 — القاعِدَة ٣) ──────────────────────────
+    //
+    // ما يَتَغَيَّرُ بِالقَرار مُثَبَّتٌ هُنا بِأَطرافِه الثَلاثَة قَبلَ أَيِّ سَطرِ كود: (١) مَتجَرٌ بِصِفرِ أَدوارٍ يُعطي كُلَّ صَلاحِيَّةٍ في المَعجَمِ
+    // لِأَيِّ دَور — حَتّى الغائِب؛ (٢) فَعُضوٌ بِلا دَورٍ فيه يَعبُرُ بَوّابَةَ إدارَةِ المَتجَر؛ (٣) وحِفظُ اختِيارٍ فارِغٍ في `roles/save` يُحفَظُ صِفرَ
+    // أَدوار. وصُفوفُ `Today_` تُقلَبُ بِأَسمائِها في كوميتِ التَبديل.
+
+    /// <summary>الأَدوارُ المَسؤولُ عَنها في المَصفوفَة — الغائِبُ والفارِغُ ودَورٌ مِن الكاتالوجِ ودَورُ الإدارَةِ ودَورٌ لا وُجودَ لَه.</summary>
+    private static readonly string?[] ProbedRoles = { null, "", "customer", "tenant_admin", "ghost" };
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040 — كوميتُ القَلب)</b> — كانَ
+    /// <c>Today_a_zero_role_store_grants_every_catalog_permission_to_any_role</c> (‏<c>aeb3ec3</c>): «40 مِن 40 خانَة تُمنَح». والآن صَلاحِيّاتُ
+    /// العُضوِ السَبعُ لِكُلِّ دَور (35)، و<c>tenant.manage</c> لا لِأَحَدٍ (5 خانات) — والإدارِيَّةُ ما يُسَمّيه <c>PermissionCatalog.Administrative</c>.</summary>
+    [Fact]
+    public void A_zero_role_store_grants_every_member_permission_and_no_administrative_one()
+    {
+        var none = Array.Empty<ACommerce.Kit.Roles.Role>();
+        var cells = ProbedRoles.SelectMany(r => ACommerce.Kit.Roles.PermissionCatalog.All.Select(p => (Role: r, Permission: p))).ToList();
+        var granted = cells.Where(c => ACommerce.Kit.Roles.RolePermissions.Has(none, c.Role, c.Permission)).ToList();
+        var refused = cells.Except(granted).ToList();
+        output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار: {granted.Count} مِن {cells.Count} خانَة تُمنَح · {refused.Count} تُرَدّ ({string.Join(", ", refused.Select(c => c.Permission).Distinct())})");
+        Assert.True(cells.Count >= 40, $"أَداةٌ عَمياء: {cells.Count} خانَة.");
+        Assert.Equal(ProbedRoles.Length * (ACommerce.Kit.Roles.PermissionCatalog.All.Count - 1), granted.Count);
+        Assert.All(refused, c => Assert.Equal("tenant.manage", c.Permission));
+        Assert.Equal(ProbedRoles.Length, refused.Count);
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040)</b> — كانَ
+    /// <c>Today_a_role_less_member_of_a_zero_role_store_passes_the_tenant_admin_guard</c> (‏<c>aeb3ec3</c>): البَوّابَةُ تَفتَح. والآن تَرُدّ؛
+    /// ومالِكُ الاستوديو يَعبُرُها كَما كان (الطَرَفُ الآخَرُ مِن القَرار).</summary>
+    [Fact]
+    public void A_role_less_member_of_a_zero_role_store_is_refused_and_the_studio_owner_still_passes()
+    {
+        var owner = Guid.NewGuid();
+        var tenant = new ACommerce.Kit.Tenants.Tenant { Id = "zero", Name = "صِفر", OwnerUserId = owner };
+        var member = new ACommerce.Kit.Auth.User { Id = Guid.NewGuid(), TenantSlug = "zero", ActiveRole = "" };
+        Assert.Empty(tenant.Roles);
+        Assert.False(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.HasTenantManage(tenant, member));
+        Assert.True(ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.IsStudioOwner(tenant, owner));
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، قَرارُ المالِك د62 — كوميتُ الرَفض)</b> — كانَ
+    /// <c>Today_saving_an_empty_role_selection_saves_zero_roles</c> (‏<c>aeb3ec3</c>): «Saved · أَدوارُ المَتجَرِ بَعدَه: 0 · كُتِبَت وَثيقَة: 1».
+    /// والآن يُرَدُّ بِـ<c>roles_empty_selection</c> قَبلَ تَحميلِ المَتجَر، فَيَبقى بِدَورَيه ولا تُكتَبُ وَثيقَة.</summary>
+    [Fact]
+    public async Task Saving_an_empty_role_selection_is_refused_and_the_store_keeps_its_roles()
+    {
+        var all = ACommerce.Kit.Roles.RoleCatalog.All;
+        var tenant = new ACommerce.Kit.Tenants.Tenant
+        {
+            Id = "zero", Name = "صِفر",
+            Roles = all.Take(2).Select((t, i) => ACommerce.Kit.Roles.RoleCatalog.InstantiateRole(t, i)).ToList(),
+        };
+        var world = new DocWorld().Put(tenant);
+        var result = await ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.RolesSaveService.SaveAsync(
+            world.Session, "zero", new(Array.Empty<string>(), null));
+        output.WriteLine($"الحِفظُ الفارِغ: {result.Status} ({result.Code}) · أَدوارُ المَتجَرِ بَعدَه: {world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count} · كُتِبَت وَثيقَة: {world.Wrote<ACommerce.Kit.Tenants.Tenant>()}");
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigStatus.Rejected, result.Status);
+        Assert.Equal(ACommerce.Templates.Customer.Marketplace.Services.TenantConfig.TenantConfigCodes.RolesEmptySelection, result.Code);
+        Assert.Equal(2, world.Read<ACommerce.Kit.Tenants.Tenant>("zero")!.Roles.Count);
+        Assert.Equal(0, world.Wrote<ACommerce.Kit.Tenants.Tenant>());
+    }
+
+    /// <summary>والسَطحانِ يَقولانِ الرَفضَ بِنَصِّه مِن القامُوس لا بِالرَمز (القاعِدَة ١١): كُلُّ صَفحَةٍ تَرسُمُ <c>roles.save.err_empty_selection</c>
+    /// مَرَّةً مَقرونَةً بِالرَمزِ مِن المُعجَم، والنَصُّ في <c>ar.json</c>.</summary>
+    [Theory]
+    [MemberData(nameof(RolesPages))]
+    public void Each_roles_page_says_the_empty_selection_refusal_from_the_dictionary(string page, string action)
+    {
+        _ = action;
+        var code = WriteEndpointGuardTests.StripMarkupComments(Read(page));
+        var keyAt = code.IndexOf("\"roles.save.err_empty_selection\"", StringComparison.Ordinal);
+        output.WriteLine($"{Path.GetFileName(page)}: المِفتاحُ {(keyAt > 0 ? "حاضِر" : "غائِب")} · TenantConfigCodes.RolesEmptySelection: {Regex.Matches(code, "TenantConfigCodes\\.RolesEmptySelection").Count}");
+        Assert.Equal(1, Regex.Matches(code, Regex.Escape("\"roles.save.err_empty_selection\"")).Count);
+        Assert.Equal(1, Regex.Matches(code, "TenantConfigCodes\\.RolesEmptySelection").Count);
+        using var doc = System.Text.Json.JsonDocument.Parse(Read("libs/core/ACommerce.Platform.I18n/Locales/ar.json"));
+        Assert.True(doc.RootElement.TryGetProperty("roles.save.err_empty_selection", out var v) && (v.GetString() ?? "").Length > 0);
+    }
+
+    // ─── سكربتُ القياس ─────────────────────────────────────────────────────────────────────────
+
+    private static string ScriptCode()
+    {
+        var path = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "scripts", "count-listing-owners.cs");
+        Assert.True(File.Exists(path), $"مَصدَرٌ مَفقود: {path}");
+        return WriteEndpointGuardTests.StripComments(File.ReadAllText(path));
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-25، كوميتُ التَبديل)</b> — كانَ
+    /// <c>Today_the_owner_count_script_prints_no_aggregate_of_the_legacy_role_mode</c> (‏<c>c8f9437</c>): «أَسطُرُ الخُلاصَة: 3 · RolePermissions.Has: 0».
+    /// والآن يَسأَلُ لِكُلِّ مَتجَرٍ دالَّةَ الصَلاحِيَّةِ نَفسَها (لا <c>Roles.Count == 0</c> مَنسوخاً — فَقَلبُ <c>RoleCatalog.cs:133</c> يُصَفِّرُه بِلا تَعديل)،
+    /// ويَعُدُّ مُستَخدِمي المَتجَرِ المَوروثِ عَدَداً، ويَجمَعُه في سَطرِ خُلاصَةٍ رابِعٍ بِالاستوديو والمالِكِ والمُستَخدِمين.</summary>
+    [Fact]
+    public void The_owner_count_script_aggregates_the_legacy_role_mode_with_the_products_own_permission_function()
+    {
+        var code = ScriptCode();
+        var summary = code[code.IndexOf("فُحِصَ: {tenants.Count} مَتجَراً", StringComparison.Ordinal)..];
+        var summaryLines = Regex.Matches(summary[..summary.IndexOf("if (mismatches.Count > 0)", StringComparison.Ordinal)], @"Console\.WriteLine\(").Count + 1;
+        var asksPermission = Regex.Matches(code, Regex.Escape("RolePermissions.Has(t.Roles, activeRole: null, \"tenant.manage\")")).Count;
+        output.WriteLine($"أَسطُرُ الخُلاصَة: {summaryLines} · RolePermissions.Has(t.Roles, null, tenant.manage): {asksPermission} · «وَضعٌ مَوروث» في الخُلاصَة: {summary.Contains("وَضعٌ مَوروث", StringComparison.Ordinal)}");
+
+        Assert.Equal(5, summaryLines);   // ‏(‏2026-10-28، ‏ADR-040) كانَ 4 — والخامِسُ «بِصِفرِ أَدوار» (الصَفُّ التالي).
+        Assert.Equal(1, asksPermission);
+        Assert.DoesNotContain("Roles.Count == 0", code[..code.IndexOf("static bool HasActiveRole", StringComparison.Ordinal)]
+            .Replace("t.Roles.Count == 0 ? \"— وَضعٌ مَوروث\"", "", StringComparison.Ordinal), StringComparison.Ordinal);
+        foreach (var piece in new[] { "{legacy}", "{legacyStudio}", "{legacyOwned}", "{legacyMembers}" })
+            Assert.Contains(piece, summary, StringComparison.Ordinal);
+        Assert.Contains("members = await tq.Query<User>().Where(u => u.DeletedAt == null).CountAsync();", code, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>وسُؤالُ المالِكِ يَبقى مُجاباً بَعدَ القَلب</b> (‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 «ج»: «كَم مَتجَراً بِلا أَدوار، وهَل ashare
+    /// مِنها، وكَم عُضواً فيها»): سَطرُ الوَضعِ المَوروثِ يَسأَلُ الدالَّةَ فَيَصيرُ صِفراً بِالقَلب — وذاكَ بُرهانُه — فَسَطرٌ خامِسٌ يَعُدُّ صِفرَ الأَدوارِ
+    /// <b>بِنيَةً</b> (<c>ZeroRoles</c>، بَعدَ <c>HasActiveRole</c>) بِمُستَخدِميه وأَسماءِ مَتاجِرِه.</summary>
+    [Fact]
+    public void The_owner_count_script_counts_zero_role_stores_by_structure_after_the_flip()
+    {
+        var code = ScriptCode();
+        var summary = code[code.IndexOf("فُحِصَ: {tenants.Count} مَتجَراً", StringComparison.Ordinal)..];
+        output.WriteLine($"ZeroRoles(t): {Regex.Matches(code, Regex.Escape("ZeroRoles(t)")).Count} · سَطرُ «بِصِفرِ أَدوار» في الخُلاصَة: {summary.Contains("بِصِفرِ أَدوار", StringComparison.Ordinal)}");
+        Assert.Contains("static bool ZeroRoles(Tenant t) => t.Roles.Count == 0;", code, StringComparison.Ordinal);
+        Assert.True(code.IndexOf("static bool ZeroRoles", StringComparison.Ordinal) > code.IndexOf("static bool HasActiveRole", StringComparison.Ordinal));
+        Assert.Equal(1, Regex.Matches(code, Regex.Escape("if (ZeroRoles(t))")).Count);
+        foreach (var piece in new[] { "{zeroRole}", "{zeroRoleStudio}", "{zeroRoleMembers}", "zeroRoleSlugs" })
+            Assert.Contains(piece, summary, StringComparison.Ordinal);
+    }
+}
+
+// ═══ البُرهانُ الحَيّ — عُضوٌ سَجَّلَ نَفسَه في مَتجَرٍ بِصِفرِ أَدوار وبَوّابَةُ إدارَتِه (‏WASAYEL_LIVE_PROOF=1، ‏2026-10-28، قَرارُ المالِك د62) ═══
+//
+// المُعالِجُ نَفسُه الَّذي تُناديه نُقطَةُ `/{slug}/auth/phone/verify` يُنشِئُ الحِسابَ في مُستَأجِرٍ مُؤَقَّتٍ بِلا أَدوار، ورَمزُه في الكوكي
+// الَّذي يَقرَؤُه `AuthSession.ResolveToken`، ثُمَّ البَوّابَةُ الَّتي تَسأَلُها صَفحَةُ `/admin/tenants/{slug}/users` ونِقاطُ الـPOST تَحتَها
+// (`TenantAdminGuard.CanAdministerAsync`) — عَلى Postgres. ويُمسَحُ المُستَأجِرُ وحِساباتُه بَعدَه.
+
+[Collection(LiveProofCollection.Name)]
+public class LiveZeroRoleAdminProofTests(ITestOutputHelper output)
+{
+    private static bool Enabled
+        => LiveDealConcurrencyProofTests.Enabled && !string.IsNullOrEmpty(LiveDealConcurrencyProofTests.ConnectionString);
+
+    /// <summary>عُضوٌ يُسَجِّلُ نَفسَه بِالجَوّالِ في مَتجَرٍ بِلا أَدوار، ثُمَّ جَوابُ بَوّابَةِ الإدارَةِ لِطَلَبٍ يَحمِلُ كوكيَّه — ومالِكُ الاستوديو بِلا جَلسَة.</summary>
+    internal static async Task<(Guid Member, bool Allowed)> SelfRegisteredMemberAsksTheAdminGuardAsync(
+        Marten.IDocumentStore store, string slug, string phone)
+    {
+        await using (var g = store.LightweightSession())
+        {
+            g.Store(new ACommerce.Kit.Tenants.Tenant { Id = slug, Name = "مَتجَرٌ بِلا أَدوار", OwnerUserId = Guid.NewGuid(), AuthChannel = "phone" });
+            await g.SaveChangesAsync();
+        }
+        const string code = "424242";
+        ACommerce.Kit.Auth.Server.AuthHandlers.IssueAttempt(slug, phone, code, ACommerce.Kit.Auth.Server.AuthHandlers.AuthKind.PhoneOtp);
+        var signedIn = await ACommerce.Kit.Auth.Server.AuthHandlers.VerifyPhoneOtpHandler(
+            new ACommerce.Kit.Auth.VerifyPhoneOtp(phone, code), new VendorRegisterBucketTests.ResolvedTenant(slug), store);
+        Assert.NotNull(signedIn);
+
+        var http = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        http.Request.Path = $"/admin/tenants/{slug}/users";
+        http.Request.Headers.Cookie = $".acommerce.auth.{slug}={signedIn!.Token}";
+        var accessor = new Microsoft.AspNetCore.Http.HttpContextAccessor { HttpContext = http };
+        var allowed = await ACommerce.Templates.Customer.Marketplace.Services.TenantAdminGuard.CanAdministerAsync(
+            store, new ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth(accessor), http.Request, slug);
+        return (signedIn.UserId, allowed);
+    }
+
+    internal static async Task CleanAsync(Marten.IDocumentStore store, string slug)
+    {
+        await using (var s = store.LightweightSession(slug))
+        {
+            foreach (var u in await Marten.QueryableExtensions.ToListAsync(s.Query<ACommerce.Kit.Auth.User>())) s.Delete(u);
+            await s.SaveChangesAsync();
+        }
+        await using var g = store.LightweightSession();
+        g.Delete<ACommerce.Kit.Tenants.Tenant>(slug);
+        await g.SaveChangesAsync();
+    }
+
+    /// <summary><b>قُلِبَ «Today_» بِاسمِه (‏2026-10-28، ‏ADR-040)</b> — كانَ
+    /// <c>Today_a_self_registered_member_of_a_zero_role_store_passes_the_admin_guard_on_Postgres</c> (‏<c>aeb3ec3</c>، «تَفتَح» 1/0 عَلى
+    /// <c>wasayel_dev</c>). والآن البَوّابَةُ تَرُدُّ العُضوَ نَفسَه.</summary>
+    [Fact]
+    public async Task A_self_registered_member_of_a_zero_role_store_is_refused_by_the_admin_guard_on_Postgres()
+    {
+        if (!Enabled) return;
+
+        await using var store = LiveDealConcurrencyProofTests.BuildStore();
+        var slug = "zr-zz-" + Guid.NewGuid().ToString("N")[..8];
+        try
+        {
+            var (member, allowed) = await SelfRegisteredMemberAsksTheAdminGuardAsync(store, slug, "966500000062");
+            output.WriteLine($"مَتجَرٌ بِصِفرِ أَدوار · عُضوٌ سَجَّلَ نَفسَه ({member:N}) · بَوّابَةُ /admin/tenants/{{slug}}/users: {(allowed ? "تَفتَح" : "تَرُدّ")}");
+            Assert.False(allowed);
+        }
+        finally { await CleanAsync(store, slug); }
+    }
+}

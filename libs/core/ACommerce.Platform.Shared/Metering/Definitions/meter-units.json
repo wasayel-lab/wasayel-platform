@@ -1,0 +1,373 @@
+{
+  "units": [
+    {
+      "code": "deal.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "deal_status",
+      "reconcile": "deal_ids",
+      "source": "DealsService.StartAsync — Deal stored with VersionFor = null (one deal = one cart line or one listing-page request)"
+    },
+    {
+      "code": "listing.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "listings",
+      "reconcile": "event_ids:ListingCreated",
+      "source": "POST /{slug}/listings/create (MarketplaceTemplateExtensions) — ListingCreated in a StreamAction.Start; one listing = one started stream; app = the stream tenant"
+    },
+    {
+      "code": "offer.submit",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "offer",
+      "reconcile": "event_ids:OfferSubmitted",
+      "source": "POST /{slug}/listings/{id}/offers (MarketplaceTemplateExtensions) — OfferSubmitted in a StreamAction.Start; one offer = one started stream; app = the stream tenant"
+    },
+    {
+      "code": "ticket.open",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "ticket",
+      "reconcile": "event_ids:TicketCreated",
+      "source": "POST /{slug}/support/open and POST /{slug}/listings/{id}/report (MarketplaceTemplateExtensions) — TicketCreated in a StreamAction.Start; a count of opened tickets, not support minutes; app = the stream tenant"
+    },
+    {
+      "code": "member_plan.subscribe",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "subscription",
+      "reconcile": "event_ids:SubscriptionCreated",
+      "source": "PlanSubscribeService.SubscribeAsync — SubscriptionCreated in a StreamAction.Start (a member granted a store plan); app = the stream tenant"
+    },
+    {
+      "code": "store.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "tenants",
+      "reconcile": "tenant_ids",
+      "source": "POST /admin/tenants/create, the studio create door (StudioTierService.RecordStoreBuiltAsync), the agent's create tool and the boot seeders — Tenant in Inserts; app = Tenant.Id; entrepreneur = Tenant.OwnerUserId"
+    },
+    {
+      "code": "studio.account.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "studio.build",
+      "reconcile": "studio_user_ids",
+      "source": "StudioAuth.VerifyAsync — StudioUser stored with VersionFor = null (an entrepreneur's first sign-in to the studio); app = _platform; entrepreneur = the account"
+    },
+    {
+      "code": "member.join",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "auth",
+      "reconcile": "user_ids",
+      "source": "AuthHandlers.GetOrCreateUserAsync — User stored with VersionFor = null (a member's first sign-in to a store); app = the session tenant; source = a pseudonym of User.Id"
+    },
+    {
+      "code": "review.create",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "reviews",
+      "reconcile": "review_ids",
+      "source": "ReviewsService.SubmitAsync — Review in Inserts; app = the session tenant; source = the review id"
+    },
+    {
+      "code": "chat.message",
+      "side": "operation",
+      "boundary": "persistence",
+      "measure": "count",
+      "feature": "chat",
+      "reconcile": "message_ids",
+      "source": "POST /{slug}/chats/{conversationId}/send (MarketplaceTemplateExtensions) and the sample conversations of the test and appearance seeders — Message in Inserts (one message = one send); app = the session tenant; source = the message id"
+    },
+    {
+      "code": "otp.sms.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "sms_otp",
+      "reconcile": "intents",
+      "source": "TwilioSmsChannel.SendOtpAsync through ProviderHttp — one entry when Twilio answers 2xx; request id = the attempt id (store door, AuthHandlers.RequestPhoneOtpHandler) or a fresh call id (studio door StudioAuth.SendPhoneCodeAsync, contact codes AccountContacts); app = the store slug or _platform"
+    },
+    {
+      "code": "notice.sms.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "sms_otp",
+      "reconcile": "intents",
+      "source": "TwilioSmsChannel.SendNoticeAsync through ProviderHttp — one entry when Twilio answers 2xx; request id = the notification id written before the send (AccountContacts.NoticeLinkedAsync); app = the store slug"
+    },
+    {
+      "code": "otp.email.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "email_otp",
+      "reconcile": "intents",
+      "source": "BrevoEmailChannel.SendOtpAsync through ProviderHttp (one entry when Brevo answers 2xx) or SmtpEmailChannel.SendOtpAsync through ProviderCalls.InvokeAsync (one entry when MailKit SendAsync returned); request id = the attempt id (store door, AuthHandlers.RequestEmailOtpHandler) or a fresh call id (studio door StudioAuth.SendEmailCodeAsync, contact codes AccountContacts); app = the store slug or _platform"
+    },
+    {
+      "code": "notice.email.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "email_otp",
+      "reconcile": "intents",
+      "source": "BrevoEmailChannel.SendNoticeAsync through ProviderHttp or SmtpEmailChannel.SendNoticeAsync through ProviderCalls.InvokeAsync — one entry when accepted; request id = the notification id written before the send (AccountContacts.NoticeLinkedAsync, DealNotices.MailStoreOwnerAsync); app = the store slug"
+    },
+    {
+      "code": "identity.nafath.start",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "nafath",
+      "reconcile": "intents",
+      "source": "NafathChannel.StartAsync through ProviderHttp — one entry when Nafath answers the MFA request 2xx; request id = a fresh call id (the attempt id is Nafath's answer, known only after); app = the store slug (AuthHandlers.RequestNafathHandler); the OAuth token and the status poll are helpers, not counted"
+    },
+    {
+      "code": "file.upload",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "bytes",
+      "feature": "files",
+      "reconcile": "intents",
+      "source": "S3FileStorage.UploadAsync — PutObjectAsync inside ProviderCalls.InvokeAsync; one entry per accepted put, quantity = the bytes put; request id = a fresh call id (a re-upload is a new upload); source = a pseudonym of the object key (the avatar key carries a user id); app = the store slug (POST /{slug}/me/save, POST /{slug}/listings/create); reads, existence checks and deletes are helpers, not counted"
+    },
+    {
+      "code": "push.send",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "notifications",
+      "reconcile": "intents",
+      "source": "WebPushService.SendAsync — SendNotificationAsync inside ProviderCalls.InvokeAsync, one entry per subscription the push service accepted; request id = {notificationId}:{pseudonym of the endpoint} (the notification written before the push); app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "GatewayPayments.OpenInvoiceAsync — the store gateway client's CreateInvoiceAsync through ProviderHttp; one entry when the POST /invoices answers 2xx (the metadata PUT that follows is a helper, not counted); request id = a fresh call id (the gateway takes no idempotency key, so a retried create is a second invoice); source = the first deal of the invoice; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.fetch",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's FetchInvoiceAsync through ProviderHttp — one entry per accepted GET; request id = {invoiceId}:verify:{fresh call id} (GatewayPayments.VerifyAsync), {invoiceId}:notice:{payment id} (ConfirmNoticeAsync), {invoiceId}:expiry (ExpireAsync on a deal never resumed — dedupes the scheduled retries), {invoiceId}:expiry:resume:{dealId:N}:{n} (ExpireAsync after the deal's n-th resume past the window — GatewayCalls.ExpiryRun: a new run, whose own retries share its trigger) or {invoiceId}:close:{cancelled deal id} (GatewayInvoiceCloser, on every cancel of a deal with an invoice); source = the invoice id; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.invoice.cancel",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's CancelInvoiceAsync through ProviderHttp — one entry when PUT /invoices/:id/cancel answers 2xx; request id = {invoiceId}:close (GatewayInvoiceCloser, after the last open deal of the invoice is cancelled); source = the invoice id; app = the store slug"
+    },
+    {
+      "code": "payment.gateway.webhook.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "payments",
+      "reconcile": "intents",
+      "source": "the store gateway client's CreateWebhookAsync through ProviderHttp — one entry when POST /webhooks answers 2xx; request id = a fresh call id (GatewayPayments.ConnectNoticesAsync, after the payments binding is written); app = the store slug"
+    },
+    {
+      "code": "billing.paypal.plan.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateBillingPlanAsync through ProviderHttp — one entry when POST /v1/billing/plans answers 2xx; request id = the PayPal-Request-Id the kit sends (derived from the catalog product and the draft); the catalog product call before it and the OAuth token are helpers, not counted; app = _platform (POST /admin/tenants/{slug}/plan/paypal-plan binds a platform plan)"
+    },
+    {
+      "code": "billing.paypal.link.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateSubscriptionAsync through ProviderHttp — one entry when POST /v1/billing/subscriptions answers 2xx; request id = the PayPal-Request-Id (PayPalSurface.LinkKey); app = the store slug (POST /admin/tenants/{slug}/plan/paypal-link)"
+    },
+    {
+      "code": "billing.paypal.order.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CreateOrderAsync through ProviderHttp — one entry when POST /v2/checkout/orders answers 2xx; request id = the PayPal-Request-Id (PayPalOrderPolicy.OrderRequestId); app = the store slug (POST /admin/tenants/{slug}/plan/paypal-order)"
+    },
+    {
+      "code": "billing.paypal.order.capture",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.CaptureOrderAsync through ProviderHttp — one entry when the capture answers 2xx; request id = the PayPal-Request-Id (PayPalOrderPolicy.CaptureRequestId); app = the order's store (PayPalOrderFlow.CaptureAsync, from the capture button or the approval event)"
+    },
+    {
+      "code": "billing.paypal.webhook.verify",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PayPalPaymentProvider.VerifyWebhookSignatureAsync through ProviderHttp — one entry when verify-webhook-signature answers 2xx, before the event is read; request id = UsageEntryId.Pseudonym(billing.paypal.webhook.verify, _platform, paypal-transmission-id) (PayPalSurface.VerifyCall — the raw header, which anyone writes before verification, never enters the ledger; PayPal's redelivery of one transmission is one entry); app = _platform (POST /api/billing/paypal)"
+    },
+    {
+      "code": "billing.paddle.transaction.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "intents",
+      "source": "PaddlePaymentProvider.CreateTransactionAsync through ProviderHttp — one entry when POST /transactions answers 2xx; request id = a fresh call id (PaddleSurface.CreateCall — our reference keys our document, not a Paddle deduplication: two clicks with the same draft are two Paddle transactions, so each accepted create is its own operation); source = paddle_reference:{our reference} (PaddleTransactionPolicy.Reference); app = the store slug (POST /admin/tenants/{slug}/plan/paddle-link)"
+    },
+    {
+      "code": "delivery.order.create",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "DealShipping.ShipAsync through PlaceAsync — the OTO client's CreateOrderAsync through ProviderHttp; one entry when OTO accepts — POST /rest/v2/createOrder answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = our order id (DealShipping.OrderIdOf, the first deal of the vendor's cart), so a repeated create of the same order is one operation; source = the order id; app = the store slug; the access-token exchange before it is a helper, not counted"
+    },
+    {
+      "code": "delivery.order.status",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "the OTO client's GetOrderStatusAsync through ProviderHttp — one entry per POST /rest/v2/orderStatus OTO accepts — one that answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = {orderId}:check:{fresh call id} (DealShipping.ShipAsync, before the deal moves), {orderId}:recover:{fresh call id} (PlaceAsync, after a create whose answer was lost) or {orderId}:notice:{status}:{timestamp} (ReceiveAsync, the signed status event, so OTO's redelivery of one event is one entry); source = the order id; app = the store slug"
+    },
+    {
+      "code": "delivery.webhook.register",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "VendorShippingService (paste and register) — the OTO client's RegisterWebhookAsync through ProviderHttp; one entry when OTO accepts — POST or PUT /rest/v2/webhook answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = a fresh call id (an update refused by another account and then created again is two operations); app = the store slug"
+    },
+    {
+      "code": "delivery.vendor.register",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "delivery",
+      "reconcile": "intents",
+      "source": "VendorShippingService.RegisterAsync — the OTO client's RegisterVendorAsync through ProviderHttp on the marketplace credential; one entry when OTO accepts — POST /rest/v2/register answers 2xx without \"success\": false (OtoClient.Acceptance with SaysRefused: a 2xx carrying \"success\": false is refused, so no entry); request id = the audit row written before the call (AuditWriter.WriteAsync returns it); app = the store slug"
+    },
+    {
+      "code": "model.call",
+      "side": "operation",
+      "boundary": "outbound",
+      "measure": "count",
+      "feature": "studio.build",
+      "reconcile": "intents",
+      "source": "IAgentBackend.CallAsync — the Anthropic, Gemini and Chat-Completions-compatible backends through ProviderHttp; one entry when usage is read from the answer (the tokens were spent, even beside an error), refused on a 4xx without usage, unknown otherwise; request id = a fresh call id per call (each analysis attempt is its own call); app = _platform (the studio design agent AgentService and the admin incubator FeasibilityAnalysisService); ModelCallRecord keeps the per-operation split"
+    },
+    {
+      "code": "presence.store",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "tenants",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store per day for every store not suspended (Tenant.IsSuspended); quantity 1; app = the store, entrepreneur = Tenant.OwnerUserId, role _system"
+    },
+    {
+      "code": "presence.role",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "roles",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per materialised role (Tenant.Roles plus the approved TenantRoleDefinition documents through TenantRoleSet.Materialize) whose derived meter TenantRoleSet.MeterOf(CatalogSlug) names this unit; quantity 1; role = the role slug"
+    },
+    {
+      "code": "presence.authored_role",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "roles",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved tenant-authored role definitions (TenantRoleSet.TenantAuthored); quantity = their count"
+    },
+    {
+      "code": "presence.authored_theme",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "theme",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved TenantThemeDefinition documents; quantity = their count"
+    },
+    {
+      "code": "presence.member_plan",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "subscriptions",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with approved TenantPlanDefinition documents; quantity = their count"
+    },
+    {
+      "code": "presence.provider_binding",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "@provider_capability",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per active TenantProviderBinding that is not a vendor entry and whose ProviderDefinition.Meter.Presence is store_binding; quantity 1; provider = its slug, feature = its capability"
+    },
+    {
+      "code": "presence.vendor_binding",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "@provider_capability",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per provider whose ProviderDefinition.Meter.Presence is vendor_binding, quantity = the store's active vendor entries ({capability}:{listing_owner}) on it; the listing owner never enters the ledger"
+    },
+    {
+      "code": "presence.api_key",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "api.call",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store with active ApiKeyDocument keys; quantity = their count — active = usable at the read instant (ApiKeyDocument.IsUsableAt, counted by PresenceReader.ApiKeysOf: status active and not expired, the same predicate ApiKeyService.AuthenticateAsync refuses by)"
+    },
+    {
+      "code": "presence.auth_channel",
+      "side": "technology",
+      "boundary": "presence",
+      "measure": "count",
+      "feature": "auth",
+      "reconcile": "presence_claims",
+      "source": "PresenceSnapshot.TakeAsync (TakePresenceSnapshot on its durable local queue: scheduled at 00:00 Asia/Riyadh, today and tomorrow at boot) — read with PresenceReader then one raw transaction with the day's presence_claim; one row per store for its sign-in channel (Tenant.AuthChannel); quantity 1; source = the channel"
+    }
+  ]
+}

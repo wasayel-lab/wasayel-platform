@@ -63,6 +63,17 @@ public sealed class FeasibilityAnalysisService
         return await session.LoadAsync<IncubatorSession>(id, ct);
     }
 
+    /// <summary>
+    /// <para><b>جَلسَةُ المَنَصَّةِ وَحدَها — ما يَبلُغُه مُشرِفُ المَنَصَّةِ في حاضِنَتِه</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-3 — يُلحَقُ ولا يُعادُ حَرفٌ
+    /// فَوقَه؛ تَوصيفُه <c>d48cec4</c>): جَلسَةٌ مالِكُها <c>Guid.Empty</c> أَو <c>null</c>.</para>
+    /// <para><b>العِلَّةُ المَقيسَة</b>: كانَ بابا <c>/admin/incubator/{id}/answer</c> و<c>/analyze</c> وصَفحَتا المُعالِجِ والدِراسَةِ يَقرَأنَ بِـ<see cref="LoadAsync"/>
+    /// أَيَّ جَلسَة — فَكَتَبَ المُشرِفُ <c>Answers.sector</c> في دِراسَةِ عَميل، ورَسَمَت الدِراسَةُ زِرَّ «أَعِد» يُرسِلُ وَصفَ العَميلِ إلى مُزَوِّدِ التَحليل.
+    /// وFLOWS-INVENTORY يَقولُ إنّ دِراساتِ العُمَلاءِ القَديمَةَ «تُقرَأُ ولا تُكتَب»، والخُصوصِيَّةُ أَسقَطَت مُزَوِّدَ التَحليلِ عَلى أَنّه لا يَبلُغُه إلّا نَصُّ
+    /// المُشرِفِ نَفسِه — فَصَدَقا الآن بِهذا السُؤال.</para>
+    /// </summary>
+    public async Task<IncubatorSession?> LoadPlatformAsync(Guid id, CancellationToken ct = default)
+        => await LoadAsync(id, ct) is { } s && s.OwnerUserId == Guid.Empty ? s : null;
+
     public async Task<List<IncubatorSession>> ListForUserAsync(Guid userId, CancellationToken ct = default)
     {
         await using var session = _store.QuerySession(IncubatorTenant);
@@ -178,11 +189,17 @@ public sealed class FeasibilityAnalysisService
     /// <summary>
     /// <para><b>مَتى تُعتَبَرُ تَشغيلَةٌ «قَيدَ التَحليل» مَهجورَة</b> —
     /// و<b>الرَقَمُ مَحسوبٌ مِنَ الكودِ لا مُختَرَعاً</b> (القاعِدَة
-    /// ١٦): مُهلَةُ عَميلِ HTTP في الخَلفِيّاتِ الثَلاثِ جَميعاً
-    /// <c>60</c> ثانِيَة (‏<c>AgentBackends.cs</c>)، و
+    /// ١٦): مُهلَةُ كُلِّ نِداءٍ في الخَلفِيَّةِ
+    /// <see cref="AgentCallBound.Background"/> ‏420 ثانِيَة (‏<c>AgentBackends.cs</c>)، و
     /// <see cref="RunAnalysisAsync"/> يُحاوِلُ <b>مَرَّتَين</b> —
-    /// فَأَقصى عُمرٍ مُمكِنٍ لِتَشغيلَةٍ حَيَّةٍ دَقيقَتان. والضِعفُ
-    /// هامِشُ أَمانٍ لِلشَبَكَةِ وقاعِدَةِ البَيانات.</para>
+    /// فَأَقصى عُمرٍ مُمكِنٍ لِتَشغيلَةٍ حَيَّةٍ 14 دَقيقَة. والضِعفُ
+    /// هامِشُ أَمانٍ لِلشَبَكَةِ وقاعِدَةِ البَيانات ← 28.</para>
+    ///
+    /// <para><b>وكانَ 4 دَقائِقَ إلى ‏2026-10-24</b> (تَيّارُ S15 البَند K): يَومَ كانَت المُهلَةُ <c>HttpClient.Timeout</c> ‏60 ثانِيَة
+    /// لِكُلِّ نِداء. فَطالَت مُهلَةُ نِداءِ الخَلفِيَّةِ فَطالَ هذا مَعَها <b>بِالقاعِدَةِ نَفسِها</b> — وإلّا عُدَّت تَشغيلَةٌ حَيَّةٌ في
+    /// مُحاوَلَتِها الثانِيَةِ مَهجورَةً وأُطلِقَت ثانِيَةٌ فَوقَها (إنفاقٌ مُضاعَف). وكُلفَتُه مَقروءَة: جَلسَةٌ ماتَت عَمَلِيَّتُها
+    /// (إعادَةُ نَشرٍ في مُنتَصَفِ التَحليل) تَبقى «جارِيَة» 28 دَقيقَةً لا 4 — «أ» S15·٧. والعَلاقَةُ يَقيسُها
+    /// <c>AnalysisCallBoundTests</c>.</para>
     ///
     /// <para><b>ولِماذا يوجَدُ هذا أَصلاً</b>: بِلا مُهلَةِ تَقادُمٍ،
     /// عَمَلِيَّةٌ تَموتُ في مُنتَصَفِ التَحليلِ تَترُكُ الدِراسَةَ
@@ -196,10 +213,34 @@ public sealed class FeasibilityAnalysisService
     /// يَقرَؤونَ نَفسَ رَقمِ التَشغيلَةِ ويَتَصادَمونَ عَلى نَفسِ
     /// المِفتاح.</para>
     /// </summary>
-    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(4);
+    public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(28);
 
     internal static bool IsStale(IncubatorSession s, DateTime nowUtc)
         => nowUtc - s.UpdatedAt >= StaleAfter;
+
+    /// <summary>بادِئَةُ سَطرِ فَشَلِ التَشغيلِ في الخَلفِيَّة — يُبحَثُ عَنها في سِجِلِّ الخادِم.</summary>
+    public const string BackgroundFailurePrefix = "[studio] analysis_run_failed";
+
+    /// <summary>
+    /// <para><b>سَطرُ استِثناءِ تَشغيلَةٍ في الخَلفِيَّة</b> (‏2026-10-24، تَيّارُ S15 البَند K). كانَت التَشغيلاتُ الثَلاثُ
+    /// (<c>/studio/s/{id}/analyze</c> و<c>/admin/incubator/{id}/analyze</c> و<c>ResumeStudioPromptAsync</c>) تَنتَهي
+    /// بِـ<c>catch { }</c>: استِثناءٌ خارِجَ النِداءِ (القاعِدَةُ عِندَ الحِفظ، جَلسَةٌ مَحذوفَة) يُبقي الدِراسَةَ «جارِيَة» إلى
+    /// <see cref="StaleAfter"/> ولا يَقولُ سِجِلُّ الخادِمِ لِماذا. ونِداءُ المُزَوِّدِ نَفسُه لا يَرمي — خَطَؤُه نَصٌّ في
+    /// <see cref="IncubatorSession.AnalysisError"/>.</para>
+    ///
+    /// <para><b>ولا سِرَّ فيه</b>: البابُ ومُعَرِّفُ الجَلسَةِ ونَوعُ الاستِثناءِ ورِسالَتُه — لا المِفتاحُ ولا جِسمُ الطَلَب
+    /// (والمِفتاحُ لا يَبلُغُ استِثناءً يَخرُجُ مِن هُنا: أَخطاءُ النِداءِ تُلتَقَطُ في الخَلفِيّات).</para>
+    /// </summary>
+    public static void LogBackgroundFailure(IServiceProvider services, Guid sessionId, string door, Exception ex)
+    {
+        var factory = services.GetService(typeof(Microsoft.Extensions.Logging.ILoggerFactory))
+            as Microsoft.Extensions.Logging.ILoggerFactory;
+        var log = factory?.CreateLogger("ACommerce.Studio.Analysis");
+        if (log is null) return;
+        Microsoft.Extensions.Logging.LoggerExtensions.LogError(log,
+            BackgroundFailurePrefix + " door={Door} session={Session} {ExceptionType}: {ExceptionMessage}",
+            door, sessionId, ex.GetType().FullName, ex.Message);
+    }
 
     /// <summary>
     /// <para><b>أَخَرقُ فَرادَةٍ هذا؟</b> — ويُفحَصُ بِشَكلَينِ لا
@@ -253,7 +294,9 @@ public sealed class FeasibilityAnalysisService
     public async Task RefineSectionAsync(
         Guid id, string sectionKey, string feedback, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(sectionKey)) return;
+        // ‏المَعجَمُ قَبلَ المُطالَبَةِ والنِداءِ والدَمج (‏2026-10-24، مُراجَعَةُ تَيّارِ S15 الجَولَة 2): كانَ فَحصَ فَراغٍ، و`MergeSection` تُضيفُ
+        // ما لَم يَكُن — فَمِفتاحٌ مُختَلَقٌ صارَ مِفتاحاً في الدِراسَة. والنُقطَةُ تَسأَلُه قَبلَ الحِصَّة؛ وهُنا لِكُلِّ مُنادٍ.
+        if (!StudioRefineSection.IsKnown(sectionKey)) return;
         var s = await LoadAsync(id, ct);
         if (s is null || s.Status != IncubatorStatus.Completed || s.AnalysisJson is null) return;
 
@@ -277,8 +320,9 @@ public sealed class FeasibilityAnalysisService
             new("user", userMsg, null, null)
         };
         var req = new AgentRequest(systemPrompt, messages,
-            Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000);
-        var resp = await _backend.CallAsync(req, ct);
+            Array.Empty<AgentToolDef>(), _model, MaxTokens: 3000, Wait: AgentCallWait.Background);
+        // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): نِداءٌ مَعدودٌ عَلى المَنَصَّة — الحاضِنَةُ لِمُشرِفِ المَنَصَّة.
+        var resp = await _backend.CallAsync(ModelCalls.Platform(), req, ct);
 
         // القياسُ **قَبلَ** فَرعِ الخَطَأ: تَحسينٌ فَشِلَ أَنفَقَ
         // توكناتٍ كَتَحسينٍ نَجَح، وسِجِلٌّ يُسقِطُ الفاشِلَ يُخفي
@@ -292,11 +336,16 @@ public sealed class FeasibilityAnalysisService
         if (newJson is null) return;
 
         // ادمُج: استَبدِل المِفتاح فَقَط، احفَظ الباقي كَما هو.
-        var merged = MergeSection(s.AnalysisJson, newJson, sectionKey);
-        if (merged is null) return;
-
+        // ‏(‏2026-10-24 — تَيّارُ S16 البَند B) **في الدِراسَةِ المُعادَةِ بَعدَ النِداء، لا في لَقطَةِ ما قَبلَه**: كانَ الدَمجُ في `s`
+        // (المَقروءَةِ قَبلَ نِداءٍ يَبلُغُ 420 ثانِيَة) ثُمَّ يُكتَبُ فَوقَ `fresh` — فَتَحسينٌ آخَرُ لِقِسمٍ آخَرَ حُفِظَ في الأَثناءِ يَعودُ قَديماً
+        // (تَوصيفُه `StudioRefineInterleaveTests`). والنافِذَةُ الباقِيَةُ بَينَ إعادَةِ القِراءَةِ والحِفظِ رِحلَةُ قاعِدَةٍ واحِدَة لا مُدَّةُ نِداء؛
+        // وإغلاقُها كُلِّيّاً حَجزٌ أَو تَزامُنٌ تَفاؤُلِيٌّ (‏ADR-036) عَلى الدِراسَة — لَم يُكتَب (سِجِلُّ المالِكِ «أ» S16·٤).
+        // ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·DD-8 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `StudioRefineInterleaveTests` حُذِفَ مَعَ نُقطَةِ التَحسينِ في `5ba4cac`،
+        // وهذِه الدالَّةُ بِلا مُنادٍ — يُثَبِّتُها `StudioAnalysisRetiredTests` يَتيمَةً بِشَرطِ رَفعِها (قَرارُ المالِكِ عَلى حاضِنَةِ المُشرِف)، فَالتَوصيفُ المُسَمّى أَعلاه غائِب.
         await using var session = _store.LightweightSession(IncubatorTenant);
         var fresh = await session.LoadAsync<IncubatorSession>(id, ct) ?? s;
+        var merged = MergeSection(fresh.AnalysisJson ?? s.AnalysisJson, newJson, sectionKey);
+        if (merged is null) return;
         fresh.AnalysisJson = merged;
         fresh.AnalysisQualityScore = ScoreQuality(merged, sector);
         fresh.UpdatedAt = DateTime.UtcNow;
@@ -378,8 +427,9 @@ public sealed class FeasibilityAnalysisService
                     null, null)
             };
             var req = new AgentRequest(systemPrompt, messages,
-                Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000);
-            var resp = await _backend.CallAsync(req, ct);
+                Array.Empty<AgentToolDef>(), _model, MaxTokens: 8000, Wait: AgentCallWait.Background);
+            // ‏(‏2026-11-12، W13-6·١٥ — ADR-051 §١٩): كُلُّ مُحاوَلَةٍ نِداءٌ مَعدودٌ بِمُعَرِّفِه — المُحاوَلَتانِ تَوكِناتانِ أُنفِقَتا.
+            var resp = await _backend.CallAsync(ModelCalls.Platform(), req, ct);
 
             // ─── سَطرُ قياسٍ **لِكُلِّ مُحاوَلَة**، الفاشِلَةِ قَبلَ
             //     الناجِحَة ──────────────────────────────────────────

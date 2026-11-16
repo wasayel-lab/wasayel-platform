@@ -100,8 +100,8 @@ else
     ACommerce.Kit.Roles.Role? activeRole;
 
     string HomeUrl => string.IsNullOrEmpty(activeRole?.HomeRoute)
-        ? $"/{Slug}"
-        : $"/{Slug}{activeRole.HomeRoute}";
+        ? AuthSession.LinkFor(Slug, null, "")
+        : AuthSession.LinkFor(Slug, null, activeRole.HomeRoute);
 
     protected override async Task OnParametersSetAsync()
     {

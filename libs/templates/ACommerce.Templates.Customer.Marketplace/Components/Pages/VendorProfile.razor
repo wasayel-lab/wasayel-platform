@@ -1,6 +1,7 @@
 @page "/{slug}/vendor/{vendorId:guid}"
 @page "/{slug}/r/{role}/vendor/{vendorId:guid}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.StorefrontQueries Storefront
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject AuthSession Auth
 @inject IHttpContextAccessor HttpCtx
 @inject L L
@@ -23,10 +24,10 @@
                 <div style="display:flex;gap:12px;align-items:center;">
                     <div style="width:64px;height:64px;border-radius:50%;background:var(--ac-primary);color:var(--ac-on-primary);
                                 display:grid;place-items:center;font-size:24px;font-weight:700;">
-                        @(string.IsNullOrEmpty(vendor.FullName) ? "?" : vendor.FullName[0].ToString())
+                        @(string.IsNullOrEmpty(shownName) ? "?" : shownName[0].ToString())
                     </div>
                     <div style="flex:1;">
-                        <h2 style="margin:0;">@vendor.FullName</h2>
+                        <h2 style="margin:0;">@shownName</h2>
                         @if (avgRating > 0)
                         {
                             <div style="color:var(--ac-rating);font-size:14px;">
@@ -47,14 +48,19 @@
             </ChildContent>
         </AcCard>
 
-        @if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
+        @if (ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(vendor))
+        {
+            @* ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) أَغلَقَ البائِعُ حِسابَه — بابُ المُحادَثَةِ يَرُدُّه بِالسُؤالِ نَفسِه، فَلا يُرسَمُ زِرٌّ يَرُدُّه. *@
+            <p style="margin:0 0 12px;color:var(--ac-text-muted);">@L.Markup("vendors.profile.contact_gone")</p>
+        }
+        else if (Auth.IsAuthenticated && vendor.Id != Auth.UserId)
         {
             <form method="post" action="@($"/{Slug}/vendor/{VendorId}/chat")" style="margin:0 0 12px;">
                 <AcButton Type="submit" Variant="primary" Block="true" Text="@L["vendors.profile.contact"]" />
             </form>
         }
 
-        <AcSectionHeader Title="@($"{L["vendors.profile.listings_prefix"]} {vendor.FullName} ({listings.Count})")" />
+        <AcSectionHeader Title="@($"{L["vendors.profile.listings_prefix"]} {shownName} ({listings.Count})")" />
         @if (listings.Count == 0)
         {
             <AcEmptyState IconName="package" Title="@L["vendors.profile.empty_title"]"
@@ -105,7 +111,7 @@
                             {
                                 <p style="margin:6px 0 0;font-size:14px;">@r.Body</p>
                             }
-                            <span style="color:var(--ac-text-muted);font-size:11px;">@r.At.ToString("yyyy-MM-dd")</span>
+                            <span style="color:var(--ac-text-muted);font-size:11px;">@Culture.FormatTime(r.At, "yyyy-MM-dd")</span>
                         </ChildContent>
                     </AcCard>
                 }
@@ -120,6 +126,8 @@
     [Parameter] public Guid VendorId { get; set; }
 
     User? vendor;
+    // ‏(2026-10-29، قَرارُ المالِك د40 «ج») اسمُ النَشاطِ حَيثُ وُجِد، وإلّا اسمُه — القاعِدَةُ الواحِدَةُ `ActorName.Of`.
+    string shownName = "";
     List<Listing> listings = new();
     List<Review> reviews = new();
     double avgRating;
@@ -131,6 +139,7 @@
         var page = await Storefront.VendorAsync(Slug, VendorId);
         vendor = page.Vendor;
         if (vendor is null) return;
+        shownName = Services.Queries.ActorName.Of(vendor) ?? "";
         listings = page.Listings.ToList();
         reviews  = page.Reviews.ToList();
         reviewCount = reviews.Count;

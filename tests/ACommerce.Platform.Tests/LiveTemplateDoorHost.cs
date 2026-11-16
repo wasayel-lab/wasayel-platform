@@ -1,0 +1,199 @@
+using Marten;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ بابُ القالِبِ بِعَينِه عَلى Postgres — جِسمُه المُسَجَّلُ لا نُسخَةٌ مِنه ═══════════════════════════════════════
+//
+// ‏(‏2026-10-30، الموجَة ١٢ F2 · ١ — مُراجَعَةُ 8357c95 (أ)) كانَت صُفوفُ الحَذفِ الحَيَّةُ تُعيدُ كِتابَةَ تَسلسُلِ البابِ في الاختِبار (`EraseLikeTheDoorAsync`)،
+// وإعادَةُ البابِ عِندَ `ConcurrencyException` لا يَقيسُها إلّا فاحِصُ شَكلٍ يَبحَثُ عَن نَصِّ الحَلقَة — فَحَلقَةٌ لا تُعيدُ فِعلاً تَبقى خَضراء (القاعِدَة ١٠).
+// فَهُنا **المُضيفُ بِتَركيبِه** (`AddPlatformHost` + `AddCustomerMarketplaceTemplate`، تَركيبُ `LiveAccountConcurrencyProofTests.HostApp` نَفسُه) و**نِقاطُ القالِبِ
+// كَما يُسَجِّلُها `MapCustomerMarketplaceTemplate`**، ويُنادى `RequestDelegate` البابِ المُسَمّى بِمُرَشِّحاتِه — جِسمُه الَّذي يُشَغَّل، بِلا خادِمٍ يَستَمِعُ ولا
+// خِدمَةٍ في الخَلفِيَّة. وما لا يُرَكِّبُه المُضيفانِ هُنا ويُرَكِّبُه `Program.cs` (مُزَوِّدُ الدَفعِ وSignalR) يُعطى بَديلاً لا يَكتُب: مُزَوِّدُ نُسخَةٍ مُسَجِّل.
+// و`marten` اختِيارِيٌّ لِمُستَمِعِ جَلسَةٍ يُدخِلُ كاتِباً مُوازِياً في مَوضِعٍ مُسَمّى — السِباقُ تَرتيبٌ حَتمِيٌّ لا حَظّ.
+
+internal sealed class LiveTemplateDoorHost : IAsyncDisposable
+{
+    private readonly WebApplication _app;
+    private readonly IReadOnlyList<RouteEndpoint> _endpoints;
+    private readonly bool _throughResolver;
+
+    public IDocumentStore Store { get; }
+
+    /// <summary>‏(‏2026-11-04، الموجَة ١٢ G1 · ٤) خِدماتُ المُضيفِ المُرَكَّب — لِرَسمِ صَفحَةٍ بِخِدماتِها هِيَ (<c>HtmlRenderer</c>) لا بِبَدائِل.</summary>
+    public IServiceProvider Services => _app.Services;
+
+    private LiveTemplateDoorHost(WebApplication app, bool throughResolver)
+    {
+        _app = app;
+        _throughResolver = throughResolver;
+        Store = app.Services.GetRequiredService<IDocumentStore>();
+        _endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>().ToList();
+    }
+
+    /// <param name="services">‏(‏2026-11-04، الموجَة ١٢ G1 · ٣) بَديلٌ لِخِدمَةٍ بَعدَ تَركيبِ المُضيف — آخِرُ مُسَجَّلٍ هُوَ ما يَحقِنُه البابُ (مَخزَنُ مِلَفّاتٍ يُسَجِّلُ ما يُحذَفُ مَثَلاً).</param>
+    /// <param name="throughResolver">‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠) كُلُّ بابٍ يَمُرُّ أَوَّلاً بِوَسيطِ المُستَأجِرِ الحَقيقِيّ (<c>TenantResolverMiddleware</c> مِن حاوِيَةِ المُضيفِ،
+    /// وَضعُ المَسارِ كَما يُرَكِّبُه <c>UsePlatformMultiTenancy</c>): أَوَّلُ سَطرٍ فيه يَفتَحُ حامِلَ العَدِّ ويَملَؤُه مِن وَثيقَةِ المَتجَر — ما تَقيسُه رِحلَةُ سَقفِ
+    /// <c>_unresolved</c> (G9). ومُطفَأٌ افتِراضاً: البَراهينُ القائِمَةُ تَرى البابَ كَما رَأَتهُ دائِماً.</param>
+    public static LiveTemplateDoorHost Build(Action<StoreOptions>? marten = null, Action<IServiceCollection>? services = null, bool throughResolver = false)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Microsoft.Extensions.Hosting.Environments.Production,
+            ContentRootPath = AppContext.BaseDirectory,
+        });
+        builder.Configuration["ConnectionStrings:Postgres"] = LiveDealConcurrencyProofTests.ConnectionString!.TrimEnd(';') + ";Timeout=60;Command Timeout=120";
+        builder.Host.UseDefaultServiceProvider(o => { o.ValidateOnBuild = false; o.ValidateScopes = false; });
+        // ‏(‏2026-11-07، الموجَة ١٣ W13-1·٦ — ADR-049 §٦) مِفتاحُ وَكيلِ التَصميمِ مُضاءٌ في هذا المُضيف: بَراهينُ الوَكيلِ الحَيَّةُ (دائِرَتا `/studio/agent`
+        // و`/admin/agent`) تَقيسُ البابَ المَفتوحَ ولا يُعَدَّلُ مِلَفُّها. والافتِراضُ المُطفَأُ مُثَبَّتٌ في `StudioAgentSwitchTests`، ومَن يَحتاجُه هُنا
+        // يُسَجِّلُ `new StudioAgentSwitch(false)` بِوَسيطِ `services` (آخِرُ مُسَجَّلٍ هُوَ ما يُحقَن).
+        builder.Configuration[ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch.Setting] = "true";
+        ACommerce.Platform.Hosting.HostingExtensions.AddPlatformHost(builder);
+        ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions.AddCustomerMarketplaceTemplate(builder.Services);
+        // ما يُرَكِّبُه `Program.cs` حَولَ المُضيفَينِ ويَطلُبُه تَوقيعُ نُقطَةٍ ما — بِلا أَيِّ قَناةٍ تُرسِل: لا SMS ولا بَريد ولا نَفاذ، والدَفعُ مُزَوِّدُ نُسخَةٍ مُسَجِّل.
+        builder.Services.AddSignalR();
+        ACommerce.Kit.Culture.CultureExtensions.AddCultureContext(builder.Services);
+        ACommerce.Kit.Versions.VersionGateExtensions.AddVersionGate(builder.Services, o => { o.MinimumSupported = "1.0.0"; o.LatestSuggested = "1.0.0"; });
+        ACommerce.Kit.Delivery.OtoShippingExtensions.AddOtoShipping(builder.Services, builder.Configuration);
+        ACommerce.Kit.Payments.Providers.PayPal.PayPalExtensions.AddPayPalSubscriptions(builder.Services, builder.Configuration);
+        ACommerce.Kit.Payments.Providers.Paddle.PaddleExtensions.AddPaddleBilling(builder.Services, builder.Configuration);
+        ACommerce.Kit.Files.UnavailableFileStorageExtensions.AddUnavailableFileStorage(builder.Services);
+        builder.Services.AddSingleton<ACommerce.Kit.Payments.IPaymentProvider>(new DealMoneyClaimFirstTests.RecordingPaymentProvider());
+        if (marten is not null) builder.Services.ConfigureMarten(marten);
+        services?.Invoke(builder.Services);
+        var app = builder.Build();
+        ACommerce.Templates.Customer.Marketplace.MarketplaceTemplateExtensions.MapCustomerMarketplaceTemplate(app);
+        return new LiveTemplateDoorHost(app, throughResolver);
+    }
+
+    /// <summary>بابُ <c>POST</c> بِنَمَطِ مَسارِه كَما سُجِّل — ويَرمي إن لَم يَكُن واحِداً: أَداةٌ لا تَجِدُ البابَ عَمياء.</summary>
+    public RouteEndpoint Door(string pattern)
+    {
+        var found = _endpoints.Where(e => e.RoutePattern.RawText == pattern
+            && (e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("POST") ?? false)).ToList();
+        if (found.Count != 1) throw new InvalidOperationException($"بابُ «{pattern}»: {found.Count} نُقطَة — الأَداةُ عَمياء.");
+        return found[0];
+    }
+
+    /// <summary>طَلَبُ استِمارَةٍ بِرَمزِ جَلسَةٍ في كوكيِّ المَتجَر — يُعيدُ الحالَةَ ووِجهَةَ التَحويل.</summary>
+    public Task<(int Status, string Location)> PostFormAsync(string pattern, IReadOnlyDictionary<string, string> route, string slug, string? token,
+        params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route,
+            token is null ? null : $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}", form);
+
+    /// <summary>‏(‏2026-11-07، الموجَة ١٣ W13-1·٢) طَلَبُ استِمارَةٍ بِرَمزِ جَلسَةِ الاستوديو في كوكيِّه (<c>StudioAuth.CookieName</c>) — لِنِقاطِ <c>/studio/…</c>
+    /// الَّتي تَقرَأُ الاستوديو لا المَتجَر. الطَلَبُ نَفسُه بِحَرفِه، والكوكيُّ وَحدَه يَختَلِف.</summary>
+    public Task<(int Status, string Location)> PostStudioFormAsync(string pattern, IReadOnlyDictionary<string, string> route, string? studioToken,
+        params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route,
+            studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form);
+
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الأُولى · SEC-C2a-1) استِمارَةٌ مُتَعَدِّدَةُ الأَجزاءِ بِمِلَفّاتٍ وكوكيِّ الاستوديو — لِبابَي حِفظِ الـPWA:
+    /// نَوعُ كُلِّ مِلَفٍّ هُوَ رَأسُ جُزئِه كَما يُرسِلُه المُتَصَفِّح، والطَلَبُ فيما سِوى ذلكَ بِحَرفِ <see cref="PostStudioFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostStudioMultipartAsync(string pattern, IReadOnlyDictionary<string, string> route, string? studioToken,
+        (string Key, string Value)[] form, params (string Name, string FileName, string ContentType, byte[] Bytes)[] files)
+        => PostFormWithCookieAsync(pattern, route,
+            studioToken is null ? null : $"{ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAuth.CookieName}={studioToken}", form, files);
+
+    /// <summary>‏(‏2026-11-12، W13-6·B-R2·1) استِمارَةٌ مُتَعَدِّدَةُ الأَجزاءِ بِمِلَفّاتٍ وكوكيِّ المَتجَر — لِبابِ نَشرِ الإعلانِ بِصُوَرِه: الطَلَبُ بِحَرفِ
+    /// <see cref="PostStudioMultipartAsync"/>، والكوكيُّ كوكيُّ <see cref="PostFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostMultipartAsync(string pattern, IReadOnlyDictionary<string, string> route, string slug, string? token,
+        (string Key, string Value)[] form, params (string Name, string FileName, string ContentType, byte[] Bytes)[] files)
+        => PostFormWithCookieAsync(pattern, route,
+            token is null ? null : $"{ACommerce.Templates.Customer.Marketplace.AuthSession.CookieName(slug)}={token}", form, files);
+
+    /// <summary>‏(‏2026-11-07، SEC-C2a-1) بابُ <c>GET</c> بِنَمَطِ مَسارِه كَما سُجِّل — ويَرمي إن لَم يَكُن واحِداً.</summary>
+    public RouteEndpoint GetDoor(string pattern)
+    {
+        var found = _endpoints.Where(e => e.RoutePattern.RawText == pattern
+            && (e.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("GET") ?? false)).ToList();
+        if (found.Count != 1) throw new InvalidOperationException($"بابُ GET «{pattern}»: {found.Count} نُقطَة — الأَداةُ عَمياء.");
+        return found[0];
+    }
+
+    /// <summary>‏(‏2026-11-07، SEC-C2a-1) طَلَبُ <c>GET</c> بِلا جَلسَة — يُعيدُ الحالَةَ ونَوعَ المُحتَوى والرُؤوسَ والبايتات كَما كَتَبَها البابُ نَفسُه.</summary>
+    public async Task<(int Status, string ContentType, IReadOnlyDictionary<string, string> Headers, byte[] Body)> GetAsync(
+        string pattern, IReadOnlyDictionary<string, string> route)
+    {
+        var door = GetDoor(pattern);
+        await using var scope = _app.Services.CreateAsyncScope();
+        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var accessor = scope.ServiceProvider.GetService<IHttpContextAccessor>();
+        if (accessor is not null) accessor.HttpContext = ctx;
+        ctx.Request.Method = "GET";
+        ctx.Request.Scheme = "http";
+        ctx.Request.Host = new HostString("localhost");
+        ctx.Request.Path = PathOf(door, route);
+        foreach (var (k, v) in route) ctx.Request.RouteValues[k] = v;
+        var body = new MemoryStream();
+        ctx.Response.Body = body;
+        ctx.SetEndpoint(door);
+        await RunAsync(door, ctx);
+        return (ctx.Response.StatusCode, ctx.Response.ContentType ?? "",
+                ctx.Response.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase), body.ToArray());
+    }
+
+    private static string PathOf(RouteEndpoint door, IReadOnlyDictionary<string, string> route)
+        => "/" + string.Join('/', door.RoutePattern.PathSegments.Select(seg => string.Concat(seg.Parts.Select(p => p switch
+        {
+            Microsoft.AspNetCore.Routing.Patterns.RoutePatternLiteralPart lit => lit.Content,
+            Microsoft.AspNetCore.Routing.Patterns.RoutePatternParameterPart par => route[par.Name],
+            _ => "",
+        }))));
+
+    /// <summary>‏(‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الأُولى · SEC-C2b-2) طَلَبُ استِمارَةٍ عَلى مُضيفٍ كَما يَترُكُه الحاقِن: <paramref name="arrange"/> يَضَعُ الرَأسَ
+    /// <c>Host</c> وعَناصِرَ <c>StoreHostItems</c> قَبلَ البابِ — والطَلَبُ فيما سِوى ذلكَ بِحَرفِ <see cref="PostFormAsync"/>.</summary>
+    public Task<(int Status, string Location)> PostFormOnHostAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
+        Action<HttpContext> arrange, params (string Key, string Value)[] form)
+        => PostFormWithCookieAsync(pattern, route, cookie, form, files: null, arrange);
+
+    private async Task<(int Status, string Location)> PostFormWithCookieAsync(string pattern, IReadOnlyDictionary<string, string> route, string? cookie,
+        (string Key, string Value)[] form, (string Name, string FileName, string ContentType, byte[] Bytes)[]? files = null,
+        Action<HttpContext>? arrange = null)
+    {
+        var door = Door(pattern);
+        await using var scope = _app.Services.CreateAsyncScope();
+        var ctx = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var accessor = scope.ServiceProvider.GetService<IHttpContextAccessor>();
+        if (accessor is not null) accessor.HttpContext = ctx;
+        var path = PathOf(door, route);
+        ctx.Request.Method = "POST";
+        ctx.Request.Scheme = "http";
+        ctx.Request.Host = new HostString("localhost");
+        ctx.Request.Path = path;
+        foreach (var (k, v) in route) ctx.Request.RouteValues[k] = v;
+        var fields = form.ToDictionary(f => f.Key, f => new Microsoft.Extensions.Primitives.StringValues(f.Value));
+        if (files is null)
+        {
+            ctx.Request.ContentType = "application/x-www-form-urlencoded";
+            ctx.Request.Form = new FormCollection(fields);
+        }
+        else
+        {
+            ctx.Request.ContentType = "multipart/form-data; boundary=----ac-live-door";
+            var parts = new FormFileCollection();
+            foreach (var f in files)
+                parts.Add(new FormFile(new MemoryStream(f.Bytes), 0, f.Bytes.Length, f.Name, f.FileName)
+                    { Headers = new HeaderDictionary(), ContentType = f.ContentType });
+            ctx.Request.Form = new FormCollection(fields, parts);
+        }
+        if (cookie is not null) ctx.Request.Headers.Cookie = cookie;
+        arrange?.Invoke(ctx);
+        ctx.Response.Body = new MemoryStream();
+        ctx.SetEndpoint(door);
+        await RunAsync(door, ctx);
+        return (ctx.Response.StatusCode, ctx.Response.Headers.Location.ToString());
+    }
+
+    /// <summary>‏(‏2026-11-12، W13-6·١٠) جِسمُ البابِ بِمُرَشِّحاتِه — وقَبلَه الوَسيطُ الحَقيقِيُّ إن طُلِبَ عِندَ البِناء (<c>throughResolver</c>).</summary>
+    private Task RunAsync(RouteEndpoint door, HttpContext ctx)
+        => _throughResolver
+            ? ActivatorUtilities.CreateInstance<ACommerce.Platform.MultiTenancy.TenantResolverMiddleware>(ctx.RequestServices, door.RequestDelegate!).InvokeAsync(ctx)
+            : door.RequestDelegate!(ctx);
+
+    public async ValueTask DisposeAsync() => await _app.DisposeAsync();
+}

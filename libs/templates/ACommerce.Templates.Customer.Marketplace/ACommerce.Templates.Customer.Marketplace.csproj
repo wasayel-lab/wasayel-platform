@@ -67,6 +67,10 @@
          ‏Marten وَحدَه، بِلا مَرجِعٍ آخَر. -->
     <ProjectReference Include="..\..\kits\Reports\ACommerce.Kit.Reports.Core\ACommerce.Kit.Reports.Core.csproj" />
     <ProjectReference Include="..\..\kits\Payments\ACommerce.Kit.Payments.Core\ACommerce.Kit.Payments.Core.csproj" />
+    <!-- عُدَّةُ الشَحن — عَميلُ OTO الواحِدُ بِلا واجِهَة (‏ADR-033 الخُطوَة 3). مُستَهلِكُه هُنا
+         **مَوجودٌ وَقتَ التَشغيل** (القاعِدَة ١): نُقطَةُ شَحنِ الصَفقَةِ ووارِدُ حالِ الطَلَب. والتَطبيقُ
+         يُحيلُها أَصلاً، فَلا يَتَغَيَّرُ ما يَبلُغُ الـSpace. -->
+    <ProjectReference Include="..\..\kits\Delivery\ACommerce.Kit.Delivery.Core\ACommerce.Kit.Delivery.Core.csproj" />
     <!-- ‏PayPal — النُقطَةُ والشاشَتانِ تَحتاج أَنواعَه: رُؤوسُ التَوقيع،
          ومُعجَمُ الأَحداث، ودالَّةُ القَرارِ النَقِيَّة. وهذِه **لَيسَت
          SDK** بَل عَقدُ واجِهَةٍ مُوَثَّق، ولا حُزمَةَ خارِجِيَّةَ تُضاف

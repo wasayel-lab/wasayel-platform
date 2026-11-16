@@ -5,6 +5,7 @@ using ACommerce.Templates.Customer.Marketplace.Services;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using Marten;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace ACommerce.Platform.Tests;
 
@@ -28,10 +29,13 @@ namespace ACommerce.Platform.Tests;
 // التَدَفُّق بِعَينِه**: لا انتِقال مِن `pending` إلى `applied`
 // يَملِكُه مُقَرِّر.
 
-public class LiveApprovalFlowProofTests
+[Collection(LiveProofCollection.Name)]
+public class LiveApprovalFlowProofTests(ITestOutputHelper output)
 {
     /// <summary>مُستَأجِر تَجرِبَة — لا يُلمَس <c>ashare</c> (عَرض
-    /// مُستَثمِرين) ولا مُستَأجِر إنتاج.</summary>
+    /// مُستَثمِرين) ولا مُستَأجِر إنتاج.
+    /// ‏(‏2026-10-29 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) «عَرضُ المُستَثمِرين» رُفِعَ بِقَرارِ المالِك ‏2026-10-28؛ والبُرهانُ باقٍ عَلى
+    /// <c>owner-test</c> لِسَبَبِه التِقنِيّ: يَكتُبُ تَعريفَ دَورٍ في مَتجَرٍ واحِدٍ مُعَيَّنٍ لَيسَت فيه لَقطَةٌ تَقرَؤُه.</summary>
     private const string TenantSlug = "owner-test";
     private const string RoleSlug   = "khayyat";
 
@@ -67,6 +71,7 @@ public class LiveApprovalFlowProofTests
 
         var roles = new TenantRoleService(store);
         var exec  = new AgentToolExecutor(store, roles);
+        var deciders = new List<string?>();
 
         Log($"[flow] states={string.Join(",", ApprovalFlow.All)} " +
             $"decisionActor={ApprovalFlow.DecisionActor}");
@@ -81,7 +86,8 @@ public class LiveApprovalFlowProofTests
         await using (var s = store.QuerySession(TenantSlug))
         {
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
-            if (doc is null) { Log("[seed] لا وَثيقَة — البُرهان يَتَوَقَّف."); return; }
+            // ‏2026-10-25 (مُراجَعَةُ تَيّارِ W8-5 الجَولَة ١): بِالعَلامَة — فَأَرضِيَّةُ CI لا تَعُدُّ هذا الرُجوعَ «بَلَغَ القاعِدَة».
+            if (doc is null) { Log("[seed] لا وَثيقَة — البُرهان يَتَوَقَّف."); output.WriteLine($"{LiveProofJobTests.EarlyReturnMarker} [seed] لا وَثيقَةَ دَور"); return; }
             Log($"[doc/before] slug={doc.Slug} status={doc.Status}");
         }
 
@@ -101,7 +107,10 @@ public class LiveApprovalFlowProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.NotEqual("applied", doc!.Status);
-            Log($"[doc/after-rejected-verdict] status={doc.Status} decidedBy={doc.DecidedBy ?? "-"}");
+            // ‏(‏2026-10-25، بَندُ المُنَسِّقِ في W8-2) مُعتَمِدُ جَولَةٍ سابِقَةٍ قَد يَكونُ مُشرِفاً عَبرَ HTTP — وبابُه يَكتُبُ «{FullName} · {Phone}». يُحجَب.
+            deciders.Add(doc.DecidedBy);
+            var earlierDecider = LiveProofRedaction.Of(doc.DecidedBy);
+            Log($"[doc/after-rejected-verdict] status={doc.Status} decidedBy={earlierDecider}");
         }
 
         // ─── ٢. المُوجَب: القَرار الَّذي يُجيزُه التَعريف يَمُرّ ─────────
@@ -117,7 +126,9 @@ public class LiveApprovalFlowProofTests
             var doc = await s.LoadAsync<TenantRoleDefinition>(RoleSlug);
             Assert.NotNull(doc);
             Assert.Equal(TenantRoleStatuses.Approved, doc!.Status);
-            Log($"[doc/after-approval] status={doc.Status} decidedBy={doc.DecidedBy} at={doc.DecidedAt:O}");
+            // والقَرارُ قَرارُ البُرهانِ نَفسِه — يُقاسُ ولا يُطبَعُ مِن الوَثيقَة.
+            Assert.Equal("live-proof", doc.DecidedBy);
+            Log($"[doc/after-approval] status={doc.Status} decidedBy=live-proof at={doc.DecidedAt:O}");
         }
 
         // ─── ٣. والدَور صارَ حَيّاً — أَثَر الاعتِماد لا إعلانُه ─────────
@@ -130,6 +141,11 @@ public class LiveApprovalFlowProofTests
         var (back, backMsg) = await roles.DecideAsync(
             TenantSlug, RoleSlug, TenantRoleStatuses.Rejected, "live-proof-cleanup");
         Log($"[cleanup/rejected] ok={back} :: {backMsg}");
+
+        // و«live-proof…» عَلامَةُ البُرهانِ نَفسِه (القَرارُ والتَنظيف) لا إنسان — لا تُقاس.
+        var measured = LiveProofRedaction.AssertAbsent(evidence.ToString(),
+            deciders.Where(d => d is not null && !d.StartsWith("live-proof", StringComparison.Ordinal)));
+        Log($"[redaction] قيمَةٌ حَيَّةٌ مَقيسَةٌ غائِبَة عَن الخَرج: {measured}");
 
         var path = Path.Combine(Path.GetTempPath(), "wasayel-approval-flow-proof.log");
         File.WriteAllText(path, evidence.ToString());

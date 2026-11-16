@@ -155,6 +155,9 @@ public class AuthSessionCookieResolutionTests
 
     // ── الاسم يَتبَع نَفس عائِلَة الـ token ───────────────────────────────
 
+    /// <remarks>‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-11) كانَ يَسأَلُ <c>AuthSession.ResolveUserName</c> — وقَد حُذِفَ بِصِفرِ مُنادٍ: اسمُ
+    /// الفاعِلِ الَّذي تَكتُبُه النِقاطُ صارَ مِن الوَثيقَة (<c>ActorNameSourceTests</c>). وما بَقِيَ قارِئاً لِلكوكي هُوَ <c>Load</c> لِلعَرضِ عَلى
+    /// صاحِبِ الجَلسَة — فَالقاعِدَةُ نَفسُها («مِن عائِلَةِ الرَمزِ نَفسِها») تُسأَلُ مِنه.</remarks>
     [Fact]
     public void UserName_ComesFromSameCookieFamilyAsToken()
     {
@@ -162,7 +165,9 @@ public class AuthSessionCookieResolutionTests
             (AuthSession.CookieName(Slug, "host"), TokenFor(Guid.NewGuid())),
             (AuthSession.CookieName(Slug, "host") + ".name", "Hoor"));
 
-        Assert.Equal("Hoor", AuthSession.ResolveUserName(req, Slug));
+        var session = new AuthSession();
+        session.Load(req.HttpContext, Slug);
+        Assert.Equal("Hoor", session.UserName);
     }
 
     [Fact]

@@ -116,11 +116,16 @@ public static class ProviderDefinitionValidator
             // ‏`platform_key` يَصرِف مِن جَيبِنا: لا حَقلَ يَملَؤُه
             // مُستَأجِر، ولا سِرَّ في خِزانَتِه — سِرُّ المَنَصَّةِ
             // وَحدَه، ونُقطَتُه تُعلِن PlatformAdminGuard.
-            if (d.Credential.Kind == CredentialKinds.PlatformKey &&
-                d.Credential.Fields.Count > 0)
+            //
+            // **وصارَ الشَرطُ «حَقلٌ غَيرُ سِرِّيِّ الشَكلِ» ‏2026-10-12** (‏ADR-033 §٢‑ج‑١ والخُطوَة 6؛ ولا يُعادُ حَرفٌ
+            // فَوقَه): الاعتِمادُ السوقِيُّ سِرُّ المَنَصَّة، وتَحتَه حَقلا **بائِعٍ** سِرِّيّانِ يُختَمانِ في مَدخَلِه
+            // (رَمزُ تَحديثِه ورَمزُ وارِدِه). فَما يُرَدُّ ما لا يُرجِعُ `IsSecretLike` — رابِطٌ أَو نَصٌّ صَريحٌ تَحتَ
+            // سِرِّنا — والمِعيارُ نَفسُه الَّذي يَحرُسُ السِياجَ أَعلاه. والرَمزُ واحِدٌ لا ثالِثَ عَشَر.
+            var plainUnderPlatformKey = d.Credential.Fields.Count(f => !CredentialKinds.IsSecretLike(f.Kind));
+            if (d.Credential.Kind == CredentialKinds.PlatformKey && plainUnderPlatformKey > 0)
                 v.Add(new("platform_key_requires_owner_grant",
                     $"المُزَوِّد «{d.Slug}» مِن نَوع platform_key ويُعلِن " +
-                    $"{d.Credential.Fields.Count} حَقلاً — وسِرُّ المَنَصَّةِ لا يَملَؤُه مُستَأجِر."));
+                    $"{plainUnderPlatformKey} حَقلاً غَيرَ سِرِّيّ — وتَحتَ سِرِّ المَنَصَّةِ لا يُملَأُ إلّا سِرٌّ يُختَم."));
         }
 
         return v;

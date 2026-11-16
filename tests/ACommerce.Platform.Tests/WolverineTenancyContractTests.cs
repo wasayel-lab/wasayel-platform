@@ -71,8 +71,10 @@ public class WolverineTenancyContractTests
         var endpoints = Endpoints();
 
         // عَدّاد: أَداةٌ تَفحَص صِفراً أَداةٌ عَمياء (القاعِدَة ١٠).
-        Assert.True(endpoints.Count >= 4,
-            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة Wolverine — والمَقيس أَربَع.");
+        // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق: الأَرضِيَّةُ ‏4 ← ‏3 — نُزِعَ وَسمُ /{slug}/auth/nafath/request عَن
+        // RequestNafathHandler، نُقطَةٌ مَقيسَةٌ مَيتَةً بِلا مُنادٍ؛ والباقي: nafath/verify وrobots.txt وsitemap.xml.)
+        Assert.True(endpoints.Count >= 3,
+            $"أَداة عَمياء: وُجِدَت {endpoints.Count} نُقطَة Wolverine — والمَقيس ثَلاث.");
 
         var pinned = PinnedExempt.Select(e => e.Route).ToHashSet(StringComparer.Ordinal);
 

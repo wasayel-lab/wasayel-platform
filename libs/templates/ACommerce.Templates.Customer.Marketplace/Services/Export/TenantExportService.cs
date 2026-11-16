@@ -215,6 +215,7 @@ public sealed class TenantExportService
                 .Invoke(null, new object[] { session, ct })!;
 
             var docs = await task;
+            if (entry.ClrType == typeof(Audit.AuditEntry)) docs = await HideErasedActorsAsync(session, docs, ct);
             return (docs.Select(d => Redact(entry.TypeName, d)).OfType<JsonObject>().ToArray(), null);
         }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
@@ -225,6 +226,18 @@ public sealed class TenantExportService
         {
             return (Array.Empty<JsonObject>(), Describe(ex));
         }
+    }
+
+    /// <summary>
+    /// <para><b>سِجِلُّ التَدقيقِ يَخرُجُ كَما تَعرِضُه صَفحَتُه</b> (‏2026-10-30، الموجَة ١٢ F2 · ٧، F2B-3؛ تَوصيفُه <c>26c5269</c>): اسمُ فاعِلٍ حَذَفَ حِسابَه، وحاشِيَةُ
+    /// سَطرٍ هَدَفُه حِسابُه، «حِسابٌ مَحذوف» — بِـ<see cref="Queries.AuditLogQueries.HideErasedActors"/> القائِمَةِ لا بِنُسخَة (القاعِدَة ٨)، عَلى الصُفوفِ المَقروءَةِ في جَلسَةِ
+    /// القِراءَة (لا حِفظ)، والمَحذوفونَ مِن جَلسَةِ التَخارُجِ نَفسِها. كانَت الحَقيبَةُ تُخرِجُ الاسمَ كَما كُتِب وصَفحَةُ السِجِلِّ تُخفيه (د52 «أ»: «ويُخفى الاسمُ عِندَ عَرضِ
+    /// السِجِلّاتِ الَّتي لا تُعَدَّل» — والحَقيبَةُ عَرضٌ يَخرُجُ مِن المَنصَّة). وتَعَذُّرُ قِراءَتِهِم يُسقِطُ الجَدوَلَ بِسَبَبِه (<c>ReadAllAsync</c>) ولا يُخرِجُه بِالاسم.</para>
+    /// </summary>
+    private static async Task<IReadOnlyList<object>> HideErasedActorsAsync(IQuerySession session, IReadOnlyList<object> docs, CancellationToken ct)
+    {
+        var erased = (await session.Query<User>().Where(u => u.DeletedAt != null).Select(u => u.Id).ToListAsync(ct)).ToHashSet();
+        return Queries.AuditLogQueries.HideErasedActors(docs.Cast<Audit.AuditEntry>().ToList(), erased).Cast<object>().ToList();
     }
 
     private static async Task<ExportTable> OneAsync<T>(string typeName, Func<Task<T?>> load)
@@ -278,6 +291,11 @@ public sealed class TenantExportService
     /// والأَثَرُ مَقيسٌ ومُعلَن: كائِنٌ يَتيمٌ (صورَةٌ رُفِعَت ثُمَّ
     /// حُذِفَ إعلانُها) لا يَخرُج. و‏ADR-017 قاسَ أَنّ مِلَفّاً بِلا
     /// رابِطٍ في القاعِدَةِ غَيرُ مَوجودٍ عَمَلِيّاً.</para>
+    ///
+    /// <para><b>‏(‏2026-11-04، الموجَة ١٢ G1 · ٣ — H-SEC-W12-1؛ تَوصيفُه <c>7f2f776</c>؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) و«حُذِفَ إعلانُها» لَم يَكُن
+    /// صَحيحاً</b>: <c>ListingDeleted</c> يَضبِطُ <c>IsDeleted</c> وَحدَه فَتَبقى <c>MediaUrls</c> في الوَثيقَة، والجامِعُ كانَ يَقرَأُ صُوَرَ كُلِّ صَفِّ إعلانٍ
+    /// فَيَشحَنُ صُوَرَ المَحذوفِ — مَقيساً: «صورَةُ إعلانِه المَسحوب: True · صورَةُ إعلانِه المَحذوفِ قَبلُ: True». والآن صَفُّ إعلانٍ مَحذوفٍ (<c>isDeleted</c>)
+    /// لا تُقرَأُ صُوَرُه، والحَذفُ يُفرِغُ صُوَرَ إعلاناتِ صاحِبِه ومَواقِعَها في مَجاريها (<c>AccountErasure.ScrubEvents</c>).</para>
     /// </summary>
     private async Task<(IReadOnlyList<ExportFile> Files, IReadOnlyList<string> Missing, string? Note)>
         CollectFilesAsync(string slug, IReadOnlyList<ExportTable> tables, CancellationToken ct)
@@ -288,7 +306,7 @@ public sealed class TenantExportService
         {
             if (t.TypeName == nameof(Listing))
                 foreach (var row in t.Rows)
-                    if (row["mediaUrls"] is JsonArray media)
+                    if (row["mediaUrls"] is JsonArray media && !IsDeletedRow(row))
                         foreach (var u in media)
                             Add(u?.GetValue<string>());
 
@@ -338,6 +356,10 @@ public sealed class TenantExportService
             if (key is not null) keys.Add(key);
         }
     }
+
+    /// <summary>صَفُّ إعلانٍ مَحذوف — <c>isDeleted</c> كَما يَكتُبُه <c>Listing.Apply(ListingDeleted)</c> (‏2026-11-04، G1 · ٣).</summary>
+    internal static bool IsDeletedRow(JsonObject row)
+        => row["isDeleted"] is JsonValue v && v.TryGetValue<bool>(out var deleted) && deleted;
 
     /// <summary>مِفتاحُ المَخزَنِ مِن رابِطٍ مَحفوظ — <b>بِالبادِئَةِ لا
     /// بِنَزعِ عُنوانٍ مُهَيَّأ</b>: مُزَوِّدانِ يَبنِيانِ الرابِطَ

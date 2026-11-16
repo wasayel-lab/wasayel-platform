@@ -1,7 +1,9 @@
 @page "/studio/apps/{slug}/providers"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.TenantProviderService Providers
+@inject ProviderVault Vault
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Platform.Providers
@@ -13,7 +15,11 @@
     (القاعِدَة ١٢): لا تَبويبَ يَقول «قَريباً»، ولا صَفَّ يَردُّ
     النَقرَةَ بِـ«لَيسَ بَعد». القائِمَةُ تُشتَقُّ مِن الكاتالوجِ
     نَفسِه — فَيَومَ يُضافُ مِلَفُّ تَعريفٍ لِقُدرَةٍ أُخرى تَظهَرُ
-    بِلا لَمسِ سَطرٍ هُنا.
+    بِلا لَمسِ سَطرٍ هُنا. **ومِن الكاتالوجِ عَبرَ `ProviderBindSurface.Offered`**
+    (‏2026-10-12): مُزَوِّدٌ حَقلُه سِرٌّ تَختِمُه الخِزانَةُ لا يُرسَمُ ما دامَت
+    الخِزانَةُ لا تَختِم (‏`Providers__Kek__v1` غائِبٌ أَو تالِف — ADR-032 الخُطوَة 11)
+    — فَلا تُرسَمُ بِطاقَةٌ تَرُدُّها النُقطَة. وحَقلُ السِرِّ `password`، والمَحفوظُ
+    يُرسَمُ ذَيلاً بَعدَ قِناعٍ لا يُفَكّ (الخُطوَة 7).
 
     ولا جَلسَةَ Marten هُنا: الصَفحَةُ تَحقِنُ خِدمَةً (الطَبَقَة ٨
     عِندَ صِفر، ولا تَرتَفِع).
@@ -44,9 +50,11 @@
                 <div class="st-chip st-chip-success" style="margin-bottom:14px;">@L.Markup(noticeKey)</div>
             }
 
-            @foreach (var capability in ProviderCatalog.BindableCapabilities)
+            @* والأَقسامُ: ما لَه بِطاقَةٌ مَعروضَةٌ أَو رَبطٌ قائِم (‏2026-10-13، G4 (xxii)) — فَرَبطٌ مَختومٌ يَبقى مَرئِيّاً مَسحوباً بِلا مِفتاحٍ رَئيس،
+               والخِزانَةُ تُخفي البِطاقاتِ وَحدَها. *@
+            @foreach (var capability in Services.Providers.ProviderBindSurface.SectionCapabilities(Vault, bindings.ContainsKey))
             {
-                var offered = ProviderCatalog.TenantBindable(capability);
+                var offered = Services.Providers.ProviderBindSurface.Offered(capability, Vault);
                 var current = Current(capability);
                 var currentDef = current is null ? null : ProviderCatalog.Find(current.ProviderSlug);
 
@@ -60,7 +68,7 @@
                             <span class="@(current.IsActive ? "st-chip st-chip-success" : "st-chip st-chip-danger")">
                                 @L.Markup(current.IsActive ? "studio.providers.state_active" : "studio.providers.state_revoked")
                             </span>
-                            <span>@L.Markup("studio.providers.bound_at") @current.BoundAt.ToString("yyyy-MM-dd")</span>
+                            <span>@L.Markup("studio.providers.bound_at") @Culture.FormatTime(current.BoundAt, "yyyy-MM-dd")</span>
                         </div>
 
                         @* القيمَةُ المَعروضَةُ هي الصورَةُ المُعَتَّمَة —
@@ -96,6 +104,12 @@
                     </div>
                 }
 
+                @* رَبطٌ آخَرُ يَحِلُّ مَحَلَّ القائِم — يُقالُ فَوقَ النَماذِجِ قَبلَ أَن يَقَع (‏2026-10-29، قَرارُ المالِك د1)؛ والشَرطُ في `WarnsReplacement` لا هُنا. *@
+                @if (Services.Providers.ProviderBindSurface.WarnsReplacement(capability, current, offered.Count))
+                {
+                    <p class="st-chip st-chip-warning" style="margin:0 0 12px;width:100%;">@L.Markup("studio.providers.replaces_binding")</p>
+                }
+
                 @foreach (var def in offered)
                 {
                     <form method="post" action="@($"/studio/apps/{Slug}/providers/bind")" class="st-card"
@@ -110,11 +124,14 @@
                             <p class="st-chip st-chip-warning" style="margin:0 0 10px;">@L.Markup("studio.providers.physical_only")</p>
                         }
 
-                        @foreach (var f in def.Credential.Fields)
+                        @* حَقلٌ تُصدِرُه وَسايِل لا يَملَؤُه صاحِبُ المَتجَر (‏2026-10-29، قَرارُ المالِك د5 (٢)) — الدالَّةُ الَّتي يَسأَلُها القارِئُ نَفسُها. *@
+                        @foreach (var f in def.Credential.Fields.Where(Services.Providers.ProviderBindSurface.IsFilledByOwner))
                         {
                             <label class="ac-chip-input-label" for="@($"{def.Slug}-{f.Code}")"
                                    style="display:block;margin-top:10px;">@ProviderText.Get(f.Label, L.Lang)</label>
                             <input class="ac-input" id="@($"{def.Slug}-{f.Code}")" name="@f.Code"
+                                   type="@Services.Providers.ProviderBindSurface.InputType(f)"
+                                   autocomplete="@Services.Providers.ProviderBindSurface.InputAutocomplete(f)"
                                    dir="ltr" required="@f.IsRequired" />
                         }
 
@@ -151,7 +168,8 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) tenant = null;
         if (tenant is null) return;
 
-        foreach (var capability in ProviderCatalog.BindableCapabilities)
+        // الرَبطُ القائِمُ لِكُلِّ قُدرَةٍ يَربِطُها مُستَأجِرٌ — لا لِما لَه بِطاقَةٌ مَعروضَةٌ وَحدَه (‏2026-10-13، G4 (xxii)).
+        foreach (var capability in Services.Providers.ProviderBindSurface.BindingCapabilities)
         {
             var doc = await Providers.CurrentAsync(Slug, capability);
             if (doc is not null) bindings[capability] = doc;
@@ -180,6 +198,7 @@
         "provider_not_bindable"   => "studio.providers.err_provider_not_bindable",
         "capability_unknown"      => "studio.providers.err_capability_unknown",
         "binding_not_found"       => "studio.providers.err_binding_not_found",
+        Services.Providers.ProviderBindSurface.VaultUnavailable => "studio.providers.err_vault_unavailable",
         ProviderValueValidator.Required        => "studio.providers.err_field_required",
         ProviderValueValidator.NotHttps        => "studio.providers.err_not_https",
         ProviderValueValidator.HostNotAllowed  => "studio.providers.err_host_not_allowed",

@@ -4,14 +4,15 @@ using ACommerce.Platform.Flows;
 namespace ACommerce.Platform.Providers;
 
 /// <summary>
-/// <para><b>قيمَةٌ مُخَزَّنَةٌ لِحَقلٍ واحِد</b> — و<b>هذِه المَوجَةُ
-/// تَدعَم الأَنواعَ الصَريحَةَ وَحدَها</b>: لا خِزانَةَ ولا تَشفير.
-/// وأَعمِدَةُ الظَرف (<c>Nonce</c>, <c>Cipher</c>, <c>Tag</c>,
-/// <c>KekVersion</c>, <c>Aad</c>) <b>مُعلَنَةٌ وغَيرُ مُستَعمَلَة</b>،
-/// والسَبَبُ مَقيسٌ لا ذَوقيّ: إضافَتُها لاحِقاً <b>تَرحيلُ جَدوَلٍ
-/// حَيٍّ يَحمِل اعتِماداتِ عُمَلاء</b>. وهذا هُوَ المَوضِعُ الوَحيدُ
-/// المُجازُ فيه إعلانٌ سابِقٌ لِاستِعمالِه — والقاعِدَةُ ١ عَن
-/// <b>تَجريد</b> لا عَن شَكلِ حَقل.</para>
+/// <para><b>قيمَةٌ مُخَزَّنَةٌ لِحَقلٍ واحِد</b> — صَريحَةٌ لِنَوعٍ يُعرَض
+/// (<see cref="Explicit"/>)، أَو <b>مَختومَةٌ</b> لِسِرٍّ تَختِمُه الخِزانَة
+/// (<see cref="Sealed"/>، ‏<c>ProviderVault</c>). وأَعمِدَةُ الظَرف
+/// (<c>Nonce</c>, <c>Cipher</c>, <c>Tag</c>, <c>KekVersion</c>, <c>Aad</c>)
+/// <b>أُعلِنَت مِن اليَومِ الأَوَّلِ (‏ADR-012 §هـ) وتُملَأُ مُنذُ ‏2026-10-12</b>
+/// (‏ADR-032 §٢‑هـ الخُطوَة 4) — تَعبِئَةٌ لا إعادَةُ تَصميم: لا عَمودَ مِنها
+/// تَغَيَّرَ اسمُه ولا نَوعُه. والسَبَبُ الَّذي أَعلَنَها قَبلَ استِعمالِها
+/// مَقيسٌ لا ذَوقيّ: إضافَتُها لاحِقاً <b>تَرحيلُ جَدوَلٍ حَيٍّ يَحمِل
+/// اعتِماداتِ عُمَلاء</b>.</para>
 ///
 /// <para><b>و<c>KekVersion</c> يَحمِلُ الدَوَران مِن اليَوم</b>: نُسخَتانِ
 /// تَتَعايَشانِ في نَفسِ الوَثيقَة، فَالتَرحيلُ إعادَةُ تَغليفٍ في
@@ -19,21 +20,36 @@ namespace ACommerce.Platform.Providers;
 ///
 /// <para><b>والفَشَلُ مُغلَق</b>: <see cref="Explicit"/> <b>تَرمي</b>
 /// لِنَوعٍ يُشبِهُ السِرّ — فَلا سَبيلَ إلى كِتابَةِ سِرٍّ صَريحٍ في
-/// عَمودِ نَصّ، ولَو أَرادَ الكاتِب.</para>
+/// عَمودِ نَصّ، ولَو أَرادَ الكاتِب؛ والسِرُّ يَمُرُّ مِن الخِزانَةِ وَحدَها.</para>
 /// </summary>
 public sealed class StoredValue
 {
     public string Kind { get; set; } = CredentialKinds.None;
 
-    /// <summary>النَصُّ الصَريح — لِلأَنواعِ الَّتي تُعرَض وَحدَها.</summary>
+    /// <summary>النَصُّ الصَريح — لِلأَنواعِ الَّتي تُعرَض وَحدَها. و<c>null</c>
+    /// دائِماً لِقيمَةٍ مَختومَة.</summary>
     public string? Plain { get; set; }
 
-    // ─── أَعمِدَةُ الظَرف — مُعلَنَةٌ مِن اليَومِ الأَوَّل ────────────
+    // ─── أَعمِدَةُ الظَرف — مُعلَنَةٌ مِن اليَومِ الأَوَّل، وتَملَؤُها الخِزانَة ──
     public string? Nonce { get; set; }
     public string? Cipher { get; set; }
     public string? Tag { get; set; }
     public int KekVersion { get; set; }
     public string? Aad { get; set; }
+
+    /// <summary>
+    /// <para><b>آخِرُ أَربَعَةِ مَحارِفَ مِن سِرٍّ مَختوم — لِلعَرضِ وَحدَه</b>
+    /// (‏ADR-032 الخُطوَة 4 تُسَمّيه؛ و«يُعرَضُ مِنه آخِرُ أَربَعَةِ مَحارِف» في جَدوَلِ
+    /// ‏ADR-012 §٢‑ب لِـ<c>secret_key</c>). يُكتَبُ عِندَ الخَتمِ بِقاعِدَةِ
+    /// <c>ProviderSecrecy.TailOf</c> نَفسِها الَّتي تُقَنِّعُ الصَريح، فَلا يَحتاجُ
+    /// العَرضُ فَكّاً. و<c>null</c> لِسِرٍّ لا ذَيلَ لَه أَو لِنَوعٍ لا يُعرَضُ مِنه شَيء.
+    /// <b>عَمودٌ سادِسٌ مُضاف</b> بِجِوارِ الخَمسَة، لا بَدَلٌ مِن أَحَدِها.</para>
+    /// </summary>
+    public string? Tail4 { get; set; }
+
+    /// <summary>أَمَختومَةٌ هذِه القيمَة؟ — مُشتَقٌّ لا يُخَزَّن.</summary>
+    [JsonIgnore]
+    public bool IsSealed => Cipher is not null;
 
     /// <summary>قيمَةٌ صَريحَةٌ مِن نَوعٍ يُعرَض — والنَوعُ يُفحَص
     /// بِالمَعجَمِ المُلزِمِ أَوَّلاً.</summary>
@@ -43,15 +59,39 @@ public sealed class StoredValue
 
         if (CredentialKinds.IsSecretLike(kind))
             throw new InvalidOperationException(
-                $"النَوع «{kind}» سِرٌّ، ولا خِزانَةَ في هذِه المَوجَة — " +
-                "فَلا يُخَزَّن صَريحاً. (‏ADR-012)");
+                $"النَوع «{kind}» سِرٌّ — لا يُخَزَّنُ صَريحاً أَبَداً؛ يُختَمُ " +
+                "بِـStoredValue.Sealed في الخِزانَة أَو لا يُخَزَّن. (‏ADR-012، ADR-032)");
 
         return new StoredValue { Kind = kind, Plain = value, KekVersion = 0 };
     }
 
-    /// <summary>الصورَةُ الَّتي يَجوز أَن تُعرَض.</summary>
+    /// <summary>
+    /// <para><b>قيمَةٌ مَختومَةٌ بِالخِزانَة</b> — تَملَأُ أَعمِدَةَ الظَرفِ
+    /// و<see cref="Tail4"/>، و<see cref="Plain"/> فارِغٌ أَبَداً. <c>aad</c> سِياقُ
+    /// القيمَةِ يَبنيه المُنادي (<c>ProviderVault.AadOf</c>)، ولا تُفَكُّ إلّا
+    /// بِه.</para>
+    /// <para>يَرمي لِنَوعٍ لا تَختِمُه الخِزانَة، ولِخِزانَةٍ غَيرِ مُتاحَة
+    /// (‏<c>vault_unavailable</c>) — <b>لا خَتمَ بِلا مِفتاح</b>.</para>
+    /// </summary>
+    public static StoredValue Sealed(ProviderVault vault, string kind, string clear, string aad)
+        => vault.Seal(kind, clear, aad);
+
+    /// <summary><b>النَصُّ الصَريحُ لِمَن يَطلُبُ بِه فِعلاً</b> — بِسِياقِه هُوَ
+    /// لا بِعَمودِ <c>Aad</c> المُخَزَّن. يَرمي <c>CryptographicException</c>
+    /// لِمِفتاحٍ آخَرَ أَو سِياقٍ آخَرَ أَو عَمودٍ مُعبَثٍ بِه، ولا يُعيدُ
+    /// شَيئاً حينَها.</summary>
+    public string Unseal(ProviderVault vault, string aad) => vault.Open(this, aad);
+
+    /// <summary>الصورَةُ الَّتي يَجوز أَن تُعرَض — ولِلمَختومَةِ ذَيلُها
+    /// المَحفوظُ أَو القِناعُ وَحدَه: لا نَصَّ صَريحاً بَينَ يَدَيها أَصلاً.</summary>
     [JsonIgnore]
-    public string Censored => ProviderSecrecy.Censor(Kind, Plain);
+    public string Censored => IsSealed
+        ? ProviderSecrecy.CensorSealed(Kind, Tail4)
+        : ProviderSecrecy.Censor(Kind, Plain);
+
+    /// <summary><b>وَجهٌ مُعَتَّم</b>: النَوعُ والصورَةُ المَعروضَة — فَلا يُفشي
+    /// لوغٌ أَو رِسالَةُ خَطَإٍ تُنادي <c>ToString</c> سِرّاً.</summary>
+    public override string ToString() => $"{Kind}:{Censored}";
 }
 
 /// <summary>
@@ -148,6 +188,64 @@ public sealed class TenantProviderBinding : ITenantDefinitionDocument
 
     [JsonIgnore]
     public bool IsActive => Status == StatusActive;
+
+    // ─── مَدخَلُ البائِع — الوَثيقَةُ نَفسُها بِمُعَرِّفٍ مُرَكَّب (‏ADR-033 §٢‑ج‑٢ والخُطوَة 7؛ تَيّارُ S8، ‏2026-10-12) ─────
+    //
+    // **لا وَثيقَةَ ثانِيَة** (القاعِدَة ٨): قيَمُ البائِعِ في المَتجَرِ — رَمزُ تَحديثِ حِسابِه عِندَ الناقِلِ ورَمزُ وارِدِه — تَسكُنُ
+    // هذِه الوَثيقَةَ بِأَعمِدَةِ ظَرفِها وإيجارِها المُقتَرِن، بِمُعَرِّفِ `{capability}:{listing_owner}` و`Slug` القُدرَة. ولا يَقرَؤُها
+    // `TenantProviderSet.For` — مُجموعَةُ المَتجَرِ تَتَجاوَزُها بِقاعِدَةٍ مُسَمّاة (`IsVendorEntryId`) — بَل استِعلامٌ بِمِفتاحِ البائِع.
+
+    /// <summary>فاصِلُ مُعَرِّفِ مَدخَلِ البائِع — لا يَحمِلُه مُعَرِّفُ قُدرَةٍ (المَعجَمُ أَسماءٌ بِلا <c>:</c>).</summary>
+    public const char VendorEntrySeparator = ':';
+
+    /// <summary><b>مُعَرِّفُ مَدخَلِ البائِع</b>: <c>{capability}:{listing_owner}</c> — والمالِكُ بِصيغَةِ <c>D</c> كَما يُكتَبُ
+    /// في مَرجِعِ <c>listing_owner</c> عَلى الصَفقَة. القُدرَةُ مِن المَعجَمِ وإلّا يُرمى.</summary>
+    public static string VendorEntryId(string capability, Guid listingOwner)
+        => $"{ProviderCapabilities.Require(capability)}{VendorEntrySeparator}{listingOwner:D}";
+
+    /// <summary>
+    /// <para><b>أَهذا مُعَرِّفُ مَدخَلِ بائِع؟ — القاعِدَةُ المُسَمّاة</b>: قُدرَةٌ مِن المَعجَمِ ثُمَّ <c>:</c> ثُمَّ مُعَرِّفٌ بِصيغَةِ
+    /// <c>D</c>. وما سِواه — ومِنه قُدرَةٌ خارِجَ المَعجَمِ أَو لاحِقَةٌ لَيسَت مُعَرِّفاً — لَيسَ مَدخَلَ بائِع.</para>
+    /// <para>(‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (iv) — ولا يُعادُ حَرفٌ فَوقَه: <b>والمُعامِلانِ الخارِجانِ بِلا قارِئٍ وَقتَ التَشغيل</b> — قارِئُها
+    /// الوَحيدُ (<c>TenantProviderSet.FromDocuments</c>) يُسقِطُهُما، ويَقرَؤُهُما صَفّان: صَفُّ التَحليلِ في <c>VendorShippingTests</c>، وصَفُّ تَوصيفِ
+    /// G5 (i) في <c>ProviderRevokeVendorEntryTests</c> الَّذي تُبقيه القاعِدَةُ ٣ بِحَرفِه — فَلا يُحذَفانِ هُنا. <b>شَرطُ مُستَهلِكِهِما</b>: أَوَّلُ قارِئٍ
+    /// وَقتَ التَشغيلِ يَحتاجُ القُدرَةَ أَو البائِعَ مِن مُعَرِّفٍ مَخزونٍ لا يَعرِفُ صاحِبَه — واليَومَ كُلُّ قارِئٍ يَعرِفُ البائِعَ فَيَبني المُعَرِّفَ مِنه
+    /// (<see cref="VendorEntryId"/>)؛ فَإن جاءَ يَومٌ لا يَحتاجُهُما فيه صَفُّ التَوصيفِ حُذِفا مَعَه.)</para>
+    /// </summary>
+    public static bool IsVendorEntryId(string? id, out string capability, out Guid listingOwner)
+    {
+        capability = "";
+        listingOwner = Guid.Empty;
+        if (string.IsNullOrEmpty(id)) return false;
+
+        var at = id.IndexOf(VendorEntrySeparator);
+        if (at <= 0 || !ProviderCapabilities.Contains(id[..at])) return false;
+        if (!Guid.TryParseExact(id[(at + 1)..], "D", out var owner)) return false;
+
+        (capability, listingOwner) = (id[..at], owner);
+        return true;
+    }
+
+    /// <summary>
+    /// <para><b>مَدخَلُ بائِعٍ فَعّالٌ لِقُدرَة — شَرطٌ يُتَرجِمُه Marten ويُقاسُ في CI</b> (‏2026-10-13، مُراجَعَةُ المَوجَة 3b، G5 (v)): مُعَرِّفٌ يَبدَأُ
+    /// بِـ<c>{capability}:</c> وحالُه <see cref="StatusActive"/>. يَسأَلُه <c>TenantProviderService.HasVendorEntriesAsync</c> — فَيُقَرِّرُ أَيَقرَأُ وارِدُ مَتجَرٍ
+    /// بِلا رَمزِ تَهيئَةٍ جِسماً (<c>DealShipping.CarrierReadyForStoreAsync</c>) — وكانَ مَكتوباً داخِلَ الاستِعلامِ فَلا يُنَفِّذُه إلّا صَفٌّ حَيٌّ عَلى Postgres.</para>
+    /// <para><b>وأَوسَعُ مِن <see cref="IsVendorEntryId"/> عَمداً</b>: تَحليلُ اللاحِقَةِ مُعَرِّفاً لا يُتَرجَمُ إلى SQL، فَمُعَرِّفٌ بِالبادِئَةِ ولاحِقَةٍ لَيسَت مُعَرِّفاً
+    /// يُعَدّ — ولا كاتِبَ يَكتُبُه (<see cref="VendorEntryId"/> وَحدَه يَكتُبُ هذا الشَكل). والقُدرَةُ مِن المَعجَمِ وإلّا يُرمى.</para>
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<TenantProviderBinding, bool>> ActiveVendorEntryOf(string capability)
+    {
+        var prefix = ProviderCapabilities.Require(capability) + VendorEntrySeparator;
+        return d => d.Id.StartsWith(prefix) && d.Status == StatusActive;
+    }
+
+    /// <summary><b>تَسجيلُ الوارِدِ عِندَ المُزَوِّدِ لِمَدخَلِ البائِع</b> — مُعَرِّفُ التَسجيلِ كَما أَعادَه (‏<c>"id"</c> في رَدِّ
+    /// «Webhook» عِندَ OTO)، و<c>null</c> حَيثُ لَم يُسَجَّل بَعد. يَقرَؤُه سَطحُ البائِعِ فَيَقولُ أَتَصِلُ الإشعارات.</summary>
+    public string? WebhookId { get; set; }
+
+    /// <summary>رَمزُ فَشَلِ آخِرِ مُحاوَلَةِ تَسجيلٍ لِلوارِد (مِن مَعجَمِ فَشَلِ العَميل)، و<c>null</c> حينَ نَجَحَت أَو لَم تُحاوَل.
+    /// والسِرُّ الَّذي يَتَحَقَّقُ بِه الوارِدُ لا يُبَدَّلُ إلّا حينَ تَنجَح — فَلا يَفتَرِقُ ما عِندَنا عَمّا عِندَ المُزَوِّد.</summary>
+    public string? WebhookRefusal { get; set; }
 }
 
 /// <summary>مُزَوِّدٌ مَحلولٌ لِمُستَأجِر: التَعريفُ + القيَم.</summary>
@@ -163,14 +261,41 @@ public sealed record ResolvedProvider(
     public string? Explicit(string fieldCode) =>
         Values.TryGetValue(fieldCode, out var v) ? v.Plain : null;
 
-    /// <summary><b>أَيَقبِضُ هذا الرَبطُ فِعلاً؟</b> — دَفعٌ، وبِرابِطٍ
+    /// <summary>
+    /// <para><b>أَيَقبِضُ هذا الرَبطُ فِعلاً؟</b> — دَفعٌ، وبِرابِطٍ
     /// مَملوءٍ يَنقُرُه الزَبون. والسُؤالُ يُطرَح هُنا مَرَّةً واحِدَةً
-    /// لِأَنّ عَلَيه يَتَوَقَّف ظُهورُ الباقاتِ المَدفوعَة.</summary>
+    /// لِأَنّ عَلَيه يَتَوَقَّف ظُهورُ الباقاتِ المَدفوعَة.</para>
+    /// <para><b>والمِفتاحُ السِرِّيُّ المَختومُ لا يُعَدُّ هُنا بَعد — يُقالُ ولا يُبتلَع
+    /// (‏2026-10-12، ‏ADR-032 §٧‑ج)</b>: الخُطوَة 7 قالَت «رابِطٌ مَملوءٌ <b>أَو</b>
+    /// حَقلٌ سِرِّيٌّ مَختوم»، ولا عَميلَ يَطلُبُ بِالمِفتاحِ قَبلَ الخُطوَة 8 — فَعَدُّه
+    /// يَقلِبُ <c>PaymentProviderConfigured</c> بِلا قابِض: تَظهَرُ الباقاتُ المَدفوعَةُ
+    /// ويَبلُغُ زِرُّها <c>PlanPay</c> بِلا رابِطٍ يُصَيِّرُه (بابٌ يُجيبُ «غَيرُ مُتاح»).
+    /// يُضافُ مَعَ العَميلِ بِسَطرٍ هُنا، ويَنقَلِبُ مَعَه صَفُّ
+    /// <c>A_sealed_key_alone_collects_nothing_yet_so_no_card_and_no_paid_plan_opens</c>.</para>
+    /// <para><b>وأُضيفَ مَعَ العَميلِ (‏2026-10-12، ‏ADR-032 الخُطوَة 8 — شَطرُ <c>CollectsMoney</c>؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق)</b>:
+    /// رابِطٌ مَملوءٌ <b>أَو</b> مِفتاحٌ سِرِّيٌّ مَختوم (<see cref="SealedSecretKeyField"/>) — صارَ المَختومُ يَطلُبُ بِه عَميلُ البَوّابَةِ
+    /// ويَقبِضُ بِه إتمامُ الشِراءِ عَلى صَفحَتِها. وانقَلَبَت مَعَه ثَلاثَةُ صُفوفٍ بِأَسمائِها (§٨‑د). <b>والباقاتُ المَدفوعَةُ لا تَقرَؤُه بَعدَ
+    /// اليَوم</b> — صَفحَتُها تُصَيِّرُ الرابِطَ وَحدَه، فَبابُها <see cref="TenantProviderSet.PlansPayable"/>: مَتجَرٌ بِمِفتاحٍ وَحدَه يَقبِضُ
+    /// ولا يَعرِضُ باقَةً بِسِعر.</para>
+    /// </summary>
     public bool CollectsMoney =>
         Definition.Capability == ProviderCapabilities.Payments &&
-        Definition.Credential.Fields
+        (Definition.Credential.Fields
             .Where(f => CredentialKinds.IsLink(f.Kind))
-            .Any(f => !string.IsNullOrWhiteSpace(Explicit(f.Code)));
+            .Any(f => !string.IsNullOrWhiteSpace(Explicit(f.Code)))
+         || SealedSecretKeyField is not null);
+
+    /// <summary>
+    /// <para><b>حَقلُ المِفتاحِ السِرِّيِّ المَختومِ في رَبطِ الدَفع</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12) — الحَقلُ الَّذي يُعلِنُه التَعريفُ
+    /// بِنَوعِ <see cref="CredentialKinds.SecretKey"/> وقيمَتُه مَختومَة؛ و<c>null</c> لِقُدرَةٍ غَيرِ الدَفعِ أَو بِلا مِفتاحٍ مَختوم.
+    /// <b>بِالنَوعِ لا بِسلاجِ المُزَوِّد</b> — الكاتالوجُ بَيانات. تَعريفٌ واحِدٌ يَقرَؤُه <see cref="CollectsMoney"/> وعَميلُ البَوّابَةِ في
+    /// القالِب (<c>GatewayPayments.SealedKeyFieldOf</c> يُحيلُ إلَيه) — فَلا يَفتَرِقُ «يَقبِضُ بِالمِفتاح» عَمّا يُفَكُّ لِلنِداء.</para>
+    /// </summary>
+    public ProviderFieldDefinition? SealedSecretKeyField =>
+        Definition.Capability == ProviderCapabilities.Payments
+            ? Definition.Credential.Fields.FirstOrDefault(f =>
+                f.Kind == CredentialKinds.SecretKey && Values.TryGetValue(f.Code, out var v) && v.IsSealed)
+            : null;
 
     /// <summary>أَوَّلُ رابِطِ دَفعٍ مَملوء — وهُوَ ما تُصَيِّرُه صَفحَةُ
     /// الدَفع.</summary>
@@ -179,6 +304,11 @@ public sealed record ResolvedProvider(
             .Where(f => CredentialKinds.IsLink(f.Kind))
             .Select(f => Explicit(f.Code))
             .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    /// <summary>أَفي الرَبطِ رابِطُ دَفعٍ مَملوء؟ — <b>حُضورُه لا قيمَتُه</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12): يَقرَؤُه بابُ الباقاتِ
+    /// (<see cref="TenantProviderSet.PlansPayable"/>)، والقيمَةُ لا يَقرَؤُها إلّا <c>PlanPay.razor</c> فَيُصَيِّرُها — كَما يُثَبِّتُ
+    /// <c>LegalCheckoutTextsCharacterizationTests</c>.</summary>
+    public bool HasPaymentLink => PaymentLink is not null;
 }
 
 /// <summary>
@@ -217,6 +347,15 @@ public sealed class TenantProviderSet
 
     public bool CollectsMoney => For(ProviderCapabilities.Payments)?.CollectsMoney == true;
 
+    /// <summary>
+    /// <para><b>أَتُدفَعُ باقاتُ هذا المَتجَرِ المَدفوعَة؟</b> (‏ADR-032 الخُطوَة 8، ‏2026-10-12) — رابِطُ دَفعٍ مَملوءٌ في رَبطِ الدَفع، وهُوَ
+    /// ما تُصَيِّرُه صَفحَةُ الباقَة (<c>PlanPay.razor</c>) وَحدَه. كانَت أَبوابُ الباقاتِ تَقرَأُ «يَقبِض» (<see cref="CollectsMoney"/>
+    /// عَبرَ <c>Tenant.PaymentProviderConfigured</c>) يَومَ كانَ «يَقبِض» رابِطاً وَحدَه؛ فَلَمّا صارَ المِفتاحُ المَختومُ يَقبِضُ بِفاتورَةِ
+    /// البَوّابَةِ في إتمامِ الشِراء — ولا فاتورَةَ لِباقَة — صارَت تَقرَأُ هذا: مَتجَرٌ بِمِفتاحٍ وَحدَه لا يَعرِضُ باقَةً بِسِعرٍ ولا يُحيلُ
+    /// إلى صَفحَةٍ بِلا رابِط. يَقرَؤُه بابُ الباقاتِ وصَفحَتُها ونُقطَةُ الاشتِراكِ ومُلاحَظَةُ الاستوديو.</para>
+    /// </summary>
+    public bool PlansPayable => For(ProviderCapabilities.Payments)?.HasPaymentLink == true;
+
     public static TenantProviderSet FromDocuments(
         string? tenantSlug, IEnumerable<TenantProviderBinding> docs)
     {
@@ -227,6 +366,11 @@ public sealed class TenantProviderSet
                      .OrderBy(d => d.BoundAt)
                      .ThenBy(d => d.Id, StringComparer.Ordinal))
         {
+            // **مَدخَلُ بائِعٍ لَيسَ رَبطَ مَتجَر — قاعِدَةٌ مُسَمّاةٌ لا فَرعُ تَحذير** (‏ADR-033 §٢‑ج‑٢، تَيّارُ S8، ‏2026-10-12):
+            // مُعَرِّفُه `{capability}:{listing_owner}` ويُقرَأُ بِمِفتاحِ البائِع، فَيُتَجاوَزُ هُنا صامِتاً — وكانَ يَقَعُ في
+            // «يَحمِلُ مُزَوِّدَ قُدرَةٍ أُخرى» بِسَطرِ خَطَإٍ لِكُلِّ قِراءَة. ومَتجَرٌ لَيسَ فيه إلّا مَداخِلُ بائِعينَ يَبقى `Platform` نَفسَه.
+            if (TenantProviderBinding.IsVendorEntryId(doc.Id, out _, out _)) continue;
+
             var def = ProviderCatalog.Find(doc.ProviderSlug);
             if (def is null)
             {

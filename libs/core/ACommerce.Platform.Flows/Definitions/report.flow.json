@@ -14,21 +14,24 @@
       "to": "Pending",
       "actor": "initiator",
       "label": { "ar": "أَرسِل تَبليغاً", "en": "Submit report" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Pending",
       "to": "Resolved",
       "actor": "moderator",
       "label": { "ar": "عالِج", "en": "Resolve" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     },
     {
       "from": "Pending",
       "to": "Rejected",
       "actor": "moderator",
       "label": { "ar": "اِرفُض", "en": "Reject" },
-      "effects": []
+      "effects": [],
+      "meter": "none"
     }
   ]
 }

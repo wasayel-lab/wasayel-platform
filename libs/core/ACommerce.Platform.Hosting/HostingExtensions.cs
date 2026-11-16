@@ -43,6 +43,20 @@ public sealed class PlatformHostBuilder
 public static class HostingExtensions
 {
     /// <summary>
+    /// <para><b>مُستَوَياتُ السِجِلّ</b> — <c>Information</c> كَما كانَ، و<b><c>Microsoft.AspNetCore.Hosting</c> عِندَ <c>Warning</c></b>
+    /// (‏2026-10-24، تَدقيقُ الإطلاق lens-security-4، حاجِبَة). كانَ السِجِلُّ يَكتُبُ لِكُلِّ طَلَبٍ سَطرَيِ الإطارِ
+    /// <c>Request starting HTTP/1.1 POST …?{الاستِعلام}</c> و<c>Request finished …</c> بِسِلسِلَةِ الاستِعلامِ كامِلَة — فَوَقَعَ فيه رَمزُ
+    /// الجَلسَةِ مِن <c>/realtime?token=</c> (رَمزٌ لِثَلاثينَ يَوماً بِلا إبطال، د28)، وتَقَعُ فيه أَرقامُ الجَوّالِ والهُوِيَّةِ مِن تَحويلاتِ الدُخول.
+    /// وسَطرُ <c>UseSerilogRequestLogging</c> (‏<c>HTTP {Method} {Path} responded {Status}</c>) يَبقى عِندَ <c>Information</c> بِالمَسارِ وَحدَه —
+    /// فَلا يَضيعُ أَثَرُ طَلَب، وتَسقُطُ سِلسِلَتُه.</para>
+    ///
+    /// <para><b>يُنقَض</b> بِحَذفِ سَطرِ <c>Override</c>. مَحروسٌ في <c>RealtimeSessionTokenTests</c> بِسِجِلٍّ مَبنِيٍّ مِن هذِه الدالَّةِ نَفسِها.</para>
+    /// </summary>
+    public static LoggerConfiguration PlatformLogLevels(LoggerConfiguration lc) => lc
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft.AspNetCore.Hosting", Serilog.Events.LogEventLevel.Warning);
+
+    /// <summary>
     /// يُهَيِّئ التَطبيق بـ Marten + Wolverine + Serilog + MultiTenancy.
     /// </summary>
     public static PlatformHostBuilder AddPlatformHost(
@@ -53,8 +67,7 @@ public static class HostingExtensions
         configure?.Invoke(pb);
 
         // Serilog إلى console
-        builder.Host.UseSerilog((ctx, lc) => lc
-            .MinimumLevel.Information()
+        builder.Host.UseSerilog((ctx, lc) => PlatformLogLevels(lc)
             .WriteTo.Console());
 
         var connStr = builder.Configuration.GetConnectionString("Postgres")
@@ -81,7 +94,11 @@ public static class HostingExtensions
 
                 // Documents الإضافيّة — Marten يَكتَشِفها لكنّ ذِكرها صَريحاً
                 // يَجعَل الـ schema gen أَوضَح ويَتَأكَّد من الـ identity.
-                opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id);
+                // ‏(‏2026-10-29، تَدقيقُ الموجَة ١١ G-1؛ تَوصيفُه `9f887fa`) **وَثيقَةُ الحِسابِ بِتَزامُنٍ تَفاؤُلِيّ** — كانَ الأَخيرُ يَربَح: حِفظٌ
+                // قَرَأَ قَبلَ «اخرج من كل الأجهزة» يُعيدُ الإصدارَ القَديم، ونُسخَةٌ قُرِئَت قَبلَ الحَذفِ تُعيدُ الحِسابَ المَمحُوّ. والآن يَرمي
+                // `ConcurrencyException`، وكُتّابُه يُعيدونَ تَغييرَهم مَرَّةً مِن قِراءَةٍ جَديدَة (`AccountWrites.UpdateAsync`). ونَظيرُه
+                // `StudioUser` في `ConfigureMarten` القالِب (الاعتِمادُ مِن القالِبِ إلى النَواةِ لا العَكس).
+                opts.Schema.For<ACommerce.Kit.Auth.User>().Identity(x => x.Id).UseOptimisticConcurrency(true);
                 opts.Schema.For<ACommerce.Kit.Notifications.Notification>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Conversation>().Identity(x => x.Id);
                 opts.Schema.For<ACommerce.Kit.Chat.Message>().Identity(x => x.Id);
@@ -232,7 +249,9 @@ public static class HostingExtensions
         // مَسارَ الأُصولِ مُحَوَّلاً. وبِلا نِطاقٍ أَساسٍ مُهَيَّأٍ
         // — وهُوَ الافتِراضيُّ اليَوم — **هذا السَطرُ عَبورٌ خالِص**.
         // التَفصيلُ في ADR-022.
-        app.UseSubdomainTenantPath();
+        // ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) صارَ سَطراً واحِداً بِاسمٍ (`UsePlatformRequestFront`) يَسأَلُه
+        // المُضيفُ المُصَغَّرُ في الاختِبارِ كَما يَسأَلُه هذا المُضيف — فَما يُرَكَّبُ في أَوَّلِ الأُنبوبِ يُقاسُ بِتَركيبِه لا بِنُسخَةٍ مِنه.
+        app.UsePlatformRequestFront();
 
         // UseStaticFiles بدلاً من MapStaticAssets لأنّ الأَخير يُعلِن
         // Content-Encoding: gzip ثُمّ يُرسِل صِفر بايتات حينَ لا يَكون
@@ -284,6 +303,26 @@ public static class HostingExtensions
             opts.TenantId.AssertExists();
         });
 
+        return app;
+    }
+
+    /// <summary>
+    /// <para><b>أَوَّلُ الأُنبوبِ بَعدَ سِجِلِّ الطَلَب — ما يَقرَأُ رَأسَ الطَلَبِ وَحدَه ولا حالَةً مَخزونَة</b> (القاعِدَة ٧): الحاقِنُ
+    /// (<c>UseSubdomainTenantPath</c>، ‏ADR-022 و‏ADR-050). <b>قَبلَ <c>UseStaticFiles</c> و<c>UseRouting</c></b> كَما يُرَكِّبُه
+    /// <see cref="UsePlatformHost"/>.</para>
+    /// <para><b>ولِماذا دالَّةٌ بِاسمِها</b> (‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1): فَحصُ <c>Origin</c> لِطَلَباتِ الكِتابَةِ يُرَكَّبُ هُنا
+    /// بِجِوارِ الحاقِن، وتَوصيفُه يَقيسُ الأُنبوبَ بِهذا الاسمِ عَلى مُضيفٍ مُصَغَّرٍ حَيٍّ — فَيَبقى مِلَفُّ التَوصيفِ بِبَصمَتِه قَبلَ الفَحصِ
+    /// وبَعدَه، ولا يُقاسُ تَركيبٌ مَنسوخٌ يَنجَرِفُ عَن هذا.</para>
+    /// </summary>
+    public static IApplicationBuilder UsePlatformRequestFront(this IApplicationBuilder app)
+    {
+        // ‏(‏2026-11-11، مُراجَعَةُ إغلاقِ W13-4 · SEC-C2b-R3-3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) رَأسُ `Host` لا يُقرَأُ ← 400 قَبلَ الحاقِنِ الَّذي يَقرَؤُه أَوَّلاً
+        // (كانَ 500 — `HostHeaderGuard`).
+        app.UseHostHeaderGuard();
+        app.UseSubdomainTenantPath();
+        // ‏(‏2026-11-07، ADR-050 §٦ · W13-4·C2c·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) طَلَبُ الكِتابَةِ مِن أَصلٍ آخَرَ يُرَدُّ 403 — بَعدَ الحاقِنِ فَيَرى
+        // المَسارَ بِشَكلِ القالِبِ عَلى كُلِّ مُضيف (نِقاطُ المُزَوِّدينَ تُستَثنى بِه). التَعليلُ في `CrossOriginWriteGate`.
+        app.UseCrossOriginWriteGate();
         return app;
     }
 }

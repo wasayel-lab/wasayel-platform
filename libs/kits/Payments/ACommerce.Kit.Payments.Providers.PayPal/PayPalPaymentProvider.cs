@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using ACommerce.Platform.Shared.Metering;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -68,14 +69,22 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// والمُختَبِر.</summary>
     public const string RequestIdHeader = "PayPal-Request-Id";
 
+    // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٤ — ADR-051 §١٩؛ التَصميم §3.4 و§6.1–§6.2؛ تَوصيفُه `PaymentsRequestShapeCharacterizationTests`): **لا `HttpClient` هُنا** —
+    // `ProviderHttp<PayPalPaymentProvider>` مالِكُه. والعَمَلِيّاتُ المَعدودَةُ الخَمسُ (الخُطَّة، الرابِط، الطَلَب، الالتِقاط، التَحَقُّقُ مِن التَوقيع) تَأخُذُ
+    // `ProviderCall` أَوَّلَ وُسَطائِها والعُدَّةُ تَسِمُه بِاسمِها، ومُعَرِّفُ الطَلَبِ مِفتاحُ PayPal نَفسُه (`PayPal-Request-Id`) — حَتّى الخُطَّة الَّتي لا يُعرَفُ مِفتاحُها
+    // إلّا بَعدَ المُنتَج (`ProviderCall.Keyed`). والرَمزُ ومُنتَجُ الكاتالوجِ نِداءانِ مُساعِدانِ لا يُعَدّان (`oauth_token`، `catalog_product`)، وعُضوا الواجِهَةِ بِلا
+    // مُنادٍ (`CancelSubscriptionAsync`، `GetInvoiceAsync`) مُساعِدانِ بِسَبَبِ دَينِهِما (`uncalled_member`). وعُضوُ الواجِهَةِ `CreateSubscriptionAsync` بِلا
+    // `ProviderCall` صَريحٌ يَبني نِداءَه مِن طَلَبِه (المَتجَرُ في `CustomerId` ومِفتاحُ مَرَّة-واحِدَة) — فَلا طَريقَ إلى PayPal بِلا عَدّ.
+    // ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) **صارَ عُضوُ الواجِهَةِ ذاكَ مُساعِداً ثالِثاً بِسَبَبِ دَينِه**
+    // (`uncalled_member`) لا نِداءً مَعدوداً يُخَمِّنُ المَتجَرَ مِن طَلَبِه: صِفرُ مُنادٍ لَه في وَقتِ التَشغيل، ومَقعَدُه في G6c، وPayPal لا يُحَلُّ عَلى `IPaymentProvider` (G6d).
     private readonly PayPalOptions _opts;
-    private readonly HttpClient _http;
+    private readonly ProviderHttp<PayPalPaymentProvider> _http;
     private readonly PayPalTokenCache _tokens;
     private readonly ILogger<PayPalPaymentProvider> _logger;
     private readonly string _baseUrl;
 
     public PayPalPaymentProvider(
-        IOptions<PayPalOptions> opts, HttpClient http,
+        IOptions<PayPalOptions> opts, ProviderHttp<PayPalPaymentProvider> http,
         PayPalTokenCache tokens, ILogger<PayPalPaymentProvider> logger)
     {
         _opts = opts.Value;
@@ -132,7 +141,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
         msg.Headers.Authorization = new AuthenticationHeaderValue("Basic",
             Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_opts.ClientId}:{_opts.ClientSecret}")));
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(Helper(ProviderHelperReasons.OauthToken), msg, ct);
         if (!resp.IsSuccessStatusCode)
         {
             _logger.LogError("[PayPal] فَشِل طَلَبُ الرَمز {Status}", resp.StatusCode);
@@ -188,7 +197,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     public async Task<string> CreateCatalogProductAsync(
         PayPalPlanDraft draft, CancellationToken ct = default)
     {
-        var dto = await PostForAsync<CatalogIdDto>(
+        var dto = await PostForAsync<CatalogIdDto>(Helper(ProviderHelperReasons.CatalogProduct),
             ProductsPath, PayPalCatalogPolicy.ProductRequestId(draft),
             new Dictionary<string, object>
             {
@@ -226,10 +235,11 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// النِداء.</para>
     /// </summary>
     public async Task<string> CreateBillingPlanAsync(
-        string productId, PayPalPlanDraft draft, CancellationToken ct = default)
+        ProviderCall call, string productId, PayPalPlanDraft draft, CancellationToken ct = default)
     {
-        var dto = await PostForAsync<CatalogIdDto>(
-            PlansPath, PayPalCatalogPolicy.PlanRequestId(productId, draft),
+        var requestId = PayPalCatalogPolicy.PlanRequestId(productId, draft);
+        var dto = await PostForAsync<CatalogIdDto>(Counted(call.Keyed(requestId)),
+            PlansPath, requestId,
             new Dictionary<string, object>
             {
                 ["product_id"] = productId,
@@ -277,6 +287,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// <summary>نِداءُ إنشاءٍ واحِدٌ: رَأسُ مَرَّة-واحِدَة، وجِسمٌ،
     /// ورَدٌّ يُقرَأ أَو يَرمي بِرَمزِ PayPal ونَصِّه.</summary>
     private async Task<T> PostForAsync<T>(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send,
         string path, string requestId, object body, string whatAr, CancellationToken ct)
         where T : class
     {
@@ -284,7 +295,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
         msg.Headers.Add(RequestIdHeader, requestId);
         msg.Content = JsonContent.Create(body);
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(send, msg, ct);
         var raw = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -330,7 +341,14 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// عَينُ الانجِرافِ الَّذي تَمنَعُه القاعِدَة ٤.</para>
     /// </summary>
     public async Task<SubscriptionResult> CreateSubscriptionAsync(
-        SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default)
+        ProviderCall call, SubscriptionRequest req, string idempotencyKey, CancellationToken ct = default)
+        => await SubscribeAsync(Counted(call.Keyed(idempotencyKey)), req, idempotencyKey, ct);
+
+    /// <summary>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩) <b>جِسمُ الاشتِراكِ بِلا نِداءٍ مَبنِيٍّ فيه</b>: يُرسِلُ بِما يُعطاه —
+    /// المَعدودُ مِن <see cref="CreateSubscriptionAsync(ProviderCall, SubscriptionRequest, string, CancellationToken)"/>، والمُساعِدُ بِسَبَبِ دَينِه مِن عُضوِ الواجِهَة.
+    /// والطَلَبُ والجَوابُ بِحَرفِهِما (<c>PaymentsRequestShapeCharacterizationTests</c>).</summary>
+    private async Task<SubscriptionResult> SubscribeAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send, SubscriptionRequest req, string idempotencyKey, CancellationToken ct)
     {
         using var msg = await AuthorizedAsync(HttpMethod.Post, SubscriptionsPath, ct);
 
@@ -343,7 +361,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             ["custom_id"] = req.CustomerId,
         });
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(send, msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -379,6 +397,17 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             ApproveUrl: approve);
     }
 
+    /// <summary>‏(‏2026-11-12، W13-6·١٤) <b>عُضوُ الواجِهَةِ بِلا <see cref="ProviderCall"/></b> — PayPal لا يُسَجَّلُ عَلى <see cref="IPaymentProvider"/> (<c>PayPalExtensions</c>)
+    /// فَلا مُنادِيَ لَه في وَقتِ التَشغيل؛ ويَبني نِداءَه مِن طَلَبِه: المَتجَرُ <c>CustomerId</c> (سلاجُه في <c>custom_id</c>) والمُعَرِّفُ مِفتاحُ مَرَّة-واحِدَة — النِداءُ
+    /// الَّذي يَبنيه <c>PayPalGateway</c> بِحَرفِه.</summary>
+    /// <remarks>‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثالِثَة · M6C-RULES-R3-1 — ADR-051 §١٩؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>صارَ مُساعِداً بِسَبَبِ دَينِه
+    /// (<see cref="ProviderHelperReasons.UncalledMember"/>) كَأَخَوَيه <see cref="CancelSubscriptionAsync"/> و<see cref="GetInvoiceAsync"/></b>: كانَ أَخاً بِلا
+    /// <see cref="ProviderCall"/> يُرسِلُ <c>billing.paypal.link.create</c> مَعدوداً ويُخَمِّنُ المَتجَرَ مِن حَقلِ طَلَبٍ (<c>req.CustomerId</c>) — والقاعِدَة ٦ تَجعَلُ
+    /// المَتجَرَ في يَدِ مَن يَعرِفُه — وبِلا مُنادٍ في وَقتِ التَشغيل (القاعِدَة ١)، وبِلا مَقعَدٍ في G6c. الآن مَقعَدُه الثامِنَ عَشَرَ (<c>MeterTestSeamTests.UncalledMembers</c>)،
+    /// والنِداءُ عَبرَ الواجِهَةِ لا يَبلُغُه لِأَنّ PayPal لا يُحَلُّ عَلى <see cref="IPaymentProvider"/> في المُضيفِ المُرَكَّب (G6d، <c>MeterCompositionTests</c>).</remarks>
+    Task<SubscriptionResult> IPaymentProvider.CreateSubscriptionAsync(SubscriptionRequest req, string idempotencyKey, CancellationToken ct)
+        => SubscribeAsync(Helper(ProviderHelperReasons.UncalledMember), req, idempotencyKey, ct);
+
     // ═══ طَلَبُ دَفعٍ مَرِن — Orders v2 (‏ADR-006) ════════════════════
     //
     // **ولا مُزَوِّدَ ثانِياً**: نَفسُ الصِنفِ ونَفسُ `HttpClient`
@@ -400,7 +429,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// (<see cref="PayPalOrderPolicy.ApproveRels"/>).</para>
     /// </summary>
     public async Task<PayPalOrderResult> CreateOrderAsync(
-        PayPalOrderDraft draft, string reference, string origin,
+        ProviderCall call, PayPalOrderDraft draft, string reference, string origin,
         string idempotencyKey, CancellationToken ct = default)
     {
         using var msg = await AuthorizedAsync(HttpMethod.Post, OrdersPath, ct);
@@ -408,7 +437,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
         msg.Content = JsonContent.Create(
             PayPalOrderPolicy.CreateBody(draft, reference, origin));
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(Counted(call.Keyed(idempotencyKey)), msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -446,14 +475,14 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// <c>PAYMENT.CAPTURE.COMPLETED</c> وَحدَه.</para>
     /// </summary>
     public async Task<PayPalCaptureResult> CaptureOrderAsync(
-        string orderId, string idempotencyKey, CancellationToken ct = default)
+        ProviderCall call, string orderId, string idempotencyKey, CancellationToken ct = default)
     {
         using var msg = await AuthorizedAsync(HttpMethod.Post, CapturePathFor(orderId), ct);
         msg.Headers.Add(RequestIdHeader, idempotencyKey);
         msg.Headers.Add(PreferHeader, PreferRepresentation);
         msg.Content = new StringContent("{}", Encoding.UTF8, "application/json");
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(Counted(call.Keyed(idempotencyKey)), msg, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
@@ -497,7 +526,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             HttpMethod.Post, $"{SubscriptionsPath}/{subscriptionId}/cancel", ct);
         msg.Content = JsonContent.Create(new { reason = "cancelled by Wasayel platform admin" });
 
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(Helper(ProviderHelperReasons.UncalledMember), msg, ct);
         if (resp.IsSuccessStatusCode) return true;
 
         if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
@@ -520,7 +549,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     public async Task<Invoice?> GetInvoiceAsync(string paymentId, CancellationToken ct = default)
     {
         using var msg = await AuthorizedAsync(HttpMethod.Get, $"{CapturesPath}/{paymentId}", ct);
-        using var resp = await SendAsync(msg, ct);
+        using var resp = await SendAsync(Helper(ProviderHelperReasons.UncalledMember), msg, ct);
         if (!resp.IsSuccessStatusCode)
         {
             if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
@@ -554,7 +583,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// صَحيحاً — <b>وفَشَلُ تَحَقُّقٍ صَحيحٍ يَبدو هُجوماً</b>.</para>
     /// </summary>
     public async Task<bool> VerifyWebhookSignatureAsync(
-        PayPalWebhookHeaders headers, string rawBody, CancellationToken ct = default)
+        ProviderCall call, PayPalWebhookHeaders headers, string rawBody, CancellationToken ct = default)
     {
         if (!PayPalEnvironment.CanVerifyWebhooks(_opts))
         {
@@ -585,7 +614,7 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
             using var msg = await AuthorizedAsync(HttpMethod.Post, VerifySignaturePath, ct);
             msg.Content = new StringContent(payload, Encoding.UTF8, "application/json");
 
-            using var resp = await SendAsync(msg, ct);
+            using var resp = await SendAsync(Counted(call), msg, ct);
             if (!resp.IsSuccessStatusCode)
             {
                 if (resp.StatusCode == HttpStatusCode.Unauthorized) _tokens.Invalidate();
@@ -636,11 +665,29 @@ public sealed class PayPalPaymentProvider : IPaymentProvider
     /// <summary>مُهلَةٌ ثانِيَةٌ إلى جانِبِ <c>HttpClient.Timeout</c>:
     /// الأولى تَحرُس النِداءَ، وهذِه تَربِطُه بِرَمزِ الطَلَب فَيَنقَطِع
     /// مَعَه. نَفسُ شَكلِ <c>BrevoEmailChannel</c>.</summary>
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage msg, CancellationToken ct)
+    /// <remarks>‏(‏2026-11-12، W13-6·١٤ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والنِداءُ يَمُرُّ بِالمُستَدعي</b>: <paramref name="send"/> مَعدودٌ (<see cref="Counted"/>)
+    /// أَو مُساعِد (<see cref="Helper"/>)، والمُهلَةُ بِحَرفِها.</remarks>
+    private async Task<HttpResponseMessage> SendAsync(
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send, HttpRequestMessage msg, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(PayPalEnvironment.Timeout(_opts.TimeoutSeconds));
-        return await _http.SendAsync(msg, cts.Token);
+        return await send(msg, cts.Token);
+    }
+
+    /// <summary>النِداءُ المَعدود — مَوسوماً بِاسمِ العُدَّة.</summary>
+    private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Counted(ProviderCall call)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        var stamped = call.By(ProviderNames.PayPal);
+        return (msg, ct) => _http.SendAsync(stamped, msg, ct);
+    }
+
+    /// <summary>النِداءُ المُساعِد بِسَبَبِه مِن القائِمَةِ المُغلَقَة.</summary>
+    private Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Helper(string reason)
+    {
+        var helper = new ProviderHelper(ProviderNames.PayPal, reason);
+        return (msg, ct) => _http.SendHelperAsync(helper, msg, ct);
     }
 
     private static string Json(string s) => JsonSerializer.Serialize(s);

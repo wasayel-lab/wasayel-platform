@@ -1,0 +1,407 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using ACommerce.Kit.Payments;
+using ACommerce.Platform.Providers;
+using ACommerce.Templates.Customer.Marketplace.Services;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
+using ACommerce.Templates.Customer.Marketplace.Services.Providers;
+using Microsoft.Extensions.Logging.Abstractions;
+using Xunit;
+using Xunit.Abstractions;
+using ACommerce.Platform.Shared.Metering;
+using static ACommerce.Platform.Tests.TenantGatewayEndpointsTests;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ إشعارُ الدَفعِ الآليُّ مِن بَوّابَةِ المَتجَر (قَرارُ المالِك د5 (٢) «ج»، ‏2026-10-29) ═══════════════════════════════════════
+//
+// **القَرار**: «إشعار آليّ من ميسر إلى المنصّة عند كل دفع، محميّ بسرّ مشترك يُتحقَّق منه في كل إشعار. ويبقى زرّ «تحقّق» للمشتري احتياطًا».
+// **والشَكلُ مِن الوَثيقَة** (مَقروءاً ‏2026-10-29): «Create Webhook» — ‏`POST /v1/webhooks` بِـ`http_method` و`url` و`shared_secret` و`events`؛ و«Webhook Payload» —
+// `secret_token` «assigned by the consumer» و`type` و`data` (الدَفعُ، وفيه `invoice_id`). **التَوصيف**: `8cff16b` (صِفرُ نُقطَة، وتَعريفٌ بِلا وارِد).
+// والصُفوفُ هُنا بِمُعالِجٍ مُزَيَّفٍ لا بِمِفتاحٍ حَقيقِيّ — والبُرهانُ الحَيُّ «ج» عَلى المالِك (مِفتاحُ اختِبارِ ميسر عَلى متجرِ تجربة).
+
+public class GatewayPaymentNoticeTests(ITestOutputHelper output)
+{
+    /// <summary>‏(‏2026-11-12، W13-6·١٤ — ADR-051 §١٩) النِداءُ الَّذي صارَ أَوَّلَ وُسَطاءِ العَمَلِيَّة (التَصميم §6.3 البَند ٢): العَميلُ هُنا مَبنِيٌّ بِـ<c>HttpClient</c>
+    /// فَمُستَدعيه لا يُسَجِّل، والصُفوفُ تَقيسُ الطَلَبَ والجَواب لا العَدّ (يَقيسُه <c>ProviderCallsTests</c>).</summary>
+    private static readonly ProviderCall Call = ProviderCall.ForChannel(OutboundUnits.PaymentGatewayWebhookCreate, "test-store", "test-request");
+
+    private const string Secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    private static string Payload(string? secret = Secret, string type = MoyasarClient.PaymentPaidEvent, string? invoice = InvoiceId,
+        bool withData = true)
+        => JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["id"] = "evt-1",
+            ["type"] = type,
+            ["created_at"] = "2026-10-29T08:00:00.000Z",
+            ["secret_token"] = secret,
+            ["account_name"] = "store",
+            ["live"] = false,
+            ["data"] = withData ? new Dictionary<string, object?> { ["id"] = "pay-1", ["status"] = "paid", ["invoice_id"] = invoice } : null,
+        });
+
+    // ═══ ١) البَوّابَةُ النَقِيَّة — المُوجِبُ والسالِبُ لِكُلِّ رَمز ═══════════════════════════════════════════════════
+
+    /// <summary><b>المُوجِب</b>: سِرٌّ يُطابِق، وحَدَثُ <c>payment_paid</c>، ودَفعٌ لِفاتورَة — إشعارٌ بِمُعَرِّفِها (بِصيغَةِ <c>D</c> ولو جاءَ بِحُروفٍ كَبيرَة)، و‏200.</summary>
+    [Fact]
+    public void A_paid_notice_with_the_store_secret_is_admitted_with_its_invoice()
+    {
+        var admitted = GatewayNoticeGate.Admit(Secret, Payload(invoice: InvoiceId.ToUpperInvariant()));
+
+        Assert.Null(admitted.Violation);
+        Assert.Equal(InvoiceId, admitted.Notice!.InvoiceId);
+        Assert.Equal("pay-1", admitted.Notice.PaymentId);
+        Assert.True(GatewayNoticeGate.IsValid(Secret, Payload()));
+        Assert.Empty(GatewayNoticeGate.Validate(Secret, Payload()));
+        Assert.Equal(200, GatewayNoticeGate.StatusFor(admitted.Violation?.Code));
+    }
+
+    /// <summary><b>السالِب لِكُلِّ رَمز</b> بِرَدِّه — والتَرتيب: «لا سِرَّ» قَبلَ الجِسم، و«السِرُّ لا يُطابِق» قَبلَ الحَدَثِ والفاتورَة (القاعِدَة ٦): حَدَثٌ آخَرُ بِسِرٍّ
+    /// خاطِئٍ يُجابُ ‏401 لا ‏200.</summary>
+    [Theory]
+    [InlineData("no_secret", GatewayNoticeGate.NoticeUnavailable, 404)]
+    [InlineData("empty_body", GatewayNoticeGate.NoticeUnreadable, 400)]
+    [InlineData("not_json", GatewayNoticeGate.NoticeUnreadable, 400)]
+    [InlineData("array", GatewayNoticeGate.NoticeUnreadable, 400)]
+    [InlineData("no_token", GatewayNoticeGate.SecretMismatch, 401)]
+    [InlineData("wrong_token", GatewayNoticeGate.SecretMismatch, 401)]
+    [InlineData("wrong_token_other_type", GatewayNoticeGate.SecretMismatch, 401)]
+    [InlineData("failed_payment", GatewayNoticeGate.NotPaymentPaid, 200)]
+    [InlineData("no_data", GatewayNoticeGate.InvoiceMissing, 200)]
+    [InlineData("no_invoice", GatewayNoticeGate.InvoiceMissing, 200)]
+    [InlineData("invoice_not_uuid", GatewayNoticeGate.InvoiceMissing, 200)]
+    public void Every_refused_notice_answers_its_code_and_status(string kind, string code, int status)
+    {
+        var (secret, body) = kind switch
+        {
+            "no_secret"              => ((string?)null, Payload()),
+            "empty_body"             => (Secret, " "),
+            "not_json"               => (Secret, "secret_token=" + Secret),
+            "array"                  => (Secret, "[]"),
+            "no_token"               => (Secret, Payload(secret: null)),
+            "wrong_token"            => (Secret, Payload(secret: Secret[..^1] + "0")),
+            "wrong_token_other_type" => (Secret, Payload(secret: "x", type: "payment_failed")),
+            "failed_payment"         => (Secret, Payload(type: "payment_failed")),
+            "no_data"                => (Secret, Payload(withData: false)),
+            "no_invoice"             => (Secret, Payload(invoice: null)),
+            "invoice_not_uuid"       => (Secret, Payload(invoice: "inv_1/../x")),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+        };
+
+        var admitted = GatewayNoticeGate.Admit(secret, body);
+
+        Assert.Null(admitted.Notice);
+        Assert.Equal(code, admitted.Violation!.Code);
+        Assert.Equal(status, GatewayNoticeGate.StatusFor(code));
+        Assert.False(GatewayNoticeGate.IsValid(secret, body));
+        Assert.Contains(code, GatewayNoticeGate.All);
+    }
+
+    [Fact]
+    public void The_notice_lexicon_is_closed_at_five()
+    {
+        Assert.Equal(5, GatewayNoticeGate.All.Count);
+        Assert.Equal(GatewayNoticeGate.All.Count, GatewayNoticeGate.All.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    // ═══ ٢) العَميل — «Create Webhook» بِحُقولِه ═════════════════════════════════════════════════════════════
+
+    /// <summary>‏<c>POST /v1/webhooks</c> بِالحُقولِ الأَربَعَةِ لا غَير وبِـ<c>Basic</c> مِن المِفتاح، والمُعَرِّفُ يَعود؛ ورابِطٌ غَيرُ مُطلَقٍ أَو سِرٌّ أَبيَضُ لا يُرسَل.</summary>
+    [Fact]
+    public async Task Creating_a_webhook_posts_the_documented_fields_and_returns_its_id()
+    {
+        var handler = new MoyasarScriptedHandler().Then(HttpStatusCode.Created, "{\"id\":\"wh-1\",\"http_method\":\"post\",\"url\":\"https://s.example/zz/payments/notify\",\"events\":[\"payment_paid\"]}");
+        var client = new MoyasarClient(new HttpClient(handler), NullLogger<MoyasarClient>.Instance);
+
+        var res = await client.CreateWebhookAsync(Call, Key, "https://s.example/zz/payments/notify", Secret);
+
+        Assert.True(res.Ok, res.Failure?.Code);
+        Assert.Equal("wh-1", res.Value);
+        var sent = Assert.Single(handler.Requests);
+        Assert.Equal((HttpMethod.Post, "https://api.moyasar.com/v1/webhooks"), (sent.Method, sent.RequestUri!.ToString()));
+        Assert.Equal(("Basic", BasicOf(Key)), (sent.Headers.Authorization!.Scheme, sent.Headers.Authorization.Parameter));
+        using var body = JsonDocument.Parse(handler.Bodies[0]!);
+        Assert.Equal(new[] { "http_method", "url", "shared_secret", "events" }, body.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal("post", body.RootElement.GetProperty("http_method").GetString());
+        Assert.Equal(Secret, body.RootElement.GetProperty("shared_secret").GetString());
+        Assert.Equal(new[] { "payment_paid" }, body.RootElement.GetProperty("events").EnumerateArray().Select(e => e.GetString()).ToArray());
+
+        var silent = new MoyasarScriptedHandler();
+        var offline = new MoyasarClient(new HttpClient(silent), NullLogger<MoyasarClient>.Instance);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "/zz/payments/notify", Secret)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "javascript:alert(1)", Secret)).Failure!.Code);
+        Assert.Equal(MoyasarFailures.Invalid, (await offline.CreateWebhookAsync(Call, Key, "https://s.example/x", " ")).Failure!.Code);
+        Assert.Empty(silent.Requests);
+    }
+
+    // ═══ ٣) التَسجيلُ بَعدَ الرَبط — السِرُّ يُختَمُ حينَ تَقبَلُه البَوّابَةُ وَحدَه ═══════════════════════════════════════
+
+    private static TenantProviderBinding Binding(World w) => w.Docs.Read<TenantProviderBinding>(ProviderCapabilities.Payments)!;
+
+    /// <summary><b>المُوجِب</b>: رَبطٌ بِمِفتاح ← سِرٌّ جَديدٌ يُسَجَّلُ بِعُنوانِ الوارِد ← البَوّابَةُ تَقبَل ← السِرُّ مَختومٌ في الرَبطِ بِسِياقِه ومَعَه مُعَرِّفُ التَسجيل،
+    /// والمِفتاحُ كَما كان؛ و<see cref="GatewayPayments.NoticeSecretAsync"/> يُعيدُ السِرَّ الَّذي أُرسِلَ نَفسَه — فَالوارِدُ يُطابِقُه.</summary>
+    [Fact]
+    public async Task Binding_the_key_registers_a_notice_and_seals_the_secret_the_gateway_accepted()
+    {
+        var w = await PaidCart();
+        var keyBefore = Binding(w).Values["secret_key"];
+        w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-1\"}");
+
+        var code = await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example");
+        var sent = JsonDocument.Parse(w.Moyasar.Bodies[0]!).RootElement;
+        var after = Binding(w);
+        output.WriteLine($"الرَمز: {code ?? "—"} · التَسجيل: {after.WebhookId} · المَسار: {w.Moyasar.Requests[0].RequestUri!.AbsolutePath} · الحُقول: {string.Join(", ", after.Values.Keys)}");
+
+        Assert.Null(code);
+        Assert.Equal("https://store.example/zz-gateway/payments/notify", sent.GetProperty("url").GetString());
+        Assert.Equal(("wh-1", (string?)null), (after.WebhookId, after.WebhookRefusal));
+        Assert.Equal(keyBefore.Cipher, after.Values["secret_key"].Cipher);
+        Assert.True(after.Values["webhook_secret"].IsSealed);
+        Assert.Equal(sent.GetProperty("shared_secret").GetString(), await w.Gateway.NoticeSecretAsync(Slug));
+        Assert.Equal(64, sent.GetProperty("shared_secret").GetString()!.Length);
+        Assert.True(GatewayNoticeGate.IsValid(await w.Gateway.NoticeSecretAsync(Slug), Payload(secret: sent.GetProperty("shared_secret").GetString())));
+    }
+
+    /// <summary><b>السالِب</b>: البَوّابَةُ تَرُدُّ التَسجيلَ (‏401) — رَمزُ فَشَلِها في الرَبطِ ولا سِرّ، والمِفتاحُ مَربوطٌ كَما هُوَ فَزِرُّ «تَحَقَّق» احتِياطٌ؛ ومَتجَرٌ بِلا رَبطٍ
+    /// لا نِداءَ لَه؛ وتَعريفٌ بِلا وارِدٍ لا يُسأَلُ عَنه.</summary>
+    [Fact]
+    public async Task A_refused_registration_keeps_the_key_records_the_code_and_issues_no_secret()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.Unauthorized, "{\"type\":\"authentication_error\",\"message\":\"Invalid authorization credentials\"}");
+
+        var code = await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example");
+
+        Assert.Equal(MoyasarFailures.Refused, code);
+        var after = Binding(w);
+        Assert.Equal((null, MoyasarFailures.Refused), (after.WebhookId, after.WebhookRefusal));
+        Assert.False(after.Values.ContainsKey("webhook_secret"));
+        Assert.True(after.IsActive);
+        Assert.Null(await w.Gateway.NoticeSecretAsync(Slug));
+
+        var unbound = await PaidCart(binding: _ => null);
+        Assert.Null(await unbound.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
+        Assert.Empty(unbound.Moyasar.Requests);
+        Assert.Null(await unbound.Gateway.NoticeSecretAsync(Slug));
+    }
+
+    /// <summary>
+    /// <para><b>رَبطُ قُدرَةٍ غَيرِ الدَفعِ لا يَمَسُّ إشعارَ الدَفع</b> (مُراجَعَةُ تَيّارِ S3 الأولى، ‏2026-10-29؛ <b>قُلِبَ بِاسمِه</b> — كانَ
+    /// <c>Today_connecting_notices_after_a_bind_of_another_capability_re_registers_and_reseals_the_payments_secret</c> (<c>a1200e2</c>): نِداءٌ ثانٍ يُسَجِّلُ wh-2 بِسِرٍّ
+    /// جَديد، ورَدُّ البَوّابَةِ يُسقِطُ السِرَّ العامِل). بابُ الرَبطِ يُمَرِّرُ القُدرَةَ الَّتي كَتَب، فَلِكُلِّ قُدرَةٍ سِوى الدَفعِ — مَعدودَةً مِن المَعجَمِ لا مَكتوبَةً بِاليَد —
+    /// <b>صِفرُ نِداءٍ إلى ميسّر والرَبطُ بايتاً بِبايت</b> (السِرُّ والمِفتاحُ المَختومانِ ومُعَرِّفُ التَسجيل). وإعادَةُ رَبطِ الدَفعِ نَفسِه تُسَجِّلُ كَما كانَت.</para>
+    /// </summary>
+    [Fact]
+    public async Task Connecting_notices_after_a_bind_of_another_capability_calls_nothing_and_keeps_the_payments_secret_byte_identical()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-1\"}");
+        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
+        static string Print(TenantProviderBinding b) => string.Join("|", b.Values.OrderBy(v => v.Key, StringComparer.Ordinal)
+            .Select(v => $"{v.Key}={v.Value.Kind}:{v.Value.Plain}:{v.Value.Nonce}:{v.Value.Cipher}:{v.Value.Tag}:{v.Value.Aad}:{v.Value.KekVersion}"))
+            + $"#{b.WebhookId}#{b.WebhookRefusal}#{b.Status}";
+        var before = Print(Binding(w));
+
+        var others = ProviderCapabilities.All.Where(c => c != ProviderCapabilities.Payments).Append("Payments").Append("").ToArray();
+        var counted = 0;
+        foreach (var capability in others)
+        {
+            Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, capability, "https://store.example"));
+            counted++;
+        }
+        output.WriteLine($"قُدُراتٌ مَفحوصَة: {counted} · نِداءاتُ ميسّر بَعدَ التَسجيلِ الأَوَّل: {w.Moyasar.Requests.Count - 1}");
+        Assert.True(counted >= ProviderCapabilities.All.Count - 1 && counted > 0, $"أَداةٌ عَمياء: {counted} قُدرَة.");
+        Assert.Single(w.Moyasar.Requests);
+        Assert.Equal(before, Print(Binding(w)));
+        Assert.Equal("wh-1", Binding(w).WebhookId);
+        Assert.NotNull(await w.Gateway.NoticeSecretAsync(Slug));
+
+        // وإعادَةُ رَبطِ مِفتاحِ الدَفعِ نَفسِه تُسَجِّلُ إشعاراً جَديداً كَما قالَ القَرار.
+        w.Moyasar.Then(HttpStatusCode.Created, "{\"id\":\"wh-2\"}");
+        Assert.Null(await w.Gateway.ConnectNoticesAsync(Slug, ProviderCapabilities.Payments, "https://store.example"));
+        Assert.Equal(2, w.Moyasar.Requests.Count);
+        Assert.Equal("wh-2", Binding(w).WebhookId);
+        Assert.NotEqual(before, Print(Binding(w)));
+
+        var template = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot,
+            "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "MarketplaceTemplateExtensions.cs")));
+        var bindAt = template.IndexOf("app.MapPost(\"/studio/apps/{slug}/providers/bind\"", StringComparison.Ordinal);
+        var bind = template[bindAt..template.IndexOf(".DisableAntiforgery();", bindAt, StringComparison.Ordinal)];
+        // ‏(‏2026-11-07، W13-4·C2b·3 — G14) الأَصلُ الَّذي يُسَجَّلُ عِندَ البَوّابَةِ أَصلُ المَنَصَّةِ مَتى هُيِّئَ النِطاق (`StoreUrl.PlatformOrigin`)، وأَصلُ الطَلَبِ بِدونِه.
+        Assert.Contains("gateway.ConnectNoticesAsync(slug, read.Capability, Services.Ux.StoreUrl.PlatformOrigin(req))", bind, StringComparison.Ordinal);
+    }
+
+    // ═══ ٤) الإشعارُ المَقبولُ يُثبَتُ بِالفاتورَةِ المَجلوبَة ═══════════════════════════════════════════════════════
+
+    private static GatewayPaymentNotice Notice(string invoice = InvoiceId)
+        => GatewayNoticeGate.Admit(Secret, Payload(invoice: invoice)).Notice!;
+
+    /// <summary><b>المُوجِب</b>: فاتورَةٌ «paid» تُسَمّي الصَفقَتَين اللَّتَينِ عَلَيهِما مَرجِعُها — يُكتَبُ الدَفعُ عَلى كِلَيهِما بِالكاتِبِ القائِم، ويُعادانِ لِيُخبَرَ بائِعوهُما؛
+    /// والإشعارُ الثاني لا يَكتُبُ شَيئاً. <b>ولا سُلطَةَ دافِع</b>: لا مُشتَريَ في الطَلَب.</summary>
+    [Fact]
+    public async Task An_admitted_notice_for_a_paid_invoice_records_the_payment_once_on_every_deal()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w)).Then(HttpStatusCode.OK, PaidInvoice(w));
+
+        var first = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        var again = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        output.WriteLine($"الأَوَّل: ok={first.Ok} كُتِب={first.Confirmed.Count} · الثاني: ok={again.Ok} كُتِب={again.Confirmed.Count}");
+
+        Assert.True(first.Ok, first.Code);
+        Assert.Equal(w.Ids.OrderBy(i => i), first.Confirmed.OrderBy(i => i));
+        Assert.All(w.Ids, id => Assert.True(GatewayReturn.IsConfirmed(w.Docs.Read<Deal>(id.ToString())!)));
+        Assert.True(again.Ok);
+        Assert.Empty(again.Confirmed);
+        Assert.Equal((HttpMethod.Get, $"/v1/invoices/{InvoiceId}"), (w.Moyasar.Requests[0].Method, w.Moyasar.Requests[0].RequestUri!.AbsolutePath));
+        Assert.Empty(w.Platform.Calls);
+    }
+
+    /// <summary><b>السالِب</b>: فاتورَةٌ لَم تُدفَع ⇒ «لَم يُدفَع» وصِفرُ كِتابَة؛ وفاتورَةٌ تُسَمّي صَفَقاتٍ لا تَحمِلُ مَرجِعَها (فاتورَةُ غَيرِنا) ⇒ لا تَعبُرُ البَوّابَة؛
+    /// ولا مِفتاح ⇒ لا جَلب.</summary>
+    [Fact]
+    public async Task A_notice_is_not_proof_an_unpaid_or_foreign_invoice_writes_nothing()
+    {
+        var unpaid = await PaidCart();
+        unpaid.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(unpaid, "initiated"));
+        var saves = unpaid.Docs.SaveCalls;
+        var res = await unpaid.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        Assert.Equal(GatewayPaymentProof.InvoiceUnpaid, res.Code);
+        Assert.Equal(saves, unpaid.Docs.SaveCalls);
+
+        var foreign = await PaidCart(invoice: false);
+        foreign.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(foreign));
+        var refused = await foreign.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        Assert.False(refused.Ok);
+        Assert.Equal(GatewayPaymentProof.InvoiceMismatch, refused.Code);
+        Assert.All(foreign.Ids, id => Assert.False(GatewayReturn.IsConfirmed(foreign.Docs.Read<Deal>(id.ToString())!)));
+
+        var keyless = await PaidCart(binding: _ => null);
+        Assert.Equal(MoyasarFailures.NotConfigured, (await keyless.Gateway.ConfirmNoticeAsync(Slug, Notice())).Code);
+        Assert.Empty(keyless.Moyasar.Requests);
+    }
+
+    // ═══ ٤‑أ) ما يَرُدُّه الوارِدُ حينَ لَم يُثبَت الدَفع (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1) ═════════════════════════════
+
+    /// <summary>
+    /// <para><b>قُلِبَ بِاسمِه</b> (‏2026-10-30، تَدقيقُ الموجَة ١١ C-PAY-1؛ تَوصيفُه <c>2948fd9</c> — كانَ
+    /// <c>Today_a_notice_whose_payment_could_not_be_confirmed_answers_200_so_the_gateway_never_retries</c>: صِفرُ كِتابَةٍ والرَدّ ‏200، و‏429 يَقَعُ في <c>gateway_refused</c>):
+    /// إشعارٌ مَقبولٌ بِسِرِّه ثُمَّ تَعَذَّرَ إثباتُ الدَفعِ لِسَبَبٍ عابِر — البَوّابَةُ لا تُجيب (‏5xx أَو انقِطاع)، أَو ‏429 «Too Many Requests» (وَثيقَةُ الأَخطاء)
+    /// ورَمزُه صارَ <see cref="MoyasarFailures.RateLimited"/>، أَو جَوابٌ لا يُقرَأ، أَو المِفتاحُ لا يُفَكُّ الآن، أَو الفاتورَةُ ما زالَت «initiated»: <b>لا يُكتَبُ شَيء،
+    /// ويُجيبُ الوارِدُ ‏503</b> فَتُعيدُه البَوّابَة — والنُقطَةُ تَحسُبُ الرَدَّ مِن النَتيجَتَين (<see cref="GatewayNoticeGate.StatusFor(string?, string?)"/>).</para>
+    /// </summary>
+    [Theory]
+    [InlineData("server_error", MoyasarFailures.Unreachable)]
+    [InlineData("dropped", MoyasarFailures.Unreachable)]
+    [InlineData("rate_limited", MoyasarFailures.RateLimited)]
+    [InlineData("unreadable", MoyasarFailures.Unreadable)]
+    [InlineData("keyless", MoyasarFailures.NotConfigured)]
+    [InlineData("status_lags", GatewayPaymentProof.InvoiceUnpaid)]
+    public async Task A_notice_whose_payment_could_not_be_confirmed_answers_503_so_the_gateway_retries(string kind, string code)
+    {
+        var w = await PaidCart(binding: kind == "keyless" ? _ => null : null);
+        switch (kind)
+        {
+            case "server_error": w.Moyasar.Then(HttpStatusCode.ServiceUnavailable, ""); break;
+            case "dropped": w.Moyasar.ThenThrow(); break;
+            case "rate_limited": w.Moyasar.Then((HttpStatusCode)429, "{\"type\":\"rate_limit_error\",\"message\":\"Too Many Requests\"}"); break;
+            case "unreadable": w.Moyasar.Then(HttpStatusCode.OK, "{}"); break;
+            case "status_lags": w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")); break;
+        }
+        var saves = w.Docs.SaveCalls;
+        var admitted = GatewayNoticeGate.Admit(Secret, Payload());
+
+        var res = await w.Gateway.ConfirmNoticeAsync(Slug, admitted.Notice!);
+        var status = GatewayNoticeGate.StatusFor(admitted.Violation?.Code, res.Code);
+        output.WriteLine($"{kind}: الرَمز={res.Code} · كُتِب={w.Docs.SaveCalls - saves} · الرَدّ={status}");
+
+        Assert.Equal(code, res.Code);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+        Assert.Equal(503, status);
+        var endpoint = WriteEndpointGuardTests.StripComments(File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates",
+            "ACommerce.Templates.Customer.Marketplace", "Billing", "TenantGatewayEndpoints.cs")));
+        Assert.Contains("return Results.StatusCode(Services.Deals.GatewayNoticeGate.StatusFor(admitted.Violation?.Code, res?.Code));", endpoint, StringComparison.Ordinal);
+    }
+
+    /// <summary><b>والإعادَةُ آمِنَة</b> (‏2026-10-30، C-PAY-1): الإشعارُ الأَوَّلُ يَرى «initiated» فَيُجابُ ‏503 بِصِفرِ كِتابَة، وإعادَتُهُ تَرى «paid» فَيُكتَبُ الدَفعُ
+    /// عَلى الصَفقَتَينِ مَرَّةً ويُجابُ ‏200، والإعادَةُ الثالِثَةُ صِفرُ كِتابَةٍ و‏200 — <c>ConfirmGatewayPaymentAsync</c> لا يَكتُبُ عَلى ما قُبِض.</summary>
+    [Fact]
+    public async Task A_retried_notice_records_the_payment_once_and_then_answers_200()
+    {
+        var w = await PaidCart();
+        w.Moyasar.Then(HttpStatusCode.OK, PaidInvoice(w, "initiated")).Then(HttpStatusCode.OK, PaidInvoice(w)).Then(HttpStatusCode.OK, PaidInvoice(w));
+
+        var first = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        var retried = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        var saves = w.Docs.SaveCalls;
+        var again = await w.Gateway.ConfirmNoticeAsync(Slug, Notice());
+        output.WriteLine($"الأَوَّل: {GatewayNoticeGate.StatusFor(null, first.Code)} · المُعاد: {GatewayNoticeGate.StatusFor(null, retried.Code)} كُتِب={retried.Confirmed.Count} · الثالِث: {GatewayNoticeGate.StatusFor(null, again.Code)} كُتِب={again.Confirmed.Count}");
+
+        Assert.Equal(503, GatewayNoticeGate.StatusFor(null, first.Code));
+        Assert.Equal(200, GatewayNoticeGate.StatusFor(null, retried.Code));
+        Assert.Equal(w.Ids.OrderBy(i => i), retried.Confirmed.OrderBy(i => i));
+        Assert.Equal(200, GatewayNoticeGate.StatusFor(null, again.Code));
+        Assert.Empty(again.Confirmed);
+        Assert.Equal(saves, w.Docs.SaveCalls);
+    }
+
+    /// <summary><b>صَفٌّ لِكُلِّ رَمز</b> (‏2026-10-30، C-PAY-1): رَمزُ البَوّابَةِ يَحكُمُ قَبلَ التَأكيد؛ والمَقبولُ ‏503 لِلعابِرِ وَحدَه و‏200 لِما ثَبَتَ ولِما لَيسَ لَنا —
+    /// وكُلُّ رَمزٍ في مَعجَمَي التَأكيدِ (فَشَلُ العَميلِ وبَوّابَةُ البُرهان) لَه صَفُّه هُنا، والعَدّادُ يُطبَع.</summary>
+    [Theory]
+    [InlineData(null, null, 200)]
+    [InlineData(null, MoyasarFailures.Unreachable, 503)]
+    [InlineData(null, MoyasarFailures.Unreadable, 503)]
+    [InlineData(null, MoyasarFailures.NotConfigured, 503)]
+    [InlineData(null, MoyasarFailures.RateLimited, 503)]
+    [InlineData(null, GatewayPaymentProof.InvoiceUnpaid, 503)]
+    [InlineData(null, MoyasarFailures.Refused, 200)]
+    [InlineData(null, MoyasarFailures.Invalid, 200)]
+    [InlineData(null, GatewayPaymentProof.InvoiceClosed, 200)]
+    [InlineData(null, GatewayPaymentProof.CurrencyMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.AmountMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.DealsMismatch, 200)]
+    [InlineData(null, GatewayPaymentProof.InvoiceMismatch, 200)]
+    [InlineData(GatewayNoticeGate.NoticeUnavailable, null, 404)]
+    [InlineData(GatewayNoticeGate.NoticeUnreadable, null, 400)]
+    [InlineData(GatewayNoticeGate.SecretMismatch, null, 401)]
+    [InlineData(GatewayNoticeGate.NotPaymentPaid, null, 200)]
+    [InlineData(GatewayNoticeGate.InvoiceMissing, null, 200)]
+    public void The_notice_status_is_a_pure_function_of_the_gate_and_the_confirm(string? gate, string? confirm, int status)
+        => Assert.Equal(status, GatewayNoticeGate.StatusFor(gate, confirm));
+
+    [Fact]
+    public void Every_confirm_code_has_its_status_row()
+    {
+        var rows = typeof(GatewayPaymentNoticeTests).GetMethod(nameof(The_notice_status_is_a_pure_function_of_the_gate_and_the_confirm))!
+            .GetCustomAttributes(typeof(InlineDataAttribute), false).Cast<InlineDataAttribute>()
+            .Select(a => a.GetData(null!).Single()[1] as string).Where(c => c is not null).ToHashSet();
+        var codes = MoyasarFailures.All.Concat(GatewayPaymentProof.Codes).ToArray();
+        output.WriteLine($"رُموزُ التَأكيد: {codes.Length} · صُفوفُها: {rows.Count} · تُعاد: {GatewayNoticeGate.RetriedConfirmCodes.Count}");
+        Assert.True(codes.Length >= 12, $"أَداةٌ عَمياء: {codes.Length} رَمزاً.");
+        Assert.All(codes, c => Assert.Contains(c, rows));
+        Assert.All(GatewayNoticeGate.RetriedConfirmCodes, c => Assert.Contains(c, codes));
+    }
+
+    // ═══ ٥) الحَقلُ الَّذي نُصدِرُه لا يَملَؤُه صاحِبُ المَتجَر ═══════════════════════════════════════════════════
+
+    /// <summary>دالَّةٌ واحِدَةٌ لِلصَفحَةِ وللقارِئ: <c>issued_secret</c> لا يُرسَمُ ولا يُقرَأُ مِن النَموذَج — فَقيمَةٌ يَدُسُّها طالِبٌ في الحَقلِ لا تُكتَب؛ والمِفتاحُ يُقرَأُ كَما كان.</summary>
+    [Fact]
+    public void The_issued_notice_secret_is_neither_rendered_nor_read_from_the_bind_form()
+    {
+        var def = SealedKeyDefinition();
+        var issued = Assert.Single(def.Credential.Fields, f => f.Kind == CredentialKinds.IssuedSecret);
+        Assert.False(ProviderBindSurface.IsFilledByOwner(issued));
+        Assert.True(ProviderBindSurface.IsFilledByOwner(Assert.Single(def.Credential.Fields, f => f.Kind == CredentialKinds.SecretKey)));
+
+        var read = ProviderBindSurface.FromForm(def.Slug, code => code == issued.Code ? "planted-secret" : Key, Slug, NewVault());
+        Assert.Null(read.RefusalCode);
+        Assert.False(read.Values.ContainsKey(issued.Code));
+        Assert.True(read.Values.ContainsKey("secret_key"));
+
+        var razor = File.ReadAllText(Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "libs", "templates", "ACommerce.Templates.Customer.Marketplace",
+            "Components", "Pages", "StudioProviders.razor"));
+        Assert.Contains("@foreach (var f in def.Credential.Fields.Where(Services.Providers.ProviderBindSurface.IsFilledByOwner))", razor, StringComparison.Ordinal);
+    }
+}

@@ -46,5 +46,6 @@
     "publicProfile": "vendorProfile",
     "extras": []
   },
-  "dealPatternAffinity": null
+  "dealPatternAffinity": null,
+  "meter": "presence.role"
 }

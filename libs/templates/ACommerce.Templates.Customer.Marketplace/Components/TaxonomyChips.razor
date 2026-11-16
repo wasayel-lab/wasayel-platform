@@ -26,7 +26,7 @@
     // الشَجَرَة فَقَط لَو في تَنَوُّع حَقيقي (Kinds مُتَعَدِّدَة). تَطبيق
     // بِـ Kind واحِد أَو كُلّه بِلا Kind ⇒ شَبَكَة مُسَطَّحَة.
     var hasTree = byKind.Count > 1;
-    var exploreUrl = $"/{Slug}/explore";
+    var exploreUrl = AuthSession.LinkFor(Slug, null, "explore");
 }
 
 @if (!hasTree)

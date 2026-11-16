@@ -4,6 +4,7 @@
 @inject ACommerce.Templates.Customer.Marketplace.Services.TenantRoleService Roles
 @inject L L
 @using ACommerce.Kit.Roles
+@using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig
 
 @*
     مُحَرِّر الأَدوار — قائِمَة checklist مِن RoleCatalog. مُصَمِّم المَتجَر
@@ -20,7 +21,8 @@
     }
     else
     {
-        var backHref = From == "tenant" ? $"/{Slug}/r/admin/manage" : $"/admin/tenants/{Slug}";
+        // ‏(‏2026-10-25، تَدقيقُ الإطلاق W8-3 — `lens-dead-doors-6`) كانَ `/{Slug}/r/admin/manage`: لا دَورَ «admin» في كاتالوج، والمَسارُ بِدَورٍ يَقرَأُ كوكي ذلِكَ الدَورِ وَحدَه — فَيَرى المُديرَ مَجهولاً. والمَسارُ بِلا دَورٍ يَقرَأُ أَيَّ جَلسَةٍ لِلمَتجَر (`AuthSession.ResolveCookieBase`).
+        var backHref = From == "tenant" ? AuthSession.LinkFor(Slug, null, "manage") : $"/admin/tenants/{Slug}";
         <div class="acm-admin-head">
             <div style="display:flex;align-items:center;gap:8px;">
                 <a class="ac-btn ac-btn-ghost ac-btn-sm" href="@backHref">
@@ -80,6 +82,9 @@
                             </label>
                         }
                     </div>
+
+                    @* ‏2026-10-25 (تَدقيقُ الإطلاق، تَيّارُ W8-3 — brief-P0-7؛ ‏ADR-032 §٦‑د): نَفسُ سَطرِ صَفحَةِ الاستوديو — الحِفظُ الفارِغُ وَضعٌ مَوروث. *@
+                    <AcAlert Variant="warning" Message="@L["roles.save.empty_warning"]" />
 
                     <div style="display:flex;gap:8px;margin-top:16px;">
                         <a class="ac-btn ac-btn-ghost" href="@($"/admin/tenants/{Slug}")">@L.Markup("admin.tenant_roles.cancel")</a>
@@ -203,8 +208,11 @@
         definitions = await Roles.ListAllAsync(Slug);
     }
 
-    static string FormatError(string err) => err switch
+    // ‏(‏2026-10-28، قَرارُ المالِك د62) رَمزُ الحِفظِ الفارِغِ بِنَصِّه مِن القامُوس — والباقي كَما كان.
+    string FormatError(string err) => err switch
     {
+        TenantConfigCodes.RolesEmptySelection => L["roles.save.err_empty_selection"],
+        TenantConfigCodes.RoleHostTaken => L["roles.save.err_role_host_taken"],
         _ => err
     };
 }

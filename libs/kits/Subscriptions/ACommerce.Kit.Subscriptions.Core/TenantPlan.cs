@@ -111,7 +111,10 @@ public sealed class TenantPlan
 
     /// <summary>مُعَرِّفُ الاشتِراكِ في PayPal — يُملَأُ مِن أَوَّلِ
     /// رِسالَةٍ مُوَثَّقَة، ولِلتَدقيقِ ولِإلغاءٍ يَدَوِيٍّ مِن
-    /// اللَوحَة.</summary>
+    /// اللَوحَة.
+    /// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-1) والرِسالَةُ المُوَثَّقَةُ وَحدَها تَكتُبُه</b>: كانَ إنشاءُ رابِطِ مُوافَقَةٍ يَكتُبُ فَوقَه
+    /// اشتِراكاً لَم يُوافَق عَلَيه بَعد، فَيَضيعُ المَرجِعُ الوَحيدُ لِاشتِراكٍ يَخصِم. ومَعَ <see cref="RenewalCancelledAt"/> الفارِغِ هُوَ
+    /// «اشتِراكٌ قائِم» (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) يُمسِكُ تَغييرَ التَرتيبِ ويَرُدُّ رَسائِلَ غَيرِه.</para></summary>
     public string? PayPalSubscriptionId { get; set; }
 
     /// <summary>رابِطُ المُوافَقَةِ كَما أَعادَتهُ PayPal عِندَ
@@ -122,6 +125,14 @@ public sealed class TenantPlan
     public string? PayPalApproveUrl { get; set; }
 
     /// <summary>
+    /// <para><b>خُطَّةُ PayPal الَّتي صُنِعَ مِنها <see cref="PayPalApproveUrl"/></b> (‏2026-11-05، الموجَة ١٢ G4 · E-6) — يَكتُبُه
+    /// <c>SaveApproveLink</c> بِما حَلَّه <see cref="PlatformPlanPayPalBinding.Resolve"/> لَحظَتَها. والرِباطُ مِفتاحُه سلاجُ الباقَة، فَخُطَّةٌ
+    /// تُنشَأُ مِن صَفحَةِ أَيِّ مَتجَرٍ تُعيدُ تَسعيرَ كُلِّ مَتجَرٍ عَلى الباقَة: الرابِطُ يُحمَلُ ما دامَ هذا المُعَرِّفُ هُوَ ما يُحَلُّ اليَوم، ويُسقَطُ
+    /// عِندَ إنشاءِ خُطَّةٍ غَيرِه. و<c>null</c> لِرابِطٍ كُتِبَ قَبلَه.</para>
+    /// </summary>
+    public string? PayPalApprovePlanId { get; set; }
+
+    /// <summary>
     /// <para>مَتى وَصَلَت رِسالَةُ إلغاءٍ أَو تَعليقٍ مِن PayPal.</para>
     ///
     /// <para><b>ولا تُطفِئ مَتجَراً</b>: الحالَةُ تَبقى مُشتَقَّةً مِن
@@ -130,8 +141,23 @@ public sealed class TenantPlan
     /// «لَن يُجَدَّد تِلقائِيّاً» — لا مِفتاحُ إغلاق. وإطفاءُ مَتجَرٍ
     /// دَفَعَ ثَمَنَ شَهرِه لِأَنَّه أَلغى التَجديدَ في يَومِه الثاني
     /// مُصادَرَةٌ لا سِياسَة.</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1) ومَعَ مُعَرِّفٍ مَحفوظٍ هِيَ إلغاءُ PayPal لَه</b> — يَقرَؤُها
+    /// <see cref="TenantPlanPolicy.HoldsLiveSubscription"/> — فَلا يَمحوها إلّا اشتِراكٌ يُجَدِّد (<c>PayPalBillingPolicy.RenewsSubscription</c>): مالٌ مِن طَلَبٍ
+    /// مَرَّةً أَو مِن Paddle أَو دَفعَةٌ مُتَأَخِّرَةٌ لِلمُلغى لا يُعيدُ تَجديداً تِلقائِيّاً.</para>
     /// </summary>
     public DateTime? RenewalCancelledAt { get; set; }
+
+    /// <summary>
+    /// <para><b>مَتى عَلَّقَت PayPal الاشتِراكَ المَحفوظ — ولِماذا تَوَقَّفَ التَجديدُ إن كانَ تَعليقاً لا إلغاءً</b> (‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2).
+    /// يَكتُبُه <c>BILLING.SUBSCRIPTION.SUSPENDED</c> مَعَ <see cref="RenewalCancelledAt"/> ما دامَ الاشتِراكُ قائِماً، ويَمحوهُ الإلغاءُ والتَمديد.
+    /// <b>‏(‏2026-11-05، G4R2-1) والتَمديدُ تَمديدُ اشتِراكٍ يُجَدِّد</b> (<c>PayPalBillingPolicy.RenewsSubscription</c>) لا طَلَبُ دَفعٍ ولا مُعامَلَةُ Paddle،
+    /// والإلغاءُ إلغاءُ PayPal لا Paddle.</para>
+    ///
+    /// <para><b>ولِماذا حَقلٌ</b>: المُعَلَّقُ يُعيدُه التاجِرُ مِن لَوحَةِ PayPal فَيُخصَمُ المُتَأَخِّرُ بِسِعرِ خُطَّتِه (<c>auto_bill_outstanding</c>)، فَهُوَ
+    /// <b>قائِمٌ</b> يُمسِكُ التَرتيبَ (<see cref="TenantPlanPolicy.HoldsLiveSubscription"/>) — وكانَ يُكتَبُ كَالإلغاءِ فَيَنفَكُّ الإمساك. و<c>null</c> لِما سِواه.</para>
+    /// </summary>
+    public DateTime? PayPalSuspendedAt { get; set; }
 }
 
 // ═══ مَرَّة-واحِدَة لِرِسائِل PayPal ═════════════════════════════════
@@ -198,6 +224,10 @@ public static class TenantPlanPolicy
     public const string GraceNegative = "tenant_plan_grace_negative";
     public const string PriceNegative = "tenant_plan_price_negative";
 
+    /// <summary><b>اشتِراكُ PayPal قائِمٌ والحِفظُ يُغَيِّرُ التَرتيب</b> (‏2026-11-05، الموجَة ١٢ G4 · E-1) — يَرُدُّه
+    /// <see cref="ValidateChange"/>، ونُقطَةُ رابِطِ المُوافَقَةِ تَرُدُّ بِه طَلَبَ رابِطٍ جَديد.</summary>
+    public const string PayPalSubscriptionLive = "tenant_plan_paypal_subscription_live";
+
     /// <summary>سَقفٌ مُعلَنٌ لِمُهلَة السَماح — ثَلاثَةُ أَشهُر. ما
     /// فَوقَه خَطَأُ إدخالٍ لا سِياسَة.</summary>
     public const int MaxGraceDays = 90;
@@ -235,6 +265,72 @@ public static class TenantPlanPolicy
     }
 
     public static bool IsValid(TenantPlan plan) => Validate(plan).Count == 0;
+
+    // ─── اشتِراكُ PayPal القائِم يُمسِكُ التَرتيب ───────────────────────
+
+    /// <summary>
+    /// <para><b>أَعَلى الباقَةِ اشتِراكُ PayPal قائِم؟</b> مُعَرِّفٌ مَحفوظٌ — ولا تَكتُبُه إلّا رِسالَةٌ مُوَثَّقَة — ولا رِسالَةَ إلغاءٍ
+    /// أَو تَعليقٍ بَعدَه (<see cref="TenantPlan.RenewalCancelledAt"/> فارِغ). (‏2026-11-05، الموجَة ١٢ G4 · E-1)</para>
+    ///
+    /// <para><b>ولِماذا يُمسِكُ</b>: الاشتِراكُ يَخصِمُ سِعرَ خُطَّتِه عِندَ PayPal ويُمَدِّدُ الباقَةَ بِطولِ مُدَّتِها المَحفوظَة، فَتَغييرُ الباقَةِ
+    /// أَو السِعرِ أَو التاريخَينِ مِن هُنا لا يَبلُغُه — يَبقى يَخصِمُ القَديمَ ويُمَدِّدُ الجَديد، ورابِطٌ ثانٍ يُخصَمُ مَعَه. والتَصميمُ
+    /// المَكتوبُ أَن يُلغِيَه المُشرِفُ مِن لَوحَةِ PayPal (لا نِداءَ إلغاءٍ لَم يُثبَت)، فَإن وَصَلَت رِسالَةُ إلغائِه انفَكَّ الإمساك.</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-2؛ تَوصيفُه <c>7dce2aa</c>) والمُعَلَّقُ قائِمٌ</b>: تَعليقٌ (<see cref="TenantPlan.PayPalSuspendedAt"/>)
+    /// يَبقى يُمسِك، لِأَنّ إعادَةَ تَفعيلِه مِن لَوحَةِ PayPal تَخصِمُ المُتَأَخِّرَ بِسِعرِ خُطَّتِه وتُمَدِّدُ الباقَةَ بِطولِ مُدَّتِها — وكانَ يَفُكُّه كَالإلغاءِ فَيَعودُ
+    /// E-1 مِن طَريقِه. فَالإلغاءُ وَحدَه يَفُكّ.</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ٢ · G4R2-1؛ تَوصيفُه <c>d356a3f</c>) والإمساكُ لِلمَحفوظِ وَحدَه</b>: العَلامَتانِ لا يَمحوهُما إلّا اشتِراكٌ
+    /// يُجَدِّد (<c>PayPalBillingPolicy.RenewsSubscription</c>: رِسالَةُ اشتِراكٍ غَيرِ المَحفوظ، أَو المَحفوظُ ما دامَ قائِماً)، ولا يَكتُبُهُما عَلى قائِمٍ إيقافٌ
+    /// لا يُسَمّي اشتِراكاً (إلغاءُ Paddle). وكانَ كُلُّ تَمديدٍ — طَلَبُ دَفعٍ مَرَّةً، مُعامَلَةُ Paddle، دَفعَةُ المُلغى المُتَأَخِّرَة — يَمحوهُما فَيَعودُ قائِماً
+    /// اشتِراكٌ أَلغَته PayPal ولا تَعودُ رِسالَةُ إلغائِه. <b>ولا حَقلَ ثالِثٌ لِلإلغاء</b>: هذِه القِراءَةُ هِيَ ما كَتَبَته كُلُّ وَثيقَةٍ حَتّى اليَومِ وما يُثَبِّتُه
+    /// <c>TenantPlanSetCharacterizationTests</c>، وحَقلٌ جَديدٌ فارِغٌ عَلَيها كُلِّها.</para>
+    /// </summary>
+    public static bool HoldsLiveSubscription(TenantPlan? plan)
+        => plan is not null
+           && !string.IsNullOrWhiteSpace(plan.PayPalSubscriptionId)
+           && (plan.RenewalCancelledAt is null || plan.PayPalSuspendedAt is not null);
+
+    /// <summary>
+    /// <para><b>أَيُقبَلُ الانتِقالُ مِن المَحفوظِ إلى المُعَيَّن؟</b> القائِمَةُ الفارِغَةُ تَعني نَعَم، وخَرقُها الوَحيدُ
+    /// <see cref="PayPalSubscriptionLive"/>: اشتِراكٌ قائِمٌ (<see cref="HoldsLiveSubscription"/>) والباقَةُ أَو السِعرُ أَو أَحَدُ التاريخَينِ
+    /// يَتَغَيَّر. وما سِواها (أَيّامُ السَماح، وإعادَةُ مَوقوفَةٍ إلى السَرَيان) لا يَمَسُّ ما يَخصِمُه PayPal فَيُقبَل. (‏2026-11-05، E-1)</para>
+    ///
+    /// <para><b>‏(‏2026-11-05، مُراجَعَةُ G4 الجَولَة ١ · G4R1-1؛ تَوصيفُه <c>3a9a358</c>) والتاريخانِ يُقارَنانِ يَوماً بِيَوم</b> (<see cref="FormDay"/>) — بِالدِقَّةِ
+    /// الَّتي تَحمِلُها الاستِمارَة: كانا يُقارَنانِ لَحظَةً بِلَحظَة، وتَمديدُ PayPal يَكتُبُ <c>next_billing_time</c> بِساعَتِه (10:00Z) والاستِمارَةُ تُعيدُه آخِرَ
+    /// اليَومِ بِتَوقيتِ المَنَصَّة، فَكانَ حِفظُ أَيّامِ السَماحِ وَحدَها يُرَدُّ ما دامَ الاشتِراك.</para>
+    /// </summary>
+    public static IReadOnlyList<TenantPlanViolation> ValidateChange(TenantPlan? stored, TenantPlan next)
+    {
+        if (!HoldsLiveSubscription(stored)) return Array.Empty<TenantPlanViolation>();
+
+        var changes = !string.Equals(stored!.PlanId, next.PlanId, StringComparison.Ordinal)
+                      || stored.Price != next.Price
+                      || FormDay(stored.StartsAt) != FormDay(next.StartsAt)
+                      || FormDay(stored.ExpiresAt) != FormDay(next.ExpiresAt);
+
+        return changes
+            ? new[] { new TenantPlanViolation(PayPalSubscriptionLive,
+                $"اشتِراكُ PayPal «{stored.PayPalSubscriptionId}» قائِمٌ عَلى هذِه الباقَة — لا تَتَغَيَّرُ الباقَةُ ولا السِعرُ ولا التاريخانِ " +
+                "حَتّى يُلغى مِن لَوحَةِ PayPal وتَصِلَ رِسالَةُ إلغائِه.") }
+            : Array.Empty<TenantPlanViolation>();
+    }
+
+    /// <summary><b>اليَومُ الَّذي تَحمِلُه استِمارَةُ المُشرِفِ لِلَحظَةٍ مَحفوظَة</b> (‏2026-11-05، G4R1-1) — ما تَرسُمُه <c>TenantPlanAdmin.razor</c>
+    /// بِـ<c>ToString("yyyy-MM-dd")</c> حَرفاً، وما يُعيدُه <see cref="ReadSetting"/> آخِرَ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة (وتاريخُه UTC هُوَ اليَومُ نَفسُه).
+    /// قارِئاه <see cref="ValidateChange"/> و<see cref="KeepStoredInstant"/>.</summary>
+    public static DateOnly FormDay(DateTime at) => DateOnly.FromDateTime(at);
+
+    /// <summary>
+    /// <para><b>لَحظَةٌ تُرسِلُها الاستِمارَةُ عَلى يَومِ المَحفوظِ هِيَ المَحفوظَة</b> (‏2026-11-05، G4R1-1): اليَومُ نَفسُه (<see cref="FormDay"/>) ⇐
+    /// <paramref name="stored"/> بِساعَتِه، وما سِواه ⇐ <paramref name="posted"/>. فَحِفظٌ لا يَمَسُّ التاريخَ لا يَنقُلُ مَوعِدَ PayPal إلى آخِرِ اليَوم.</para>
+    ///
+    /// <para><b>وقارِئُها <c>TenantPlanAdminService.SetAsync</c> وَحدَه، وما دامَ اشتِراكٌ قائِماً فَقَط</b> (<see cref="HoldsLiveSubscription"/>): الاشتِراكُ
+    /// هُوَ مالِكُ اللَحظَةِ يَومَئِذٍ. وبِلا اشتِراكٍ قائِمٍ يَبقى الحِفظُ كَما كانَ يَكتُبُ قِراءَةَ الاستِمارَةِ (آخِرَ اليَوم، د51) — فَلا يَتَغَيَّرُ حَرفٌ لِباقَةٍ
+    /// يَضبُطُها المُشرِفُ وَحدَه.</para>
+    /// </summary>
+    public static DateTime KeepStoredInstant(DateTime stored, DateTime posted)
+        => FormDay(stored) == FormDay(posted) ? stored : posted;
 
     // ─── الاشتِقاق ───────────────────────────────────────────────────
 
@@ -274,6 +370,18 @@ public static class TenantPlanPolicy
     public static DateTime? HiddenAt(TenantPlan? plan)
         => plan is null ? null : plan.ExpiresAt.AddDays(Math.Max(plan.GraceDays, 0));
 
+    /// <summary>
+    /// <para><b>السِعرُ الَّذي يُعرَضُ لِرائِدِ الأَعمالِ في الاستوديو — <see cref="TenantPlan.Price"/> حينَ سَجَّلَه المُشرِف</b>
+    /// (فَوقَ الصِفر)، و<c>null</c> لِما سِواه: لا باقَة، أَو صِفرٌ («لَم يُسَجَّل بَعد» بِنَصِّ الحَقل)، أَو سالِبٌ لا يَعبُرُ مُصادِقَه
+    /// أَصلاً. فَلا رَقمَ يُختَرَعُ ولا «0 ر.س» يُطبَعُ لِسِعرٍ لَم يُقَل (القاعِدَة ١٦).</para>
+    ///
+    /// <para><b>ولِماذا هُنا</b> (‏2026-10-25، تَدقيقُ الإطلاق brief-P2-1): البَندُ ٤ مِن مُوافَقَةِ الاستوديو يَقولُ إنّ اشتِراكَ المَتجَرِ
+    /// «يُعرَضُ لَكَ في الاستوديو قَبلَ أَيِّ دَفع»، والسِعرُ كانَ لا تَقرَؤُه إلّا صَفحَةُ المُشرِف. قارِئاه لافِتَةُ التَجديدِ وسَطرُ السارِيَةِ في
+    /// <c>StudioHome</c> — قَرارٌ واحِدٌ بِجِوارِ <see cref="HiddenAt"/> الَّذي كُتِبَ لِلافِتَةِ نَفسِها.</para>
+    /// </summary>
+    public static decimal? ShownPrice(TenantPlan? plan)
+        => plan is { Price: > 0m } ? plan.Price : null;
+
     // ─── قِراءَةُ ما يَكتُبُه المُشرِف ────────────────────────────────
 
     /// <summary>
@@ -292,15 +400,15 @@ public static class TenantPlanPolicy
         ReadSetting(string? planId, string? startsAt, string? expiresAt,
                     string? graceDays, string? price, DateTime now)
     {
-        var starts = DateTime.TryParse(startsAt, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var s)
-            ? s : now.Date;
-
-        var expires = DateTime.TryParse(expiresAt, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal
-            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var e)
-            ? e : DateTime.MinValue;
+        // **اليَومُ بِلا ساعَةٍ آخِرُ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة** (‏2026-10-29، قَرارُ المالِك د51؛ ‏ADR-039 §مُلحَق د51) — وكانَ
+        // مُنتَصَفَ لَيلِه UTC (الثالِثَةَ فَجراً بِتَوقيتِ الرِياض)، فَمِن تِلكَ الدَقيقَةِ يَدخُلُ المَتجَرُ السَماح. **والدالَّةُ نَفسُها
+        // لِلحَقلَين** لا لِلانتِهاءِ وَحدَه: البَدءُ لا يَقرَؤُه `Derive` أَصلاً، وإنَّما يُقرَأُ في طولِ المُدَّةِ (`ExpiresAt − StartsAt`)
+        // الَّذي يُضيفُه تَمديدُ PayPal حينَ لا تُعطي مَوعِداً — فَبَقِيَ أَيّاماً كامِلَةً كَما كان، وبَقِيَت ساعَةُ النِهايَةِ ثابِتَةً عَبرَ
+        // التَجديد، وبَقِيَ اليَومانِ اللَّذانِ تَطبَعُهُما صَفحَةُ المُشرِفِ (‏UTC) هُما المَكتوبان (`TenantPlanExpiryDayTests`).
+        // ولَحظَةٌ كُتِبَت بِساعَتِها (‏ISO بِـT) تُقرَأُ كَما كُتِبَت، كَما كانَت.
+        var today = DateOnly.FromDateTime(ACommerce.Kit.Culture.CultureTime.InZone(now));
+        var starts = ReadDay(startsAt) ?? ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(today);
+        var expires = ReadDay(expiresAt) ?? DateTime.MinValue;
 
         var grace = int.TryParse(graceDays, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var g)
@@ -310,6 +418,22 @@ public static class TenantPlanPolicy
             System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : 0m;
 
         return ((planId ?? "").Trim(), starts, expires, grace, amount);
+    }
+
+    /// <summary>حَقلُ تاريخٍ مِن الاستِمارَة: <c>yyyy-MM-dd</c> وَحدَه ← آخِرُ ذلكَ اليَومِ بِتَوقيتِ المَنَصَّة
+    /// (<see cref="ACommerce.Kit.Culture.CultureTime.EndOfDayUtc"/>)؛ وما سِواه يُقرَأُ لَحظَةً بِـ<c>AssumeUniversal</c> كَما كان؛
+    /// وما لا يُقرَأُ <c>null</c>.</summary>
+    private static DateTime? ReadDay(string? field)
+    {
+        var text = field?.Trim();
+        if (DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var day))
+            return ACommerce.Kit.Culture.CultureTime.EndOfDayUtc(day);
+
+        return DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal
+            | System.Globalization.DateTimeStyles.AdjustToUniversal, out var at)
+            ? at : null;
     }
 }
 

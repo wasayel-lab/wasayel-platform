@@ -18,8 +18,7 @@
     <link rel="stylesheet" href="_content/ACommerce.Kit.Maps.Web/maps.css"><link rel="stylesheet" href="_content/ACommerce.Templates.Customer.Marketplace/css/premium.css">
 
     <script src="_content/ACommerce.Templates.Customer.Marketplace/admin-editors.js" defer></script><link rel="icon" type="image/svg+xml" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.svg">
-        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png">
-        <meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
+        <link rel="apple-touch-icon" href="_content/ACommerce.Templates.Customer.Marketplace/brand/wasayel-app-icon.png"><meta name="apple-mobile-web-app-title" content="&#x648;&#x64E;&#x633;&#x627;&#x64A;&#x650;&#x644;" /></head>
 <body><div class="acs-page" style="--ac-primary:#1D4ED8;"><main><div class="acs-page acm-admin"><div class="acm-admin-head"><div style="display:flex;align-items:center;gap:8px;"><a class="ac-btn ac-btn-ghost ac-btn-sm" href="/admin/tenants/owner-test"><svg class="ac-icon " width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
                 <h1 class="acm-wizard-title" style="margin:0;">أَدوار &#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631; &#x627;&#x644;&#x645;&#x650;&#x644;&#x643;&#x650;&#x64A;&#x64E;&#x651;&#x629;</h1></div></div><div class="ac-card  "><div class="ac-card-body"><h3 style="margin-top:0;">القَوالِب القِياسيَّة</h3>
                 <p style="color:var(--ac-text-muted);font-size:13px;margin:0 0 16px;">
@@ -87,6 +86,8 @@
                                     افتراضي
                                 </label></label></div>
 
+                    <div class="ac-alert ac-alert-warning ">&#x62A;&#x64E;&#x646;&#x628;&#x64A;&#x647;: &#x627;&#x62E;&#x62A;&#x64E;&#x631; &#x62F;&#x64E;&#x648;&#x631;&#x627;&#x64B; &#x648;&#x627;&#x62D;&#x650;&#x62F;&#x627;&#x64B; &#x639;&#x64E;&#x644;&#x649; &#x627;&#x644;&#x623;&#x64E;&#x642;&#x64E;&#x644;&#x651; &#x2014; &#x627;&#x644;&#x62D;&#x650;&#x641;&#x638;&#x64F; &#x628;&#x650;&#x644;&#x627; &#x623;&#x64E;&#x64A;&#x650;&#x651; &#x62F;&#x64E;&#x648;&#x631;&#x64D; &#x645;&#x64F;&#x62E;&#x62A;&#x627;&#x631;&#x64D; &#x64A;&#x64F;&#x631;&#x641;&#x64E;&#x636; &#x648;&#x644;&#x627; &#x64A;&#x64F;&#x63A;&#x64E;&#x64A;&#x650;&#x651;&#x631;&#x64F; &#x623;&#x64E;&#x62F;&#x648;&#x627;&#x631;&#x64E; &#x627;&#x644;&#x645;&#x64E;&#x62A;&#x62C;&#x64E;&#x631;.</div>
+
                     <div style="display:flex;gap:8px;margin-top:16px;"><a class="ac-btn ac-btn-ghost" href="/admin/tenants/owner-test">إلغاء</a>
                         <button type="submit" class="ac-btn ac-btn-primary ac-btn-block"><svg class="ac-icon " width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12l5 5 9-11"/></svg> حِفظ
                         </button></div></form></div></div><div class="ac-card  "><div class="ac-card-body"><h3 style="margin-top:0;">أَدوار مُؤَلَّفَة لِهذا المَتجَر (2)</h3>
@@ -151,13 +152,13 @@
             );
         };
 
+        window.acTenant = {"slug":"","role":"","hostMode":false,"home":false,"base":""};
+
         // تَحديث live لِعَدّاد الرَسائِل وَالإشعارات في الـ nav.
         // SignalR push لَو مُتاح، مَع polling كُلّ ٦٠ث كَ احتِياط.
         (function () {
-            var match = location.pathname.match(/^\/([^\/]+)/);
-            if (!match) return;
-            var slug = match[1];
-            if (slug === 'admin' || slug === 'api') return;
+            var slug = (window.acTenant || {}).slug;
+            if (!slug) return;
 
             async function refresh() {
                 try {
@@ -180,10 +181,10 @@
             refresh();
             window.addEventListener('focus', refresh);
 
-            // SignalR — لَو لِبَريريّ مُحَمَّلَة + token مَوجود.
-            if (window.signalR && window.acRealtimeToken) {
+            // SignalR — لَو لِبَريريّ مُحَمَّلَة + جَلسَة (الكوكي يَحمِلُها، والرابِطُ المَتجَرَ وَحدَه).
+            if (window.signalR && window.acRealtimeSlug) {
                 var conn = new signalR.HubConnectionBuilder()
-                    .withUrl('/realtime?token=' + encodeURIComponent(window.acRealtimeToken))
+                    .withUrl('/realtime?slug=' + encodeURIComponent(window.acRealtimeSlug))
                     .withAutomaticReconnect()
                     .build();
                 conn.on('unread_changed', function () { refresh(); });
@@ -207,16 +208,66 @@
         // /{slug}/r/{role}/. تَجاهَل مَسارات /admin و /api.
         (function () {
             if (!('serviceWorker' in navigator)) return;
-            var path = location.pathname;
-            if (path.startsWith('/admin') || path.startsWith('/api')) return;
-            var seg = path.split('/').filter(Boolean);
-            if (seg.length === 0) return;   // home page — no PWA
-            var slug = seg[0];
-            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ لِـ legacy.
-            var scope = '/' + slug + '/';
-            if (seg.length >= 3 && seg[1] === 'r') {
-                scope = '/' + slug + '/r/' + seg[2] + '/';
-            }
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة — لا PWA
+            var slug = t.slug;
+            // اِبني scope: /{slug}/r/{role}/ أَو /{slug}/ — و/r/{role}/ أَو / عَلى مُضيفِ المَتجَر.
+            var store = t.hostMode ? '' : '/' + slug;
+            var scope = t.base + (t.role ? '/r/' + t.role : '') + '/';
+            // ‏(‏2026-10-30، الموجَة ١٢ F1 البَند ٨) الخُروجُ مِن هذا الجِهازِ يَسحَبُ اشتِراكاتِ مُتَصَفِّحِه: كانَ بابُ الخُروجِ يَمسَحُ الكوكيّاتِ وَحدَها، فَيَبقى
+            // عُنوانُ هذا المُتَصَفِّحِ في الحِسابِ ويَصِلُه أَوَّلُ مِئَةِ حَرفٍ مِن كُلِّ رِسالَةٍ وإشعاراتُ الصَفَقاتِ بَعدَ خُروجِ صاحِبِه مِن جِهازٍ مُشتَرَك. فَقَبلَ أَن
+            // تُرسَلَ استِمارَةُ خُروجٍ (‏`action` الاستِمارَةِ أَو `formaction` الزِرّ إلى `/{slug}/auth/logout`) تُقرَأُ اشتِراكاتُ نِطاقاتِ هذا المَتجَر (العامُّ
+            // وكُلُّ دَور) وتوضَعُ عَناوينُها في حُقولٍ خَفِيَّةٍ `push_endpoint` وتُلغى عِندَ المُتَصَفِّح — بِأَفضَلِ جُهدٍ وبِمُهلَة: لا يُؤَخِّرُ الخُروجَ أَكثَرَ مِن
+            // ثانِيَةٍ ونِصف، وأَيُّ عُطلٍ يُرسِلُ الاستِمارَةَ كَما كانَت.
+            var esc = slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var logoutPath = new RegExp('^' + (t.hostMode ? '(?:/' + esc + ')?' : '/' + esc) + '/auth/logout$');
+            document.addEventListener('submit', function (e) {
+                var form = e.target;
+                if (!(form instanceof HTMLFormElement) || form.dataset.acPushOut === '1') return;
+                var by = e.submitter;
+                var action = by && by.hasAttribute('formaction') ? by.formAction : form.action;
+                var url;
+                try { url = new URL(action, location.href); } catch (_) { return; }
+                if (url.origin !== location.origin || !logoutPath.test(url.pathname)) return;
+                e.preventDefault();
+                form.dataset.acPushOut = '1';
+                var sent = false;
+                function go(endpoints) {
+                    if (sent) return;
+                    sent = true;
+                    (endpoints || []).forEach(function (endpoint) {
+                        var field = document.createElement('input');
+                        field.type = 'hidden';
+                        field.name = 'push_endpoint';
+                        field.value = endpoint;
+                        form.appendChild(field);
+                    });
+                    if (by && by.hasAttribute('formaction')) form.action = by.formAction;
+                    if (by && by.name) {
+                        var carry = document.createElement('input');
+                        carry.type = 'hidden'; carry.name = by.name; carry.value = by.value;
+                        form.appendChild(carry);
+                    }
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+                setTimeout(function () { go([]); }, 1500);
+                navigator.serviceWorker.getRegistrations()
+                    .then(function (regs) {
+                        var mine = regs.filter(function (r) {
+                            try { return new URL(r.scope).pathname.indexOf(store + '/') === 0 && r.pushManager; } catch (_) { return false; }
+                        });
+                        return Promise.all(mine.map(function (r) {
+                            return r.pushManager.getSubscription().then(function (sub) {
+                                if (!sub) return null;
+                                var endpoint = sub.endpoint || '';
+                                return sub.unsubscribe().then(function () { return endpoint; }, function () { return endpoint; });
+                            }, function () { return null; });
+                        }));
+                    })
+                    .then(function (found) { go(found.filter(function (x) { return !!x; })); })
+                    .catch(function () { go([]); });
+            }, true);
+
             navigator.serviceWorker.register('/sw.js', { scope: scope })
                 .then(function (reg) {
                     if ('PushManager' in window) subscribeToPush(reg);
@@ -333,13 +384,14 @@
             // launcher بِلا /r/. لَو السيرفر رَكَّب pwaPath = null لَن
             // يَكون عُنصُر #ac-install-banner مَوجوداً — هذا فَحص ثانوي
             // لِلسَلامَة.
+            var t = window.acTenant || {};
+            if (!t.slug) return;   // صَفَحاتُ المَنَصَّة
             var p = location.pathname;
             var isTransient = /\/(login|verify|terms|logout|auth)(\/|$|\?)/.test(p)
                            || p.startsWith('/admin');
             if (isTransient) return;
-            var segs = p.split('/').filter(Boolean);
-            var hasRole = segs.length >= 3 && segs[1] === 'r';
-            if (segs.length <= 1 && !hasRole) return;   // launcher أَو جَذر
+            var hasRole = !!t.role;
+            if (t.home && !hasRole) return;   // launcher أَو جَذر
 
             // Chrome لا يَعرِض «تَثبيت» إلّا عَلى https أَو localhost.
             var isLocalhost = /^(localhost|127\.|\[::1\])/.test(location.hostname)
@@ -356,8 +408,7 @@
             // وَنَفحَصه عِندَ تَحميل أَيّ صَفحَة لاحِقَة. لا API مُتَصَفِّح
             // تُخبِرنا "هَل PWA لِهذا الـ scope مُثَبَّتَة" — نُحاكيها بِالمُتَصَفِّح
             // المَحَلّيّ.
-            var scopeKey = hasRole ? '/' + segs[0] + '/r/' + segs[2] + '/'
-                                   : '/' + segs[0] + '/';
+            var scopeKey = t.base + (hasRole ? '/r/' + t.role : '') + '/';
             var installedKey = 'ac.pwa.installed.' + scopeKey;
             function isInstalled() {
                 try { return localStorage.getItem(installedKey) === '1'; }

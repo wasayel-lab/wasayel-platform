@@ -74,6 +74,27 @@ internal sealed class DocWorld
     /// <summary>ما كُتِبَ مِن نَوعٍ بِعَينِه — «لَم تُكتَب وَثيقَةُ
     /// طَلَبٍ» شَرطٌ يُعَدّ.</summary>
     public int Wrote<T>() => Stored.Count(x => x is T);
+
+    /// <summary>
+    /// <para><b>ما يَقَعُ بَينَ جَلسَتَين — اختِيارِيٌّ، و<c>null</c> افتِراضاً</b>:
+    /// يُنادى بِاسمِ كُلِّ عُضوٍ بَعدَ عَدِّه وقَبلَ تَنفيذِه، فَيُدخِلُ الاختِبارُ
+    /// كِتابَةً ثالِثَةً (إلغاءً، قَبولاً ثانِياً) <b>في مَوضِعٍ مُسَمّى</b> مِن
+    /// مَسارٍ يَفتَحُ جَلَساتٍ مُتَتالِيَة — والسِباقُ يَصيرُ تَرتيباً حَتمِيّاً
+    /// لا حَظّاً.</para>
+    ///
+    /// <para><b>المُستَهلِكُ الثالِث، ولا تَغييرَ عَلى الأَوَّلَين</b> (‏2026-10-11؛
+    /// <c>DealAcceptStaleSnapshotCharacterizationTests</c>): مُستَهلِكا
+    /// PayPal وPaddle لا يَضبِطانِه، فَسَطرُ النِداءِ في <c>MartenProxy</c> لا
+    /// يَعمَلُ لَهُما — صِفرُ تَغييرٍ في ما يَقيسان.</para>
+    ///
+    /// <para><b>وصُحِّحَ العَدُّ ‏2026-10-11 (مُراجَعَةٌ ثالِثَة) — ولا يُعادُ حَرفٌ فَوقَه</b>: «الثالِث» كانَ
+    /// الرابِعَ — <c>TenantSlugResolutionTests</c> يَبني <c>DocWorld</c> مُنذُ <c>ace0e04</c> (‏56 حالَة) —
+    /// واختِباراتُ PayPal وPaddle السُلوكِيَّةُ ‏33 لا ‏37 كَما قالَ كوميتُه (مَقيسٌ بِـ<c>--filter</c>). واليَومَ
+    /// سَبعَةُ مِلَفّاتٍ تَبني العالَمَ (‏<c>grep -l "new DocWorld()"</c>)، ولا يَضبِطُ الخُطّافَ مِنها إلّا
+    /// <c>DealAcceptStaleSnapshotCharacterizationTests</c>؛ والدَعوى الَّتي صَدَقَت بِحَرفِها: الخُطّافُ
+    /// <c>null</c> افتِراضاً فَلا يَتَغَيَّرُ ما يَقيسُه غَيرُه.</para>
+    /// </summary>
+    public Action<string>? BeforeMember { get; set; }
 }
 
 /// <summary>
@@ -102,6 +123,7 @@ internal class MartenProxy : DispatchProxy
     {
         var name = method!.Name;
         _world.Members.Add(name);
+        _world.BeforeMember?.Invoke(name);
 
         switch (name)
         {

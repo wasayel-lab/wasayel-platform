@@ -37,6 +37,9 @@ ROUTES=(
   "GET  /studio"
   "GET  /studio/new"
   "GET  /studio/auth"
+  # ‏(‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·R2D-4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) مَسارٌ مُتَقاعِدٌ يُحَوَّلُ إلى اللَوحَة — كانَ مَدخَلَ
+  # الشَريطِ حَتّى W13-1·٥ ثُمَّ 404 فارِغاً، ولَم تَكُن اللَقطَةُ تُسَمّيه فَلَم يَرَ خُروجَه أَحَد.
+  "GET  /studio/ideas"
   "GET  /favicon.ico"
 
   # ─── مَسارات المُستَأجِر ─────────────────────────────────────────
@@ -51,15 +54,18 @@ ROUTES=(
   "GET  /ashare/api/me/unread"
 
   # ─── نُقطَتا Wolverine الكاتِبَتانِ (‏تَحمِلانِ slug) ─────────────
-  "POST /ashare/auth/nafath/request"
+  # (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-10 الجَولَة ٢ — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): «نُقطَتا» صارَتا نُقطَةً — `ce1fff3` نَزَعَ
+  # `[WolverinePost]` عَن `/{slug}/auth/nafath/request` (لَم تَعمَل لِأَحَدٍ قَطّ)، فَسَقَطَ مِجَسّاها؛ ومِجَسُّ السلاجِ المَجهولِ صارَ
+  # عَلى `nafath/verify` الباقِيَة، فَتُقاسُ حَيَّةً بِسلاجٍ مَوجودٍ وبِسلاجٍ مَجهول.
   "POST /ashare/auth/nafath/verify"
-  "POST /zz-no-such-tenant/auth/nafath/request"
+  "POST /zz-no-such-tenant/auth/nafath/verify"
 
   # ─── نِقاط minimal API مُختارَة (‏لا يَجوز أَن تَتَأَثَّر) ────────
   "POST /admin/tenants/create"
   "POST /ashare/auth/phone/login"
   "POST /lang/ar"
-  "POST /studio/begin"
+  # ‏(‏2026-11-07، الموجَة ١٣ W13-1·٥ — ADR-049؛ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) `POST /studio/begin` خَرَجَ مَعَ التَحليل؛ ومَكانَه بابُ الإنشاءِ اليَدَوِيّ.
+  "POST /studio/apps/create"
 )
 
 printf '%-6s %-45s %-5s %-34s %s\n' "VERB" "ROUTE" "CODE" "CONTENT-TYPE" "BYTES"

@@ -1,6 +1,7 @@
 @page "/{slug}/chats/{conversationId:guid}"
 @page "/{slug}/r/{role}/chats/{conversationId:guid}"
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.AccountQueries Account
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject AuthSession Auth
 @inject L L
 
@@ -42,19 +43,19 @@ else
             DateTime? lastDay = null;
             foreach (var m in messages)
             {
-                var local = m.SentAt.Kind == DateTimeKind.Utc ? m.SentAt.ToLocalTime() : m.SentAt;
+                var local = Culture.InZone(m.SentAt);
                 if (lastDay is null || lastDay.Value.Date != local.Date)
                 {
                     lastDay = local;
                     <div style="text-align:center;margin:12px 0 8px;">
                         <span style="background:var(--ac-bg-alt);color:var(--ac-text-muted);
                                      padding:3px 12px;border-radius:999px;font-size:11px;">
-                            @FormatDay(local)
+                            @FormatDay(m.SentAt)
                         </span>
                     </div>
                 }
                 var mine = m.SenderId == Auth.UserId;
-                <AcChatBubble Body="@m.Body" Time="@local.ToString("HH:mm")" Mine="@mine" />
+                <AcChatBubble Body="@m.Body" Time="@Culture.FormatTime(m.SentAt, "HH:mm")" Mine="@mine" />
             }
         }
     </div>
@@ -63,11 +64,17 @@ else
     {
         <p style="display:flex;align-items:center;justify-content:center;gap:6px;
                   font-size:12px;color:var(--ac-text-muted);margin:8px 0;">
-            <AcIcon Name="clock" Size="14" /> @L.Markup("chats.room.temp_until") @conv.ExpiresAt.Value.ToString("yyyy-MM-dd HH:mm")
+            <AcIcon Name="clock" Size="14" /> @L.Markup("chats.room.temp_until") @Culture.FormatTime(conv.ExpiresAt.Value, "yyyy-MM-dd HH:mm")
         </p>
     }
 
-    @if (conv.IsExpired)
+    @if (partnerGone)
+    {
+        @* ‏(‏2026-10-30، الموجَة ١٢ F2 · ٥) الطَرَفُ الآخَرُ غائِبٌ أَو أَغلَقَ حِسابَه (`AccountErasure.PartnerGone`) — بابُ الإرسالِ يَرُدُّه، فَلا تُرسَمُ استِمارَةٌ يَرُدُّها. *@
+        <div style="text-align:center;padding:16px;background:var(--ac-bg-alt);
+                    border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">@L.Markup("chats.room.partner_gone")</div>
+    }
+    else if (conv.IsExpired)
     {
         <div style="text-align:center;padding:16px;background:var(--ac-bg-alt);
                     border-radius:var(--ac-radius-md);color:var(--ac-text-muted);">@((MarkupString)"\n            ")@L.Markup("chats.room.expired")@((MarkupString)"\n        ")
@@ -97,15 +104,19 @@ else
     [Parameter] public Guid ConversationId { get; set; }
     Conversation? conv;
     List<Message> messages = new();
+    bool partnerGone;
 
     // غَير ساكِنَة: القيَم صارَت في المَعجَم، والساكِنَة لا تَبلُغ `L`.
-    string FormatDay(DateTime localAt)
+    // (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-7 الجَولَة ١): تَأخُذُ اللَحظَةَ المُخَزَّنَةَ لا ساعَتَها المَحَلِّيَّة، وتُنَسِّقُ بِـ`FormatTime` — فَلَحظَةٌ لَم تُضبَط
+    // نَصٌّ فارِغٌ لا «0001/01/01». والتاريخُ المَحَلِّيُّ لِلمُقارَنَةِ وَحدَها، وكُلُّ مَضبوطٍ بايتاً ما كانَ (`DisplayTimeAbsentTests`).
+    string FormatDay(DateTime sentUtc)
     {
-        var today = DateTime.Now.Date;
-        if (localAt.Date == today)               return L["chats.room.day_today"];
-        if (localAt.Date == today.AddDays(-1))   return L["chats.room.day_yesterday"];
-        if ((today - localAt.Date).TotalDays < 7) return localAt.ToString("dddd", new System.Globalization.CultureInfo("ar"));
-        return localAt.ToString("yyyy/MM/dd");
+        var day   = Culture.InZone(sentUtc).Date;
+        var today = Culture.NowInZone.Date;
+        if (day == today)               return L["chats.room.day_today"];
+        if (day == today.AddDays(-1))   return L["chats.room.day_yesterday"];
+        if ((today - day).TotalDays < 7) return ACommerce.Kit.Culture.CultureTime.FormatTime(sentUtc, "dddd", Culture.TimeZone, new System.Globalization.CultureInfo("ar"));
+        return Culture.FormatTime(sentUtc, "yyyy/MM/dd");
     }
 
 
@@ -128,5 +139,9 @@ else
             c => c.OwnerId == Auth.UserId || c.PartnerId == Auth.UserId);
         conv     = room.Conversation;
         messages = room.Messages.ToList();
+        // سُؤالُ بابِ الإرسالِ بِعَينِه عَلى الطَرَفِ الآخَر — يُقرَأُ حِسابُه حينَ تُرسَمُ الغُرفَةُ لِطَرَفٍ فيها.
+        if (conv is not null)
+            partnerGone = ACommerce.Templates.Customer.Marketplace.Services.Identity.AccountErasure.PartnerGone(
+                await Account.ProfileAsync(Slug, conv.OwnerId == Auth.UserId ? conv.PartnerId : conv.OwnerId));
     }
 }

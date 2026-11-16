@@ -26,5 +26,6 @@
       "driversList"
     ]
   },
-  "dealPatternAffinity": "trip"
+  "dealPatternAffinity": "trip",
+  "meter": "presence.role"
 }

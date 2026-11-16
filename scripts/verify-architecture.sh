@@ -292,4 +292,174 @@ fi
 
 echo "✅ Layer 8b green — $PROV_FILES تَعريفاً كُلُّها في الفِهرِس، وصِفرُ إحالَةِ عُدَّة."
 
+# ═══════════════════════════════════════════════════════════════════════
+#  الطَبَقَة ٨-ج — لا عَميلَ صادِراً خامّاً خارِجَ قائِمَتِه (‏2026-11-12، W13-6·١١ — ADR-051 §١٨)
+# ───────────────────────────────────────────────────────────────────────
+#  رَأسُ ٨-ب يُسَمّي الحَدَّ «لا SDK خارِجيّاً يُنادى مُباشَرَةً» ويَقيسُ البَياناتِ وَحدَها. وهذه تَقيسُ الكود — فَكُلُّ نِداءٍ يُغادِرُ العَمَلِيَّةَ
+#  يَمُرُّ بِالمُستَدعي المَعدودِ (`ProviderHttp`/`ProviderCalls`) أَو يَحمَرّ:
+#
+#    ١. النَوع: مِلَفٌّ في libs/ يُسَمّي كودُه (بِلا تَعليقاتٍ ولا نُصوص) نَوعَ عَميلٍ خامٍّ أَو `.CreateClient(` وهُوَ لَيسَ في القائِمَة.
+#    ٢. الفِعل: في مِلَفٍّ مُدرَجٍ بِحَقلِ SDK، وُصولٌ إلى عُضوٍ فيه (عَدا Dispose) خارِجَ وُسَطاءِ `InvokeAsync(` أَو `HelperAsync(` — بِعُمقِ الأَقواس.
+#    ٣. الإعفاءُ المَيِّت: سَطرٌ في القائِمَةِ لِمِلَفٍّ غائِبٍ أَو لا يُسَمّي نَوعاً خامّاً.
+#
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الأولى · M6C-RULES-R1-2 — ADR-051 §١٩) **والحَقلُ يُرى بِكُلِّ شَكلٍ يُستَعمَلُ بِه**: كانَ النَمَطُ
+#  `\bحَقل\s*\.` وَحدَه — فَمَرَّ `_client?.X(…)` و`_client!.X(…)` والاسمُ المُستَعارُ (`var c = _client; c.X()`) والحَقلُ وَسيطاً (مَقيسٌ عِندَ المُراجِع:
+#  `_client?.ListBucketsAsync` أَوَّلَ `DeleteAsync` ⇐ «violations: 0» والطَبَقَةُ خَضراء). الآنَ كُلُّ ذِكرٍ لِلحَقل: وُصولٌ بِـ`.`/`?.`/`!.`/`[`/`?[` (عَدا
+#  `Dispose`) داخِلَ المُستَدعي أَو أَحمَر؛ والإعلانُ والإسنادُ إلَيه لا يُعَدّان؛ وكُلُّ ذِكرٍ سِواهُما **تَسَرُّبٌ** (`escape`) داخِلَ المُستَدعي أَو أَحمَر.
+#  وسَطرُ قائِمَةٍ يُسَمّي حَقلاً ولا يَقيسُ لَه وُصولاً واحِداً (**حَقلٌ مَيِّت**) أَحمَر.
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-1 — ADR-051 §١٩) **وما يَلي `=>` أَو `??` لَيسَ إعلاناً**: اختِبارُ الإعلانِ («ما قَبلَه
+#  يَنتَهي بِحَرفِ نَوعٍ ثُمَّ مَسافَة») قَرَأَ `>` في `=>` فَصارَ `private IAmazonS3 Raw => _client;` إعلاناً لا يُعَدّ — والاسمُ المُستَعارُ نادى S3 خارِجَ
+#  المُستَدعي والطَبَقَةُ خَضراء (مَقيسٌ عِندَ المُراجِع: «escapes: 0 · violations: 0»). الآنَ ذِكرٌ يَسبِقُه `=>` أَو `??` تَسَرُّب.
+#  ‏(‏2026-11-13، مُراجَعَةُ المَرحَلَةِ ج الثانِيَة · M6C-RULES-R2-2 — ADR-051 §١٩) **وعَدَدُ رُموزِ كُلِّ مِلَفٍّ مُدرَجٍ مُثَبَّت** (العَمودُ الثالِثُ في القائِمَة):
+#  قاعِدَةُ النَوعِ تُعفي المِلَفَّ كُلَّه وقاعِدَةُ الفِعلِ لا تَرى إلّا الحَقلَ المُسَمّى — فَمَرَّت `new AmazonS3Client(…)` مَحَلِّيَّةٌ تُرسِلُ قَبلَ المُستَدعي
+#  («raw client type tokens: 11 · violations: 0» عِندَ المُراجِع). الآنَ أَيُّ فَرقٍ بَينَ المَقيسِ والمُثَبَّتِ أَحمَر (TOKEN DRIFT)، وسَطرٌ بِلا عَدَدٍ أَحمَر (UNPINNED).
+#  ولا رَقَمَ طَبَقَةٍ جَديد: داخِلَ ٨ فَلا تَتَغَيَّرُ أَسماءُ الطَبَقاتِ التِسع. وحارِسُ العَمى كَما فَوقَه: العَدَدُ يُطبَع، وصِفرُ مِلَفٍّ أَو صِفرُ رَمزٍ يُحمِر.
+#  وتَوأَمُها في الاختِبارات: `OutboundInvokerBoundaryTests` (المُصَنِّفُ نَفسُه بِـC#، والحَقنُ المَقيس).
+# ═══════════════════════════════════════════════════════════════════════
+
+OUT_ALLOW="$SCRIPT_DIR/verify-outbound-allowlist.txt"
+
+echo ""
+echo "═══════════════════════════════════════════════"
+echo "   Layer 8c — outbound clients only through the metered invoker"
+echo "═══════════════════════════════════════════════"
+echo ""
+
+if [ ! -f "$OUT_ALLOW" ]; then
+    echo "  ✗ BLIND CHECK: $(wsl_rel "$OUT_ALLOW") غائِب — لا قائِمَةَ يُقاسُ عَلَيها." >&2
+    exit 1
+fi
+
+cat > "$TMP/outbound.pl" <<'PERL'
+use strict; use warnings;
+use open ':std', ':encoding(UTF-8)';
+my (%field, %pin);
+{ open(my $fh, '<:encoding(UTF-8)', shift @ARGV) or die "allow-list"; while (<$fh>) { chomp; next if /^\s*(#|$)/; my ($p, $f, $t) = split /\|/; $field{$p} = $f if defined $f && $f ne '-'; $pin{$p} = (defined $t && $t =~ /^\d+$/) ? $t : -1; } close $fh; }
+my $root = shift @ARGV;
+my $TYPES = qr/\b(?:HttpClient|HttpMessageInvoker|IHttpClientFactory|SocketsHttpHandler|HttpClientHandler|AmazonS3Client|IAmazonS3|SmtpClient|WebPushClient|HubConnectionBuilder|ClientWebSocket|TcpClient|GrpcChannel)\b|\.CreateClient\(/;
+sub strip {
+    my $s = shift;
+    $s =~ s{("""[\s\S]*?"""|\@"(?:""|[^"])*"|\$?"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])'|//[^\n]*|/\*[\s\S]*?\*/)}{ my $t = $1; ($t =~ m{^/[/*]}) ? " " : '""' }ge;
+    return $s;
+}
+sub inside_invoke {
+    my ($s, $at) = @_;
+    my $depth = 0;
+    for (my $i = $at - 1; $i >= 0; $i--) {
+        my $c = substr($s, $i, 1);
+        if ($c eq ')') { $depth++; }
+        elsif ($c eq '(') {
+            if ($depth > 0) { $depth--; next; }
+            return 1 if substr($s, 0, $i) =~ /\b(?:InvokeAsync|HelperAsync)\s*(?:<[^<>()]*>)?\s*\z/;
+        }
+    }
+    return 0;
+}
+for my $f (@ARGV) {
+    open(my $fh, '<:encoding(UTF-8)', $f) or next;
+    local $/; my $raw = <$fh>; close $fh;
+    my $s = strip($raw);
+    my $tokens = () = $s =~ /$TYPES/g;
+    my ($acc, $bad, $esc, $named) = (0, 0, 0, 0);
+    (my $rel = $f) =~ s{^\Q$root\E/}{};
+    $rel =~ s{\\}{/}g;
+    if (my $fld = $field{$rel}) {
+        $named = 1;
+        while ($s =~ /\b\Q$fld\E\b/g) {
+            my ($pos, $end) = ($-[0], $+[0]);
+            my $after = substr($s, $end, 160);
+            my $from = $pos > 160 ? $pos - 160 : 0;
+            my $before = substr($s, $from, $pos - $from);
+            if ($after =~ /^\s*[?!]?\s*\.\s*(\w+)/) {
+                next if $1 eq 'Dispose';
+                $acc++;
+                $bad++ unless inside_invoke($s, $pos);
+                next;
+            }
+            if ($after =~ /^\s*[?!]?\s*\[/) { $acc++; $bad++ unless inside_invoke($s, $pos); next; }
+            next if $after =~ /^\s*(?:=(?![=>])|\?\?=)/;
+            next if $after =~ /^\s*[;,)]/ && $before =~ /[\w>\]?]\s+\z/
+                 && $before !~ /\b(?:return|await|throw|yield|in|out|ref|is|as|case|when|else|and|or|not|new|nameof)\s+\z/
+                 && $before !~ /(?:=>|\?\?)\s*\z/;   # (‏2026-11-13، M6C-RULES-R2-1) `=> _c;` و`?? _c;` اسمٌ مُستَعارٌ لا إعلان
+            $acc++; $esc++;
+            $bad++ unless inside_invoke($s, $pos);
+        }
+    }
+    my $pinned = exists $pin{$rel} ? $pin{$rel} : -2;   # -2: غَيرُ مُدرَج، -1: مُدرَجٌ بِلا عَدَد
+    print "$rel|$tokens|$acc|$bad|$esc|$named|$pinned\n";
+}
+PERL
+
+find "$ROOT/libs" -name '*.cs' -not -path '*/bin/*' -not -path '*/obj/*' | sort > "$TMP/out-files.txt"
+OUT_SCANNED=$(wc -l < "$TMP/out-files.txt" | tr -d ' ')
+xargs -a "$TMP/out-files.txt" -d '\n' perl "$TMP/outbound.pl" "$OUT_ALLOW" "$ROOT" > "$TMP/out-raw.txt"
+grep -vE '^[[:space:]]*(#|$)' "$OUT_ALLOW" | cut -d'|' -f1 | sort > "$TMP/out-allowed.txt" || true
+
+OUT_NAMING=$(awk -F'|' '$2 > 0' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
+OUT_TOKENS=$(awk -F'|' '{ n += $2 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_ACCESSES=$(awk -F'|' '{ n += $3 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_ESCAPES=$(awk -F'|' '{ n += $5 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_FIELDS=$(awk -F'|' '$6 == 1' "$TMP/out-raw.txt" | wc -l | tr -d ' ')
+OUT_ALLOWED=$(wc -l < "$TMP/out-allowed.txt" | tr -d ' ')
+OUT_PINNED=$(awk -F'|' '$7 >= 0 { n += $7 } END { print n + 0 }' "$TMP/out-raw.txt")
+OUT_VIOL=0
+
+echo "--- Measurement ---"
+echo "  .cs files scanned under libs/:   $OUT_SCANNED"
+echo "  files naming a raw client type:  $OUT_NAMING"
+echo "  raw client type tokens:          $OUT_TOKENS"
+echo "  SDK member accesses checked:     $OUT_ACCESSES"
+echo "  SDK field bare uses (escapes):   $OUT_ESCAPES"
+echo "  allow-listed SDK fields:         $OUT_FIELDS"
+echo "  allow-listed files:              $OUT_ALLOWED"
+echo "  pinned tokens (allow-list):      $OUT_PINNED"
+
+if [ "$OUT_SCANNED" -eq 0 ] || [ "$OUT_TOKENS" -eq 0 ]; then
+    echo "  ✗ BLIND CHECK: $OUT_SCANNED مِلَفّاً و$OUT_TOKENS رَمزاً — «صِفرُ مُخالَفَة» مِن أَداةٍ لَم تَرَ شَيئاً." >&2
+    exit 1
+fi
+
+while IFS='|' read -r file tokens acc bad esc named pinned; do
+    [ -z "$file" ] && continue
+    if [ "$tokens" -gt 0 ] && ! grep -qxF "$file" "$TMP/out-allowed.txt"; then
+        echo "  ✗ RAW CLIENT outside the allow-list: $file ($tokens رَمزاً) — مَرِّرهُ بِـProviderHttp أَو ProviderCalls."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    if [ "$bad" -gt 0 ]; then
+        echo "  ✗ SDK VERB outside InvokeAsync/HelperAsync: $file ($bad مِن $acc وُصولاً، مِنها $esc تَسَرُّباً)"
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    # ‏(‏2026-11-13، M6C-RULES-R2-2) عَدَدُ رُموزِ المِلَفِّ المُدرَجِ مُثَبَّتٌ في سَطرِه: نُسخَةُ SDK ثانِيَةٌ لا تَراها قاعِدَةُ الفِعلِ تَرفَعُه.
+    if [ "${pinned:--2}" -eq -1 ]; then
+        echo "  ✗ UNPINNED: $file — سَطرُه بِلا عَدَدِ رُموز (العَمودُ الثالِث): لا يُرى ما يُضافُ إلَيه."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    elif [ "${pinned:--2}" -ge 0 ] && [ "$tokens" -ne "$pinned" ]; then
+        echo "  ✗ TOKEN DRIFT: $file ($tokens رَمزاً والمُثَبَّتُ $pinned) — نُسخَةُ عَميلٍ خامٍّ لا يَراها الحَقلُ المُسَمّى، أَو تَغَيَّرَ المِلَفُّ بِلا سَطرٍ في القائِمَة."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+    if [ "$named" = 1 ] && [ "$acc" -eq 0 ]; then
+        echo "  ✗ DEAD FIELD: $file — سَطرُه يُسَمّي حَقلاً لا وُصولَ إلَيه (0 وُصول): قاعِدَةُ الفِعلِ عَمياءُ عَن هذا المِلَفّ."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+done < "$TMP/out-raw.txt"
+
+while read -r file; do
+    [ -z "$file" ] && continue
+    row=$(grep -F "$file|" "$TMP/out-raw.txt" | head -1)
+    tokens=$(echo "$row" | cut -d'|' -f2)
+    if [ -z "$row" ] || [ "${tokens:-0}" -eq 0 ]; then
+        echo "  ✗ DEAD EXEMPTION: $file مُدرَجٌ ولا يُسَمّي نَوعاً خامّاً (أَو غائِب) — احذِف سَطرَه، فَالقائِمَةُ تَتَقَلَّص."
+        OUT_VIOL=$((OUT_VIOL + 1))
+    fi
+done < "$TMP/out-allowed.txt"
+
+echo "  violations:                      $OUT_VIOL"
+echo ""
+if [ "$OUT_VIOL" -gt 0 ]; then
+    echo "Layer 8c red — نِداءٌ يُغادِرُ العَمَلِيَّةَ بِلا عَدّ، أَو قائِمَةٌ لا تَصِفُ المُستَودَع."
+    exit 1
+fi
+
+echo "✅ Layer 8c green — $OUT_NAMING مِلَفّاً يُسَمّي عَميلاً خامّاً كُلُّها في القائِمَة ($OUT_ALLOWED)، وصِفرُ مُخالَفَة."
+
 exit 0

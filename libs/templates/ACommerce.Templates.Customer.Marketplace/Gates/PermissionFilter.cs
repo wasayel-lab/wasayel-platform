@@ -1,6 +1,7 @@
 using ACommerce.Kit.Auth;
 using ACommerce.Kit.Roles;
 using ACommerce.Kit.Tenants;
+using ACommerce.Platform.Shared.Metering;
 using Marten;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,10 +29,23 @@ public sealed class PermissionFilter : IEndpointFilter
         var userId = http.UserIdOrNull();
         if (userId is null) return Results.Unauthorized();
 
-        await using var g = store.QuerySession();
-        var tenant = await g.LoadAsync<Tenant>(slug);
+        // ‏(‏2026-10-28، قَرارُ المالِك د42 «أ») كانَ `await using var g = store.QuerySession(); var tenant = await g.LoadAsync<Tenant>(slug);` —
+        // أَدوارُ المَتجَرِ المُخَزَّنَةُ وَحدَها، فَدَورٌ مُؤَلَّفٌ مُعتَمَدٌ يَحمِلُ `listing.create` يُرَدُّ بِـ‏403 وبَقِيَّةُ المَنَصَّةِ تَراه ناشِراً (تَوصيفُه
+        // `973dcd0`). صارَ يَقرَأُ قِراءَةَ حارِسِ العَرضِ (`HasPermissionAsync`) بِعَينِها: المُستَأجِرُ مُجَسَّداً بِأَدوارِه المُؤَلَّفَةِ المُعتَمَدَة.
+        var tenant = await MarketplaceTemplateExtensions.LoadTenantWithRolesAsync(store, slug);
         if (tenant is null) return Results.NotFound();
-        if (tenant.Roles.Count == 0) return await next(ctx);   // legacy mode
+        // ‏(‏2026-10-28، ‏ADR-040، د62) كانَ `return await next(ctx);   // legacy mode` — يَفتَحُ أَيَّ صَلاحِيَّةٍ لِمَتجَرٍ بِلا أَدوار، ومِنها
+        // الإدارِيَّةُ لَو حُرِسَت بِها نُقطَة. صارَ يَسأَلُ الدالَّةَ نَفسَها: صَلاحِيّاتُ العُضوِ تَمُرّ، والإدارِيَّةُ 403.
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) كانَ `return RolePermissions.Has(tenant.Roles, null, _permission)
+        // ? await next(ctx) : Results.StatusCode(StatusCodes.Status403Forbidden);` — والقَرارُ بِحَرفِه، ومَعَ القَبولِ يَكتُبُ `_none` الَّذي قَرَّرَه في حامِلِ
+        // العَدّ: كانَ `_none` يَأتي مِن الوَسيطِ وَحدَه (المُخَزَّنَةُ المُخَبَّأَة)، فَمَتجَرٌ أُزيلَ آخِرُ دَورٍ فيه تَحتَ الذاكِرَةِ يُكتَبُ نَشرُه بِلا دَور.
+        if (tenant.Roles.Count == 0)
+        {
+            if (!RolePermissions.Has(tenant.Roles, null, _permission))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            MeterScope.Current?.FillAcceptedRole(slug, MeterSentinels.None);
+            return await next(ctx);
+        }
 
         await using var t = store.QuerySession(slug);
         var user = await t.LoadAsync<User>(userId.Value);
@@ -48,6 +62,12 @@ public sealed class PermissionFilter : IEndpointFilter
         if (!RolePermissions.Has(tenant.Roles, effectiveRole, _permission))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
+        // ‏(‏2026-11-12، الموجَة ١٣ W13-6·١٠ — ADR-051 §١٧، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق) **والدَورُ الفَعّالُ الَّذي قَبِلَ بِه يَدخُلُ حامِلَ العَدّ** — كانَ
+        // يُحسَبُ ويُرمى، فَكِتابَةُ النُقطَةِ في مَتجَرٍ بِأَدوارٍ دَورُها `_unresolved`. والحامِلُ يَقبَلُه لِمَتجَرِه وَحدَه وأَوَّلُ كاتِبٍ يَفوز (`MeterScopeHolder.Fill`)؛
+        // وبِلا حامِلٍ لا شَيء. والقَرارُ فَوقَه بِحَرفِه (`LiveRoleDecisionCharacterizationProofTests`).
+        // ‏(‏2026-11-12، W13-6·B-R1·1 — M6B-CNT-1) كانَ `MeterScope.Current?.Fill(slug, role: effectiveRole);` — و«الكاتِبُ الأَوَّلُ يَفوز» يُبقي `_none` الوَسيطِ
+        // (المُخَزَّنَةُ فارِغَة) فَوقَ دَورٍ مُؤَلَّفٍ مُعتَمَدٍ قَبِلَ بِه هذا المُرَشِّح. فَالدَورُ المَقبولُ يَحِلُّ مَحَلَّ المُؤَقَّت (`FillAcceptedRole`).
+        MeterScope.Current?.FillAcceptedRole(slug, effectiveRole);
         return await next(ctx);
     }
 }

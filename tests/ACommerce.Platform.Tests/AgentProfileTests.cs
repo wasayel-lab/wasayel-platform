@@ -270,7 +270,7 @@ public class AgentBackendProviderTests
     {
         // قَرار مُوَثَّق: مِلَفّان مُتَطابِقان لا يُنشِئان خَلفيَّتَين. المِعيار
         // هو ما يُغَيِّر الاتِّصال (مُزَوِّد + عُنوان + مِفتاح + تَسميَة).
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "anthropic"), ("Agent:ApiKey", "k")));
 
         Assert.Same(p.For(AgentNames.Studio), p.For(AgentNames.Analysis));
@@ -281,7 +281,7 @@ public class AgentBackendProviderTests
     {
         // النَموذج ليس جُزءاً مِن هُوِيَّة الخَلفيَّة — يُمَرَّر في كُلّ طَلَب.
         // هذا هو حال GitHub Models: مِفتاح وعُنوان واحِد، نَموذَجان.
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider",        "openai"),
             ("Agent:BaseUrl",         "https://models.github.ai/inference"),
             ("Agent:ApiKey",          "ghp-one"),
@@ -296,7 +296,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void DifferentApiKeys_ProduceDistinctBackends()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider",         "anthropic"),
             ("Agents:Analysis:ApiKey", "key-a"),
             ("Agents:Studio:ApiKey",   "key-b")));
@@ -307,7 +307,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void DifferentProviders_ProduceDistinctBackendTypes()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:ApiKey",             "k"),
             ("Agents:Analysis:Provider", "anthropic"),
             ("Agents:Studio:Provider",   "openai")));
@@ -319,7 +319,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void ProfileAndBackend_AreCached()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(("Agent:ApiKey", "k")));
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(("Agent:ApiKey", "k")));
 
         Assert.Same(p.ProfileFor(AgentNames.Studio), p.ProfileFor(AgentNames.Studio));
         Assert.Same(p.For(AgentNames.Studio),        p.For(AgentNames.Studio));
@@ -332,7 +332,7 @@ public class AgentBackendProviderTests
     public void ModelFor_FallsBackToBackendDefault_WhenProfileHasNoModel(
         string provider, string expected)
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", provider), ("Agent:ApiKey", "k")));
 
         Assert.Equal(expected, p.ModelFor(AgentNames.Analysis));
@@ -341,7 +341,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void ModelFor_PrefersProfileModel()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "anthropic"), ("Agent:ApiKey", "k"),
             ("Agents:Analysis:Model", "claude-opus-4")));
 
@@ -351,7 +351,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void OpenAiBackend_TakesBaseUrlAndLabelFromProfile()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agents:Studio:Provider",      "openai"),
             ("Agents:Studio:ApiKey",        "k"),
             ("Agents:Studio:BaseUrl",       "https://models.github.ai/inference"),
@@ -367,7 +367,7 @@ public class AgentBackendProviderTests
     [Fact]
     public void OpenAiBackend_InfersLabelFromBaseUrl_WhenLabelAbsent()
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "openai"),
             ("Agent:BaseUrl",  "https://api.groq.com/openai"),
             ("Agent:ApiKey",   "k")));
@@ -379,7 +379,7 @@ public class AgentBackendProviderTests
     public void IsConfigured_StaysFalse_WhenNoKeyAnywhere()
     {
         // دَلالَة IsConfigured هي ما تَعتَمِدُه رَسائِل الواجِهَة.
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "gemini"), ("Agent:ApiKey", "")));
 
         Assert.False(p.For(AgentNames.Studio).IsConfigured);
@@ -398,7 +398,7 @@ public class AgentBackwardCompatibilityTests
     public void LegacyConfigWithoutModel_BothAgentsGetProviderDefault(
         string provider, string expectedModel)
     {
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", provider), ("Agent:ApiKey", "legacy-key")));
 
         // خَلفيَّة واحِدَة مُشتَرَكَة — كَما كانَ التَسجيل singleton تَماماً.
@@ -415,7 +415,7 @@ public class AgentBackwardCompatibilityTests
     {
         // قَبل: OpenAIBackend.DefaultModel = Agent:Model ?? "gpt-4o"، ووَكيل
         // التَحليل كانَ يَستَخدِم DefaultModel. بَعد: نَموذج المِلَفّ. نَفس القيمَة.
-        var p = new AgentBackendProvider(AgentCfg.Of(
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "openai"),
             ("Agent:ApiKey",   "k"),
             ("Agent:Model",    "llama-3.3-70b")));
@@ -428,10 +428,10 @@ public class AgentBackwardCompatibilityTests
     public void LegacyConfig_StudioModelRuleUnchanged()
     {
         // قَبل: cfg["Agent:Model"] ?? backend.DefaultModel — حَرفيّاً.
-        var withModel = new AgentBackendProvider(AgentCfg.Of(
+        var withModel = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "anthropic"), ("Agent:ApiKey", "k"),
             ("Agent:Model", "claude-haiku-4")));
-        var withoutModel = new AgentBackendProvider(AgentCfg.Of(
+        var withoutModel = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "anthropic"), ("Agent:ApiKey", "k")));
 
         Assert.Equal("claude-haiku-4",    withModel.ModelFor(AgentNames.Studio));
@@ -443,7 +443,7 @@ public class AgentBackwardCompatibilityTests
     {
         // الحَشو الفارِغ + بِلا بيئَة = وَكيلان غَير مُهَيَّأَين، ونَموذج
         // افتِراضيّ سَليم بَدَل السِلسِلَة الفارِغَة الَّتي كانَت تُرسَل قَبلاً.
-        var p = new AgentBackendProvider(AgentCfg.ShippedAppsettings());
+        var p = new AgentBackendProvider(new HttpClient(), AgentCfg.ShippedAppsettings());
 
         Assert.False(p.For(AgentNames.Studio).IsConfigured);
         Assert.False(p.For(AgentNames.Analysis).IsConfigured);
@@ -479,7 +479,7 @@ public class AgentServiceProfileWiringTests
     {
         // هذا هو الانحِراف الَّذي كانَ: FeasibilityAnalysisService كانَ
         // يَستَخدِم _backend.DefaultModel عارِيَةً فَيَتَجاهَل تَهيئَتَه.
-        var provider = new AgentBackendProvider(AgentCfg.Of(
+        var provider = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider",        "anthropic"),
             ("Agent:ApiKey",          "k"),
             ("Agents:Analysis:Model", "claude-opus-4")));
@@ -493,7 +493,7 @@ public class AgentServiceProfileWiringTests
     [Fact]
     public void StudioAndAnalysis_CarryDifferentModelsFromOneConfiguration()
     {
-        var provider = new AgentBackendProvider(AgentCfg.Of(
+        var provider = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider",        "openai"),
             ("Agent:BaseUrl",         "https://models.github.ai/inference"),
             ("Agent:ApiKey",          "ghp-token"),
@@ -512,7 +512,7 @@ public class AgentServiceProfileWiringTests
     [Fact]
     public void StudioAndAnalysis_CanUseDifferentProvidersAndKeys()
     {
-        var provider = new AgentBackendProvider(AgentCfg.Of(
+        var provider = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agents:Analysis:Provider", "anthropic"),
             ("Agents:Analysis:ApiKey",   "sk-ant"),
             ("Agents:Studio:Provider",   "openai"),
@@ -529,7 +529,7 @@ public class AgentServiceProfileWiringTests
     [Fact]
     public void LegacyOnlyConfiguration_BothServicesMatchTodaysBehaviour()
     {
-        var provider = new AgentBackendProvider(AgentCfg.Of(
+        var provider = new AgentBackendProvider(new HttpClient(), AgentCfg.Of(
             ("Agent:Provider", "anthropic"), ("Agent:ApiKey", "legacy-key")));
 
         var studio   = new AgentService(null!, provider);

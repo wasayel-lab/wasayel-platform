@@ -49,15 +49,68 @@ public sealed class TenantFromAnalysisFactory
     /// </summary>
     public async Task<string?> ValidateSlugAsync(string slug, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(slug)) return SlugRequired;
-        if (!System.Text.RegularExpressions.Regex.IsMatch(slug, "^[a-z0-9_-]+$"))
-            return SlugFormat;
-        if (ReservedTenantSlugs.Contains(slug)) return SlugReserved;
+        if (SlugRefusal(slug) is { } refused) return refused;
 
         await using var s = _store.QuerySession();
         var existing = await s.LoadAsync<Tenant>(slug, ct);
-        return existing is null ? null : SlugTaken;
+        if (existing is not null) return SlugTaken;
+        // ‏(‏2026-11-07، ADR-050 §٤ · W13-4·C2b·4 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ومُضيفُ دَورٍ مُمكِنٍ لَه (`{slug}-{rolehost}`) اسمُ مَتجَرٍ قائِم ← الرَمزُ نَفسُه.
+        return await TenantConfig.RoleHostCollision.FirstTakenForNewStoreAsync(s, slug, ct) is null ? null : SlugTaken;
     }
+
+    /// <summary><b>المَتجَرُ القائِمُ بِهذا المُعَرِّف، أَو <c>null</c></b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 الجَولَةُ الثانِيَة · W13-1·SEC2-C1-1 — يُلحَقُ ولا يُعادُ
+    /// حَرفٌ فَوقَه): يَسأَلُه بابُ الاستوديو بَعدَ أَن يُرَدَّ الطَلَبُ عَلى مُعَرِّفٍ مَكتوب، لِيَعرِفَ مالِكَه وما كُتِبَ فيه — فَاستِمارَةُ صاحِبِه نَفسُها
+    /// مُكَرَّرَةً (نَقرَتانِ يَصِلُ ثانيهِما بَعدَ أَن حُفِظَ الأَوَّل) تُجابُ بِمَتجَرِه لا بِـ<see cref="SlugTaken"/> عَنه (<c>StudioStoreCreate.Repeats</c>).</summary>
+    public async Task<Tenant?> FindAsync(string slug, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(slug)) return null;
+        await using var s = _store.QuerySession();
+        return await s.LoadAsync<Tenant>(slug, ct);
+    }
+
+    /// <summary>لَوحَةُ المَتجَرِ إن كانَت الاستِمارَةُ تَكرارَ صاحِبِه لِما وَلَدَه (<see cref="StudioStoreCreate.Repeats"/>)، أَو <c>null</c> — يَسأَلُه بابُ الاستوديو
+    /// بَعدَ الرَفضِ وَحدَه، فَلا يَكبُرُ جِسمُ البابِ بِمَنطِقِه (‏W13-1·SEC2-C1-1).</summary>
+    public async Task<string?> RepeatOfAsync(Guid ownerId, StudioStoreCreate.Form form, CancellationToken ct = default)
+        => StudioStoreCreate.Repeats(await FindAsync(form.Slug, ct), ownerId, form) ? StudioStoreCreate.StorePage(form.Slug) : null;
+
+    /// <summary>
+    /// <para><b>شَكلُ مُعَرِّفِ المَتجَرِ الواحِد</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): يَبدَأُ بِحَرفٍ
+    /// لاتينيٍّ صَغيرٍ أَو رَقَم، ثُمَّ حُروفٌ وأَرقامٌ وشَرطَة، وطولُه 63 عَلى الأَكثَر — حَدُّ مِلصَقِ المُضيفِ في DNS (‏RFC 1035)، وهو ما يَلزَمُ
+    /// <c>{slug}.R</c> في W13-4. وهُوَ شَكلُ بابِ التَصديرِ (<c>TenantExportAuthorization</c>) بِحَدِّ طول.</para>
+    ///
+    /// <para><b>العِلَّةُ المَقيسَة</b>: كانَ <c>^[a-z0-9_-]+$</c> بِلا حَدّ، والمَحجوزُ <c>_admin</c> وَحدَه مِن أَقسامِ القاعِدَة — فَحِسابُ استوديو
+    /// مُوافِقٌ أَنشَأَ <c>_studio</c> و<c>_incubator</c> و<c>_platform</c> و<c>-</c>، كُلٌّ بِـ<c>302 …?built=1</c>: وَثائِقُ مَتجَرِ <c>_studio</c>
+    /// تُشارِكُ قِسمَ حِساباتِ الاستوديو، وعَميلٌ يَدخُلُه يَحمِلُ رَمزاً قَبِلَه الاستوديو جَلسَةً؛ ومالِكُ <c>_platform</c> كَتَبَ سَطرَ تَدقيقٍ في نِطاقِ
+    /// المَنَصَّة؛ وبابُ التَصديرِ يَرُدُّ هذِه المَتاجِرَ نَفسَها <c>slug_reserved</c>. والآن بابٌ واحِدٌ لِلأَبوابِ الثَلاثَة (الاستوديو والمُشرِفُ وأَداةُ
+    /// الوَكيل)، وأَقسامُ القاعِدَةِ الداخِلِيَّةُ مَحجوزَةٌ بِأَسمائِها في الكود (<see cref="InternalPartitions"/>) لا بِنُسَخٍ مِنها.</para>
+    /// </summary>
+    /// <remarks>والمَحجوزُ قَبلَ الشَكل: <c>_studio</c> و<c>_admin</c> يُقالُ لِصاحِبِهِما «مَحجوزٌ لِلمَنَصَّة» لا «حُروفٌ وأَرقامٌ وشَرطَة» — الرَدُّ
+    /// هُوَ هُوَ، والرِسالَةُ تَصدُقُ في سَبَبِه؛ وتَرتيبُ الفَحصِ القائِمُ (‏<c>ReservedTenantSlugTests</c>: كُلُّ اسمٍ مَحجوزٍ بِلا نُقطَةٍ يُجابُ
+    /// <c>slug_reserved</c>) باقٍ.
+    /// <para><b>ويَسأَلُ مُصادِقَ اسمِ المُضيف</b> (‏2026-11-07، ADR-050 §٣ · W13-4·C2a·3 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): الشَكلُ
+    /// <c>^[a-z0-9][a-z0-9-]{0,62}$</c> كانَ يَقبَلُ <c>shop-</c> و<c>ab--cd</c> و<c>xn--…</c> وطولاً بَينَ 54 و63 و<c>best-vendor</c> — والمَتجَرُ
+    /// <c>{slug}.R</c> ودَورُه <c>{slug}-{rolehost}.R</c> مِلصَقانِ لا يَصلُحُ لَهُما أَيٌّ مِنها. فَصارَ الشَكلُ <see cref="StoreHostName"/> نَفسَه،
+    /// وخُروقُه تُترجَمُ إلى رُموزِ الواجِهَةِ القائِمَة: المَحجوزُ ولاحِقَةُ اسمِ الدَورِ <see cref="SlugReserved"/> (اسمٌ تَملِكُه المَنَصَّةُ لِمُضيفِ
+    /// دَورِ مَتجَرٍ آخَر)، وما سِواهُما <see cref="SlugFormat"/>. والمَحجوزُ قَبلَ الشَكلِ كَما كان، وأَقسامُ القاعِدَةِ قَبلَ الكُلّ. تَوصيفُه قَبلَ التَبديل
+    /// <c>SlugDoorHostShapeCharacterizationTests</c> (‏5a70efa) بِبَصمَتِه.</para></remarks>
+    public static string? SlugRefusal(string? slug)
+    {
+        if (string.IsNullOrEmpty(slug)) return SlugRequired;
+        if (InternalPartitions.Contains(slug, StringComparer.OrdinalIgnoreCase)) return SlugReserved;
+        var violations = StoreHostName.Validate(slug);
+        if (violations.Count == 0) return null;
+        return violations.Any(v => v.Code is StoreHostName.Reserved or StoreHostName.RoleSuffix) ? SlugReserved : SlugFormat;
+    }
+
+    /// <summary>أَقسامُ Marten الداخِلِيَّةُ الَّتي لا وَثيقَةَ مُستَأجِرٍ لَها — بِثَوابِتِها لا بِنُسَخِها، فَقِسمٌ يُعادُ تَسمِيَتُه يَبقى مَحجوزاً. والشَكلُ
+    /// أَعلاه يَرُدُّها اليَومَ (تَبدَأُ بِـ<c>_</c>)، والقائِمَةُ تَحجُزُها ولَو اتَّسَعَ الشَكلُ يَوماً.</summary>
+    public static readonly IReadOnlyList<string> InternalPartitions =
+    [
+        StudioAuth.Tenant,
+        FeasibilityAnalysisService.IncubatorTenant,
+        Audit.AuditWriter.PlatformScope,
+        AgentService.AdminTenant,
+    ];
 
     // ─── النَمَط: مَعجَمٌ مُغلَقٌ وسُقوطٌ مَكتوبٌ صَراحَةً ──────────────
 
@@ -102,6 +155,10 @@ public sealed class TenantFromAnalysisFactory
     /// عَمداً لِلَقطَةِ المَظهَر)، وأَداةُ الوَكيلِ <c>set_roles</c>
     /// تَعرِضُهُ نَصّاً. فَالمَمنوعُ <b>بُلوغُهُ مِن مَسارِ البِناء</b>،
     /// وحَذفُهُ قَرارٌ مُنتَجِيٌّ لِصاحِبِ المَشروع.</para>
+    ///
+    /// <para><b>(‏2026-10-28، ‏ADR-040، قَرارُ المالِك د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: اتَّخَذَه المالِك — صِفرُ الأَدوارِ لا يُعطي
+    /// <c>tenant.manage</c> لِأَحَد (<c>RolePermissions.Has</c>)، فَما وَصَفَه «قيسَ حَيّاً» أَعلاه لا يَقَعُ اليَومَ ولَو بَلَغَ مَتجَرٌ صِفرَ أَدوار.
+    /// والأَرضِيَّةُ هُنا باقِيَة: مَتجَرٌ بِلا أَدوارٍ ما زالَ بِلا دَورٍ يَبيعُ مِنه أَحَدٌ بِاختِيار.</para>
     /// </summary>
     public static string NormalizePattern(string? pattern)
         => pattern is not null && KnownPatterns.Contains(pattern)
@@ -149,11 +206,21 @@ public sealed class TenantFromAnalysisFactory
     /// المالِكُ بِيَدِه. القَناةُ الآنَ تُشتَقُّ في النُقطَةِ مِن
     /// <see cref="TenantAuthChannelDoor"/>، والمَصنَعُ يَكتُبُ ما
     /// أُعطِيَ ولا يَختَرِعُ.</para>
+    ///
+    /// <para><b>ويُدرِجُ ولا يَدهَس</b> (‏2026-11-07، مُراجَعَةُ تَيّارِ C1 · W13-1·F2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): كانَ <c>ws.Store(tenant)</c> — upsert —
+    /// فَسُؤالُ <see cref="ValidateSlugAsync"/> قَبلَه ظَنٌّ لا قُفل: حِسابانِ بِمُعَرِّفٍ واحِدٍ في اللَحظَةِ نَفسِها قيلَ لِكِلَيهِما «بُني» (‏12/12 في سِتِّ جَولاتٍ مَقيسَة)،
+    /// وبَقِيَ صَفٌّ واحِدٌ مالِكُه آخِرُ كاتِب، وعُدَّ لِكِلَيهِما مَتجَر. والآنَ <c>Insert</c>: مِفتاحُ الوَثيقَةِ هُوَ القُفل، والثاني يَرمي
+    /// <c>JasperFx.DocumentAlreadyExistsException</c> عِندَ الحِفظ — ويُجيبُه البابُ بِـ<see cref="SlugTaken"/> كَما يُجيبُ مَن جاءَ بَعدَ الكِتابَة.
+    /// والوَثيقَةُ المَكتوبَةُ هِيَ هِيَ بايتاً (‏<c>StudioStoreBirthCharacterizationTests.GoldenSha256</c>).</para>
+    ///
+    /// <para><b>و<paramref name="write"/> <c>false</c> يُعيدُ الوَثيقَةَ ولا يَكتُبُها</b> (‏2026-11-07، مُراجَعَةُ عَدَساتِ C1 · W13-1·SEC-C1-1 — يُلحَقُ ولا يُعادُ
+    /// حَرفٌ فَوقَه): بابُ الاستوديو يُدرِجُها في حِفظِ <see cref="StudioTierService.RecordStoreBuiltAsync"/> نَفسِه مَعَ عَدّادِ صاحِبِها وسُؤالِ سَقفِه —
+    /// فَلا مَتجَرَ بِلا عَدٍّ ولا عَدَّ بِلا مَتجَر. والوَثيقَةُ هِيَ هِيَ في الحالَين.</para>
     /// </summary>
     public async Task<Tenant> CreateAsync(
         string slug, string name, string color, string tagLine, string city,
         string pattern, string sector, string authChannel,
-        Guid ownerId, Guid? sourceAnalysisId,
+        Guid ownerId, Guid? sourceAnalysisId, bool write = true,
         CancellationToken ct = default)
     {
         // **النَمَطُ يُسَوّى قَبلَ أَن يُشتَقَّ مِنهُ شَيء.** ولا يُغَيِّرُ
@@ -174,9 +241,10 @@ public sealed class TenantFromAnalysisFactory
             SourceAnalysisId = sourceAnalysisId,
             CreatedAt = DateTime.UtcNow
         };
+        if (!write) return tenant;
 
         await using var ws = _store.LightweightSession();
-        ws.Store(tenant);
+        ws.Insert(tenant);
         await ws.SaveChangesAsync(ct);
         return tenant;
     }
@@ -200,9 +268,19 @@ public sealed class TenantFromAnalysisFactory
         var s = string.IsNullOrEmpty(sector) ? PatternToSector(pattern) : sector;
         return s switch
         {
+            // **كِندٌ فارِغٌ لا `"commercial"`** (‏ADR-034، ‏2026-10-11). كانَت
+            // الفِئَتانِ هُنا بِكِندِ `"commercial"` — وهي في مُعجَمِ المُستَودَعِ
+            // **عَقارٌ تِجارِيّ** (مَحَلّاتُ قِطاعِ `realestate` أَدناه، ومَكاتِبُ
+            // `ejar` ومَحَلّاتُه) — و`PatternProfileResolver.PatternOf` يَقرَؤُها
+            // إيجاراً بِلا سَلَّة، وكَذلكَ نُسخَتُه في `MainLayout.razor`. وهذا
+            // الفَرعُ مَقصِدُ مَسارِ العَميلِ كُلِّه (القِطاعُ `""` والنَمَطُ يَسقُطُ
+            // إلى `marketplace`)، فَكانَ كُلُّ مَتجَرٍ مِن `/studio/begin` يولَدُ
+            // بِلا استِمارَةٍ إلى `cart/add` ولا تَبويبِ سَلَّة (‏FLGAP-04). والفارِغُ
+            // هُوَ ما تُبذَرُ بِه `theme-demo` وما يَكتُبُه فَرعُ السُقوطِ أَدناه:
+            // «فِئَةٌ رَئيسِيَّةٌ بِلا تَجميع» (‏`Category.Kind`). والقارِئُ لَم يُمَسّ.
             "ecommerce" => new[] {
-                C("products",   "مُنتَجات",  "🛍️", "commercial", 0),
-                C("deals",      "عُروض",     "🏷️", "commercial", 1)
+                C("products",   "مُنتَجات",  "🛍️", "", 0),
+                C("deals",      "عُروض",     "🏷️", "", 1)
             },
             "fnb" => new[] {
                 C("restaurants", "مَطاعِم", "🍽️", "fnb", 0),

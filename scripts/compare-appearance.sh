@@ -22,7 +22,9 @@ STRIPPED="$(mktemp -d)"
 
 trap 'rm -rf "$AFTER" "$STRIPPED"' EXIT
 
-bash "$(dirname "$0")/capture-appearance.sh" "$AFTER" "$BASE_URL" > /dev/null
+# ‏`--allow-skip` (‏2026-11-05، E-4): الالتِقاطُ يَفشَلُ عَلى صَفحَةٍ مَحروسَةٍ تُخُطِّيَت، وهُنا الحُكمُ لِلمُقارَنَة — كُلُّ لَقطَةِ أَساسٍ بِلا نَظيرٍ
+# تُحمِرُّ أَدناه بِاسمِها، وأَساسٌ لا يَحوي المُتَخَطّاةَ لا يَفشَلُ بِسَبَبِها.
+bash "$(dirname "$0")/capture-appearance.sh" --allow-skip "$AFTER" "$BASE_URL" > /dev/null
 
 fail=0
 compared=0

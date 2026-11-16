@@ -1,0 +1,33 @@
+namespace ACommerce.Templates.Customer.Marketplace.Services;
+
+/// <summary>
+/// <para><b>إلى أَينَ يَعودُ أُنبوبُ بَدءِ المُحادَثَةِ حينَ يَفشَل</b> — دالَّةٌ نَقِيَّة.
+/// وُلِدَ <c>POST /{slug}/users/{userId}/chat</c> لِصَفحَةِ السائِقينَ فَكانَ يُسقِطُ كُلَّ
+/// فَشَلٍ (دُخولٌ، نَفسٌ، طَرَفٌ مَحذوف) عَلى <c>/drivers</c>. وصارَ لَه مُستَهلِكٌ ثانٍ
+/// — زِرُّ «تَواصَل مَع البائِع» عَلى صَفحَةِ الصَفقَة (‏S1·٧) — فَمُشتَرٍ حُذِفَ حِسابُ
+/// بائِعِه كانَ يُقذَفُ إلى صَفحَةِ السائِقينَ بِلا كَلِمَة (مُراجَعَةُ المَوجَة ١).</para>
+///
+/// <para><b>المَنشَأُ يُحَلُّ بِـ<see cref="LocalRedirect.Resolve"/> القائِمَةِ لا هُنا</b>
+/// (القاعِدَة ٨، و<c>LocalRedirectTests.NoEndpointDecidesRedirectLocalityOnItsOwn</c>
+/// يَفرِضُ أَنّ كُلَّ قِراءَةٍ لِـ<c>returnUrl</c> مَوصولَةٌ بِها): <c>returnUrl</c> مَحَلِّيٌّ
+/// أَو مَسقَطُ الرَأسِ. وهذِه الدالَّةُ تُلحِقُ الرَمزَ وَحدَه، فَتَقرَؤُه الصَفحَةُ
+/// المُنشِئَةُ مِن القامُوس (<c>DealRefusalTexts</c>)؛ وصَفحَةُ السائِقينَ لا تَقرَأُ
+/// <c>err</c> فَيَمُرُّ بِها الرَمزُ بِلا أَثَر.</para>
+/// </summary>
+public static class ChatStartReturn
+{
+    /// <summary>رَمزُ الفَشَل: الطَرَفُ المَطلوبُ لَم يَعُد مُسَجَّلاً في المَتجَر.</summary>
+    public const string PartnerMissing = "partner_missing";
+
+    /// <summary>وِجهَةُ الفَشَلِ بِرَمزِه: المَنشَأُ (المَحلولُ سَلَفاً) مَعَ <c>?err=</c> —
+    /// أَو <c>&amp;err=</c> إن حَمَلَ استِعلاماً.</summary>
+    public static string Failure(string origin, string code)
+        => origin + (origin.Contains('?') ? "&" : "?") + "err=" + code;
+
+    /// <summary><b>رابِطُ الدُخولِ الَّذي يَعودُ إلى المَنشَأ</b> — والمَنشَأُ <b>مُرَمَّزٌ</b> قيمَةً واحِدَةً لِـ
+    /// <c>returnUrl</c> (مُراجَعَةُ المَوجَةِ الثانِيَة، ‏2026-10-11): كانَ يُحشَرُ خاماً في
+    /// <c>login?returnUrl={origin}</c>، فَمَنشَأٌ يَحمِلُ استِعلاماً (<c>…?tab=1&amp;err=x</c>) يَنقَسِمُ عَلى صَفحَةِ
+    /// الدُخولِ إلى مُعامِلَين ويَعودُ المُستَخدِمُ إلى نِصفِه. والمَنشَأُ مَحلولٌ سَلَفاً بِـ
+    /// <see cref="LocalRedirect.Resolve"/> — التَرميزُ لا يَحكُمُ مَحَلِّيَّتَه، يَنقُلُه فَقَط.</summary>
+    public static string Login(string origin) => "login?returnUrl=" + Uri.EscapeDataString(origin);
+}

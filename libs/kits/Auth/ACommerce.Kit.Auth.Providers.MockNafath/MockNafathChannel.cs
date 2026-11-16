@@ -28,7 +28,8 @@ public sealed class MockNafathChannel : INafathChannel, IDevelopmentStubChannel
 
     public string ChannelName => "MockNafath";
 
-    public Task<NafathStartResult> StartAsync(string nationalId, CancellationToken ct)
+    /// <remarks>‏(‏2026-11-12، W13-6·١٣) تَبِعَ التَوقيعَ ولا يَعُدّ — لا يُغادِرُ العَمَلِيَّة.</remarks>
+    public Task<NafathStartResult> StartAsync(ACommerce.Platform.Shared.Metering.ProviderCall call, string nationalId, CancellationToken ct)
     {
         var attemptId = Guid.NewGuid().ToString("N");
         _attempts[attemptId] = DateTime.UtcNow.AddSeconds(_opts.AutoApproveSeconds);

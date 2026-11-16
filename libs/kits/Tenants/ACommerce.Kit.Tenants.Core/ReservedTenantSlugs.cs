@@ -83,6 +83,13 @@ public static class ReservedTenantSlugs
             // مَخزَنَ المَلَفّاتِ كُلَّه، فَلا صورَةَ تُفتَح.
             "uploads", "branding",
 
+            // ═══ نِقاطٌ عَلى الجَذرِ خارِجَ القائِمَة — ‏2026-11-07، ADR-050 §٩ · W13-4·C2a·4 (يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) ═══
+            //
+            // **العِلَّةُ المَقيسَة**: `/sw.js` و`/offline.html` و`/lang/{lang}` تُخدَمُ مِن الجَذرِ (`MarketplaceTemplateExtensions`) ولَم تَكُن هُنا —
+            // فَعَلى مُضيفِ المَتجَرِ يَحقِنُها الوَسيطُ `/ashare/sw.js` فَتُجابُ 404 **ولا يُسَجَّلُ عامِلُ الخِدمَةِ قَطّ**، وفي المَسارِ يُستَعلَمُ عَن مَتجَرٍ
+            // اسمُه «sw.js» في كُلِّ طَلَب. والحارِسُ `RootEndpointsReservedTests` يَجمَعُ كُلَّ جَذرٍ مَخدومٍ ويَحمَرُّ عَلى ما يُضافُ بِلا حَجز.
+            "sw.js", "offline.html", "lang",
+
             // ═══ مِحوَرُ المُضيف — أَسماءٌ لا تَصلُحُ نِطاقاً فَرعِيّاً ═══
             //
             // **لِماذا الآنَ وفي القائِمَةِ نَفسِها**: صارَ السلاجُ
@@ -113,6 +120,83 @@ public static class ReservedTenantSlugs
             "blog", "status", "support", "docs", "help",
             "app", "dev", "staging", "test",
         };
+
+    /// <summary>
+    /// <para><b>جُذورُ البِنيَةِ التَحتِيَّة — تُخدَمُ كَما هي عَلى كُلِّ مُضيف</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5). عَلى مُضيفِ المَتجَرِ
+    /// <c>{slug}.R</c> لا يُحقَنُ فيها السلاج: إطارُ Blazor ومِحوَرُه، والأَنماطُ والسكربتات، وصُوَرُ المَخزَنِ والعَلامَة، والصِحَّة، ومِحوَرُ
+    /// الإشعارات، ووَثيقَتا الزاحِف (وخَريطَةُ المَوقِعِ تَسرُدُ مَتجَرَ المُضيفِ وَحدَه)، وعامِلُ الخِدمَةِ وصَفحَتُه البَديلَة وزِرُّ اللُغَة.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> RootEndpoints =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "_blazor", "_framework", "_content", "css", "js", "lib", "favicon.ico",
+            "health", "realtime", "robots.txt", "sitemap.xml", "uploads", "branding",
+            "sw.js", "offline.html", "lang",
+        };
+
+    /// <summary>
+    /// <para><b>مَناطِقُ المَنَصَّة — لا تُخدَمُ عَلى مُضيفِ مَتجَر</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2a·5): الاستوديو والإشرافُ وعَودَةُ الدَفعِ
+    /// والصَفَحاتُ الخَمسُ. عَلى <c>{slug}.R</c> يُحَوَّلُ <c>GET</c> إلَيها 301 إلى الجَذرِ <c>R</c> بِالمَسارِ والاستِعلامِ نَفسَيهِما، وما سِواه 404 —
+    /// <b>والعِلَّةُ المَقيسَة</b>: كانَت تُخدَمُ هُناكَ بِسِياقِ المَتجَرِ (‏<c>/studio</c> عَلى <c>ashare.R</c> مُستَأجِرُه <c>ashare</c>).</para>
+    /// <para>‏(‏2026-11-11، الإغلاقُ الأَخيرُ لِـW13-4 · C2z-PATHS-R1-06 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) <b>والتَحويلُ 302 لا 301</b> (‏<c>023b686</c>، ADR-050 §١٣):
+    /// المُتَصَفِّحُ يَحفَظُ الـ301 بِلا انقِضاء، والـ301 لِلمَرحَلَةِ الخامِسَةِ حينَ تُحسَمُ قَراراتُها.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> PlatformAreas =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "admin", "_admin", "studio", "billing",
+            "terms", "privacy", "refunds", "pricing", "contact",
+        };
+
+    /// <summary><b>سَطحُ الـAPI</b> — عَلى مُضيفِ المَتجَرِ يُخدَمُ <c>/api/{slug}/…</c> لِمَتجَرِ المُضيفِ و<c>/api/push/…</c> (مِفتاحُ الإشعارِ العامّ)، وما
+    /// سِواهُما 404: مَتجَرٌ آخَرُ لا يُبلَغُ مِن مُضيفِ غَيرِه، وAPI المَنَصَّةِ (<c>/api/v1</c>، خُطّافا <c>/api/billing</c>) عَلى الجَذر.</summary>
+    public const string ApiRoot = "api";
+
+    /// <summary>المَقطَعُ الثاني مِن <c>/api/…</c> الَّذي يُخدَمُ عَلى كُلِّ مُضيفِ مَتجَر.</summary>
+    public const string ApiPushSegment = "push";
+
+    /// <summary><b>الطَرَفُ الوَحيدُ تَحتَ <see cref="ApiPushSegment"/> الَّذي يُخدَمُ عَلى مُضيفِ المَتجَر</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة ·
+    /// SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ‏<c>GET /api/push/vapid-key</c> — مِفتاحُ الإشعارِ العامّ. وما سِواه تَحتَ <c>/api/push/</c> هُوَ سَطحُ مَتجَرٍ
+    /// اسمُه <c>push</c> (‏<c>/api/{slug}/…</c>)، وكانَ يُخدَمُ عَلى كُلِّ مُضيفٍ آخَر.</summary>
+    public const string ApiPushVapidKey = "vapid-key";
+
+    /// <summary>
+    /// <para><b>المَقاطِعُ الحَرفِيَّةُ الثانِيَةُ لِـAPI المَنَصَّة</b> (‏2026-11-07، مُراجَعَةُ C2a الجَولَةُ الثانِيَة · SEC-C2a-R2-1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه):
+    /// <c>/api/push/vapid-key</c> و<c>/api/v1/*</c> وخُطّافا <c>/api/billing/{paypal,paddle}</c> — كُلُّها تُطابِقُ قالَبَ <c>/api/{slug}/…</c> شَكلاً.
+    /// <b>والعِلَّةُ المَقيسَة</b> (عِندَ <c>b8bf5b1</c>): المُشرِفُ أَنشَأَ مَتجَرَينِ <c>push</c> و<c>v1</c>، فَكانَ سَطحُ <c>push</c> يُخدَمُ عَلى مُضيفِ كُلِّ مَتجَرٍ آخَرَ
+    /// بِسِياقِه، و<c>v1.R/api/v1/deals</c> يَبلُغُ API المَنَصَّةِ عَلى مُضيفِ مَتجَر.</para>
+    /// <para><b>ولِماذا لَيسَت في <see cref="All"/></b>: <c>SlugFromPath</c> يَقرَأُ تِلكَ القائِمَة، فَمَتجَرٌ قائِمٌ بِاسمٍ مِنها كانَ يَفقِدُ مَسارَه بِالنَشر (دَرسُ
+    /// <c>lang</c>، C2a-P-02). فَهي تُرَدُّ حَيثُ يُسأَلُ اسمُ المُضيفِ وَحدَه — <c>StoreHostName</c> (بابُ الإنشاءِ الواحِدُ وحَلُّ المُضيف) — فَلا يولَدُ بِها مَتجَرٌ
+    /// جَديد، والقائِمُ يَبقى بِمَسارِه بِلا مُضيفٍ كَكُلِّ مُعَرِّفٍ عَلى غَيرِ الشَكل. والحارِسُ <c>RootEndpointsReservedTests</c> يَجمَعُ المَقطَعَ الثانِيَ الحَرفِيَّ
+    /// مِن كُلِّ نُقطَةِ <c>/api/…</c> ويَحمَرُّ عَلى ما لَيسَ هُنا.</para>
+    /// </summary>
+    public static readonly IReadOnlySet<string> PlatformApiSegments =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ApiPushSegment, "v1", "billing" };
+
+    /// <summary>
+    /// <para><b>عَلامَةُ الدَورِ في المَسار</b> — <c>/{slug}/r/{role}/…</c>، وعَلى مُضيفِ المَتجَرِ <c>/r/{role}/…</c> (‏2026-11-07، مُراجَعَةُ C2b الجَولَةُ الثانِيَة ·
+    /// C2b-P2-01 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق). <b>مَحجوزَةٌ اسمَ مُضيفٍ وَحدَه</b> (<c>StoreHostName</c>): عَلى مُضيفِ مَتجَرٍ اسمُه <c>r</c> يَصيرُ
+    /// <c>/r/{role}/…</c> مَساراً يَحمِلُ المَتجَرَ فَلا يُحقَن، ولا مَسارَ <c>/{slug}/{role}/…</c> ← 404 لِكُلِّ رابِطِ دَورٍ نَظيف (مَقيسٌ حَيّاً عِندَ <c>f8e02c1</c>).
+    /// <b>ولا في <see cref="All"/></b> — بِدَرسِ <see cref="PlatformApiSegments"/> نَفسِه: <c>SlugFromPath</c> يَقرَؤُها، فَمَتجَرٌ قائِمٌ اسمُه <c>r</c> يَبقى بِمَسارِه
+    /// بِلا مُضيفٍ كَكُلِّ مُعَرِّفٍ عَلى غَيرِ الشَكل.</para>
+    /// </summary>
+    public const string RoleSegment = "r";
+
+    /// <summary>أَهذا الاسمُ مَقطَعٌ حَرفِيٌّ لِـAPI المَنَصَّة؟ (<see cref="PlatformApiSegments"/>)</summary>
+    public static bool IsPlatformApiSegment(string? name)
+        => !string.IsNullOrWhiteSpace(name) && PlatformApiSegments.Contains(name.Trim());
+
+    /// <summary>
+    /// <para><b>أَيُخدَمُ هذا المَقطَعُ الأَوَّلُ مِن الجَذرِ نَفسِه عَلى كُلِّ مُضيف؟</b> (‏2026-11-07، ADR-050 §٩ · W13-4·C2b·1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق):
+    /// جُذورُ البِنيَةِ التَحتِيَّة (<see cref="RootEndpoints"/>) ومَناطِقُ المَنَصَّة (<see cref="PlatformAreas"/>) وسَطحُ الـAPI (<see cref="ApiRoot"/>)، بِلا حالَةِ أَحرُف.
+    /// <b>وهُوَ ما لا يَحقِنُ فيه الحاقِنُ مَتجَرَ المُضيف</b> (<c>TenantResolverMiddleware.PathWithSlug</c> يَسأَلُه)، <b>فَيَسأَلُه أَيضاً بانِي الرابِطِ النَظيف</b>
+    /// (<c>StoreUrl</c>): ذَيلٌ يَبدَأُ بِه لا يَكونُ نَظيفاً عَلى المُضيفِ بَل <c>/{slug}/…</c> — كانَ <c>LinkFor(slug, role, "terms?…")</c> يَكتُبُ <c>/terms</c>
+    /// فَيُحَوَّلُ إلى شُروطِ المَنَصَّةِ عَلى الجَذر. قائِمَةٌ واحِدَةٌ يَقرَؤُها الطَرَفان، فَلا يَنجَرِفُ أَحَدُهُما عَن الآخَر (القاعِدَة ٨).</para>
+    /// </summary>
+    public static bool ServedAtRoot(string? first)
+        => !string.IsNullOrEmpty(first)
+           && (RootEndpoints.Contains(first) || PlatformAreas.Contains(first)
+               || string.Equals(first, ApiRoot, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>أَهذا الاسمُ مَحجوز؟ — <b>الفَراغُ لَيسَ مَحجوزاً بَل
     /// غائِب</b>، ويَرُدُّه فاحِصُ الشَكلِ لا هذا.</summary>

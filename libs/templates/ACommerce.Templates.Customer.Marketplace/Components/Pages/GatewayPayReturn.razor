@@ -1,0 +1,130 @@
+@page "/{slug}/pay/return"
+@page "/{slug}/r/{role}/pay/return"
+@inject AuthSession Auth
+@inject Services.Deals.DealsService Deals
+@inject IHttpContextAccessor HttpCtx
+@inject L L
+@using ACommerce.Templates.Customer.Marketplace.Services.Deals
+
+@*
+    صَفحَةُ العَودَةِ مِن بَوّابَةِ المَتجَر — **قِراءَةٌ خالِصَة، ولا تُثبِتُ شَيئاً ولا تَكتُبُه** (‏ADR-032 §٢‑هـ الخُطوَة 9).
+
+    يَعودُ إلَيها المُشتَري مِن صَفحَةِ الدَفعِ المُستَضافَةِ بَعدَ أَن دَفَعَ (`success_url`) أَو بِزِرِّ الرُجوعِ (`back_url`) — وكِلاهُما
+    `GET` يُطلِقُه مُتَصَفِّحُه، ويُطلِقُه الزاحِفُ والجالِبُ المُسبَقُ أَيضاً. **فَالعَودَةُ لَيسَت بُرهاناً، ولا يَقَعُ بِها أَثَر**: تَرسُمُ
+    الصَفحَةُ زِرّاً واحِداً يُرسِلُ `POST /{slug}/payments/verify`، وهُناكَ يُسأَلُ عَن الدَفعِ بِمِفتاحِ المَتجَرِ وتُعرَضُ الفاتورَةُ
+    عَلى بَوّابَتِها. وما يُكتَبُ — حينَ يُكتَب — يُكتَبُ هُناك. والفاحِصُ `No_razor_page_writes_state` يَحمَرُّ إن كَتَبَت.
+
+    **وتَسأَلُ السُلطَةَ الَّتي تَسأَلُها النُقطَة** (`DealPayAuthorization`): لا يُرسَمُ الزِرُّ لِغَيرِ مُشتَري الصَفقَة، ولا لِصَفقَةٍ بِلا
+    فاتورَة — فَما يُرسَمُ هُوَ ما يُقبَل. ورَمزُ رَفضِ النُقطَةِ يَعودُ في `?err=` ويُقرَأُ مِن القامُوسِ بِـ`GatewayReturn.KeyFor`.
+
+    **والنَصُّ كُلُّه مِن القامُوس** (القاعِدَة ١١): صِفرُ حَرفِيَّةٍ عَرَبِيَّةٍ خارِجَ التَعليق.
+
+    **والحالُ تُسأَلُ** (‏2026-10-12، مُراجَعَةُ تَيّارِ S9 الأولى — ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): السُلطَةُ لا تَسأَلُ عَن الحالِ عَمداً — دَفعٌ
+    وَقَعَ عَلى طَلَبٍ أُلغِيَ يُسَجَّلُ ولا يُبتلَع، فَالزِرُّ باقٍ — لكِنّ الصَفحَةَ كانَت تَرسُمُ لِلمُلغى رابِطَ «أَكمِلِ الدَّفعَ» ونَصَّ «طَلَبُك
+    قائِمٌ»، وبَعدَ دَفعِه «يُتابِعُه البائِع». فَالرابِطُ لِلقائِمِ وَحدَه (`GatewayReturn.PayUrlOf`)، ونَصُّ الحالِ مِن دالَّةٍ واحِدَةٍ بِشَرطِ
+    الكاتِبِ نَفسِه (`GatewayReturn.StateKeyOf` — المُلغى يُقالُ لَه «أُلغِيَ، واستِرجاعُ ما دَفَعتَ عَلى المَتجَرِ مِن لَوحَةِ بَوّابَتِه»).
+*@
+
+<div class="acs-page">
+    @if (!Auth.IsAuthenticated)
+    {
+        <AcEmptyState IconName="package" Title="@L["pay.return.need_login"]"
+                      ActionLabel="@L["shell.nav.login"]" ActionHref="@AuthSession.LinkFor(Slug, Role, GatewayReturn.LoginPathFor(Slug, DealRef))" />
+    }
+    else if (refusalKey is not null)
+    {
+        <AcEmptyState IconName="info" Title="@L[refusalKey]"
+                      ActionLabel="@L["deals.detail.back"]" ActionHref="@AuthSession.LinkFor(Slug, Role, "deals")" />
+    }
+    else if (confirmed)
+    {
+        @* ثَبَتَ الدَفعُ وكُتِب (‏ADR-032 الخُطوَة 10): قِراءَةٌ لِما كَتَبَه التَأكيدُ — `GatewayReturn.IsConfirmed` — لا سُؤالٌ لِلبَوّابَة؛
+           فَلا زِرَّ تَحَقُّقٍ لِدَفعٍ ثَبَت. *@
+        <h1 class="acm-wizard-title">@L.Markup("pay.return.title")</h1>
+        <AcCard>
+            <ChildContent>
+                <p>@L.Markup(stateKey)</p>
+                <a class="ac-btn ac-btn-primary" href="@AuthSession.LinkFor(Slug, Role, $"deals/{dealId}")">@L.Markup("pay.return.open_deal")</a>
+            </ChildContent>
+        </AcCard>
+    }
+    else
+    {
+        <h1 class="acm-wizard-title">@L.Markup("pay.return.title")</h1>
+
+        @if (GatewayReturn.KeyFor(Err) is { } errKey)
+        {
+            <AcAlert Variant="danger" Message="@L[errKey]" />
+        }
+        else if (GatewayReturn.KeyFor(closedCode) is { } closedKey)
+        {
+            @* فاتورَةٌ رَأى تَحَقُّقٌ سابِقٌ إغلاقَها (‏2026-10-13، G5 (xvii-g)): يُقالُ رَمزُها بِلا `?err=`، والرابِطُ لا يُرسَمُ لَها (`PayUrlOf`). *@
+            <AcAlert Variant="danger" Message="@L[closedKey]" />
+        }
+        else if (windowClosed)
+        {
+            @* انتَهَت مُهلَةُ الفاتورَةِ بِتاريخِها المَكتوب (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الأولى؛ `GatewayReturn.WindowClosed`): البَوّابَةُ لا تَقبَلُ دَفعَها بَعدَه، فَلا رابِطَ
+               إلَيها (القاعِدَة ١٢) — ويُقالُ ما يَفعَلُه زِرُّ «تَحَقَّق» الآن. *@
+            <AcAlert Variant="warning" Message="@L["pay.return.window_closed"]" />
+        }
+
+        <AcCard>
+            <ChildContent>
+                <p>@L.Markup(stateKey)</p>
+                <form method="post" action="@($"/{Slug}/payments/verify")">
+                    <input type="hidden" name="@GatewayReturn.DealKey" value="@dealId.ToString("N")" />
+                    <button type="submit" class="ac-btn ac-btn-primary">@L.Markup("pay.return.verify")</button>
+                </form>
+                @* ومَن لَم يُكمِل الدَفعَ يَعودُ إلى صَفحَتِه — رابِطُها كَما كَتَبَه إتمامُ الشِراء (‏ADR-032 الخُطوَة 10)، ولا يُرسَمُ بِلا رابِط. *@
+                @if (payUrl is not null)
+                {
+                    <a class="ac-btn ac-btn-ghost" href="@payUrl" rel="noopener noreferrer">@L.Markup("pay.return.complete_payment")</a>
+                }
+            </ChildContent>
+        </AcCard>
+
+        <a href="@AuthSession.LinkFor(Slug, Role, "deals")">@L.Markup("deals.detail.back")</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+    [Parameter] public string? Role { get; set; }
+
+    /// <summary>الصَفقَةُ المَرجِعُ كَما وَضَعَها إتمامُ الشِراءِ في رابِطِ العَودَة — تُقرَأُ بِـ<see cref="GatewayReturn.DealIdOf"/>.</summary>
+    [SupplyParameterFromQuery(Name = GatewayReturn.DealKey)] public string? DealRef { get; set; }
+
+    /// <summary>رَمزُ رَفضٍ ارتَدَّت بِه نُقطَةُ التَحَقُّق — يُحَلُّ نَصّاً بِـ<see cref="GatewayReturn.KeyFor"/>، ولا يُرسَمُ لِرَمزٍ خارِجَ المَعجَم.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
+
+    Guid dealId;
+    /// <summary>نَصُّ رَفضِ السُلطَةِ لِلناظِر — و<c>null</c> حينَ يَتَحَقَّقُ مِن هذِه الصَفقَة، فَيُرسَمُ الزِرّ.</summary>
+    string? refusalKey;
+    /// <summary>ثَبَتَ دَفعُ الصَفقَةِ وكُتِب — <see cref="GatewayReturn.IsConfirmed"/> (‏ADR-032 الخُطوَة 10).</summary>
+    bool confirmed;
+    /// <summary>رابِطُ صَفحَةِ الدَفعِ المُستَضافَة — <see cref="GatewayReturn.PayUrlOf"/>، و<c>null</c> فَلا «أَكمِل الدَّفع».</summary>
+    string? payUrl;
+    /// <summary>نَصُّ حالِ الصَفقَة — <see cref="GatewayReturn.StateKeyOf"/>: قائِمَةٌ أَو مُلغاة × ثَبَتَ دَفعُها أَو لا (‏2026-10-12).</summary>
+    string stateKey = "";
+    /// <summary>رَمزُ الفاتورَةِ المُغلَقَةِ حينَ رَآها تَحَقُّقٌ سابِق (<see cref="GatewayReturn.IsClosed"/>، ‏2026-10-13) — يُقالُ بِلا <c>?err=</c>،
+    /// والرابِطُ لا يُرسَمُ لَها (<see cref="GatewayReturn.PayUrlOf"/>).</summary>
+    string? closedCode;
+    /// <summary>انتَهَت مُهلَةُ الدَفعِ بِتاريخِ الفاتورَةِ المَكتوب — لِصَفقَةٍ قائِمَةٍ لَم يَثبُت دَفعُها (<see cref="GatewayReturn.WindowClosed"/>، ‏2026-10-29).</summary>
+    bool windowClosed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (HttpCtx.HttpContext is { } ctx) { Auth.SetTenant(Slug); Auth.Load(ctx, Slug); }
+        if (!Auth.IsAuthenticated) return;
+        var deal = GatewayReturn.DealIdOf(DealRef) is { } id ? await Deals.LoadAsync(Slug, id) : null;
+        refusalKey = GatewayReturn.KeyFor(DealPayAuthorization.Validate(deal, new DealPayer(Auth.UserId!.Value))?.Code);
+        dealId = deal?.Id ?? Guid.Empty;
+        if (refusalKey is not null || deal is null) return;
+        confirmed = GatewayReturn.IsConfirmed(deal);
+        var now = DateTimeOffset.UtcNow;
+        payUrl = GatewayReturn.PayUrlOf(deal, now);
+        windowClosed = deal.Status == DealStatus.Active && !confirmed && GatewayReturn.WindowClosed(deal, now);
+        stateKey = GatewayReturn.StateKeyOf(deal);
+        closedCode = GatewayReturn.IsClosed(deal) ? GatewayPaymentProof.InvoiceClosed : null;
+    }
+}

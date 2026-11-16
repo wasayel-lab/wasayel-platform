@@ -1,7 +1,9 @@
 @page "/studio/apps/{slug}/deals"
 @inject Services.Incubator.StudioAuth Auth
+@inject ACommerce.Kit.Culture.ICultureContext Culture
 @inject Services.Queries.TenantDirectory Tenants
 @inject Services.Deals.DealsService Deals
+@inject Services.Queries.AccountQueries Account
 @inject L L
 @using ACommerce.Kit.Tenants
 @using ACommerce.Templates.Customer.Marketplace.Services.Deals
@@ -14,10 +16,8 @@
 <StudioShell Title="@($"{L["studio.app_deals.title"]} {tenant?.Name ?? Slug}")" Active="home">
     <TopBarActions>
         <a class="st-btn st-btn-ghost" href="@($"/studio/apps/{Slug}")">← @L.Markup("studio.app_nav.settings")</a>
-        <form method="post" action="@($"/studio/apps/{Slug}/deals/seed")" style="display:inline-block;margin-inline-start:8px;">
-            <input type="hidden" name="pattern" value="@SelectedPattern" />
-            <button type="submit" class="st-btn st-btn-light">@L.Markup("studio.app_deals.demo_op")</button>
-        </form>
+        @* (‏2026-10-29، قَرارُ المالِك د32 «٢»): كانَ هُنا زِرُّ «+ عَمَلِيَّة تَجريبيَّة» إلى `/studio/apps/{slug}/deals/seed` — يَكتُبُ صَفقَةً حَقيقِيَّةً
+           في المَتجَرِ تَقِفُ عِندَ «عَرض» (حارِسُ المُبادِرِ يَرُدُّ أَوَّلَ نَقرَةٍ إدارِيَّة)؛ فَحُذِفَ هُوَ واستِمارَةُ الصَفحَةِ الفارِغَةِ والبابُ نَفسُه (القاعِدَتانِ ١٢ و١٧). *@
     </TopBarActions>
     <ChildContent>
         @if (tenant is null)
@@ -30,6 +30,19 @@
                 <h1>@L.Markup("studio.app_deals.heading")</h1>
                 <p>@L.Markup("studio.app_deals.intro")</p>
             </div>
+
+            @* نُقطَةُ `advance` الإدارِيَّةُ تَرتَدُّ إلى القائِمَةِ لِصَفقَةٍ لا تُحَمَّل — بِرَمزِها، والنَصُّ مِن مَعجَمِ الاستوديو
+               (‏2026-10-13، مُراجَعَةُ المَوجَة 3a — G4 (i)؛ نَسَقُ شَريطِ `StudioAppDealDetail`). *@
+            @if (DealRefusalTexts.StudioKeyFor(Err) is { } errKey)
+            {
+                <div class="st-chip st-chip-danger" style="margin-bottom:14px;">@L.Markup(errKey)</div>
+            }
+            @* تَنبيهاتُ صاحِبِ المَتجَرِ — «استِرجاعٌ مُستَحَقّ» و«فاتورَةٌ لَم تُلغَ» — صُفوفاً تُنقَرُ إلى صَفقاتِها (‏2026-10-29، مُراجَعَةُ تَيّارِ S3 الجَولَة ٢؛
+               قَرارُ المالِك د3 (٢) «د»). وبِلا إشعارٍ لا يُرسَمُ شَيء — الكُتلَةُ بِلا فَراغٍ قَبلَها ولا بَعدَها فَالصَفحَةُ كَما كانَت بِحَرفِها. *@
+            @if (ownerNotices.Count > 0)
+            {
+                <StudioOwnerNotices Slug="@Slug" Mine="@ownerNotices" />
+            }
 
             <div class="studio-stats">
                 <div class="studio-stat"><div class="studio-stat-label">@L.Markup("studio.app_deals.stat_total")</div>
@@ -48,17 +61,7 @@
                 <div class="st-card" style="text-align:center;padding:36px;">
                     <div style="margin-bottom:6px;"><AcIcon Name="package" Size="42" /></div>
                     <h3 style="margin:0 0 6px;">@L.Markup("studio.app_deals.empty")</h3>
-                    <p style="color:var(--st-muted);margin:0 0 16px;">@L.Markup("studio.app_deals.empty_hint")</p>
-                    <form method="post" action="@($"/studio/apps/{Slug}/deals/seed")" style="display:flex;justify-content:center;gap:8px;">
-                        <select name="pattern" class="st-input" style="width:auto;">
-                            <option value="marketplace">marketplace</option>
-                            <option value="trip">trip</option>
-                            <option value="rental">rental</option>
-                            <option value="service">service</option>
-                            <option value="classifieds">classifieds</option>
-                        </select>
-                        <button type="submit" class="st-btn st-btn-primary">@L.Markup("studio.app_deals.start")</button>
-                    </form>
+                    <p style="color:var(--st-muted);margin:0;">@L.Markup("studio.app_deals.empty_hint")</p>
                 </div>
             }
             else
@@ -77,7 +80,7 @@
                                 <span>
                                     @d.Pattern · @d.InitiatorName
                                     @if (d.CounterpartyName is not null) { <text> ⇄ @d.CounterpartyName</text> }
-                                    · @d.UpdatedAt.ToString("HH:mm")
+                                    · @Culture.FormatTime(d.UpdatedAt, "HH:mm")
                                 </span>
                             </div>
                             <span class="st-chip">@DealsPolicy.LabelAr(d.Stage)</span>
@@ -96,9 +99,12 @@
 
 @code {
     [Parameter] public string Slug { get; set; } = "";
+    /// <summary>رَمزُ رَفضٍ مِن نُقطَةٍ إدارِيَّةٍ ارتَدَّت إلى القائِمَة — يُحَلُّ بِـ<see cref="DealRefusalTexts.StudioKeyFor"/>.</summary>
+    [SupplyParameterFromQuery(Name = "err")] public string? Err { get; set; }
     Tenant? tenant;
     List<Deal> deals = new();
-    string SelectedPattern => deals.FirstOrDefault()?.Pattern ?? "marketplace";
+    /// <summary>إشعاراتُ صاحِبِ المَتجَرِ في مُستَأجِرِ المَتجَرِ بِمُعَرِّفِ جَلسَةِ الاستوديو — يَقرَؤُها القارِئُ القائِمُ نَفسُه (القاعِدَة ٨) بَعدَ فَحصِ المِلكِيَّة.</summary>
+    IReadOnlyList<ACommerce.Kit.Notifications.Notification> ownerNotices = Array.Empty<ACommerce.Kit.Notifications.Notification>();
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,6 +114,7 @@
         if (tenant is not null && tenant.OwnerUserId != Auth.UserId!.Value) { tenant = null; return; }
         if (tenant is null) return;
         deals = await Deals.ListForTenantAsync(Slug);
+        ownerNotices = await Account.NotificationsAsync(Slug, Auth.UserId!.Value);
     }
 
     static string StageIcon(DealStage s) => s switch

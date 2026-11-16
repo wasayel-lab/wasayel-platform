@@ -1,0 +1,255 @@
+using System.Text.RegularExpressions;
+using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.Extensions.DependencyInjection;
+using Xunit;
+using UpgradePrompt = ACommerce.Templates.Customer.Marketplace.Components.UpgradePrompt;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ لافِتَةُ التَرقِيَةِ تَعرِضُ سِعرَ دَرَجَةٍ لا تُباع — الشَقيقَةُ الَّتي لَم يَبلُغها `2db0bfb` (موجزُ الفجوات P2-3) ═══
+//
+// **المَقيس** (‏2026-10-13، مُراجَعَةُ تَيّارِ S11 — الجَولَة ١): `UpgradePrompt.razor` تَرسُمُ لِمَن بَلَغَ حَدَّه حُدودَ
+// `TierCatalog.NextAbove(CurrentTier)` وزِرّاً إلى `/studio/billing` نَصُّه «تَرقِيَة إلى {LabelAr} ({MonthlyPriceSar} / شَهر)» — تَحتَ
+// `Next is not null` وَحدَه، ولا تَسأَلُ `StudioTierPurchase.IsSelfGrantable` الَّتي يَسأَلُها سِعرُ البِطاقَةِ وزِرُّها في `/studio/billing`.
+// و`/studio/billing` (`Shown`) لا تَرسُمُ دَرَجَةً لا تُمنَحُ ذاتِيّاً إلّا دَرَجَةَ المُستَخدِمِ نَفسِه — فَالزِرُّ يَحمِلُ سِعراً ويَنتَهي إلى
+// صَفحَةٍ لا تَعرِضُ ما سَمّاه ولا تَبيعُه (القاعِدَة ١٢).
+//
+// حَيّاً عَلى نُسخَةٍ مَرمِيَّةٍ مِن قاعِدَةٍ مَبذورَة: مالِكُ استوديو عادِيٌّ، `/studio?upgrade=analyze` ثُمَّ `/studio/billing`، والدَرَجَةُ
+// المُخَزَّنَةُ تُكتَبُ في النُسخَةِ بِـSQL — لا كاتِبَ في المُنتَجِ لِدَرَجَةٍ بِسِعر (`StudioTierPurchase.Refuse` يَرُدُّها)، لكِنّ ما خُزِّنَ
+// قَبلَ إغلاقِ `/studio/billing/select` (‏2026-08-30) يُقرَأُ كَما هو:
+//   spark  → لا قائِمَةَ ولا زِرّ                                        | billing: [Spark]
+//   lite   → أَربَعَةُ بُنودٍ مِن حُدودِ Spark + «تَرقِيَة إلى Spark (99 ر.س / شَهر)» | billing: [Lite]   — ولا Spark فيها
+//   growth → أَربَعَةُ بُنودٍ مِن حُدودِ Spark + «تَرقِيَة إلى Spark (99 ر.س / شَهر)» | billing: [Growth] — ولا Spark فيها
+//   scale  → لا قائِمَةَ ولا زِرّ                                        | billing: [Scale]
+// ويَومَ يُقلَبُ `FreeTierTemporarilyRaised` (العَودَةُ المُوَثَّقَةُ سَطرانِ في `StudioTier.cs`) يَصيرُ ذلك عَرضَ كُلِّ مُستَخدِم:
+// «تَرقِيَة إلى Lite (199 ر.س / شَهر)» — وهو بِحَرفِه ما في `i18n-baseline/studio-upgrade-*.html` المُودَعَةِ مِن قَبلِ الرَفع.
+//
+// يُثَبَّتُ هُنا قَبلَ العِلاجِ (القاعِدَة ٣): الصَفُّ الأَوَّلُ يَنقَلِبُ بِاسمِه في كوميتِ العِلاج، والآخَرانِ يَبقَيانِ أَخضَرَينِ بِلا تَعديلِ حَرف.
+//
+// **العِلاج** (‏2026-10-13): `Offer` = `Next` مَصفِيّاً بِـ`StudioTierPurchase.IsSelfGrantable`، والوَسمُ يَقرَؤُه وَحدَه — فَالأَوسَعُ الَّذي لا
+// يُباعُ يُرسَمُ كَما لا أَوسَع. الصَفُّ الأَوَّلُ انقَلَبَ بِاسمِه، والرابِعُ جَديد، والثاني والثالِثُ كَما أُودِعا.
+//
+// **والقُطبِيَّةُ تُثَبَّتُ لا الاحتِواء** (‏2026-10-13، مُراجَعَةُ تَيّارِ S11 — الجَولَة ٢): كانَ الصَفُّ الأَوَّلُ يَسأَلُ أَيَحوي تَعريفُ
+// `Offer` كَلِمَةَ `Next` ونِداءَ `IsSelfGrantable(`، وذلك يَصدُقُ عَلى نَفيِه: `!StudioTierPurchase.IsSelfGrantable(n.Tier)` يُعيدُ العَطَبَ
+// بِعَينِه وصُفوفُ هذا المِلَفِّ و`StudioBillingPriceTests` و`UpgradeLadderTests` (‏13) خَضراء — مَقيساً عَلى نُسخَةٍ مُؤَرشَفَةٍ مِن
+// `9cf3f68`، ومَعَه سِتَّةُ أَشكالٍ أُخرى: `!(…)`، `|| true`، `== false`، `is false`، `^ true`، وتَبديلُ فَرعَي `? n : null`. فَصارَ التَعريفُ
+// مُثَبَّتاً بِحَرفِه في الأَوَّل، ويَرسُمُ الرابِعُ اللافِتَةَ ويُقارِنُها بايتاً بِبايت، و`StudioBillingPriceTests.IsSellCondition` يَقرَأُ
+// القُطبِيَّة. والثاني والثالِثُ والأَدَواتُ كَما أُودِعَت.
+public class UpgradePromptPriceTests
+{
+    /// <summary>نَصُّ مِلَفٍّ بِلا تَعليقاتٍ (‏<c>@* *@</c> و<c>&lt;!-- --&gt;</c> ثُمَّ تَعليقاتُ C#) — والفَهارِسُ مَحفوظَةٌ، لِأَنّ
+    /// التَعليقَ يُفَرَّغُ ولا يُحذَف.</summary>
+    internal static string Code(params string[] relative)
+    {
+        var path = Path.Combine(new[] { ThemeZeroEquivalenceTests.RepoRoot }.Concat(relative).ToArray());
+        var text = File.ReadAllText(path);
+        Assert.True(text.Length > 500, $"أَداةٌ عَمياء: {path} لَم يُقرَأ.");
+        return WriteEndpointGuardTests.StripComments(WriteEndpointGuardTests.StripMarkupComments(text));
+    }
+
+    internal static string Prompt() => Code(
+        "libs", "templates", "ACommerce.Templates.Customer.Marketplace", "Components", "UpgradePrompt.razor");
+
+    /// <summary>شُروطُ كُلِّ <c>if (…) { … }</c> تَحوي كُتلَتُه <paramref name="index"/> — مِن الخارِجِ إلى الداخِل، بِمُوازَنَةِ
+    /// الأَقواسِ لا بِعَدِّ أَسطُر. و<c>if</c> بِلا كُتلَةٍ (سَطرٌ واحِد) لا يُحسَب: لا يَحوي ما بَعدَه.</summary>
+    internal static IReadOnlyList<string> EnclosingIfConditions(string code, int index)
+    {
+        Assert.True(index >= 0, "المَوضِعُ غَيرُ مَوجودٍ في النَصّ — الأَداةُ عَمياء.");
+        var found = new List<string>();
+        foreach (Match m in Regex.Matches(code, @"(?<![\w.])@?if\s*\("))
+        {
+            if (m.Index >= index) break;
+            var open = m.Index + m.Length - 1;
+            var close = Matching(code, open, '(', ')');
+            var brace = close + 1;
+            while (brace < code.Length && char.IsWhiteSpace(code[brace])) brace++;
+            if (brace >= code.Length || code[brace] != '{') continue;
+            var end = Matching(code, brace, '{', '}');
+            if (brace < index && index < end)
+                found.Add(Regex.Replace(code[(open + 1)..close], @"\s+", " ").Trim());
+        }
+        return found;
+    }
+
+    private static int Matching(string code, int open, char o, char c)
+    {
+        var depth = 0;
+        for (var i = open; i < code.Length; i++)
+        {
+            if (code[i] == o) depth++;
+            else if (code[i] == c && --depth == 0) return i;
+        }
+        Assert.Fail($"«{o}» بِلا مُقابِلٍ عِندَ {open} — الأَداةُ عَمياء.");
+        return -1;
+    }
+
+    /// <summary><b>حُدودُ الأَوسَعِ وزِرُّه وسِعرُه لِما يُباعُ وَحدَه</b> (‏2026-10-13 — انقَلَبَ بِقَرارٍ مَرئِيٍّ مِن
+    /// <c>Today_the_banner_draws_the_next_tiers_price_and_sell_button_under_no_sell_condition</c>): قائِمَةُ <c>BenefitsFor</c> وكُتلَةُ
+    /// <c>&lt;a … href="/studio/billing"&gt;</c> وقيمَةُ <c>MonthlyPriceSar</c> شَرطُها الداخِلِيُّ <c>Offer is not null</c>، و<c>Offer</c> هُوَ
+    /// <c>Next</c> مَصفِيّاً بِـ<c>StudioTierPurchase.IsSelfGrantable</c> — الدالَّةُ الَّتي تَرسُمُ سِعرَ البِطاقَةِ وزِرَّها في
+    /// <c>/studio/billing</c>، لا شَرطٌ ثانٍ.
+    ///
+    /// <para><b>وتَعريفُ <c>Offer</c> يُثَبَّتُ بِحَرفِه لا بِاحتِوائِه</b> (‏2026-10-13 — مُراجَعَةُ تَيّارِ S11، الجَولَة ٢): «يَحوي
+    /// <c>Next</c> و<c>IsSelfGrantable(</c>» يَصدُقُ عَلى نَفيِه أَيضاً — <c>&amp;&amp; !StudioTierPurchase.IsSelfGrantable(n.Tier)</c>
+    /// يُعيدُ زِرَّ Spark بِسِعرِه لِمَن خُزِّنَ عَلى lite أَو growth والصُفوفُ خَضراء. فَالمُثَبَّتُ القُطبِيَّة: التَعريفُ بَعدَ طَيِّ
+    /// المَسافاتِ حَرفاً، كَما يُثَبِّتُ <c>StudioBillingPriceTests</c> شَرطَ البِطاقَةِ حَرفاً.</para></summary>
+    [Fact]
+    public void The_banner_draws_the_next_tiers_price_and_sell_button_only_for_a_tier_billing_sells()
+    {
+        var razor = Prompt();
+        Assert.Single(Regex.Matches(razor, "MonthlyPriceSar"));
+
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) شَرطُ اللافِتَةِ صارَ `StudioUpgradeReason.Drawn(Reason)` — الغائِبُ والفارِغُ
+        // كَما كانا، والمُتَقاعِدُ (analyze/refine/export) لا يُرسَم؛ وكانَ «!string.IsNullOrEmpty(Reason)». وشَرطُ العَرضِ داخِلَه بِحَرفِه.
+        var expected = new[] { "StudioUpgradeReason.Drawn(Reason)", "Offer is not null" };
+        foreach (var marker in new[] { "BenefitsFor(", "href=\"/studio/billing\"", "MonthlyPriceSar" })
+            Assert.Equal(expected, EnclosingIfConditions(razor, razor.IndexOf(marker, StringComparison.Ordinal)));
+
+        var offer = Regex.Match(razor, @"TierLimits\?\s+Offer\s*=>(?<expr>[^;]+);");
+        Assert.True(offer.Success, "لا تَعريفَ لِـ`Offer` في اللافِتَة.");
+        Assert.Equal("Next is { } n && StudioTierPurchase.IsSelfGrantable(n.Tier) ? n : null",
+            Regex.Replace(offer.Groups["expr"].Value, @"\s+", " ").Trim());
+    }
+
+    /// <summary><b>والسُلَّمُ يَعرِضُ اليَومَ عَلى دَرَجَتَينِ مُخَزَّنَتَينِ — وعَلى المَجّانِيَّةِ يَومَ تَعودُ حُدودُها — دَرَجَةً بِسِعرٍ لا
+    /// تَرسُمُها <c>/studio/billing</c> ولا تَبيعُها.</b> يُقاسُ بِالدَوالِّ نَفسِها (<c>NextAbove</c> و<c>IsSelfGrantable</c>) وبِشَرطِ
+    /// <c>Shown</c> في صَفحَةِ الباقاتِ حَرفاً (تُمنَحُ ذاتِيّاً أَو هي الحالِيَّة)؛ والأَرقامُ تُقرَأُ ولا تُكتَب (القاعِدَة ١٦). وهذا لا
+    /// يَتَبَدَّلُ بِالعِلاج — العِلاجُ في اللافِتَةِ لا في السُلَّم.</summary>
+    [Fact]
+    public void The_ladder_offers_two_stored_tiers_and_the_reverted_free_tier_a_priced_tier_billing_neither_shows_nor_sells()
+    {
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        Assert.True(TierCatalog.All.Count >= 4, $"أَداةٌ عَمياء: {TierCatalog.All.Count} دَرَجَة.");
+
+        var offered = 0;
+        var dead = new List<string>();
+        foreach (var current in TierCatalog.All.Values)
+        {
+            var next = TierCatalog.NextAbove(current.Tier);
+            if (next is null) continue;
+            offered++;
+            // ‏(‏2026-10-24) هذِه النُسخَةُ مِن `Shown` مَربوطَةٌ بِحَرفِه: `StudioBillingPriceTests.ShownExpected` يُثَبِّتُ التَعريفَ في الصَفحَةِ
+            // بَعدَ طَيِّ المَسافات، فَإن تَغَيَّرَ هُناكَ حَمِرَ ذاك قَبلَ أَن تَكذِبَ هذِه.
+            // ‏(‏2026-10-24 — تَيّارُ S16، يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) والرَبطُ كانَ دَعوى: تَغييرُ الصَفحَةِ و`ShownExpected` مَعاً يُبقي هذِه عَلى
+            // القَديم. صارَ `StudioBillingPriceTests.The_two_test_copies_of_Shown_are_ShownExpected_letter_for_letter` يُقارِنُها بِحَرفِه.
+            var shownOnBilling = StudioTierPurchase.IsSelfGrantable(next.Tier) || next.Tier == current.Tier;
+            if (next.MonthlyPriceSar > 0 && !shownOnBilling) dead.Add($"{current.Tier}→{next.Tier}");
+        }
+        Assert.True(offered >= 2, $"أَداةٌ عَمياء: فُحِصَت {offered} دَعوَةَ تَرقِيَة.");
+        Assert.Equal(new[] { "growth→spark", "lite→spark" }, dead.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+
+        // والعَودَةُ المُوَثَّقَة: المَجّانِيَّةُ بِحُدودِها قَبلَ الرَفعِ يُعرَضُ عَلَيها `lite` — بِسِعرٍ، ولا تُمنَحُ ذاتِيّاً.
+        var before = TierCatalog.FreeTierBeforeRaise;
+        var reverted = TierCatalog.All.Values
+            .Where(t => !string.Equals(t.Tier, before.Tier, StringComparison.Ordinal))
+            .Where(t => TierCatalog.Exceeds(t, before))
+            .OrderBy(t => t.MonthlyPriceSar)
+            .First();
+        Assert.Equal("lite", reverted.Tier);
+        Assert.True(reverted.MonthlyPriceSar > 0, "lite بِلا سِعر");
+        Assert.False(StudioTierPurchase.IsSelfGrantable(reverted.Tier), "lite تُمنَحُ ذاتِيّاً");
+    }
+
+    /// <summary><b>وعُنوانُ الحَدِّ ورِسالَتُه يُرسَمانِ لِكُلِّ سَبَبٍ أَيّاً كانَ المَعروض</b> — تَحتَ شَرطِ <c>Reason</c> وَحدَه، فَإخفاءُ
+    /// العَرضِ لا يُسقِطُ اللافِتَة: مَن بَلَغَ حَدَّه يُقالُ لَه ذلك ولو لَم يُبَع لَه شَيء (‏<c>UpgradeLadderTests</c>: «بَلَغتَ حَدَّك» بِلا زِرِّ
+    /// بَيع).</summary>
+    /// <para><b>قُلِبَ بِاسمِه (‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1)</b> — كانَ <c>The_limit_title_and_message_render_for_every_reason_whatever_is_offered</c>
+    /// بِشَرطِ <c>!string.IsNullOrEmpty(Reason)</c>. والسَبَبُ المُتَقاعِدُ لا تُرسَمُ لَه لافِتَة، فَالشَرطُ <c>StudioUpgradeReason.Drawn(Reason)</c> وَحدَه.</para>
+    [Fact]
+    public void The_limit_title_and_message_render_for_every_drawn_reason_whatever_is_offered()
+    {
+        var razor = Prompt();
+        foreach (var marker in new[] { "@TitleFor(Reason)", "@MessageFor(Reason)" })
+        {
+            var at = razor.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(at > 0, $"«{marker}» غَيرُ مَرسومٍ في اللافِتَة.");
+            Assert.Equal(new[] { "StudioUpgradeReason.Drawn(Reason)" }, EnclosingIfConditions(razor, at));
+        }
+    }
+
+    /// <summary><b>ودَرَجَةٌ أَوسَعُ لا تُباعُ تُرسَمُ لافِتَتُها لافِتَةَ «لا أَوسَع» بِحَرفِها</b> (‏2026-10-13): الوَسمُ لا يَقرَأُ
+    /// <c>Next</c> في أَيِّ مَوضِعٍ — يَقرَأُ <c>Offer</c> وَحدَه — فَحينَ يَكونُ <c>null</c> لِأَنّ الأَوسَعَ لا يُباعُ يَخرُجُ ما يَخرُجُ حينَ
+    /// لا أَوسَع: العُنوانُ والرِسالَة. ومَعَ <c>SelfServiceCheckoutExists = false</c> لا دَرَجَةَ في الكاتالوجِ — مُخَزَّنَةً كانَت أَو
+    /// مَجّانِيَّةً بَعدَ العَودَة — يُعرَضُ عَلَيها شَيء.
+    ///
+    /// <para><b>و«اللافِتَةُ نَفسُها» تُرسَمُ وتُقارَنُ لا تُستَنتَج</b> (‏2026-10-13 — مُراجَعَةُ تَيّارِ S11، الجَولَة ٢: نِصفُ الكاتالوجِ
+    /// أَعلاه لا يَقرَأُ الوَسم، وشَطرُ الوَسمِ يَقيسُ النَصَّ لا الناتِج): المُكَوِّنُ نَفسُه يُصَيَّرُ بِـ<c>HtmlRenderer</c> — في
+    /// <c>Microsoft.AspNetCore.Components.Web</c> المُرجَعَةِ أَصلاً، بِلا قاعِدَةٍ ولا خادِم، لِأَنّ أَداةَ اللَقطَةِ القائِمَةَ تُصَيِّرُ
+    /// مالِكَ استوديو عَلى spark وَحدَها فَلا تَبلُغُ هذِه الحالَ — لِكُلِّ سَبَبٍ في <c>StudioUpgradeReason.All</c> ولِكُلِّ دَرَجَةٍ
+    /// أَوسَعُها لا يُباع، وتُقارَنُ لافِتَتُها بايتاً بِبايتٍ بِلافِتَةِ دَرَجَةٍ لا أَوسَعَ لَها. فَنَفيُ الشَرطِ في <c>Offer</c> — أَو أَيُّ
+    /// وَسمٍ يَرسُمُ لِلأَوسَعِ الَّذي لا يُباعُ شَيئاً — يُحمِرُّه بِالناتِجِ لا بِالنَصّ.</para></summary>
+    [Fact]
+    public async Task An_unsellable_wider_tier_draws_the_same_banner_as_no_wider_tier()
+    {
+        var razor = Prompt();
+        var code = razor.IndexOf("@code", StringComparison.Ordinal);
+        Assert.True(code > 300, "لا كُتلَةَ `@code` في اللافِتَة — الأَداةُ عَمياء.");
+        var markup = razor[..code];
+        Assert.DoesNotMatch(@"\bNext\b", markup);
+        Assert.Equal(2, Regex.Matches(markup, @"@if \(Offer is not null\)").Count);
+
+        Assert.False(StudioTierPurchase.SelfServiceCheckoutExists);
+        var before = TierCatalog.FreeTierBeforeRaise;
+        var reverted = TierCatalog.All.Values
+            .Where(t => !string.Equals(t.Tier, before.Tier, StringComparison.Ordinal))
+            .Where(t => TierCatalog.Exceeds(t, before))
+            .OrderBy(t => t.MonthlyPriceSar)
+            .FirstOrDefault();
+        var nexts = TierCatalog.All.Values.Select(t => TierCatalog.NextAbove(t.Tier)).Append(reverted)
+            .Where(n => n is not null).Select(n => n!).ToList();
+        Assert.True(nexts.Count >= 3, $"أَداةٌ عَمياء: فُحِصَت {nexts.Count} دَرَجَةً أَوسَع.");
+        var sold = nexts.Where(n => StudioTierPurchase.IsSelfGrantable(n.Tier)).Select(n => n.Tier).ToList();
+        Assert.True(sold.Count == 0, $"فُحِصَت {nexts.Count} دَرَجَةً أَوسَع، ويُعرَضُ بِسِعرٍ {sold.Count}: {string.Join(", ", sold)}");
+
+        // ‏(الجَولَة ٢) واللافِتَةُ مَرسومَةً: الدَرَجاتُ تُقرَأُ مِن الكاتالوجِ ولا تُكتَب — أَوسَعُها لا يُباعُ (اليَومَ lite وgrowth،
+        // وأَوسَعُهُما spark)، أَو لا أَوسَعَ لَها (spark ما دامَ الرَفعُ قائِماً، وscale).
+        var unsellable = TierCatalog.All.Values
+            .Where(t => TierCatalog.NextAbove(t.Tier) is { } n && !StudioTierPurchase.IsSelfGrantable(n.Tier))
+            .Select(t => t.Tier).OrderBy(t => t, StringComparer.Ordinal).ToList();
+        var noWider = TierCatalog.All.Values
+            .Where(t => TierCatalog.NextAbove(t.Tier) is null)
+            .Select(t => t.Tier).OrderBy(t => t, StringComparer.Ordinal).ToList();
+        Assert.True(unsellable.Count >= 2 && noWider.Count >= 1,
+            $"أَداةٌ عَمياء: {unsellable.Count} دَرَجَةً أَوسَعُها لا يُباع، و{noWider.Count} بِلا أَوسَع.");
+
+        await using var services = new ServiceCollection()
+            .AddSingleton(new ACommerce.Platform.I18n.L(new Microsoft.AspNetCore.Http.HttpContextAccessor()))
+            .BuildServiceProvider();
+        await using var renderer = new HtmlRenderer(services, Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        Task<string> Render(string tier, string reason) => renderer.Dispatcher.InvokeAsync(async () =>
+            (await renderer.RenderComponentAsync<UpgradePrompt>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                [nameof(UpgradePrompt.Reason)] = reason,
+                [nameof(UpgradePrompt.CurrentTier)] = tier,
+            }))).ToHtmlString());
+
+        var compared = 0;
+        var differ = new List<string>();
+        // ‏(‏2026-11-07، مُراجَعَةُ C1 · W13-1·F1 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) الأَسبابُ المَرسومَةُ وَحدَها ومَعَها السَبَبُ المَجهول (فَرعُ الافتِراض): المُتَقاعِدُ
+        // لا لافِتَةَ لَه أَصلاً (`UpgradePromptRetiredReasonsTests`)، وكانَت الحَلقَةُ عَلى `StudioUpgradeReason.All`.
+        var reasons = StudioUpgradeReason.All.Where(StudioUpgradeReason.Drawn).Append(UpgradePromptLiveReasonsCharacterizationTests.UnknownReason).ToList();
+        foreach (var reason in reasons)
+        {
+            var none = await Render(noWider[0], reason);
+            Assert.True(none.Length > 300 && none.Contains("<strong", StringComparison.Ordinal),
+                $"أَداةٌ عَمياء: لافِتَةُ «{noWider[0]}» لِـ«{reason}» {none.Length} حَرفاً بِلا عُنوان.");
+            Assert.DoesNotContain("<ul", none, StringComparison.Ordinal);
+            Assert.DoesNotContain("href=\"/studio/billing\"", none, StringComparison.Ordinal);
+            foreach (var tier in unsellable.Concat(noWider.Skip(1)))
+            {
+                var drawn = await Render(tier, reason);
+                compared++;
+                if (drawn == none) continue;
+                var at = 0;
+                while (at < drawn.Length && at < none.Length && drawn[at] == none[at]) at++;
+                differ.Add($"{tier}/{reason}: {drawn.Length} ≠ {none.Length} حَرفاً، أَوَّلُ فَرقٍ عِندَ {at}");
+            }
+        }
+        Assert.True(compared >= 3 * reasons.Count,
+            $"أَداةٌ عَمياء: قورِنَت {compared} لافِتَةً بِلافِتَةِ «لا أَوسَع».");
+        Assert.True(differ.Count == 0,
+            $"قورِنَت {compared} لافِتَةً، وتَختَلِفُ عَن لافِتَةِ «لا أَوسَع» {differ.Count}:\n  " + string.Join("\n  ", differ));
+    }
+}

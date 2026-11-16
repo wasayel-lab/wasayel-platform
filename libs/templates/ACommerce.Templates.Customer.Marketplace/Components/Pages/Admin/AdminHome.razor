@@ -1,4 +1,5 @@
 @page "/admin"
+@inject ACommerce.Templates.Customer.Marketplace.Services.Incubator.StudioAgentSwitch AgentSwitch
 @inject ACommerce.Templates.Customer.Marketplace.Services.Queries.TenantDirectory Tenants
 @inject NavigationManager Nav
 @inject L L
@@ -57,9 +58,13 @@
             <a class="ac-btn ac-btn-primary" href="/admin/tenants/new">
                 <AcIcon Name="plus" Size="18" /> @L.Markup("admin.home.new_tenant")@((MarkupString)"\n            ")
             </a>
+            @* ‏(‏2026-11-07، W13-1·٦ — ADR-049 §٦) لا رابِطَ إلى الوَكيلِ والمِفتاحُ مُطفَأ. *@
+            @if (AgentSwitch.Enabled)
+            {
             <a class="ac-btn ac-btn-ghost" href="/admin/agent">
                 <AcIcon Name="message" Size="18" /> @L.Markup("admin.home.agent_cta")@((MarkupString)"\n            ")
             </a>
+            }
             @* سِجِلُّ التَدقيق — مَدخَلٌ كانَ مَفقوداً. الشاشَةُ قائِمَةٌ
                وتَرُدُّ ‏200 مُذ بُنِيَت، ولا يَربِطُ إلَيها إلّا سَطرُ
                تَنَقُّلِها هي نَفسِها؛ فَمَن لَم يَحفَظ العُنوانَ لَم
@@ -159,7 +164,7 @@
                     </a>
                     @* رابِط مُنفَصِل لِفَتح المَتجَر نَفسه في تَبويب جَديد.
                        النَّقر عَلى البِطاقَة = تَحَكُّم، السَّهم = مُعايَنَة. *@
-                    <a href="@($"/{t.Slug}")" target="_blank" rel="noopener"
+                    <a href="@ACommerce.Templates.Customer.Marketplace.Services.Ux.StoreUrl.Open(t.Slug)" target="_blank" rel="noopener"
                        title="@(L["admin.home.open_title"])"
                        style="position:absolute;top:10px;inset-inline-end:10px;
                               display:inline-flex;align-items:center;justify-content:center;
@@ -177,6 +182,8 @@
     @* monitoring CTA لِمُشرِف المَنصَّة *@
     <div style="margin-top:18px;">
         <a class="ac-btn ac-btn-ghost" href="/admin/monitor"><AcIcon Name="bar-chart" Size="16" /> @L.Markup("admin.home.monitor_cta")</a>
+        @* ‏(‏2026-11-12، W13-6·٥ — ADR-051 §١٣) العَدُّ الداخِلِيّ: مَدخَلُه هُنا بِجِوارِ المُراقَبَة (القاعِدَة ١٢) — `MeterAdminReachabilityTests`. *@
+        <a class="ac-btn ac-btn-ghost" href="/admin/meter"><AcIcon Name="list" Size="16" /> @L.Markup("admin.home.meter_cta")</a>
     </div>
 </RequirePlatformAdmin>
 

@@ -36,12 +36,20 @@ public static class TestDataSeeder
     {
         var store = services.GetRequiredService<IDocumentStore>();
         await using var globalSession = store.LightweightSession();
+        var skipped = new List<string>();
 
         for (int ti = 0; ti < Plan.Length; ti++)
         {
             var (slug, roles) = Plan[ti];
             var tenant = await globalSession.LoadAsync<Tenant>(slug);
-            if (tenant is null) continue;   // tenant غَير مَوجود → تَخَطّي
+            // ‏**ما يُتَخَطّى يُقالُ بِسَبَبِه** (‏2026-10-24، تَيّارُ S15 البَند F؛ القاعِدَة ١٠): البَذّارُ يَكتُبُ في المُستَأجِرينَ القائِمينَ ولا
+            // يُنشِئُهُم، و`injez` لا يَبذُرُه `PlatformSeed` — فَعَلى كُلِّ قاعِدَةٍ مَحَلِّيَّةٍ كانَ يُتَخَطّى صامِتاً والخُلاصَةُ «✅» كَأَنَّ الأَربَعَةَ بُذِروا.
+            if (tenant is null)
+            {
+                skipped.Add(slug);
+                Console.WriteLine($"[TestSeed] tenant '{slug}' غائِبٌ في هذِه القاعِدَة — تُخُطِّي: البَذّارُ يَكتُبُ في مُستَأجِرٍ قائِمٍ ولا يُنشِئُه.");
+                continue;
+            }
 
             // (١) أَضِف الأَدوار النّاقِصَة فَقَط — احتَرِم تَخصيص الـ admin.
             bool tenantTouched = false;
@@ -108,7 +116,10 @@ public static class TestDataSeeder
             await tenantSession.SaveChangesAsync();
         }
         await globalSession.SaveChangesAsync();
-        Console.WriteLine("[TestSeed] ✅ test data seeded.");
+        // ‏(‏2026-10-24 — تَيّارُ S16، مُراجَعَةُ S15 الجَولَة ١) **والعَلامَةُ تَسأَلُ العَدّ**: كانَت «✅» بِلا شَرطٍ فَقاعِدَةٌ لا مُستَأجِرَ فيها
+        // مِن الأَربَعَةِ تُقرَأُ نَجاحاً «0 مِن 4». صِفرٌ مَبذورٌ ⇒ «⚠ test data NOT seeded»، وما سِواه «✅» كَما كان.
+        Console.WriteLine($"[TestSeed] {(Plan.Length - skipped.Count == 0 ? "⚠ test data NOT seeded" : "✅ test data seeded")} — {Plan.Length - skipped.Count} مِن {Plan.Length} مُستَأجِرين"
+            + (skipped.Count == 0 ? "." : $"؛ تُخُطِّيَ الغائِب: {string.Join(", ", skipped)}."));
     }
 
     private static async Task EnsureSampleListingAsync(
@@ -182,8 +193,9 @@ public static class TestDataSeeder
             (a.Id,     "مُمتاز، مَتى يُمكِن المُعايَنَة؟",                95),
             (bUser.Id, "تَمام، نَتَّفِق على المَوعِد غَداً.",            90),
         };
+        // ‏(‏2026-11-12، W13-6·٩) `Insert` بِمُعَرِّفٍ جَديدٍ لِكُلِّ رِسالَة (وخَلفَ حارِسِ المُحادَثَةِ أَعلاه) — فَتُعَدُّ `chat.message` تَحتَ `_seed`.
         foreach (var (sender, body, mins) in msgs)
-            s.Store(new Message
+            s.Insert(new Message
             {
                 Id = Guid.NewGuid(), ConversationId = convId,
                 SenderId = sender, Body = body, SentAt = now.AddMinutes(-mins)
@@ -192,7 +204,13 @@ public static class TestDataSeeder
 
     /// <summary>صَفقَتان لِفَحص MyDeals/DealDetail مَملوءَتَين: واحِدَة نَشِطَة
     /// في مُنتَصَف التَّدَفُّق (Paid) وأُخرى مُكتَمِلَة (Reviewed) — العميل
-    /// (أَوَّل مُستَخدِم) هو المُبادِر لِتَظهَر في لَوحَتِه.</summary>
+    /// (أَوَّل مُستَخدِم) هو المُبادِر لِتَظهَر في لَوحَتِه.
+    /// <para><b>وكُلُّ ما فيهِما يُطيعُ كاتالوجَ الصَفَقات</b> (موجَزُ الفَجَوات P3-7، ‏2026-10-13): كانَت المُكتَمِلَةُ عِندَ
+    /// <c>Received</c> — ولَيسَت مِن مَراحِلِ <c>marketplace</c> — وسِجِلُّها يَقفِزُ <c>Paid → Delivered</c> مُتَجاوِزاً
+    /// <c>Shipping</c>، و«assigned» يُحَرِّكُ المَرحَلَةَ، وكُلُّ خُطوَةٍ بِاسمِ المُبادِر. صارَت كُلُّ خُطوَةٍ ما يَكتُبُه الكودُ نَفسُه:
+    /// «assigned» بِالطَرَفِ المُقابِلِ ومَرحَلَةٍ ثابِتَة (<c>AssignCounterpartyAsync</c>)، و«advanced» إلى
+    /// <c>DealsPolicy.Next</c> بِفاعِلِ المَرحَلَةِ الداخِلَة (<c>DealsPolicy.Actor</c>)، و<c>Completed</c> عِندَ آخِرِ مَراحِلِ
+    /// النَمَطِ وَحدَه (<c>MoveAsync</c>). يَحرُسُه <c>TestDataSeederDealsTests</c> مِن هذا المَصدَر.</para></summary>
     private static async Task EnsureSampleDealsAsync(
         IDocumentSession s, string slug, User initiator, User counterparty)
     {
@@ -201,8 +219,8 @@ public static class TestDataSeeder
         if (existing.Count > 0) return;
 
         var now = DateTime.UtcNow;
-        DealEvent Ev(DealStage from, DealStage to, string action, int hoursAgo) =>
-            new(from, to, action, initiator.Id, initiator.FullName, null, now.AddHours(-hoursAgo));
+        DealEvent Ev(DealStage from, DealStage to, string action, User actor, int hoursAgo) =>
+            new(from, to, action, actor.Id, actor.FullName, null, now.AddHours(-hoursAgo));
 
         // (أ) نَشِطَة — وَصَلَت مَرحَلَة الدَّفع.
         s.Store(new Deal
@@ -211,34 +229,37 @@ public static class TestDataSeeder
             ListingTitle = "إعلان اختِبار — صَفقَة نَشِطَة",
             InitiatorId = initiator.Id, InitiatorName = initiator.FullName,
             CounterpartyId = counterparty.Id, CounterpartyName = counterparty.FullName,
-            AmountSar = 100, CommissionSar = 5,
+            AmountSar = 100,
             Stage = DealStage.Paid, Status = DealStatus.Active,
             CreatedAt = now.AddHours(-26), UpdatedAt = now.AddHours(-3),
             Timeline =
             {
-                Ev(DealStage.Offered,   DealStage.Booked,    "assigned",  26),
-                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced",  20),
-                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced",   3),
+                Ev(DealStage.Offered,   DealStage.Offered,   "assigned", counterparty, 26),
+                Ev(DealStage.Offered,   DealStage.Booked,    "advanced", counterparty, 25),
+                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", initiator,    20),
+                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", initiator,     3),
             }
         });
 
-        // (ب) مُكتَمِلَة — وَصَلَت Reviewed (تُظهِر نَموذَج التَّقييم).
+        // (ب) مُكتَمِلَة — وَصَلَت Reviewed، آخِرَ مَراحِلِ نَمَطِها (تُظهِر نَموذَج التَّقييم).
         s.Store(new Deal
         {
             Id = Guid.NewGuid(), TenantSlug = slug, Pattern = "marketplace",
             ListingTitle = "إعلان اختِبار — صَفقَة مُكتَمِلَة",
             InitiatorId = initiator.Id, InitiatorName = initiator.FullName,
             CounterpartyId = counterparty.Id, CounterpartyName = counterparty.FullName,
-            AmountSar = 250, CommissionSar = 12.5m,
-            Stage = DealStage.Received, Status = DealStatus.Completed,
+            AmountSar = 250,
+            Stage = DealStage.Reviewed, Status = DealStatus.Completed,
             CreatedAt = now.AddDays(-6), UpdatedAt = now.AddDays(-1),
             Timeline =
             {
-                Ev(DealStage.Offered,   DealStage.Booked,    "assigned",  144),
-                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced",  120),
-                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced",   96),
-                Ev(DealStage.Paid,      DealStage.Delivered, "advanced",   48),
-                Ev(DealStage.Delivered, DealStage.Received,  "advanced",   24),
+                Ev(DealStage.Offered,   DealStage.Offered,   "assigned", counterparty, 144),
+                Ev(DealStage.Offered,   DealStage.Booked,    "advanced", counterparty, 143),
+                Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", initiator,    120),
+                Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", initiator,     96),
+                Ev(DealStage.Paid,      DealStage.Shipping,  "advanced", counterparty,  72),
+                Ev(DealStage.Shipping,  DealStage.Delivered, "advanced", counterparty,  48),
+                Ev(DealStage.Delivered, DealStage.Reviewed,  "advanced", initiator,     24),
             }
         });
     }

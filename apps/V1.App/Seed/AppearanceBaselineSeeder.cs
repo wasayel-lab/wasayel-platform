@@ -1,4 +1,5 @@
 using ACommerce.Kit.Auth;
+using ACommerce.Kit.Chat;
 using ACommerce.Kit.Listings;
 using ACommerce.Kit.Offers;
 using ACommerce.Kit.Roles;
@@ -6,6 +7,7 @@ using ACommerce.Kit.Support;
 using ACommerce.Kit.Tenants;
 using ACommerce.Kit.Theme;
 using ACommerce.Platform.Shared;
+using ACommerce.Templates.Customer.Marketplace.Services.Deals;
 using ACommerce.Templates.Customer.Marketplace.Services.Incubator;
 using ACommerce.Templates.Customer.Marketplace.Services.Listings;
 using ACommerce.Templates.Customer.Marketplace.Services.TenantConfig;
@@ -27,11 +29,17 @@ namespace ACommerce.V1.App.Seed;
 /// <para><b>ولِماذا بَذرَةٌ ثالِثَةٌ ولَيسَت سَطراً في
 /// <see cref="TestDataSeeder"/></b>: تِلكَ تَكتُب في المُستَأجِرينَ
 /// <b>الحَقيقِيّين</b> (<c>ashare</c>, <c>ejar</c>, <c>order</c>) —
-/// وأَحَدُهُم عَرضُ المُستَثمِرين. وهذِه تَكتُب في مُستَأجِرَي اللَقطَة
+/// وكانَ أَحَدُهُم عَرضَ المُستَثمِرين (رُفِعَ ذلكَ بِقَرارِ المالِك ‏2026-10-28، و<c>ashare</c>
+/// مَتجَرٌ تَجريبِيٌّ كَغَيرِه — والعَزلُ باقٍ لِسَبَبِه التِقنِيّ: لَقطَةٌ حَتمِيَّةٌ لا تَتَحَرَّكُ بِبَياناتِ
+/// غَيرِ مُستَأجِرَيها). وهذِه تَكتُب في مُستَأجِرَي اللَقطَة
 /// وَحدَهُما، و<b>لا تَمَسّ صَفّاً واحِداً</b> خارِجَهُما. والدَعوى
 /// مَقيسَةٌ لا مَوعودَة: <see cref="SnapshotAsync"/> يَعُدّ كُلّ جَدوَل
 /// <c>mt_doc_*</c> بِمُستَأجِرِه قَبلَ البَذرِ وبَعدَه، ويَرمي إن
 /// تَحَرَّكَ عَدّادُ مُستَأجِرٍ آخَر.</para>
+///
+/// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-2 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) واستِثناءٌ واحِدٌ مُسَمّى</b>: عَيِّناتُ ejar ذاتُ المُعَرِّفاتِ الثابِتَة
+/// (<see cref="EjarFixtureIds"/> — صَفقَتانِ ومُحادَثَةٌ وإعلانٌ وبائِع) لِسَبعِ لَقَطاتٍ كانَت عَناوينُها مِن بَياناتِ Neon. و<see cref="SnapshotAsync"/>
+/// يَستَثني صُفوفَها بِأَعيانِها لا جَدوَلَها ولا مُستَأجِرَها، فَصَفٌّ آخَرُ يَتَحَرَّكُ في ejar يُوقِفُ البَذرَ كَما كان.</para>
 ///
 /// <para><b>وكُلُّ قيمَةٍ هُنا حَتمِيَّة</b>: مُعَرِّفاتٌ ثابِتَة،
 /// وطَوابِعُ زَمَنٍ ثابِتَة، وأَسماءُ نَفاذٍ <b>مُشتَقَّةٌ</b> مِن رَقم
@@ -105,9 +113,17 @@ public static class AppearanceBaselineSeeder
     /// ‏`studio-app-ticket-missing` يَقول «التَذكَرَة غَير مَوجودَة»
     /// لِنَفسِ المُعَرِّف (يَقرَأ المَجرى). الصَفحَتانِ طَرَفا فَرقٍ
     /// حَقيقيّ في الشيفرَة، ولَو بُذِرَ المَجرى لَاختَفى أَحَدُ
-    /// الطَرَفَين.</summary>
+    /// الطَرَفَين.
+    /// <para><b>‏(‏2026-11-05، الموجَة ١٢ G4 · E-2 — تَصحيحٌ يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه)</b>: «يَقرَأ المَجرى» سَقَطَ بِـ<c>c901bde</c> — صَفحَةُ
+    /// التَذكِرَةِ تَقرَأُ اللَقطَةَ (<c>LoadAsync&lt;Ticket&gt;</c>) كَالقائِمَة، فَكانَت <c>studio-app-ticket-missing</c> تَرسُمُ هذِه التَذكِرَةَ الفارِغَةَ
+    /// مُنذُ يَومِه. فَصارَت تِلكَ اللَقطَةُ عَلى <see cref="AbsentTicketId"/> (لا وَثيقَةَ ولا مَجرى ⇒ «غَير مَوجودَة» حَقّاً)، والتَذكِرَةُ هذِه تَرسُمُها
+    /// <c>studio-app-ticket</c>.</para></summary>
     public static readonly Guid OwnerTestTicketId =
         Guid.Parse("00000000-0000-0000-0000-000000000001");
+
+    /// <summary>تَذكِرَةٌ لا تُبذَرُ أَبَداً — عُنوانُ <c>studio-app-ticket-missing</c> (‏2026-11-05، E-2).</summary>
+    public static readonly Guid AbsentTicketId =
+        Guid.Parse("5a3e1d00-0000-4000-8000-00000000dead");
 
     private static readonly Guid OwnerTestTicketReplyId =
         Guid.Parse("00000000-0000-0000-0000-000000000002");
@@ -160,6 +176,34 @@ public static class AppearanceBaselineSeeder
     /// آخَر.</summary>
     private const string ThemeDocsAuthor = "صاحِب المَشروع · 0599999999";
 
+    // ── عَيِّناتُ ejar بِمُعَرِّفاتٍ ثابِتَة (‏2026-11-05، الموجَة ١٢ G4 · E-2) ─────────────────────────────────────────
+    //
+    // سَبعُ لَقَطاتٍ كانَت عَناوينُها مُعَرِّفاتٍ مِن بَياناتِ Neon (`17497544…` صَفقَةٌ نَشِطَة، `8c34e5ee…` مُكتَمِلَة، `90e91b8c…` مُحادَثَة،
+    // `45b17b1e…` الإعلانُ المُوَثَّقُ المُمَيَّز، `e7862bae…` بائِع) فَتَرسُمُ فَرعَ الغِيابِ عَلى كُلِّ قاعِدَةٍ مَحَلِّيَّة. فَتُبذَرُ هُنا
+    // بِمُعَرِّفاتٍ ثابِتَة، و`capture-appearance.sh` يَطلُبُها بِها. **وهِيَ الكِتابَةُ الوَحيدَةُ خارِجَ المُستَأجِرَين** — والحارِسُ لا يَتَراخى
+    // لَها: `SnapshotAsync` يَستَثني صُفوفَ هذِه المُعَرِّفاتِ بِأَعيانِها (`id` أَو `stream_id`) مِن العَدّ، فَصَفٌّ آخَرُ يَتَحَرَّكُ في ejar يُوقِفُ البَذر.
+    // والأَطرافُ عُضوا اللَقطَة: هاتِفا `WSL_CAPTURE_MEMBER_PHONE`/`MEMBER2_PHONE` (عَميلُ ejar ومُضيفُه في `TestDataSeeder.Plan`)،
+    // والإعلانُ نُسخَةٌ مِن إعلانِ `PlatformSeed` المُوَثَّقِ يُقرَأُ مِن القاعِدَةِ لا يُنسَخُ نَصّاً (سِعرُه وسِماتُه بَياناتُ ذلكَ البَذرِ لا أَرقامٌ هُنا).
+    public const string Ejar = "ejar";
+    internal const string EjarMemberPhone  = "05101234567";
+    internal const string EjarMember2Phone = "05111234567";
+    public static readonly Guid EjarVendorId      = Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0001");
+    private const string EjarVendorNid = "1052009001";
+    public static readonly Guid EjarListingId     = Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0002");
+    public static readonly Guid EjarActiveDealId  = Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0003");
+    public static readonly Guid EjarDoneDealId    = Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0004");
+    public static readonly Guid EjarChatId        = Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0005");
+    private static readonly Guid[] EjarChatMessageIds =
+    {
+        Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0011"), Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0012"),
+        Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0013"), Guid.Parse("5a3e1d00-0000-4000-8000-0000000e0014"),
+    };
+    private static readonly DateTime EjarFixturesAt = new(2026, 8, 16, 12, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>كُلُّ مُعَرِّفٍ تَكتُبُه عَيِّناتُ ejar — ولا غَيرُها يُستَثنى مِن عَدِّ الحارِس.</summary>
+    internal static IReadOnlyList<Guid> EjarFixtureIds =>
+        new[] { EjarVendorId, EjarListingId, EjarActiveDealId, EjarDoneDealId, EjarChatId }.Concat(EjarChatMessageIds).ToArray();
+
     // ═══════════════════════════════════════════════════════════════════
 
     public static async Task RunAsync(IServiceProvider services, IWebHostEnvironment env)
@@ -179,6 +223,7 @@ public static class AppearanceBaselineSeeder
 
         await SeedThemeDemoAsync(store);
         await SeedOwnerTestAsync(store);
+        await SeedEjarFixturesAsync(store);
 
         var after = await SnapshotAsync(connStr);
         var outsiders = AssertOnlyBaselineTenantsMoved(before, after);
@@ -198,7 +243,8 @@ public static class AppearanceBaselineSeeder
         var tenant = await global.LoadAsync<Tenant>(ThemeDemo);
         if (tenant is null)
         {
-            global.Store(new Tenant
+            // ‏(‏2026-11-12، W13-6·٨ — ADR-051 §١٥) إدراجٌ لا `Store`: الوِلادَةُ مَحروسَةٌ بِالسَطرِ أَعلاه، والمُستَمِعُ يَعُدُّ `store.create` مِن `Inserts`.
+            global.Insert(new Tenant
             {
                 Id         = ThemeDemo,
                 Name       = "مَتجَر التَّجرِبَة",
@@ -214,12 +260,16 @@ public static class AppearanceBaselineSeeder
                 // «لَوحَة الإداريّ» في `user-manage.html` — وهو الفَرعُ
                 // المُقابِلُ لِـ«لا صَلاحِيَّة» في `member-manage.html`
                 // على `ejar` ذي الأَدوار.
+                // ‏(‏2026-10-28، ‏ADR-040، د62 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه) صِفرُ الأَدوارِ لا يُعطي
+                // `tenant.manage` بَعدَ القَلب، فَفَرعُ `user-manage.html` صارَ «لا صَلاحِيَّة»؛
+                // والصِفرُ باقٍ عَمداً لِفَرعِ الرَئيسِيَّةِ الافتِراضِيّ (`theme-demo-portal`).
                 Roles      = new(),
                 // ‏فِئَتانِ بِـ`Kind` واحِد (فارِغ) — فَيُصَيَّر فَرعُ
                 // الشَبَكَة المُسَطَّحَة لا فَرعُ الشَجَرَة، ويُعطي
                 // ‏`PatternProfileResolver.PatternOf` نَمَطَ
-                // ‏`Marketplace` (سَلَّة + هيرو «اطلُب مِن مَقاهيكَ
-                // المُفَضَّلَة») كَما في اللَقطَة.
+                // ‏`Marketplace` (سَلَّة + هيرو «تَصَفَّح المُنتَجات واطلُب
+                // ما تُحِبّ» — كانَ «اطلُب مِن مَقاهيكَ المُفَضَّلَة» حَتّى
+                // ‏2026-10-13) كَما في اللَقطَة.
                 Categories = new()
                 {
                     new Category { Slug = "general",  Label = "عام",      Icon = "🏠", Kind = "", SortOrder = 0 },
@@ -316,7 +366,8 @@ public static class AppearanceBaselineSeeder
         var tenant = await global.LoadAsync<Tenant>(OwnerTest);
         if (tenant is null)
         {
-            global.Store(new Tenant
+            // ‏(‏2026-11-12، W13-6·٨ — ADR-051 §١٥) إدراجٌ لا `Store` — كَوِلادَةِ «theme-demo» أَعلاه.
+            global.Insert(new Tenant
             {
                 Id         = OwnerTest,
                 Name       = "مَتجَر المِلكِيَّة",
@@ -365,6 +416,8 @@ public static class AppearanceBaselineSeeder
             // ‏`CreatedAt` = `default` قَصداً: اللَقطَةُ تَطبَع
             // ‏«‏0001-01-01 00:00». وَثيقَةٌ تُخَزَّن مُباشَرَةً بِلا
             // مَجرى — راجِع <see cref="OwnerTestTicketId"/>.
+            // ‏(‏2026-10-25، W8-7 — يُلحَقُ ولا يُعادُ حَرفٌ فَوقَه): ومُنذُ `CultureTime.FormatTime` لا تُطبَعُ لَحظَةٌ لَم تُضبَطُ شَيئاً — فَالتَذكِرَةُ
+            // هذِه هِيَ عَيِّنَةُ «الغائِب» في الصَفَحاتِ الحَيَّة (`DisplayTimeAbsentTests`)، لا «0001-01-01».
             s.Store(new Ticket
             {
                 Id         = OwnerTestTicketId,
@@ -394,6 +447,131 @@ public static class AppearanceBaselineSeeder
         await s.SaveChangesAsync();
 
         await EnsureRegionsAsync(store, OwnerTest, "الرِياض > العُلَيا، النَخيل\nجُدَّة");
+    }
+
+    // ── ejar — العَيِّناتُ ذاتُ المُعَرِّفاتِ الثابِتَة (‏2026-11-05، الموجَة ١٢ G4 · E-2) ─────────────────────────────
+
+    private static async Task SeedEjarFixturesAsync(IDocumentStore store)
+    {
+        await using (var global = store.QuerySession())
+            if (await global.LoadAsync<Tenant>(Ejar) is null)
+            {
+                Console.WriteLine($"[AppearanceSeed] لا مُستَأجِرَ «{Ejar}» — لا عَيِّناتِ ejar.");
+                return;
+            }
+
+        await using var s = store.LightweightSession(Ejar);
+        var written = 0;
+
+        // ‏البائِعُ — صاحِبُ الإعلانِ وعُنوانُ `ejar-vendor`، بِالكاتِبِ نَفسِه الَّذي يَبذُرُ مُستَخدِمي المُستَأجِرَين (اسمُه مُشتَقٌّ مِن رَقمِه، ولا يَدخُلُ
+        // بِه أَحَد: ejar قَناتُه الهاتِف). فَلا مَوضِعَ كِتابَةِ دَورٍ جَديدَ يُثَبَّتُ في `AdminSelfGrantTests`.
+        if (await s.LoadAsync<User>(EjarVendorId) is null) written++;
+        await EnsureNafathUserAsync(s, Ejar, EjarVendorId, EjarVendorNid, activeRole: "vendor");
+
+        // ‏الإعلانُ المُوَثَّقُ المُمَيَّز — نُسخَةٌ مِن إعلانِ `PlatformSeed` المُوَثَّقِ في ejar بِبَياناتِه كَما في القاعِدَة، ومالِكُه البائِع.
+        if (await s.Events.FetchStreamStateAsync(EjarListingId) is null)
+        {
+            var source = (await s.Query<Listing>().Where(l => l.IsVerified && l.IsFeatured)
+                .OrderBy(l => l.CreatedAt).Take(1).ToListAsync()).FirstOrDefault();
+            if (source is null)
+                Console.WriteLine("[AppearanceSeed] لا إعلانَ مُوَثَّقاً في ejar يُنسَخ — `ejar-listing` تَرسُمُ الغِياب.");
+            else
+            {
+                var attrs = new Dictionary<string, string>(source.Attributes, StringComparer.Ordinal)
+                    { [ListingEditService.OwnerAttribute] = EjarVendorId.ToString() };
+                s.Events.StartStream<Listing>(EjarListingId,
+                    new ListingCreated(EjarListingId, Ejar, source.Title, source.Description, source.Price, source.CategorySlug,
+                        source.City, source.District, attrs, EjarFixturesAt),
+                    new ListingFlagsSet(EjarListingId, IsFeatured: true, IsVerified: true, EjarFixturesAt.AddMinutes(1)));
+                written++;
+            }
+        }
+
+        var member  = (await s.Query<User>().Where(u => u.Phone == EjarMemberPhone).Take(1).ToListAsync()).FirstOrDefault();
+        var member2 = (await s.Query<User>().Where(u => u.Phone == EjarMember2Phone).Take(1).ToListAsync()).FirstOrDefault();
+        if (member is null || member2 is null)
+            Console.WriteLine($"[AppearanceSeed] عُضوا اللَقطَةِ ({EjarMemberPhone}، {EjarMember2Phone}) غائِبانِ في ejar — " +
+                              "لا صَفَقاتِ عَيِّنَةٍ ولا مُحادَثَة (يَبذُرُهُما TEST_DATA_SEED=1).");
+        else
+        {
+            // ‏صَفقَتانِ بِشَكلِ `TestDataSeeder.EnsureSampleDealsAsync` (العَناوينُ والمَراحِلُ والفاعِلونَ والمَبلَغانِ) بِمُعَرِّفاتٍ وأَوقاتٍ ثابِتَة.
+            DealEvent Ev(DealStage from, DealStage to, string action, User actor, int hours) =>
+                new(from, to, action, actor.Id, actor.FullName, null, EjarFixturesAt.AddHours(hours));
+            if (await s.LoadAsync<Deal>(EjarActiveDealId) is null)
+            {
+                s.Store(new Deal
+                {
+                    Id = EjarActiveDealId, TenantSlug = Ejar, Pattern = "marketplace",
+                    ListingTitle = "إعلان اختِبار — صَفقَة نَشِطَة",
+                    InitiatorId = member.Id, InitiatorName = member.FullName,
+                    CounterpartyId = member2.Id, CounterpartyName = member2.FullName,
+                    AmountSar = 100, Stage = DealStage.Paid, Status = DealStatus.Active,
+                    CreatedAt = EjarFixturesAt, UpdatedAt = EjarFixturesAt.AddHours(23),
+                    Timeline =
+                    {
+                        Ev(DealStage.Offered,   DealStage.Offered,   "assigned", member2, 0),
+                        Ev(DealStage.Offered,   DealStage.Booked,    "advanced", member2, 1),
+                        Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", member,  6),
+                        Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", member, 23),
+                    }
+                });
+                written++;
+            }
+            if (await s.LoadAsync<Deal>(EjarDoneDealId) is null)
+            {
+                s.Store(new Deal
+                {
+                    Id = EjarDoneDealId, TenantSlug = Ejar, Pattern = "marketplace",
+                    ListingTitle = "إعلان اختِبار — صَفقَة مُكتَمِلَة",
+                    InitiatorId = member.Id, InitiatorName = member.FullName,
+                    CounterpartyId = member2.Id, CounterpartyName = member2.FullName,
+                    AmountSar = 250, Stage = DealStage.Reviewed, Status = DealStatus.Completed,
+                    CreatedAt = EjarFixturesAt, UpdatedAt = EjarFixturesAt.AddHours(120),
+                    Timeline =
+                    {
+                        Ev(DealStage.Offered,   DealStage.Offered,   "assigned", member2, 0),
+                        Ev(DealStage.Offered,   DealStage.Booked,    "advanced", member2, 1),
+                        Ev(DealStage.Booked,    DealStage.Confirmed, "advanced", member,  24),
+                        Ev(DealStage.Confirmed, DealStage.Paid,      "advanced", member,  48),
+                        Ev(DealStage.Paid,      DealStage.Shipping,  "advanced", member2, 72),
+                        Ev(DealStage.Shipping,  DealStage.Delivered, "advanced", member2, 96),
+                        Ev(DealStage.Delivered, DealStage.Reviewed,  "advanced", member, 120),
+                    }
+                });
+                written++;
+            }
+
+            // ‏ومُحادَثَةٌ بِشَكلِ `TestDataSeeder.EnsureSampleConversationAsync` ونُصوصِها، بِمُعَرِّفاتٍ وأَوقاتٍ ثابِتَة.
+            if (await s.LoadAsync<Conversation>(EjarChatId) is null)
+            {
+                var msgs = new (User Sender, string Body, int Minutes)[]
+                {
+                    (member,  "السَّلام عَلَيكُم، هَل الإعلان ما زالَ مُتاحاً؟", 0),
+                    (member2, "وعَلَيكُم السَّلام، نَعَم مُتاح.",               10),
+                    (member,  "مُمتاز، مَتى يُمكِن المُعايَنَة؟",                25),
+                    (member2, "تَمام، نَتَّفِق على المَوعِد غَداً.",            30),
+                };
+                s.Store(new Conversation
+                {
+                    Id = EjarChatId, OwnerId = member.Id, OwnerName = member.FullName,
+                    PartnerId = member2.Id, PartnerName = member2.FullName,
+                    LastMessage = msgs[^1].Body, LastAt = EjarFixturesAt.AddMinutes(30),
+                    OwnerUnread = 0, PartnerUnread = 2, CreatedAt = EjarFixturesAt,
+                });
+                // ‏(‏2026-11-12، W13-6·٩) `Insert` خَلفَ حارِسِ المُحادَثَة: الرِسائِلُ تُكتَبُ مَعَها في الحِفظِ نَفسِه، فَغِيابُها غِيابُهُنّ — وتُعَدُّ `chat.message` تَحتَ `_seed`.
+                for (var i = 0; i < msgs.Length; i++)
+                    s.Insert(new Message
+                    {
+                        Id = EjarChatMessageIds[i], ConversationId = EjarChatId,
+                        SenderId = msgs[i].Sender.Id, Body = msgs[i].Body, SentAt = EjarFixturesAt.AddMinutes(msgs[i].Minutes),
+                    });
+                written++;
+            }
+        }
+
+        await s.SaveChangesAsync();
+        Console.WriteLine($"[AppearanceSeed] عَيِّناتُ ejar ذاتُ المُعَرِّفاتِ الثابِتَة: {written} كُتِبَت " +
+                          $"({EjarFixtureIds.Count} مُعَرِّفاً تُستَثنى صُفوفُها بِأَعيانِها مِن عَدِّ الحارِس).");
     }
 
     // ── لَبِنات مُشتَرَكَة ────────────────────────────────────────────
@@ -520,9 +698,10 @@ public static class AppearanceBaselineSeeder
         await using var qs = store.QuerySession(StudioAuth.Tenant);
         var adminPhone = Environment.GetEnvironmentVariable(PlatformAdminSeeder.PhoneVar);
         StudioUser? owner = null;
+        var adminForms = ACommerce.Kit.Auth.PhoneNumber.LookupForms(adminPhone).ToArray();   // ‏(د57، ‏ADR-044) كَما كُتِبَ ثُمَّ مُوَحَّداً
         if (!string.IsNullOrWhiteSpace(adminPhone))
-            owner = (await qs.Query<StudioUser>()
-                .Where(u => u.Phone == adminPhone).Take(1).ToListAsync()).FirstOrDefault();
+            owner = ACommerce.Kit.Auth.PhoneNumber.Pick(await qs.Query<StudioUser>()
+                .Where(u => adminForms.Contains(u.Phone)).ToListAsync(), u => u.Phone, adminPhone);
         owner ??= (await qs.Query<StudioUser>()
             .OrderBy(u => u.CreatedAt).Take(1).ToListAsync()).FirstOrDefault();
         if (owner is null)
@@ -652,11 +831,12 @@ public static class AppearanceBaselineSeeder
         await using var conn = new NpgsqlConnection(connStr);
         await conn.OpenAsync();
 
-        var tables = new List<(string Name, bool HasTenant)>();
+        var tables = new List<(string Name, bool HasTenant, string? Key)>();
         await using (var cmd = new NpgsqlCommand(
             """
             select table_name,
-                   max(case when column_name = 'tenant_id' then 1 else 0 end) as has_tenant
+                   max(case when column_name = 'tenant_id' then 1 else 0 end) as has_tenant,
+                   max(case when column_name = 'stream_id' then 2 when column_name = 'id' then 1 else 0 end) as key_column
             from information_schema.columns
             where table_schema = 'platform'
               and (table_name like 'mt\_doc\_%' or table_name in ('mt_events','mt_streams'))
@@ -665,15 +845,19 @@ public static class AppearanceBaselineSeeder
             """, conn))
         await using (var r = await cmd.ExecuteReaderAsync())
             while (await r.ReadAsync())
-                tables.Add((r.GetString(0), r.GetInt32(1) == 1));
+                tables.Add((r.GetString(0), r.GetInt32(1) == 1, r.GetInt32(2) switch { 2 => "stream_id", 1 => "id", _ => null }));
 
+        // ‏(‏2026-11-05، E-2) صُفوفُ عَيِّناتِ ejar بِأَعيانِها خارِجَ العَدّ — لا جَدوَلٌ ولا مُستَأجِر: صَفٌّ آخَرُ يَتَحَرَّكُ في ejar يُحمِرُّ الحارِسَ كَما كان.
+        var fixtureIds = EjarFixtureIds.Select(g => g.ToString()).ToArray();
         var counts = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var (name, hasTenant) in tables)
+        foreach (var (name, hasTenant, keyColumn) in tables)
         {
+            var notFixture = keyColumn is null ? "" : $" where not ({keyColumn}::text = any(@fixtures))";
             var sql = hasTenant
-                ? $"select coalesce(tenant_id, '(null)'), count(*) from platform.\"{name}\" group by 1"
-                : $"select '(single)', count(*) from platform.\"{name}\"";
+                ? $"select coalesce(tenant_id, '(null)'), count(*) from platform.\"{name}\"{notFixture} group by 1"
+                : $"select '(single)', count(*) from platform.\"{name}\"{notFixture}";
             await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("fixtures", fixtureIds);
             await using var r = await cmd.ExecuteReaderAsync();
             while (await r.ReadAsync())
                 counts[$"{name}|{r.GetString(0)}"] = r.GetInt64(1);

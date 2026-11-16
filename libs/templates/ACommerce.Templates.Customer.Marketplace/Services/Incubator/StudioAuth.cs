@@ -24,6 +24,14 @@ public sealed class StudioAuth
     public const string Tenant = "_studio";
     public const string CookieName = ".acommerce.studio";
 
+    /// <summary>اسمُ كوكيِّ جَلسَةِ الاستوديو كَما يُكتَبُ ويُقرَأُ عَلى طَلَبٍ آمِنٍ أَو غَيرِه (‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2) — نَظيرُ
+    /// <c>AuthSession.CookieNameFor</c>، يَسأَلُه <see cref="Load"/> و<see cref="WriteCookie"/> و<see cref="DeleteCookie"/> وجَزيرَتا الوَكيل.</summary>
+    /// <remarks>‏(‏2026-11-07، ADR-050 §٥ · W13-4·C2c·2) وعَلى طَلَبٍ آمِنٍ بِالبادِئَةِ <c>AuthSession.HostPrefix</c> — كوكيُّ المَتجَرِ نَفسُه.</remarks>
+    public static string CookieNameFor(bool secure) => secure ? AuthSession.HostPrefix + CookieName : CookieName;
+
+    /// <summary>الاسمُ عَلى هذا الطَلَب — بِقَرارِ <c>AuthSession.SecureFor</c> نَفسِه الَّذي يَضبِطُ <c>Secure</c>.</summary>
+    public static string CookieNameOn(HttpRequest? request) => CookieNameFor(AuthSession.SecureFor(request));
+
     private readonly IHttpContextAccessor _http;
     public StudioAuth(IHttpContextAccessor http) => _http = http;
 
@@ -36,11 +44,12 @@ public sealed class StudioAuth
     {
         var ctx = _http.HttpContext;
         if (ctx is null) return;
-        var token = ctx.Request.Cookies[CookieName];
+        var name = CookieNameOn(ctx.Request);
+        var token = AuthSession.CookieValue(ctx.Request, name);
         var parsed = AuthHandlers.ParseToken(token);
         if (parsed is null || parsed.Value.TenantSlug != Tenant) { Clear(); return; }
         UserId = parsed.Value.UserId;
-        UserName = ctx.Request.Cookies[CookieName + ".name"];
+        UserName = AuthSession.CookieValue(ctx.Request, name + ".name");
     }
 
     public void Clear() { UserId = null; UserName = null; }
@@ -61,16 +70,25 @@ public sealed class StudioAuth
     /// (‏<c>null</c> مَع مُزَوِّدٍ فِعليّ). يَرمي <see cref="InvalidOperationException"/>
     /// عِندَ تَجاوُزِ الحَدّ، ويُمَرِّرُ ما تَرميه القَناةُ عِندَ فَشَلِ
     /// الإرسال.</summary>
+    /// <remarks>‏(‏2026-11-12، الموجَة ١٣ W13-6·١١ — ADR-051 §١٨) <b>النِداءُ مَعدود</b>: المَتجَرُ المَنَصَّةُ نَفسُها (<c>_platform</c>)، ومُعَرِّفُ الطَلَبِ مُعَرِّفُ نِداءٍ
+    /// جَديد — فَكُلُّ إرسالٍ عَمَلِيَّتُه (التَصميم §6.2).</remarks>
     public static async Task<string?> SendPhoneCodeAsync(
         IOtpChannel channel, string phone, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Phone, phone, channel.DevHintCode,
-            (code, token) => channel.SendOtpAsync(phone, code, token), ct);
+            (code, token) => channel.SendOtpAsync(
+                ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.OtpSmsSend,
+                    ACommerce.Platform.Shared.Metering.MeterSentinels.Platform, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId()),
+                AuthHandlers.PhoneDestination(phone), code, token), ct);
 
     /// <summary>نَظيرُه لِلبَريد — نَفسُ الجِسمِ بِقَناةٍ أُخرى.</summary>
+    /// <remarks>‏(‏2026-11-12، W13-6·١٢ — ADR-051 §١٩) والنِداءُ مَعدودٌ كَأَخيه: <c>_platform</c> ومُعَرِّفُ نِداءٍ جَديد.</remarks>
     public static async Task<string?> SendEmailCodeAsync(
         IEmailOtpChannel channel, string email, CancellationToken ct = default)
         => await SendAsync(StudioAuthMethod.Email, email, channel.DevHintCode,
-            (code, token) => channel.SendOtpAsync(email, code, token), ct);
+            (code, token) => channel.SendOtpAsync(
+                ACommerce.Platform.Shared.Metering.ProviderCall.ForChannel(ACommerce.Platform.Shared.Metering.OutboundUnits.OtpEmailSend,
+                    ACommerce.Platform.Shared.Metering.MeterSentinels.Platform, ACommerce.Platform.Shared.Metering.ProviderCall.FreshRequestId()),
+                email, code, token), ct);
 
     /// <summary><b>والرَمزُ يُمَرَّر ولا يُلتَقَط</b>: كانَ الـ<c>ct</c>
     /// مَحبوساً في المُغلَق (‏<c>closure</c>) بَينَما المُهلَةُ تُقاس على
@@ -81,7 +99,11 @@ public sealed class StudioAuth
         StudioAuthMethod method, string subject, string? devHint,
         Func<string, CancellationToken, Task> send, CancellationToken ct)
     {
-        if (!AuthHandlers.TryConsumeSendQuota($"{Tenant}|{subject}"))
+        // ‏(‏2026-10-24، تَدقيقُ الإطلاق lens-security-3) الجَوّالُ يُعَدُّ بِرَقَمِه لا بِكِتابَتِه (`PhoneDestination`)، ثُمَّ سَقفُ المَنَصَّة —
+        // والمَوضوعُ (المُحاوَلَةُ والمُستَخدِم) يَبقى كَما كُتِب.
+        var counted = method == StudioAuthMethod.Phone ? AuthHandlers.PhoneDestination(subject) : subject;
+        if (!AuthHandlers.TryConsumeSendQuota($"{Tenant}|{counted}")
+            || !AuthHandlers.TryConsumeGlobalSendQuota(AuthHandlers.GlobalSendsPerHour))
             throw new InvalidOperationException("rate_limited");
         var code = AuthHandlers.NewCode(devHint);
         AuthHandlers.IssueAttempt(Tenant, subject, code, StudioAuthDoor.Kind(method));
@@ -113,14 +135,16 @@ public sealed class StudioAuth
             return null;
 
         await using var s = store.LightweightSession(Tenant);
+        // ‏(‏2026-10-28، قَرارُ المالِك د57 «أ»؛ ‏ADR-044) الجَوّالُ كَما كُتِبَ أَوَّلاً ثُمَّ مُوَحَّداً، والجَديدُ يُكتَبُ مُوَحَّداً — قاعِدَةُ دُخولِ العُضوِ بِعَينِها
+        // (`PhoneNumber`)؛ كانَ `u.Phone == subject` و`Phone = subject` (تَوصيفُه `d72e34e`). والمَوضوعُ (المُحاوَلَةُ والحِصَّة) كَما كُتِب.
+        var phoneForms = PhoneNumber.LookupForms(subject).ToArray();
         var user = method == StudioAuthMethod.Email
             ? (await s.Query<StudioUser>().Where(u => u.Email == subject).ToListAsync())
                 .FirstOrDefault()
-            : (await s.Query<StudioUser>().Where(u => u.Phone == subject).ToListAsync())
-                .FirstOrDefault();
+            : PhoneNumber.Pick(await s.Query<StudioUser>().Where(u => phoneForms.Contains(u.Phone)).ToListAsync(), u => u.Phone, subject);
         user ??= method == StudioAuthMethod.Email
             ? new StudioUser { Id = Guid.NewGuid(), Email = subject }
-            : new StudioUser { Id = Guid.NewGuid(), Phone = subject };
+            : new StudioUser { Id = Guid.NewGuid(), Phone = PhoneNumber.Canonical(subject) };
         user.LastLoginAt = DateTime.UtcNow;
         s.Store(user);
         await s.SaveChangesAsync();
@@ -129,22 +153,37 @@ public sealed class StudioAuth
         return user;
     }
 
+    /// <summary><b>الكوكيّانِ بِصِفاتِ كوكي المَتجَرِ نَفسِها</b> (‏2026-10-24، تَدقيقُ الإطلاق lens-security-6، كُبرى): كانَ كوكي الجَلسَةِ
+    /// — وهُوَ وَحدَه يُنتِجُ جَلسَةَ مُشرِفِ المَنَصَّة — بِلا <c>Secure</c>، وكوكي الاسمِ بِلا <c>HttpOnly</c> ولا <c>Secure</c> ولا <c>SameSite</c>.
+    /// صارا <c>HttpOnly</c>/<c>Lax</c>/<c>Secure</c> بِقَرارِ <c>AuthSession.SecureFor</c> لِطَلَبِ هذا الرَدّ (HTTP المَحَلِّيُّ بِلا Secure كَما
+    /// كان). والاسمُ لا يَقرَؤُه سِكربت: الخادِمُ وَحدَه (<see cref="Load"/>). مَحروسٌ في <c>AuthCookieFlagsTests</c>.</summary>
     public static void WriteCookie(HttpResponse res, StudioUser user)
     {
-        var token = AuthHandlers.MakeToken(user.Id, Tenant);
+        var token = AuthHandlers.MakeToken(user.Id, Tenant, user.SessionVersion);
         var opts = new CookieOptions
         {
             HttpOnly = true, IsEssential = true, SameSite = SameSiteMode.Lax,
+            Secure = AuthSession.SecureFor(res.HttpContext.Request),
             Path = "/", Expires = DateTimeOffset.UtcNow.AddDays(30)
         };
-        res.Cookies.Append(CookieName, token, opts);
-        res.Cookies.Append(CookieName + ".name", user.FullName,
-            new CookieOptions { IsEssential = true, Path = "/", Expires = opts.Expires });
+        var name = CookieNameOn(res.HttpContext.Request);
+        res.Cookies.Append(name, token, opts);
+        res.Cookies.Append(name + ".name", user.FullName, opts);
     }
 
     public static void DeleteCookie(HttpResponse res)
     {
-        res.Cookies.Delete(CookieName);
-        res.Cookies.Delete(CookieName + ".name");
+        // المَحوُ بِصِفَةِ الكِتابَةِ نَفسِها — نَسَقُ `AuthSession.ClearCookie`.
+        var opts = new CookieOptions { Path = "/", Secure = AuthSession.SecureFor(res.HttpContext.Request) };
+        var name = CookieNameOn(res.HttpContext.Request);
+        res.Cookies.Delete(name, opts);
+        res.Cookies.Delete(name + ".name", opts);
+        // ‏(‏2026-11-11، SEC-C2c-R3-3 — يُلحَقُ) وعَلى HTTPS الاسمُ القَديمُ مَعَه — كَوكيُّ المَتجَرِ نَفسُه (`AuthSession.ClearCookie`): جَلسَةُ مُشرِفٍ قَبلَ `__Host-` لا تَعودُ بِتَراجُع.
+        if (opts.Secure)
+        {
+            var legacy = CookieNameFor(false);
+            res.Cookies.Delete(legacy, opts);
+            res.Cookies.Delete(legacy + ".name", opts);
+        }
     }
 }

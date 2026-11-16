@@ -1,0 +1,315 @@
+using System.Text.RegularExpressions;
+using Xunit;
+using Xunit.Abstractions;
+
+namespace ACommerce.Platform.Tests;
+
+// ═══ لا اختِبارَ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه — تَوصيفُ «اليَوم» (بَندُ المُنَسِّقِ في تَيّارِ W8-2، ‏2026-10-25) ═══
+//
+// **المَقيس** (عِندَ `f99f79a`): `LiveThemeProofTests.ReadThemeDocumentsAndNamePlatformAdmins` يَكتُبُ إلى `Console` ومِلَفِّ الأَدِلَّةِ
+// «‏[platform-admin] phone={a.Phone} name={a.FullName}» لِكُلِّ مُشرِفِ مَنَصَّةٍ في القاعِدَةِ الَّتي يُشَغَّلُ عَلَيها — وهِيَ قاعِدَةٌ حَيَّةٌ بِالتَصميم
+// (`WASAYEL_LIVE_PROOF=1`) — و«by={d.CreatedBy}» لِكُلِّ وَثيقَةِ ثيم، وبابُ الثيمِ يَكتُبُ فيه «{u.FullName} · {u.Phone}»؛ وبِصِفرِ `Assert`:
+// يَخضَرُّ ما لَم يَرمِ شَيء. **والماسِحُ وَجَدَ اثنَينِ آخَرَين**: `LiveRoleDefinitionProofTests` يَكتُبُ السَطرَينِ نَفسَيهِما (نَسخٌ مِن البُرهانِ
+// الأَوَّل)، و`LiveApprovalFlowProofTests` يَكتُبُ `decidedBy={doc.DecidedBy}` مَرَّتَين — وبابُ القَرارِ يَكتُبُ فيه الصيغَةَ نَفسَها. وفيهِما
+// `Assert`ات. فَخَرجُ الاختِبارِ (سِجِلُّ CI، مِلَفُّ الأَدِلَّة) يَحمِلُ جَوّالاتِ المُشرِفينَ وأَسماءَهُم.
+//
+// **الماسِح**: كُلُّ `.cs` تَحتَ `tests/` (بِلا تَعليقات): نِداءُ `WriteLine`/`Write` — ومِن ثَمَّ كُلُّ دالَّةٍ مَحَلِّيَّةٍ في المِلَفِّ يَكتُبُ جِسمُها
+// إلى `Console` أَو `.WriteLine(` (كَـ`Log` هُناك) — تَحمِلُ وُسَطاؤُه `.Phone` أَو `.Email` أَو `.FullName` أَو `.NationalId`. ويَطبَعُ ما فَحَصَه
+// ويَفشَلُ إن كانَ صِفراً (القاعِدَة ١٠). وهذا المِلَفُّ نَفسُه خارِجَ المَسحِ لِأَنّ عَيِّناتِه نُصوص — وتُقاسُ بِالدالَّةِ نَفسِها أَدناه.
+// (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١ — ولا يُعادُ حَرفٌ فَوقَه: وكُلُّ مَحَلِّيٍّ يُنسَخُ إلَيه الحَقلُ قيمَةً — سِلسِلَةُ أَعضاءٍ تَنتَهي بِه، أَو `$"…"`،
+// أَو `"…" + …` — يُعَدُّ كَالحَقلِ نَفسِه في وُسَطاءِ الكاتِب (`PersonalAliases`)، وسَطرا `LiveProofRedaction.Of` لا يُعَدّان؛ وحُدودُه في مُلَخَّصِها: الاسمُ في
+// المِلَفِّ كُلِّه، وخُطوَةٌ واحِدَة، ولا دالَّةٌ تُعيدُ الحَقل.)
+//
+// **العِلاج** (‏2026-10-25): `LiveProofRedaction` — الحَقلُ يُحجَبُ في سَطرٍ قَبلَ نِداءِ الكاتِب، والبُرهانُ يَقيسُ غِيابَ كُلِّ قيمَةٍ حَيَّةٍ عَن
+// خَرجِه بِرِسالَةٍ لا تُعيدُها؛ وبُرهانُ الثيمِ يَقيسُ حالاتِ وَثائِقِه وثيمَه الفَعّال. الصَفّانِ انقَلَبا بِاسمَيهِما، وصَفُّ العَيِّناتِ كَما أُودِع.
+//
+// **يُثَبَّتُ قَبلَ العِلاجِ** (القاعِدَة ٣): الصَفّانِ `Today_…` يَنقَلِبانِ بِاسمَيهِما، وصَفُّ العَيِّناتِ المَحقونَةِ يَبقى حَرفاً. وأَوَّلُ مَسحٍ وَجَدَ
+// أَربَعَةَ مِلَفّاتٍ بِالحُقولِ الأَربَعَة: اثنانِ مِنها كاذِبان — `GetType().FullName` اسمُ نَوع، وعَيِّنَةُ `ListingOwnerCountScriptTests` سِلسِلَةٌ لِماسِحِه — فَصارَ
+// النَمَطُ يَستَثني اسمَ النَوعِ والماسِحُ يُفَرِّغُ السِلسِلَةَ العادِيَّة، وكِلاهُما بِصَفٍّ هُنا.
+public class TestOutputPersonalDataTests(ITestOutputHelper output)
+{
+    /// <summary>الحُقولُ الأَربَعَةُ الَّتي سَمّاها التَكليف، و<c>CreatedBy</c>/<c>DecidedBy</c> لِأَنّ قيمَتَهُما مَقيسَة: بابُ الثيمِ والأَدوارِ يَكتُبُ
+    /// فيهِما «<c>{u.FullName} · {u.Phone}</c>» (`MarketplaceTemplateExtensions.cs`). و<c>GetType().FullName</c>/<c>typeof(…).FullName</c> اسمُ نَوعٍ لا إنسان.</summary>
+    private const string PersonalField =
+        @"(?<!GetType\(\))(?<!typeof\([\w.<>]*\))\.(?:Phone|Email|FullName|NationalId|CreatedBy|DecidedBy)\b";
+
+    /// <summary>
+    /// <para><b>مُحتَوى السِلسِلَةِ غَيرِ المُستَوفاةِ يُفَرَّغ</b> (عادِيَّةً أَو <c>@"…"</c> أَو خامّاً <c>"""…"""</c>) ويَبقى الطول: عَيِّنَةٌ نَصِّيَّةٌ لِماسِحٍ
+    /// آخَرَ لَيسَت كِتابَةً إلى الخَرج، والحَقلُ خارِجَ السِلسِلَةِ يَبقى ظاهِراً. والمُستَوفاةُ (<c>$"…"</c>) تَبقى كَما هِيَ — ثُقوبُها هِيَ ما يُقاس.</para>
+    ///
+    /// <para><b>ولِماذا ماسِحٌ يَدَوِيٌّ لا تَعبيرٌ نَمَطِيّ</b>: أَوَّلُ نُسخَةٍ كانَت تَعبيراً، وعِلَّتُه مَقروءَةٌ قَبلَ القِياس — عَلامَةُ الإغلاقِ في
+    /// <c>$"…"</c> تُرى بِدايَةَ سِلسِلَةٍ عادِيَّةٍ فَتَبتَلِعُ ما بَعدَها إلى أَوَّلِ عَلامَة، ومَعَه نِداءُ كاتِبٍ حَقيقِيّ. فَالماسِحُ يَتبَعُ الثُقوبَ
+    /// وما فيها مِن سَلاسِلَ مُتَداخِلَة، و<c>'"'</c> حَرفٌ لا سِلسِلَة.</para>
+    /// </summary>
+    internal static string BlankPlainStrings(string code)
+    {
+        var b = code.ToCharArray();
+        for (var i = 0; i < code.Length; i++)
+        {
+            if (code[i] == '\'') { i = EndOfChar(code, i); continue; }
+            if (code[i] != '"') continue;
+            var (interpolated, verbatim) = PrefixAt(code, i);
+            var close = EndOfString(code, i, interpolated, verbatim, out var bodyStart, out var bodyEnd);
+            if (!interpolated)
+                for (var j = bodyStart; j < bodyEnd; j++) if (b[j] is not ('\n' or '\r')) b[j] = ' ';
+            i = close;
+        }
+        return new string(b);
+    }
+
+    private static (bool Interpolated, bool Verbatim) PrefixAt(string code, int quote)
+    {
+        bool interpolated = false, verbatim = false;
+        for (var k = quote - 1; k >= 0 && code[k] is '$' or '@'; k--)
+            if (code[k] == '$') interpolated = true; else verbatim = true;
+        return (interpolated, verbatim);
+    }
+
+    private static int EndOfChar(string code, int i)
+    {
+        for (var j = i + 1; j < code.Length; j++)
+        {
+            if (code[j] == '\\') { j++; continue; }
+            if (code[j] == '\'' || code[j] == '\n') return j;
+        }
+        return code.Length - 1;
+    }
+
+    /// <summary>فِهرِسُ عَلامَةِ الإغلاق، ومَدى المُحتَوى بَينَ العَلامَتَين.</summary>
+    private static int EndOfString(string code, int i, bool interpolated, bool verbatim, out int bodyStart, out int bodyEnd)
+    {
+        // الخامّ: ثَلاثُ عَلاماتٍ أَو أَكثَر، ويُغلِقُه العَدَدُ نَفسُه.
+        var run = 0;
+        while (i + run < code.Length && code[i + run] == '"') run++;
+        if (run >= 3)
+        {
+            var fence = new string('"', run);
+            var end = code.IndexOf(fence, i + run, StringComparison.Ordinal);
+            bodyStart = i + run;
+            bodyEnd = end < 0 ? code.Length : end;
+            return end < 0 ? code.Length - 1 : end + run - 1;
+        }
+        bodyStart = i + 1;
+        var depth = 0;
+        for (var j = i + 1; j < code.Length; j++)
+        {
+            var ch = code[j];
+            if (depth == 0)
+            {
+                if (!verbatim && ch == '\\') { j++; continue; }
+                if (ch == '"')
+                {
+                    if (verbatim && j + 1 < code.Length && code[j + 1] == '"') { j++; continue; }
+                    bodyEnd = j;
+                    return j;
+                }
+                if (interpolated && ch == '{')
+                {
+                    if (j + 1 < code.Length && code[j + 1] == '{') { j++; continue; }
+                    depth = 1;
+                }
+            }
+            else if (ch == '{') depth++;
+            else if (ch == '}') depth--;
+            else if (ch == '\'') j = EndOfChar(code, j);
+            else if (ch == '"')
+            {
+                var (ni, nv) = PrefixAt(code, j);
+                j = EndOfString(code, j, ni, nv, out _, out _);
+            }
+        }
+        bodyEnd = code.Length;
+        return code.Length - 1;
+    }
+
+    /// <summary>مِن مَوضِعِ القَوسِ الفاتِحِ إلى مُقابِلِه — والفَتحُ والغَلقُ داخِلَ ثُقوبِ الاستيفاءِ مُتَوازِنانِ فَيُعَدّانِ كَغَيرِهِما.</summary>
+    private static string Balanced(string text, int open, char o, char c)
+    {
+        var depth = 0;
+        for (var i = open; i < text.Length; i++)
+        {
+            if (text[i] == o) depth++;
+            else if (text[i] == c && --depth == 0) return text[open..(i + 1)];
+        }
+        return text[open..];
+    }
+
+    /// <summary>أَسماءُ ما يَكتُبُ إلى الخَرجِ في هذا النَصّ: <c>WriteLine</c> و<c>Write</c>، وكُلُّ دالَّةٍ مَحَلِّيَّةٍ أَو خاصَّةٍ يَكتُبُ جِسمُها إلَيه.</summary>
+    internal static IReadOnlyCollection<string> Writers(string code)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal) { "WriteLine", "Write" };
+        foreach (Match m in Regex.Matches(code, @"\b(?:void|Task|async\s+Task)\s+(\w+)\s*\("))
+        {
+            var sig = Balanced(code, code.IndexOf('(', m.Index), '(', ')');
+            var after = m.Index + (code.IndexOf('(', m.Index) - m.Index) + sig.Length;
+            var rest = code[after..].TrimStart();
+            var body = rest.StartsWith("=>", StringComparison.Ordinal)
+                ? rest[..Math.Max(0, rest.IndexOf(';'))]
+                : rest.StartsWith('{') ? Balanced(rest, 0, '{', '}') : "";
+            if (Regex.IsMatch(body, @"Console\.(?:Error\.)?Write|\.WriteLine\(")) names.Add(m.Groups[1].Value);
+        }
+        return names;
+    }
+
+    /// <summary>أَشكالُ الطَرَفِ الأَيمَنِ الَّتي <b>هي</b> القيمَةُ لا سُؤالٌ عَنها: سِلسِلَةُ أَعضاءٍ تَنتَهي بِالحَقلِ (بِـ<c>?.</c> و<c>.Trim()</c> و<c>?? …</c>)،
+    /// أَو سِلسِلَةٌ مُستَوفاةٌ <c>$"…"</c>، أَو نَصٌّ يُوصَلُ بِها <c>"…" + …</c>. وما سِواها — نِداءٌ يَأخُذُ الحَقلَ وَسيطاً (<c>Path.Combine(dir.FullName, …)</c>،
+    /// <c>LiveProofRedaction.Of(a.Phone)</c>، <c>IsNullOrEmpty(…)</c>)، أَو مُقارَنَة، أَو طول — لا يُعَدّ.</summary>
+    private const string ValueShapes =
+        @"^(?:[A-Za-z_]\w*(?:\??\.\w+)*\??\.(?:Phone|Email|FullName|NationalId|CreatedBy|DecidedBy)(?:\.Trim\(\))?(?:\s*\?\?\s*[^=;]+)?" +
+        @"|\$@?"".*|@?\$"".*|""[^""]*""\s*\+.*)$";
+
+    /// <summary>
+    /// <para><b>المَحَلِّيُّ الَّذي يَحمِلُ حَقلاً شَخصِيّاً</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١، صُغرى؛ ولا يُعادُ حَرفٌ فَوقَ ما سَبَق): كانَ
+    /// الماسِحُ يَقرَأُ وُسَطاءَ الكاتِبِ وَحدَها، فَـ<c>var p = a.Phone; Log($"…{p}")</c> يَمُرّ — وهو شَكلُ سَطرَي الحَجبِ نَفسُه
+    /// (<c>var phone = LiveProofRedaction.Of(a.Phone); Log(…phone…)</c>)، فَلا يُفَرِّقُ بَينَ مَحجوبٍ وغَيرِه. صارَ كُلُّ <c>var</c>/<c>string</c> مَحَلِّيٍّ
+    /// يَحمِلُ طَرَفُه الأَيمَنُ حَقلاً شَخصِيّاً اسماً مُستَعاراً — ما لَم يَمُرَّ بِـ<c>LiveProofRedaction.Of(</c>، أَو يَكُن سُؤالاً لا قيمَة (عَلَمٌ أَو عَدَدٌ أَو
+    /// مُقارَنَة) — وكاتِبٌ يُسَمّيه كَشف. <b>وحَدُّه مُعلَن</b>: بِالاسمِ في المِلَفِّ كُلِّه لا في دالَّتِه (اسمٌ مُكَرَّرٌ في دالَّةٍ أُخرى يُحمِرُّ — أَحمَرُ
+    /// كاذِبٌ يُصلَحُ بِسَطر)، وبِخُطوَةٍ واحِدَة (مُستَعارٌ مِن مُستَعارٍ لا يُتبَع)، ولا يَرى الحَقلَ يَمُرُّ في وَسيطِ دالَّةٍ تُعيدُه.</para>
+    /// </summary>
+    internal static IReadOnlySet<string> PersonalAliases(string code)
+    {
+        var aliases = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Match m in Regex.Matches(code, @"\b(?:var|string\??)\s+(?<name>\w+)\s*=\s*(?<rhs>[^;]+);"))
+        {
+            var rhs = m.Groups["rhs"].Value.Trim();
+            if (!Regex.IsMatch(rhs, PersonalField)) continue;
+            if (Regex.IsMatch(rhs, ValueShapes)) aliases.Add(m.Groups["name"].Value);
+        }
+        return aliases;
+    }
+
+    /// <summary>كُلُّ نِداءٍ لِكاتِبٍ تَحمِلُ وُسَطاؤُه حَقلاً شَخصِيّاً أَو مَحَلِّيّاً يَحمِلُه (<see cref="PersonalAliases"/>) — والتَصريحُ بِالدالَّةِ نَفسِها لا يُعَدّ.</summary>
+    internal static IReadOnlyList<string> Leaks(string code)
+    {
+        var leaks = new List<string>();
+        var aliases = PersonalAliases(code);
+        var aliasPattern = aliases.Count == 0 ? null : $@"\b(?:{string.Join("|", aliases.Select(Regex.Escape))})\b";
+        foreach (var name in Writers(code))
+            foreach (Match m in Regex.Matches(code, $@"(?<!\b(?:void|Task)\s+)\b{Regex.Escape(name)}\s*\("))
+            {
+                var args = Balanced(code, code.IndexOf('(', m.Index), '(', ')');
+                if (Regex.IsMatch(args, PersonalField) || (aliasPattern is not null && Regex.IsMatch(args, aliasPattern)))
+                    leaks.Add($"{name}{(args.Length > 90 ? args[..90] + "…" : args)}");
+            }
+        return leaks;
+    }
+
+    internal static (int Files, Dictionary<string, IReadOnlyList<string>> Leaks) Scan()
+    {
+        var root = Path.Combine(ThemeZeroEquivalenceTests.RepoRoot, "tests");
+        var files = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
+                     && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                     && !f.EndsWith(nameof(TestOutputPersonalDataTests) + ".cs", StringComparison.Ordinal))
+            .ToList();
+        var found = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var f in files)
+        {
+            var leaks = Leaks(BlankPlainStrings(WriteEndpointGuardTests.StripComments(File.ReadAllText(f))));
+            if (leaks.Count > 0) found[Path.GetFileName(f)] = leaks;
+        }
+        return (files.Count, found);
+    }
+
+    // ─── الصَفُّ الدائِم: الماسِحُ يَحمَرُّ عَلى سَطرِ اليَومِ حَرفاً وعَلى أَشكالِه، ولا يَعُدُّ ما لَيسَ حَقلاً شَخصِيّاً ───────────
+
+    [Fact]
+    public void The_scanner_goes_red_on_todays_line_and_its_shapes_and_not_on_counts_or_flags()
+    {
+        // سَطرُ اليَومِ بِدالَّتِه المَحَلِّيَّةِ كَما هُوَ هُناك.
+        const string today = """
+            void Log(string line)
+            {
+                var stamped = $"{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ss.fffZ}  {line}";
+                evidence.AppendLine(stamped);
+                Console.WriteLine(stamped);
+            }
+            foreach (var a in users.Where(u => u.IsPlatformAdmin))
+                Log($"[platform-admin] phone={a.Phone} name={a.FullName}");
+            """;
+        Assert.Contains("Log", Writers(today));
+        Assert.Single(Leaks(today));
+        Assert.Single(Leaks("output.WriteLine($\"{user.Email}\");"));
+        Assert.Single(Leaks("Console.WriteLine(\"nid \" + u.NationalId);"));
+        Assert.Single(Leaks("private void Say(string s) => output.WriteLine(s);\nSay(x.Phone);"));
+
+        // لا يُعَدّ: عَدَدٌ، أَو عَلَمٌ يُسَمّي الحَقلَ ولا يَحمِلُه، أَو حَقلٌ خارِجَ نِداءِ كاتِب.
+        Assert.Empty(Leaks("output.WriteLine($\"admins={users.Count(u => u.IsPlatformAdmin)}\");"));
+        Assert.Empty(Leaks("output.WriteLine($\"verified={u.PhoneVerified} hasEmail={hasEmail}\");"));
+        Assert.Empty(Leaks("var hasPhone = !string.IsNullOrEmpty(a.Phone);\noutput.WriteLine($\"phone={hasPhone}\");"));
+        Assert.Empty(Leaks(WriteEndpointGuardTests.StripComments("// output.WriteLine(a.Phone);")));
+        Assert.Empty(Leaks("Log($\"[race] النَوع={loser.Conflict?.GetType().FullName} {typeof(Deal).FullName}\");"));
+        Assert.Empty(Leaks(BlankPlainStrings("With(\"Console.Error.WriteLine(studioUser.Email);\");")));
+        Assert.Single(Leaks(BlankPlainStrings("Console.WriteLine(\"phone \" + u.Phone);")));
+        Assert.Single(Leaks("void Log(string s) => Console.WriteLine(s);\nLog($\"[doc] slug={doc.Slug} by={doc.CreatedBy}\");"));
+        Assert.Equal("if (c is '\"' or '\\'') x = \"       \";", BlankPlainStrings("if (c is '\"' or '\\'') x = \"a.Phone\";"));
+        // عَلامَةُ إغلاقِ المُستَوفاةِ لا تَفتَحُ سِلسِلَةً تَبتَلِعُ النِداءَ الَّذي بَعدَها، ولا سِلسِلَةٌ مُتَداخِلَةٌ في ثُقبِها.
+        Assert.Single(Leaks(BlankPlainStrings("Log($\"{a}\"); output.WriteLine(u.Phone); x = \"y\";")));
+        Assert.Single(Leaks(BlankPlainStrings("output.WriteLine($\"{(ok ? \"x\" : \"y\")} {u.Phone}\");")));
+        Assert.Empty(Leaks(BlankPlainStrings("const string s = \"\"\"\n  output.WriteLine(u.Phone);\n  \"\"\";")));
+    }
+
+    /// <summary><b>والمُستَعارُ يُرى</b> (‏2026-10-25، مُراجَعَةُ تَيّارِ W8-2 الجَولَة ١ — القاعِدَة ١٠): حَقلٌ يُنسَخُ إلى مَحَلِّيٍّ ثُمَّ يُكتَب كَشف، بِأَشكالِه؛
+    /// وسَطرا الحَجبِ (<c>LiveProofRedaction.Of</c>) لا يُعَدّان، ولا عَلَمٌ أَو عَدَدٌ مُشتَقّ — وكانَ الأَوَّلُ يَمُرُّ قَبلَ <see cref="PersonalAliases"/>.</summary>
+    [Fact]
+    public void The_scanner_sees_a_personal_field_copied_into_a_local_and_not_its_redacted_copy()
+    {
+        Assert.Single(Leaks("var p = a.Phone;\nLog($\"[admin] {p}\");\nvoid Log(string s) => Console.WriteLine(s);"));
+        Assert.Single(Leaks("string? who = doc?.CreatedBy;\noutput.WriteLine(who);"));
+        Assert.Single(Leaks("var line = $\"{u.FullName} · {u.Email}\";\noutput.WriteLine(line);"));
+        Assert.Single(Leaks("var nid = user.NationalId ?? \"-\";\noutput.WriteLine(\"nid \" + nid);"));
+
+        Assert.Empty(Leaks("var phone = LiveProofRedaction.Of(a.Phone);\nLog($\"[admin] {phone}\");\nvoid Log(string s) => Console.WriteLine(s);"));
+        Assert.Empty(Leaks("var hasEmail = !string.IsNullOrEmpty(u.Email);\noutput.WriteLine($\"{hasEmail}\");"));
+        Assert.Empty(Leaks("var n = u.Phone.Length;\noutput.WriteLine($\"{n}\");"));
+        Assert.Empty(Leaks("var same = a.Email == b.Email;\noutput.WriteLine($\"{same}\");"));
+        Assert.Empty(Leaks("var p = a.Phone;\nAssert.Equal(\"x\", p);"));
+        Assert.Equal(new[] { "p", "who" }, PersonalAliases("var p = a.Phone; string? who = d.CreatedBy; var q = LiveProofRedaction.Of(a.Phone);").OrderBy(x => x));
+    }
+
+    // ─── ١. لا اختِبارَ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه ─────────────────────────────────────────────────
+    //
+    // انقَلَبَ بِاسمِه (‏2026-10-25) مِن `Today_three_live_proofs_write_admin_phones_names_proposers_or_deciders_to_their_output`.
+
+    [Fact]
+    public void No_test_writes_a_personal_field_to_its_output()
+    {
+        var (files, leaks) = Scan();
+        output.WriteLine($"مِلَفّاتٌ مَفحوصَة: {files} · مَواضِعُ الكَشف: {leaks.Values.Sum(l => l.Count)}");
+        Assert.True(files > 100, $"أَداةٌ عَمياء: {files} مِلَفّاً.");
+        Assert.True(leaks.Count == 0, "اختِبارٌ يَكتُبُ حَقلاً شَخصِيّاً إلى خَرجِه — احجُبه قَبلَ النِداءِ بِـLiveProofRedaction.Of:\n  " +
+            string.Join("\n  ", leaks.SelectMany(kv => kv.Value.Select(l => $"{kv.Key}: {l}"))));
+    }
+
+    // ─── ٢. بُرهانُ الثيمِ الحَيُّ يَقيسُ ما قَرَأ — والثَلاثَةُ تَقيسُ خَرجَها ──────────────────────────────
+
+    internal static string ThemeProof() => WriteEndpointGuardTests.StripComments(
+        StudioConsentCharacterizationTests.Source("tests", "ACommerce.Platform.Tests", "LiveThemeProofTests.cs"));
+
+    // انقَلَبَ بِاسمِه (‏2026-10-25) مِن `Today_the_theme_live_proof_asserts_nothing_so_it_is_green_whatever_it_reads`.
+    [Fact]
+    public void The_theme_live_proof_measures_statuses_the_effective_theme_and_its_own_output()
+    {
+        var proof = ThemeProof();
+        var asserts = Regex.Matches(proof, @"\bAssert\.\w+\(").Count;
+        output.WriteLine($"Assert في LiveThemeProofTests: {asserts}");
+        Assert.True(asserts >= 4, $"{asserts} Assert");
+        Assert.Contains("TenantThemeStatuses.Contains(d.Status)", proof, StringComparison.Ordinal);
+        Assert.Contains("TenantThemeSet.Platform.Theme.Slug", proof, StringComparison.Ordinal);
+        foreach (var file in new[] { "LiveThemeProofTests.cs", "LiveRoleDefinitionProofTests.cs", "LiveApprovalFlowProofTests.cs" })
+            Assert.Contains("LiveProofRedaction.AssertAbsent(evidence.ToString(),", WriteEndpointGuardTests.StripComments(
+                StudioConsentCharacterizationTests.Source("tests", "ACommerce.Platform.Tests", file)), StringComparison.Ordinal);
+    }
+
+    // والقِياسُ نَفسُه يَحمَرّ: قيمَةٌ حَيَّةٌ في الخَرجِ تُفشِلُه، ورِسالَتُه لا تُعيدُها؛ وما دونَ ثَلاثَةِ أَحرُفٍ لا يُقاس.
+    [Fact]
+    public void The_redaction_check_goes_red_on_a_live_value_without_repeating_it()
+    {
+        Assert.Equal(LiveProofRedaction.Mask, LiveProofRedaction.Of("0500000000"));
+        Assert.Equal("-", LiveProofRedaction.Of("  "));
+        Assert.Equal(1, LiveProofRedaction.AssertAbsent("[platform-admin] phone=‹مَحجوب›", ["0500000000", "ab", null]));
+        var red = Assert.ThrowsAny<Xunit.Sdk.XunitException>(() =>
+            LiveProofRedaction.AssertAbsent("[platform-admin] phone=0500000000", ["0500000000"]));
+        Assert.DoesNotContain("0500000000", red.Message, StringComparison.Ordinal);
+    }
+}
